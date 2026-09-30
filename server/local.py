@@ -64,6 +64,10 @@ def load_backend(config):
     return Backend(Store(config['databasePath']),ChainRpc(config['deployment']),Path(config['secretKeyFile']).read_bytes(),
                    config['deployment']['issuer'],signers=config.get('workSigners'))
 
+def load_worker_keys(config):
+    return {role:Path(config[role+'KeyFile']).read_bytes() for role in ('issuer','operator','settler')
+            if role=='issuer' or role in config.get('workSigners',{})}
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('command',choices=['setup','web','worker','backup','restore'])
@@ -95,7 +99,7 @@ def main():
         create_app(backend,origin=config['origin']).run(host='127.0.0.1',port=8875,debug=False,use_reloader=False)
     else:
         from server.outbox import Worker
-        worker=Worker(backend,Path(config['issuerKeyFile']).read_bytes())
+        worker=Worker(backend,load_worker_keys(config))
         while True:
             try: worker.tick()
             except Exception: print('Worker state unavailable; preserving original operations')

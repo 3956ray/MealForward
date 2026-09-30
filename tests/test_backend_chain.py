@@ -138,7 +138,7 @@ class BackendChainTests(unittest.TestCase):
         self.assertEqual(self.post(self.partner,'/auth/logout',{}).status_code,204)
         self.assertEqual(self.get(self.partner,'/operations/'+op_id).status_code,401)
         anonymous=self.session()
-        for path in ('/session','/reset','/work/locks','/work/payables/x/settle'):
+        for path in ('/session','/reset','/work/locks/confirm','/work/payables/x/confirm'):
             self.assertEqual(self.post(anonymous,path,{'actor':'partner','outcome':'success'}).status_code,404)
     def test_disable_and_reenable_revokes_unvisited_sessions(self):
         second=self.login('partner-a')
@@ -326,7 +326,7 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         self.mine();self.worker.tick();self.assertEqual(self.op(op_id)['status'],'FINALIZED_REVERT')
         self.assertEqual(self.backend.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],0)
         self.assertEqual(self.get(self.partner,'/operations/'+op_id).json()['vouchers'],[])
-    def test_unsigned_preflight_rejection_preserves_original_reservation(self):
+    def test_trusted_unsigned_preflight_rejection_allows_explicit_new_attempt(self):
         _,_,funded=self.funded();r,body=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
         def stop(phase):
             if phase=='before_sign': raise RuntimeError('Unsigned crash')
@@ -335,13 +335,15 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         role=self.rpc.contract.functions.ISSUER_ROLE().call()
         admin={'from':self.w3.eth.accounts[0]}
         self.w3.eth.wait_for_transaction_receipt(self.rpc.contract.functions.revokeRole(role,self.config['deployment']['issuer']).transact(admin))
-        self.worker.tick();self.assertEqual(self.op(op_id)['status'],'SUBMISSION_UNKNOWN')
-        self.assertEqual(self.backend.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],3)
-        self.assertEqual(self.backend.store.one('SELECT state FROM reservations WHERE operation_id=?',(op_id,))['state'],'PENDING')
+        self.worker.tick();self.assertEqual(self.op(op_id)['status'],'NOT_SUBMITTED')
+        self.assertEqual(self.backend.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],0)
+        self.assertEqual(self.backend.store.one('SELECT state FROM reservations WHERE operation_id=?',(op_id,))['state'],'RELEASED')
         self.w3.eth.wait_for_transaction_receipt(self.rpc.contract.functions.grantRole(role,self.config['deployment']['issuer']).transact(admin))
+        r,_=self.issue(funded['intent']['batchId']);new_id=r.json()['operation']['id']
+        self.assertNotEqual(new_id,op_id)
         self.worker.tick()
-        self.assertEqual(self.backend.store.one('SELECT nonce FROM outbox WHERE operation_id=?',(op_id,))['nonce'],original)
-        self.mine();self.worker.tick();self.assertEqual(self.op(op_id)['status'],'FINALIZED_SUCCESS')
+        self.assertEqual(self.backend.store.one('SELECT nonce FROM outbox WHERE operation_id=?',(new_id,))['nonce'],original)
+        self.mine();self.worker.tick();self.assertEqual(self.op(new_id)['status'],'FINALIZED_SUCCESS')
     def test_queued_backup_recovers_included_issuance_without_releasing_quota(self):
         _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
         backup_path=Path(self.tmp.name)/'queued-backup.sqlite3'

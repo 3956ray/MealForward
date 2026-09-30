@@ -4,18 +4,24 @@ import json
 from contextlib import contextmanager
 from eth_account import Account
 from eth_account._utils.legacy_transactions import Transaction
-from eth_abi import encode
 from hexbytes import HexBytes
 from web3.exceptions import ContractLogicError
 from server.backend import TERMINAL, canonical
+from server.actions import ACTIONS, action_fingerprint
 from server.chain.client import ChainConflict, ZERO, hx
 from server.projection import Projector
 
 class Worker:
     def __init__(self, backend, issuer_key, fault=None):
         self.b,self.rpc,self.store=backend,backend.rpc,backend.store
-        self.account=Account.from_key(issuer_key)
-        if self.account.address.lower()!=backend.signer.lower(): raise ValueError('Wrong local signer')
+        keys=issuer_key if isinstance(issuer_key,dict) else {'issuer':issuer_key}
+        self.accounts={}
+        for role,key in keys.items():
+            account=Account.from_key(key)
+            if role not in backend.signers or account.address.lower()!=backend.signers[role].lower(): raise ValueError('Wrong local signer')
+            self.accounts[account.address]=account
+        if not self.accounts: raise ValueError('Local signer required')
+        self.account=next(iter(self.accounts.values()))
         self.projector=Projector(backend)
         self.fault=fault or (lambda phase: None)
     @contextmanager
@@ -30,71 +36,108 @@ class Worker:
             self.projector.sync()
             for op in self.store.all("SELECT * FROM operations WHERE kind='support' AND status NOT IN ('FINALIZED_SUCCESS','FINALIZED_REVERT','NOT_SUBMITTED')"):
                 self.observe_support(op)
-            job=self.store.one("SELECT * FROM outbox WHERE state!='DONE' ORDER BY rowid LIMIT 1")
-            if not job: return
-            self.b.check_halted(); self.rpc.guard()
-            if job['raw_cipher'] is None:
-                # A restored backup can predate signing/broadcast. Recover original
-                # evidence before estimation; absence of raw is not proof of no send.
-                if self.recover_unsigned(job): return
-                if self.b.quarantined():
-                    self.unsigned_unknown(job,'RESTORE_SIGNING_HISTORY_MISSING')
-                    return
-                if job['signing_stage']!='NEVER_SIGNED':
-                    self.unsigned_unknown(job,'SIGNING_HISTORY_INCOMPLETE')
-                    return
-                if self.rpc.contract.functions.paused().call(): return
-                tx=json.loads(job['tx_json']); tx['from']=self.account.address
-                try: gas=self.rpc.w3.eth.estimate_gas(tx)
-                except ContractLogicError:
-                    self.unsigned_unknown(job,'PREFLIGHT_UNRESOLVED')
-                    return
-                pending_nonce=self.rpc.w3.eth.get_transaction_count(self.account.address,'pending')
-                saved=self.store.one('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,))
-                expected=job['nonce'] if job['nonce'] is not None else (saved['next_nonce'] if saved else 0)
-                if pending_nonce!=expected:
-                    self.unsigned_unknown(job,'SIGNER_NONCE_UNRESOLVED'); return
-                with self.store.transaction() as db:
-                    saved=db.execute('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,)).fetchone()
-                    nonce=job['nonce'] if job['nonce'] is not None else max(pending_nonce,saved['next_nonce'] if saved else 0)
-                    if job['nonce'] is None:
-                        db.execute('INSERT OR REPLACE INTO signer_nonces VALUES(?,?)',(self.account.address,nonce+1))
-                        db.execute('UPDATE outbox SET nonce=? WHERE operation_id=?',(nonce,job['operation_id']))
-                self.fault('before_sign')
-                tx.update(nonce=nonce,gas=(gas*110+99)//100,gasPrice=self.rpc.w3.eth.gas_price)
-                with self.store.transaction() as db:
-                    db.execute("UPDATE outbox SET signing_stage='SIGNING_STARTED' WHERE operation_id=?",(job['operation_id'],))
-                    db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
-                               (job['operation_id'],'SIGNING_STARTED',self.b.now()))
-                self.fault('signing_started')
-                signed=self.account.sign_transaction(tx)
-                raw=hx(signed.raw_transaction); tx_hash=hx(signed.hash)
-                with self.store.transaction() as db:
-                    db.execute("UPDATE outbox SET raw_cipher=?,tx_hash=?,state='SIGNED',signing_stage='RAW_SAVED' WHERE operation_id=?",(self.b.encrypt(raw),tx_hash,job['operation_id']))
-                    db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
-                               (job['operation_id'],'RAW_SAVED',self.b.now()))
-                    db.execute("UPDATE operations SET tx_hash=?,status='SIGNED',updated_at=? WHERE id=?",(tx_hash,self.b.now(),job['operation_id']))
-                self.fault('after_sign')
-                job=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],))
-            raw=self.validate_saved_raw(job)
-            receipt=self.rpc.receipt(job['tx_hash'])
-            if receipt:
-                self.observe_work(job,receipt)
+            with self.store.transaction() as db: self.b.work.expire_codes(db)
+            for address in self.accounts:
+                job=self.store.one("SELECT * FROM outbox WHERE state!='DONE' AND signer=? ORDER BY rowid LIMIT 1",(address,))
+                if job:
+                    self.account=self.accounts[address]
+                    self.process_job(job)
+    def process_job(self, job):
+        op=self.store.one('SELECT * FROM operations WHERE id=?',(job['operation_id'],))
+        if op['kind'] not in ACTIONS or self.b.signers.get(ACTIONS[op['kind']].signer_role,'').lower()!=job['signer'].lower():
+            self.b.halt('SIGNER_ROLE_CONFLICT');raise ChainConflict('Action signer role mismatch')
+        self.b.check_halted(); self.rpc.guard()
+        if job['raw_cipher'] is None:
+            # A restored backup can predate signing/broadcast. Recover original
+            # evidence before estimation; absence of raw is not proof of no send.
+            if self.recover_unsigned(job): return
+            if self.b.quarantined():
+                self.unsigned_unknown(job,'RESTORE_SIGNING_HISTORY_MISSING')
                 return
-            self.fault('before_broadcast')
-            # Mark possibility of propagation before network call; all exceptions preserve reservation.
-            self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
-            try:
-                result=self.rpc.broadcast_same_raw(raw)
-                if result.lower()!=job['tx_hash'].lower(): raise ChainConflict('Broadcast hash mismatch')
-                self.fault('after_broadcast')
-            except ChainConflict:
-                self.b.halt('BROADCAST_CONFLICT'); raise
-            except Exception:
-                self.store.execute("UPDATE outbox SET state='UNKNOWN',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
+            if job['signing_stage']!='NEVER_SIGNED':
+                self.unsigned_unknown(job,'SIGNING_HISTORY_INCOMPLETE')
                 return
-            self.store.execute("UPDATE outbox SET state='BROADCAST',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
-            self.store.execute("UPDATE operations SET status='BROADCAST',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
+            if not self.authorized(op):
+                self.preflight_failure(job,'AUTH_SCOPE_CHANGED');return
+            if op['kind']!='report' and self.rpc.contract.functions.paused().call():
+                self.preflight_failure(job,'PAUSED');return
+            tx=json.loads(job['tx_json']); tx['from']=self.account.address
+            try: gas=self.rpc.w3.eth.estimate_gas(tx)
+            except ContractLogicError:
+                self.preflight_failure(job,'PREFLIGHT_REJECTED')
+                return
+            pending_nonce=self.rpc.w3.eth.get_transaction_count(self.account.address,'pending')
+            saved=self.store.one('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,))
+            expected=job['nonce'] if job['nonce'] is not None else (saved['next_nonce'] if saved else 0)
+            if pending_nonce!=expected:
+                self.unsigned_unknown(job,'SIGNER_NONCE_UNRESOLVED'); return
+            with self.store.transaction() as db:
+                saved=db.execute('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,)).fetchone()
+                nonce=job['nonce'] if job['nonce'] is not None else max(pending_nonce,saved['next_nonce'] if saved else 0)
+                if job['nonce'] is None:
+                    db.execute('INSERT OR REPLACE INTO signer_nonces VALUES(?,?)',(self.account.address,nonce+1))
+                    db.execute('UPDATE outbox SET nonce=? WHERE operation_id=?',(nonce,job['operation_id']))
+            self.fault('before_sign')
+            tx.update(nonce=nonce,gas=(gas*110+99)//100,gasPrice=self.rpc.w3.eth.gas_price)
+            if self.rpc.w3.eth.get_balance(self.account.address)<tx['gas']*tx['gasPrice']+tx['value']:
+                self.preflight_failure(job,'GAS_UNAVAILABLE');return
+            if not self.authorized(op):
+                self.preflight_failure(job,'AUTH_SCOPE_CHANGED');return
+            with self.store.transaction() as db:
+                db.execute("UPDATE outbox SET signing_stage='SIGNING_STARTED' WHERE operation_id=?",(job['operation_id'],))
+                db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
+                           (job['operation_id'],'SIGNING_STARTED',self.b.now()))
+            self.fault('signing_started')
+            signed=self.account.sign_transaction(tx)
+            raw=hx(signed.raw_transaction); tx_hash=hx(signed.hash)
+            with self.store.transaction() as db:
+                db.execute("UPDATE outbox SET raw_cipher=?,tx_hash=?,state='SIGNED',signing_stage='RAW_SAVED' WHERE operation_id=?",(self.b.encrypt(raw),tx_hash,job['operation_id']))
+                db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
+                           (job['operation_id'],'RAW_SAVED',self.b.now()))
+                db.execute("UPDATE operations SET tx_hash=?,status='SIGNED',updated_at=? WHERE id=?",(tx_hash,self.b.now(),job['operation_id']))
+            self.fault('after_sign')
+            job=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],))
+        raw=self.validate_saved_raw(job)
+        receipt=self.rpc.receipt(job['tx_hash'])
+        if receipt:
+            self.observe_work(job,receipt)
+            return
+        self.fault('before_broadcast')
+        if not self.authorized(op):
+            self.unsigned_unknown(job,'AUTH_SCOPE_CHANGED');return
+        # Mark possibility of propagation before network call; all exceptions preserve reservation.
+        self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
+        try:
+            result=self.rpc.broadcast_same_raw(raw)
+            if result.lower()!=job['tx_hash'].lower(): raise ChainConflict('Broadcast hash mismatch')
+            self.fault('after_broadcast')
+        except ChainConflict:
+            self.b.halt('BROADCAST_CONFLICT'); raise
+        except Exception:
+            self.store.execute("UPDATE outbox SET state='UNKNOWN',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
+            return
+        self.store.execute("UPDATE outbox SET state='BROADCAST',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
+        self.store.execute("UPDATE operations SET status='BROADCAST',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
+    def authorized(self, op):
+        with self.store.transaction() as db: return self.b.work.dispatch_authorized(db,op)
+    def preflight_failure(self, job, reason):
+        with self.store.transaction() as db:
+            current=db.execute('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],)).fetchone()
+            active=db.execute("SELECT value FROM metadata WHERE key='recovery_state'").fetchone()['value']=='ACTIVE'
+            accepted=db.execute("SELECT 1 FROM work_audit WHERE operation_id=? AND event='ACCEPTED_NEVER_SIGNED'",(job['operation_id'],)).fetchone()
+            signed=db.execute("SELECT 1 FROM work_audit WHERE operation_id=? AND event='SIGNING_STARTED'",(job['operation_id'],)).fetchone()
+            if (not active or not accepted or signed or current['signing_stage']!='NEVER_SIGNED'
+                    or current['raw_cipher'] or current['tx_hash'] or current['broadcast_count']):
+                db.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',error_code=? WHERE id=?",(reason,job['operation_id']))
+                return
+            op=dict(db.execute('SELECT * FROM operations WHERE id=?',(job['operation_id'],)).fetchone())
+            self.b.work.release_failed(db,op)
+            if current['nonce'] is not None:
+                db.execute('UPDATE signer_nonces SET next_nonce=? WHERE signer=? AND next_nonce=?',
+                           (current['nonce'],current['signer'],current['nonce']+1))
+            db.execute("UPDATE outbox SET state='DONE',nonce=NULL WHERE operation_id=?",(job['operation_id'],))
+            db.execute("UPDATE operations SET status='NOT_SUBMITTED',error_code=?,updated_at=? WHERE id=?",(reason,self.b.now(),job['operation_id']))
+            db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(job['operation_id'],'REJECTED_BEFORE_SIGNING',self.b.now()))
     def validate_saved_raw(self, job):
         try:
             raw=self.b.decrypt(job['raw_cipher']);encoded=HexBytes(raw)
@@ -116,15 +159,16 @@ class Worker:
         self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',error_code=?,updated_at=? WHERE id=?",
                            (reason,self.b.now(),job['operation_id']))
     def recover_unsigned(self, job):
-        payload,result=self.rpc.contract.functions.getOperation(1,job['operation_id']).call()
+        op=self.store.one('SELECT kind FROM operations WHERE id=?',(job['operation_id'],));spec=ACTIONS[op['kind']]
+        payload,result=self.rpc.contract.functions.getOperation(spec.number,job['operation_id']).call()
         recorded=hx(payload)!=ZERO
         if recorded:
             _,args=self.rpc.contract.decode_function_input(json.loads(job['tx_json'])['data'])
-            expected=self.rpc.w3.keccak(encode(['bytes32','bytes32[]'],[args['batchId'],args['voucherIds']]))
-            if bytes(payload)!=bytes(expected) or bytes(result)!=bytes(args['batchId']):
+            expected,expected_result=action_fingerprint(op['kind'],args)
+            if hx(payload)!=expected or hx(result)!=expected_result:
                 self.b.halt('RECOVERY_CONFLICT'); raise ChainConflict('Original operation mapping conflict')
         matches=[e for e in self.rpc.events(int(self.b.deployment['deploymentBlock']),'latest')
-                 if e['eventName']=='Issued' and e['args']['operationId']==job['operation_id']]
+                 if e['eventName']==spec.event and e['args']['operationId']==job['operation_id']]
         if matches:
             if len(matches)!=1:
                 self.b.halt('RECOVERY_CONFLICT'); raise ChainConflict('Duplicate original issuance')
@@ -180,7 +224,8 @@ class Worker:
             db.execute('UPDATE operations SET status=?,receipt_block=?,receipt_hash=?,finalized_block=?,updated_at=? WHERE id=?',
                        (state,receipt['blockNumber'],hx(receipt['blockHash']),final if state=='FINALIZED_REVERT' else None,self.b.now(),job['operation_id']))
             if state=='FINALIZED_REVERT':
-                self.b.resolve_reservation(db,job['operation_id'],False)
+                op=dict(db.execute('SELECT * FROM operations WHERE id=?',(job['operation_id'],)).fetchone())
+                self.b.work.release_failed(db,op)
                 db.execute("UPDATE outbox SET state='DONE' WHERE operation_id=?",(job['operation_id'],))
     def observe_support(self, op):
         row=self.store.one('SELECT * FROM support_intents WHERE operation_id=?',(op['id'],))

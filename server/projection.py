@@ -2,6 +2,7 @@
 import json
 from server.backend import canonical
 from server.chain.client import ChainConflict, ChainUnavailable, PRICE, hx
+from server.actions import ACTIONS
 
 class Projector:
     def __init__(self, backend): self.b,self.rpc,self.store=backend,backend.rpc,backend.store
@@ -54,13 +55,16 @@ class Projector:
             row=self.store.one('SELECT * FROM support_intents WHERE intent_id=? AND lower(payer)=?',(args['intentId'],args['payer'].lower()))
             if row and (row['batch_id']!=args['batchId'] or row['value_wei']!=args['amount'] or not self.rpc.transaction_matches(event['transactionHash'],sender=row['payer'],data=row['data'],value=row['value_wei'])):
                 raise ChainConflict('Original support payload mismatch')
-        if name=='Issued':
+        kinds={spec.event:kind for kind,spec in ACTIONS.items()}
+        if name in kinds:
             row=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(args['operationId'],))
             if row:
+                op=self.store.one('SELECT kind FROM operations WHERE id=?',(args['operationId'],))
+                if op['kind']!=kinds[name]: raise ChainConflict('Action evidence mismatch')
                 tx=json.loads(row['tx_json'])
                 if not self.rpc.transaction_matches(event['transactionHash'],sender=row['signer'],data=tx['data'],value=0):
                     raise ChainConflict('Original issue payload mismatch')
-            elif self.rpc.w3.eth.get_transaction(event['transactionHash'])['from'].lower()==self.b.signer.lower():
+            elif self.rpc.w3.eth.get_transaction(event['transactionHash'])['from'].lower() in {v.lower() for v in self.b.signers.values()}:
                 # A backup older than acceptance lost private quota/recipient context.
                 # Public events cannot safely reconstruct that authorization.
                 raise ChainConflict('Local issuance missing private recovery context')
@@ -97,6 +101,31 @@ class Projector:
                 op_id=op['id']; self.b.resolve_reservation(db,op_id,True)
                 db.execute('UPDATE private_vouchers SET confirmed=1 WHERE operation_id=?',(op_id,))
                 db.execute("UPDATE outbox SET state='DONE' WHERE operation_id=?",(op_id,))
+        elif event['eventName'] in ('Locked','Reported','Settled'):
+            kind={'Locked':'lock','Reported':'report','Settled':'settle'}[event['eventName']]
+            op=db.execute('SELECT * FROM operations WHERE id=? AND kind=?',(a['operationId'],kind)).fetchone()
+            if op:
+                r=db.execute('SELECT * FROM redemptions WHERE id=?',(op['redemption_id'],)).fetchone()
+                claim=db.execute('SELECT * FROM voucher_claims WHERE voucher_id=?',(a['voucherId'],)).fetchone()
+                if not r or not claim or claim['redemption_id']!=r['id'] or r['voucher_id']!=a['voucherId']:
+                    raise ChainConflict('Missing original private lock context')
+                if kind in ('lock','report') and r['lock_id']!=a['lockId']: raise ChainConflict('Original lock mismatch')
+                if kind in ('report','settle'):
+                    statement=db.execute('SELECT * FROM handoff_statements WHERE redemption_id=?',(r['id'],)).fetchone()
+                    lock=db.execute('SELECT status FROM operations WHERE id=?',(r['lock_operation_id'],)).fetchone()
+                    if not statement or statement['actor_id']!=r['actor_id'] or not lock or lock['status']!='FINALIZED_SUCCESS':
+                        raise ChainConflict('Missing original handoff/lock proof')
+                if kind=='settle':
+                    if op['actor_id']==statement['actor_id']: raise ChainConflict('Self settlement evidence')
+                    if not db.execute("SELECT 1 FROM operations WHERE kind='report' AND redemption_id=? AND status='FINALIZED_SUCCESS'",(r['id'],)).fetchone():
+                        raise ChainConflict('Missing original report proof')
+                state={'lock':'LOCKED','report':'REPORTED','settle':'SETTLED'}[kind]
+                # Replaying old lock/report must not regress a more advanced responsibility.
+                rank={'LOCK_PENDING':0,'LOCKED':1,'HANDED_OFF':2,'REPORT_PENDING':3,'REPORTED':4,'SETTLE_PENDING':5,'SETTLED':6,'LOCK_FAILED':-1}
+                if rank.get(r['state'],-1)<rank[state]: db.execute('UPDATE redemptions SET state=? WHERE id=?',(state,r['id']))
+                db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL WHERE voucher_id=?',(a['voucherId'],))
+                if kind=='settle': db.execute('UPDATE processing_items SET active=0 WHERE voucher_id=?',(a['voucherId'],))
+                op_id=op['id'];db.execute("UPDATE outbox SET state='DONE' WHERE operation_id=?",(op_id,))
         if op_id:
             db.execute("UPDATE operations SET status='FINALIZED_SUCCESS',tx_hash=?,receipt_block=?,receipt_hash=?,finalized_block=?,error_code=NULL,updated_at=? WHERE id=?",
                        (event['transactionHash'],event['blockNumber'],event['blockHash'],final_height,self.b.now(),op_id))

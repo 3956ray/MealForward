@@ -1,9 +1,10 @@
 """Loopback-only CP15 API. No legacy actor/reset/simulated outcomes or full work flow."""
 import re
+import importlib.util
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 from web3 import Web3
-from server.contracts import ApiError, SUPPORT_COOKIE, SUPPORT_TTL
+from server.contracts import ApiError, SUPPORT_COOKIE, SUPPORT_TTL, RECIPIENT_COOKIE
 from server.chain.client import ChainConflict, hx
 from server.projection import Projector
 
@@ -15,7 +16,15 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     app.logger.disabled=True
     service=register_auth(app,backend.store,origin=origin,clock=clock or backend.clock,secure_cookie=False)
     projector=Projector(backend)
+    recipient=redemption=None
+    if importlib.util.find_spec('server.recipient'):
+        from server.recipient import RecipientService
+        recipient=RecipientService(backend)
+    if importlib.util.find_spec('server.redemption'):
+        from server.redemption import RedemptionService
+        redemption=RedemptionService(backend)
     app.extensions['backend']=backend
+    app.extensions['recipient']=recipient;app.extensions['redemption']=redemption
     @app.before_request
     def origin_and_json():
         if request.method=='POST':
@@ -47,7 +56,7 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     def config():
         d=backend.deployment
         return jsonify({**{k:v for k,v in d.items() if k not in ('rpcUrl','issuer')},
-                        'capabilities':[] if backend.quarantined() else ['support','issue'],
+                        'capabilities':[] if backend.quarantined() else ['support','issue']+(['recipient'] if recipient else [])+(['lock','handoff','report','settle'] if redemption else []),
                         'recovery':backend.recovery_view(),'finalityPolicy':'receipt-canonical-finalized-local'})
     @app.post('/api/v1/support-session')
     def support_session():
@@ -73,7 +82,81 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     @app.get('/api/v1/work/issuances/by-intent/<key>')
     def by_intent(key): return jsonify(backend.get_issue(service.require('partner'),key=key))
     @app.get('/api/v1/operations/<op_id>')
-    def work_operation(op_id): return jsonify(backend.get_issue(service.require('partner'),op_id=op_id))
+    def work_operation(op_id):
+        actor=service.require()
+        op=backend.store.one('SELECT kind FROM operations WHERE id=?',(op_id,))
+        if op and op['kind'] in ('lock','report','settle') and redemption:
+            return jsonify(redemption.operation(actor,op_id=op_id))
+        return jsonify(backend.get_issue(actor,op_id=op_id))
+    if recipient:
+        @app.get('/api/v1/work/vouchers')
+        def work_vouchers(): return jsonify(recipient.list_vouchers(service.require('partner')))
+        @app.post('/api/v1/work/vouchers/<voucher_id>/invitation')
+        def invitation(voucher_id):
+            actor=service.require('partner',csrf=True);projector.sync()
+            return jsonify(recipient.invitation(actor,voucher_id,body()))
+        @app.post('/api/v1/work/vouchers/<voucher_id>/deliveries')
+        def deliver(voucher_id):
+            actor=service.require('partner',csrf=True);projector.sync()
+            return jsonify(recipient.deliver(actor,voucher_id,body())),201
+        @app.get('/api/v1/work/vouchers/<voucher_id>/deliveries')
+        def deliveries(voucher_id): return jsonify(recipient.deliveries(service.require('partner'),voucher_id))
+        @app.post('/api/v1/recipient/session')
+        def recipient_exchange():
+            projector.sync()
+            dto,token=recipient.exchange(body(),str(request.remote_addr),request.cookies.get(RECIPIENT_COOKIE))
+            response=jsonify(dto)
+            response.set_cookie(RECIPIENT_COOKIE,token,httponly=True,samesite='Lax',secure=False,path='/api/v1/recipient',
+                                max_age=max(0,dto['expiresAt']-backend.now()))
+            return response
+        @app.get('/api/v1/recipient/voucher')
+        def recipient_voucher(): return jsonify(recipient.voucher(request.cookies.get(RECIPIENT_COOKIE)))
+        @app.post('/api/v1/recipient/presentations')
+        def presentation():
+            projector.sync()
+            return jsonify(recipient.present(request.cookies.get(RECIPIENT_COOKIE),request.headers.get('X-CSRF-Token'),body(),str(request.remote_addr)))
+        @app.post('/api/v1/recipient/logout')
+        def recipient_logout():
+            if body(): raise ApiError(422,'INVALID_INPUT','Empty object required')
+            recipient.logout(request.cookies.get(RECIPIENT_COOKIE),request.headers.get('X-CSRF-Token'))
+            return '',204
+    if redemption:
+        @app.post('/api/v1/work/prechecks')
+        def precheck():
+            actor=service.require('staff',csrf=True);projector.sync()
+            return jsonify(redemption.precheck(actor,body(),str(request.remote_addr)))
+        @app.post('/api/v1/work/groups')
+        def create_group(): return jsonify(redemption.create_group(service.require('staff',csrf=True),body())),201
+        @app.get('/api/v1/work/groups/<group_id>')
+        def group(group_id): return jsonify(redemption.group(service.require('staff'),group_id))
+        @app.post('/api/v1/work/groups/<group_id>/items')
+        def add_group(group_id):
+            actor=service.require('staff',csrf=True);projector.sync()
+            return jsonify(redemption.add(actor,group_id,body(),str(request.remote_addr)))
+        @app.post('/api/v1/work/locks')
+        def lock():
+            actor=service.require('staff',csrf=True);projector.sync()
+            return jsonify(redemption.lock(actor,body(),str(request.remote_addr))),202
+        @app.get('/api/v1/work/redemptions/<redemption_id>')
+        def get_redemption(redemption_id): return jsonify(redemption.get(service.require('staff'),redemption_id))
+        @app.post('/api/v1/work/redemptions/<redemption_id>/handoff')
+        def handoff(redemption_id):
+            actor=service.require('staff',csrf=True);projector.sync()
+            return jsonify(redemption.handoff(actor,redemption_id,body()))
+        @app.post('/api/v1/work/redemptions/<redemption_id>/report')
+        def report(redemption_id):
+            actor=service.require('staff',csrf=True);projector.sync()
+            return jsonify(redemption.report(actor,redemption_id,body())),202
+        @app.get('/api/v1/work/payables')
+        def payables(): return jsonify(redemption.payables(service.require('settler')))
+        @app.get('/api/v1/work/payables/<redemption_id>')
+        def payable(redemption_id): return jsonify(redemption.payable(service.require('settler'),redemption_id))
+        @app.post('/api/v1/work/payables/<redemption_id>/settle')
+        def settle(redemption_id):
+            actor=service.require('settler',csrf=True);projector.sync()
+            return jsonify(redemption.settle(actor,redemption_id,body())),202
+        @app.get('/api/v1/work/operations/by-intent/<kind>/<key>')
+        def work_by_intent(kind,key): return jsonify(redemption.operation(service.require(),kind=kind,key=key))
     @app.get('/api/v1/batches/<batch_id>')
     def batch(batch_id):
         row=backend.store.one('SELECT * FROM batches WHERE id=?',(batch_id,))

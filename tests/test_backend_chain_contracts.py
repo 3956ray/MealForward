@@ -8,7 +8,7 @@ from unittest.mock import patch
 import tests.test_backend_chain as chain_tests
 from server.backend import random_id
 from server.contracts import AuthContext, ApiError
-from server.local import load_backend
+from server.local import load_backend, load_worker_keys
 from server.recovery import backup_bundle, restore_bundle, FILES
 from server.storage import Store
 from server.outbox import Worker
@@ -99,6 +99,69 @@ class C0Tests(unittest.TestCase):
         legacy={k:v for k,v in self.h.config.items() if k not in ('workSigners','operatorKeyFile','settlerKeyFile')}
         self.assertEqual(set(load_backend(legacy).signers),{'issuer'})
         with self.assertRaises(ValueError):load_backend({**self.h.config,'workSigners':{'operator':self.b.signers['settler']}})
+    def test_worker_protocol_lock_report_settle_uses_distinct_signers_and_finality(self):
+        voucher,code=self.issued_code();actor=self.actor();lock_id=random_id();redemption=random_id();lock_op=random_id()
+        batch_id=self.b.store.one('SELECT batch_id FROM private_vouchers WHERE id=?',(voucher,))['batch_id']
+        with self.b.store.transaction() as db:
+            self.b.work.validate_and_consume_code(db,actor,code,lock_op)
+            self.b.work.enqueue(db,actor,'lock','lock-worker',voucher,{'codeHash':self.b.work.code_hash(code)},
+                                {'voucherId':voucher,'lockId':lock_id},redemption_id=redemption,operation_id=lock_op)
+            db.execute('INSERT INTO redemptions VALUES(?,?,?,?,?,?,?,?,?)',(redemption,voucher,actor.actor_id,actor.shop_id,None,lock_id,lock_op,'LOCK_PENDING',self.b.now()))
+            db.execute('INSERT INTO voucher_claims VALUES(?,?)',(voucher,redemption))
+        worker=Worker(self.b,load_worker_keys(self.h.config));worker.tick();worker.tick()
+        self.assertEqual(self.h.op(lock_op)['status'],'INCLUDED_SUCCESS')
+        self.assertEqual(self.b.store.one('SELECT state FROM redemptions')['state'],'LOCK_PENDING')
+        self.h.mine();worker.tick();self.assertEqual(self.b.store.one('SELECT state FROM redemptions')['state'],'LOCKED')
+        with self.b.store.transaction() as db:
+            db.execute('INSERT INTO handoff_statements VALUES(?,?,?,?,?,?)',(random_id(),redemption,actor.actor_id,actor.shop_id,'handoff-worker',self.b.now()))
+            db.execute("UPDATE redemptions SET state='HANDED_OFF' WHERE id=?",(redemption,))
+            report=self.b.work.enqueue(db,actor,'report','report-worker',voucher,{'redemptionId':redemption},
+                                       {'voucherId':voucher,'lockId':lock_id},redemption_id=redemption)
+        send=self.h.rpc.broadcast_same_raw
+        def lost(raw): send(raw);raise TimeoutError('Lost original report response')
+        with patch.object(self.h.rpc,'broadcast_same_raw',lost):worker.tick()
+        self.assertEqual(self.h.op(report['id'])['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(self.b.store.one('SELECT H FROM batches')['H'],0)
+        self.h.mine();worker.tick();self.assertEqual(self.b.store.one('SELECT state FROM redemptions')['state'],'REPORTED')
+        _,_,other_fund=self.h.funded(1)
+        pending,_=self.h.issue(other_fund['intent']['batchId'],1,session=self.h.login('partner-b'))
+        pending_issuer=pending.json()['operation']['id']
+        with self.b.store.transaction() as db:
+            settle=self.b.work.enqueue(db,self.actor('settler-a'),'settle','settle-worker',voucher,{'redemptionId':redemption},
+                                       {'voucherId':voucher},redemption_id=redemption)
+        before=self.h.w3.eth.get_balance(self.h.config['deployment']['merchant'])
+        def issuer_unavailable(raw):
+            if self.h.w3.eth.account.recover_transaction(raw)==self.b.signers['issuer']:raise TimeoutError('Issuer unavailable')
+            return send(raw)
+        with patch.object(self.h.rpc,'broadcast_same_raw',issuer_unavailable):
+            worker.tick();self.h.mine();worker.tick()
+        self.assertEqual(self.h.op(pending_issuer)['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(self.h.op(settle['id'])['status'],'FINALIZED_SUCCESS')
+        self.assertEqual(self.b.store.one('SELECT state FROM redemptions')['state'],'SETTLED')
+        self.assertEqual(self.h.w3.eth.get_balance(self.h.config['deployment']['merchant'])-before,10**15)
+        rows=self.b.store.all('SELECT signer,nonce FROM outbox WHERE operation_id IN (?,?,?) ORDER BY rowid',(lock_op,report['id'],settle['id']))
+        self.assertEqual([(r['signer'],r['nonce']) for r in rows],[(self.b.signers['operator'],0),(self.b.signers['operator'],1),(self.b.signers['settler'],0)])
+        self.assertEqual(self.b.store.one('SELECT R,H,S FROM batches WHERE id=?',(batch_id,)),{'R':2*10**15,'H':0,'S':10**15})
+    def test_async_scope_revocation_before_sign_rejects_without_broadcast(self):
+        _,_,funded=self.h.funded();r,_=self.h.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        self.b.store.set_user_enabled('partner-a',False)
+        with patch.object(self.h.worker.account,'sign_transaction',side_effect=AssertionError('Revoked actor')):self.h.worker.tick()
+        self.assertEqual(self.h.op(op_id)['status'],'NOT_SUBMITTED')
+        row=self.b.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        self.assertIsNone(row['raw_cipher']);self.assertEqual(row['broadcast_count'],0)
+        self.assertEqual(self.b.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],0)
+    def test_async_scope_revocation_after_sign_keeps_raw_and_reservation(self):
+        _,_,funded=self.h.funded();r,_=self.h.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        def stop(phase):
+            if phase=='after_sign':raise RuntimeError('Signed original')
+        key=Path(self.h.config['issuerKeyFile']).read_bytes()
+        with self.assertRaises(RuntimeError):Worker(self.b,key,stop).tick()
+        before=self.b.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        self.b.store.set_user_enabled('partner-a',False);self.h.worker.tick()
+        after=self.b.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        self.assertEqual((after['raw_cipher'],after['tx_hash'],after['broadcast_count']),(before['raw_cipher'],before['tx_hash'],0))
+        self.assertEqual(self.h.op(op_id)['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(self.b.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],3)
     def test_v2_backup_carries_signers_and_revokes_recipient_capabilities(self):
         _,_=self.issued_code()
         bundle=backup_bundle(self.h.config,Path(self.h.tmp.name)/'v2-bundle')

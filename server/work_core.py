@@ -92,3 +92,32 @@ class WorkCore:
                       VALUES(?,?,?,'QUEUED','NEVER_SIGNED')''',(op_id,signer,canonical(tx)))
         db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(op_id,'ACCEPTED_NEVER_SIGNED',now))
         return dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone())
+    def dispatch_authorized(self, db, op):
+        spec=ACTIONS.get(op['kind'])
+        user=db.execute('SELECT * FROM users WHERE id=?',(op['actor_id'],)).fetchone()
+        if not spec or not user or not user['enabled'] or user['role']!=spec.actor_role: return False
+        if op['kind']=='issue': return bool(user['partner_id'] and user['partner_id']==op['partner_id'])
+        if user['shop_id']!=LOCAL_SHOP_ID or user['shop_id']!=op['shop_id']: return False
+        r=db.execute('SELECT * FROM redemptions WHERE id=?',(op['redemption_id'],)).fetchone()
+        if not r or r['voucher_id']!=op['target'] or r['shop_id']!=user['shop_id']: return False
+        if op['kind'] in ('lock','report') and r['actor_id']!=user['id']: return False
+        if op['kind']=='lock': return r['lock_operation_id']==op['id']
+        handoff=db.execute('SELECT * FROM handoff_statements WHERE redemption_id=?',(r['id'],)).fetchone()
+        lock=db.execute('SELECT status FROM operations WHERE id=?',(r['lock_operation_id'],)).fetchone()
+        if not handoff or not lock or lock['status']!='FINALIZED_SUCCESS': return False
+        if op['kind']=='report': return handoff['actor_id']==user['id']
+        if handoff['actor_id']==user['id']: return False
+        return bool(db.execute("SELECT 1 FROM operations WHERE redemption_id=? AND kind='report' AND status='FINALIZED_SUCCESS'",(r['id'],)).fetchone())
+    def release_failed(self, db, op):
+        from server.chain.client import ChainConflict
+        if op['kind']=='issue':
+            self.b.resolve_reservation(db,op['id'],False)
+            return
+        r=db.execute('SELECT * FROM redemptions WHERE id=?',(op['redemption_id'],)).fetchone()
+        if not r: raise ChainConflict('Missing private action context')
+        if op['kind']=='lock':
+            db.execute('DELETE FROM voucher_claims WHERE voucher_id=? AND redemption_id=?',(op['target'],r['id']))
+            state='LOCK_FAILED'
+        elif op['kind']=='report': state='HANDED_OFF'
+        else: state='REPORTED'
+        db.execute('UPDATE redemptions SET state=? WHERE id=?',(state,r['id']))
