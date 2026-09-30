@@ -38,7 +38,7 @@ export function WalletSupport({ deployment }: { deployment: LocalDeployment }) {
     <button disabled={busy} onClick={() => void run(async () => { setAccount(await controller.connect()) })}>连接本地测试账户</button>{' '}
     <button disabled={busy} onClick={() => void run(() => controller.switchChain())}>确认切换本地网络</button>
     <p>账户：{account ?? '未连接'}</p>
-    <label>份数（1–20） <input type="number" min="1" max="20" value={quantity} onChange={e => { setQuantity(Number(e.target.value)); controller.reviewed = false; setReviewed(false) }} /></label>
+    <label>份数（1–20） <input disabled={busy} type="number" min="1" max="20" value={quantity} onChange={e => { setQuantity(Number(e.target.value)); controller.invalidateReview(); setReviewed(false) }} /></label>
     <p>每份 {formatEther(BigInt(deployment.priceWei))} {LOCAL_ASSET_LABEL}。Gas 另计。</p>
     <label>验证故障 <select disabled={busy} defaultValue="none" onChange={e => { provider.fault = e.target.value as Fault }}>
       <option value="none">正常发送</option><option value="reject">签前拒绝</option><option value="drop-after-send">真实发送后丢响应</option><option value="unknown-before-send">未发送但结果未知</option>

@@ -66,3 +66,37 @@ test('another tab replacing a prepared quote cannot authorize the first tab to p
   await second.connect(); await second.review(20)
   await assert.rejects(f.controller.send(), /Review required/); assert.equal(f.sent(), 0)
 })
+for (const change of ['quantity', 'account', 'chain', 'new-review']) {
+  test(`late review cannot revive authorization after ${change} changes`, async () => {
+    const f = fixture(); await f.controller.connect()
+    let release!: () => void, entered!: () => void
+    const pending = new Promise<void>(resolve => { release = resolve })
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const originalRpc = f.rpc.request.bind(f.rpc)
+    let first = true
+    f.rpc.request = async args => {
+      if (args.method === 'eth_getCode' && first) { first = false; entered(); await pending }
+      return originalRpc(args)
+    }
+    const oldReview = f.controller.review(1)
+    const rejected = assert.rejects(oldReview, /Review changed/)
+    await started
+    if (change === 'new-review') {
+      await f.controller.review(20)
+    } else if (change === 'quantity') {
+      f.controller.invalidateReview()
+    } else {
+      f.controller.invalidate()
+    }
+    release(); await rejected
+    if (change === 'new-review') {
+      assert.equal(f.controller.load()?.intent.quantity, 20)
+      assert.equal(f.controller.reviewed, true)
+    } else {
+      assert.equal(f.controller.reviewed, false)
+      assert.equal(f.controller.load(), undefined)
+      await assert.rejects(f.controller.send(), /Review required/)
+    }
+    assert.equal(f.sent(), 0)
+  })
+}

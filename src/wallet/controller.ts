@@ -26,6 +26,7 @@ export class WalletController {
   account?: Address
   reviewed = false
   private reviewedIntentId?: Hex
+  private reviewEpoch = 0
   constructor(deployment: LocalDeployment, provider: Provider, store: Store, rpc = rpcProvider(deployment.rpcUrl)) {
     this.deployment = deployment; this.provider = provider; this.store = store; this.rpc = rpc
   }
@@ -34,7 +35,8 @@ export class WalletController {
     return raw ? JSON.parse(raw) as ChainOperation : undefined
   }
   save(operation: ChainOperation) { this.store.setItem(STORAGE_KEY, JSON.stringify(operation)); return operation }
-  invalidate = () => { this.reviewed = false; this.account = undefined }
+  invalidateReview = () => { this.reviewEpoch++; this.reviewed = false; this.reviewedIntentId = undefined }
+  invalidate = () => { this.invalidateReview(); this.account = undefined }
   async guard(checkWallet = false) {
     const d = this.deployment
     assertLocalRpc(d.rpcUrl)
@@ -45,6 +47,7 @@ export class WalletController {
     if (checkWallet && BigInt(await this.provider.request({ method: 'eth_chainId' }) as string) !== BigInt(LOCAL_CHAIN_ID)) throw new Error('Wrong wallet chain; explicitly switch first')
   }
   async connect() {
+    this.invalidate()
     await this.guard()
     const accounts = await this.provider.request({ method: 'eth_requestAccounts' }) as Address[]
     this.account = accounts[0]; this.reviewed = false
@@ -52,11 +55,16 @@ export class WalletController {
     return this.account
   }
   async switchChain() {
+    this.invalidate()
     await this.guard()
     await this.provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: toHex(LOCAL_CHAIN_ID) }] })
     this.invalidate()
   }
-  async review(quantity: number) { return this.exclusive(() => this.reviewOriginal(quantity)) }
+  async review(quantity: number) {
+    this.invalidateReview()
+    const epoch = this.reviewEpoch
+    return this.exclusive(() => this.reviewOriginal(quantity, epoch))
+  }
   async exclusive<T>(action: () => Promise<T>): Promise<T> {
     if (typeof window !== 'undefined') {
       if (!navigator.locks) throw new Error('Browser storage locking unavailable')
@@ -64,10 +72,10 @@ export class WalletController {
     }
     return action()
   }
-  private async reviewOriginal(quantity: number) {
-    this.reviewed = false
+  private async reviewOriginal(quantity: number, epoch: number) {
     await this.guard(true)
     const accounts = await this.provider.request({ method: 'eth_accounts' }) as Address[]
+    if (epoch !== this.reviewEpoch) throw new Error('Review changed; review again')
     if (!this.account || accounts[0]?.toLowerCase() !== this.account.toLowerCase()) throw new Error('Account changed; connect again')
     const previous = this.load()
     if (previous && !['PREPARED', 'NOT_SUBMITTED', 'FINALIZED_SUCCESS', 'FINALIZED_REVERT'].includes(previous.status)) throw new Error('Resolve original operation first')
@@ -83,9 +91,10 @@ export class WalletController {
   private async sendOriginal() {
     const operation = this.load()
     if (!operation || operation.status !== 'PREPARED' || !this.reviewed || this.reviewedIntentId !== operation.intent.intentId) throw new Error('Review required')
+    const epoch = this.reviewEpoch
     await this.guard(true)
     const accounts = await this.provider.request({ method: 'eth_accounts' }) as Address[]
-    if (!this.reviewed || accounts[0]?.toLowerCase() !== operation.intent.account.toLowerCase() || Date.now() >= operation.intent.quoteExpiresAt) { this.reviewed = false; throw new Error('Account or quote changed; review again') }
+    if (epoch !== this.reviewEpoch || !this.reviewed || accounts[0]?.toLowerCase() !== operation.intent.account.toLowerCase() || Date.now() >= operation.intent.quoteExpiresAt) { this.reviewed = false; throw new Error('Account or quote changed; review again') }
     // Re-read after asynchronous checks. Another tab may already have submitted this intent.
     if (JSON.stringify(this.load()) !== JSON.stringify(operation)) throw new Error('Original operation changed')
     this.reviewed = false
