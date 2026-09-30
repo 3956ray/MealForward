@@ -20,3 +20,11 @@
 - `node_modules/`、`dist/`、`data/`、`__pycache__/` 为生成物，不入库。
 - 以 README 中**已验证**的安装、运行、测试、构建命令为准。更改写操作时运行对应测试；更改界面时做移动/桌面浏览器流程验收。
 - 只改本项目目录；独立审查由主 agent 安排，subagent 不再委派。
+
+## CP13 本地链授权（覆盖上述“不得接链”的本轮例外）
+
+- Leader 已授权仅 Anvil chainId 31337 + loopback，虚构身份/本地余额；禁止真实测试网、用户现有钱包、云、push与公网部署。
+- 主开发拥有共享 `src/chain-contract.ts`、依赖/锁、配置/文档、`contracts/`、`tests/contracts/`、`scripts/`；Leader钱包代理独占 `src/wallet/`、`src/components/WalletSupport.tsx`、`wallet-harness/`、`tests/wallet/`。共享更改先提给主开发。
+- 不改现有 App.tsx/P01–P14，不做持久backend/auth/outbox；不得重置或停止5173/8765及CP11演示数据。
+- 链状态以合约与确认结果为准；本地chain单位不是Monad testnet MON，gas与本金分开。独立harness不代表完整DApp。
+- 所有开发/审查Astra Medium；Leader派钱包代理及独立审查，主开发不重复委派同范围。

@@ -7,3 +7,10 @@ __pycache__/
 playwright-report/
 test-results/
 evidence/
+.env
+.env.*
+!.env.example
+out/
+cache/
+.localchain/
+wallet-harness/dist/

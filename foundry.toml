@@ -1,0 +1,15 @@
+[profile.default]
+src = "contracts"
+test = "tests/contracts"
+out = "out"
+cache_path = "cache"
+libs = ["node_modules"]
+remappings = ["@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+chain_id = 31337
+
+[fuzz]
+runs = 256

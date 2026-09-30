@@ -31,3 +31,9 @@ CP11 多券演示：新的 normal 样例中 REF-A 有3份虚构额度。先支�
 接口与字段见 [docs/API.md](docs/API.md)。首次仓库基线为 GitHub `3956ray/MealForward` 的 `db3d5729c320325aaf3247b0781ed5bb5064c065`（仅 `LICENSE`）；本地开发分支为 `codex/mcpay-local-mvp`。
 
 CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION.md)。
+
+## CP13 localchain（隔离开发中）
+
+C0已冻结接口；合约和钱包模块按独立提交实现。仅本地Anvil31337，不触及用户钱包或Monad测试网。
+共享接口、文件所有权、fixture和harness启动约定见 [CP13-CONTRACT](docs/CP13-CONTRACT.md)。
+此处chain/wallet脚本在对应实施提交完成后才可运行，C0不宣称链路已实现或验收。
