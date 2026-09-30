@@ -12,7 +12,7 @@ import time
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +89,21 @@ CREATE TABLE IF NOT EXISTS vouchers (
  handoff_declared INTEGER NOT NULL DEFAULT 0, report_operation TEXT,
  settlement_operation TEXT, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS issuances (
+ operation_id TEXT PRIMARY KEY REFERENCES operations(id), request_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS issuance_vouchers (
+ operation_id TEXT NOT NULL REFERENCES issuances(operation_id),
+ voucher_id TEXT NOT NULL UNIQUE REFERENCES vouchers(id), position INTEGER NOT NULL,
+ PRIMARY KEY(operation_id, position)
+);
+CREATE TABLE IF NOT EXISTS processing_groups (
+ id TEXT PRIMARY KEY, staff_actor TEXT NOT NULL, shop_id TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS processing_items (
+ group_id TEXT NOT NULL REFERENCES processing_groups(id), voucher_id TEXT NOT NULL REFERENCES vouchers(id),
+ position INTEGER NOT NULL, PRIMARY KEY(group_id, voucher_id), UNIQUE(group_id, position)
+);
 CREATE TABLE IF NOT EXISTS cases (
  id TEXT PRIMARY KEY, actor TEXT NOT NULL, voucher_id TEXT,
  kind TEXT NOT NULL, detail TEXT NOT NULL, stage TEXT NOT NULL, created_at INTEGER NOT NULL
@@ -106,12 +121,25 @@ def init(path: Path) -> None:
         db.executescript(SCHEMA)
         if not db.execute("SELECT 1 FROM batch").fetchone():
             seed(db, "normal")
+        # Additive CP11 migration: never reset balances, quotas, sessions or old vouchers.
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            for op in db.execute("SELECT * FROM operations WHERE action='issue' AND status='SUCCESS'").fetchall():
+                if db.execute("SELECT 1 FROM issuances WHERE operation_id=?", (op["id"],)).fetchone():
+                    continue
+                v = db.execute("SELECT * FROM vouchers WHERE id=?", (op["target"],)).fetchone()
+                if v:
+                    snapshot = issue_snapshot({"recipient_ref": v["recipient_ref"], "quantity": 1,
+                                               "batch_id": batch(db)["id"], "quote_price": batch(db)["price"],
+                                               "rule_version": batch(db)["rule_version"]})
+                    db.execute("INSERT INTO issuances VALUES (?,?)", (op["id"], snapshot))
+                    db.execute("INSERT INTO issuance_vouchers VALUES (?,?,0)", (op["id"], v["id"]))
 
 
 def seed(db: sqlite3.Connection, scenario: str) -> None:
     if scenario not in ("normal", "paused"):
         raise ApiError(400, "BAD_SCENARIO", "仅能重置为 normal 或 paused 演示。")
-    for table in ("events", "cases", "vouchers", "operations", "sessions", "recipients", "batch"):
+    for table in ("processing_items", "processing_groups", "issuance_vouchers", "issuances", "events", "cases", "vouchers", "operations", "sessions", "recipients", "batch"):
         db.execute(f"DELETE FROM {table}")
     paused = scenario == "paused"
     f, a, r, h = (200, 0, 100, 100) if paused else (0, 0, 0, 0)
@@ -122,7 +150,7 @@ def seed(db: sqlite3.Connection, scenario: str) -> None:
     db.executemany(
         "INSERT INTO recipients VALUES (?,?,?,?,?,?)",
         [
-            ("REF-A", 1, 1, 1, "R-demo-v1", "演示服务计划已确认，本期尚有 1 份额度"),
+            ("REF-A", 1, 3, 1, "R-demo-v1", "虚构服务计划已确认；本期初始 3 份，非真实家庭资格"),
             ("REF-B", 0, 0, 1, "R-demo-v1", "未有当前服务计划确认"),
             ("REF-C", 1, 1, 0, "R-demo-v1", "资格合格，但私人交付渠道尚未核对"),
             ("REF-D", 1, 0, 1, "R-demo-v1", "本期额度已用完"),
@@ -252,6 +280,43 @@ def get_voucher(db: sqlite3.Connection, voucher_id: str) -> sqlite3.Row:
     return v
 
 
+def issue_snapshot(body: dict) -> str:
+    return json.dumps({k: body.get(k) for k in ("recipient_ref", "quantity", "batch_id", "quote_price", "rule_version")}, sort_keys=True, separators=(",", ":"))
+
+
+def issuance_view(db: sqlite3.Connection, op_id: str, actor: str) -> dict:
+    row = db.execute("SELECT i.*,o.actor FROM issuances i JOIN operations o ON o.id=i.operation_id WHERE i.operation_id=? AND o.actor=?", (op_id, actor)).fetchone()
+    if not row:
+        raise ApiError(404, "NOT_FOUND", "找不到本机构原发行结果；不可据此判断未提交。")
+    request = json.loads(row["request_json"])
+    vouchers = [rowdict(v) for v in db.execute("SELECT v.id,v.recipient_ref,v.status,v.delivery_status,v.delivery_method,v.delivery_at,v.created_at FROM issuance_vouchers iv JOIN vouchers v ON v.id=iv.voucher_id WHERE iv.operation_id=? ORDER BY iv.position", (op_id,))]
+    return {"operation": op_dict(db, op_id), "request": request, "vouchers": vouchers}
+
+
+def checked_code(db: sqlite3.Connection, code: str) -> sqlite3.Row:
+    v = db.execute("SELECT * FROM vouchers WHERE code=?", (code,)).fetchone()
+    if not v or not v["code_expires"] or v["code_expires"] <= now():
+        raise ApiError(404, "CODE_INVALID", "展示码不存在或已过期，请重新出示有效码。")
+    if v["status"] != "active" or v["delivery_status"] not in ("sent", "handover", "acknowledged"):
+        raise ApiError(409, "LOCK_CONFLICT", "此券不可开始新的处理。")
+    return v
+
+
+def own_group(db: sqlite3.Connection, group_id: str, actor: str) -> sqlite3.Row:
+    group = db.execute("SELECT * FROM processing_groups WHERE id=? AND staff_actor=? AND shop_id=?", (group_id, actor, SHOP["id"])).fetchone()
+    if not group:
+        raise ApiError(404, "NOT_FOUND", "找不到本店本人处理组。")
+    return group
+
+
+def group_view(db: sqlite3.Connection, group: sqlite3.Row) -> dict:
+    items = []
+    for v in db.execute("SELECT v.id,v.status,v.lock_actor,v.lock_confirmed FROM processing_items i JOIN vouchers v ON v.id=i.voucher_id WHERE i.group_id=? ORDER BY i.position", (group["id"],)):
+        own = v["lock_actor"] == group["staff_actor"]
+        items.append({"voucher_id": v["id"], "status": v["status"] if own else ("needs_code" if v["status"] == "active" else "unavailable"), "owned": own, "lock_confirmed": bool(v["lock_confirmed"]) if own else False})
+    return {"id": group["id"], "created_at": group["created_at"], "items": items}
+
+
 def action(db: sqlite3.Connection, session: sqlite3.Row, body: dict) -> dict:
     name = body.get("action")
     if name == "precheck":
@@ -272,6 +337,12 @@ def action(db: sqlite3.Connection, session: sqlite3.Row, body: dict) -> dict:
     actor = session["actor"]
     # A repeated request returns the original evidence even if the batch has since paused.
     previous = old_op(db, actor, name, key)
+    if previous and name == "issue":
+        require_role(session, "partner")
+        original = issuance_view(db, previous["id"], actor)
+        if issue_snapshot(body) != issue_snapshot(original["request"]):
+            raise ApiError(409, "INTENT_CONFLICT", "同一发行意图的数量或规则快照不一致，请查询原结果。")
+        return {"message": "返回原N券发行，未再次预留。", "operation": previous, "issuance": original}
     if previous:
         return {"message": "已返回原操作，未重复执行。", "operation": previous}
 
@@ -302,28 +373,58 @@ def action(db: sqlite3.Connection, session: sqlite3.Row, body: dict) -> dict:
     if name == "issue":
         require_role(session, "partner")
         ensure_active(db)
+        quantity = body.get("quantity")
+        if type(quantity) is not int or not 1 <= quantity <= 20:
+            raise ApiError(400, "BAD_QUANTITY", "发行数量须为1–20的整数，每券仅一份。")
+        b = batch(db)
+        if body.get("batch_id") != b["id"] or body.get("quote_price") != b["price"] or body.get("rule_version") != b["rule_version"]:
+            raise ApiError(409, "QUOTE_CHANGED", "批次、价格或规则已变化，请重新审阅。")
         ref = body.get("recipient_ref")
         recipient = db.execute("SELECT * FROM recipients WHERE ref=?", (ref,)).fetchone()
         if not recipient:
             raise ApiError(404, "NOT_FOUND", "此领取关联不在本机构演示范围。")
-        if not recipient["eligible"] or recipient["quota_remaining"] < 1:
-            raise ApiError(409, "NOT_ELIGIBLE", "资格未确认或本期份额不足，不能发行可兑券。")
+        if not recipient["eligible"] or recipient["quota_remaining"] < quantity:
+            raise ApiError(409, "NOT_ELIGIBLE", "资格未确认或本期份额不足。")
+        if recipient["rule_version"] != b["rule_version"]:
+            raise ApiError(409, "QUOTE_CHANGED", "此关联规则需重新核对。")
         if not recipient["channel_verified"]:
-            raise ApiError(409, "CHANNEL_UNVERIFIED", "私人交付渠道尚未核对，不能发行可兑券。")
-        b = batch(db)
-        if b["a"] - b["l"] < b["price"]:
+            raise ApiError(409, "CHANNEL_UNVERIFIED", "私人交付渠道尚未核对。")
+        if b["a"] - b["l"] < quantity * b["price"]:
             raise ApiError(409, "INSUFFICIENT_A", "可发餐款 A−L 不足。")
-        voucher_id = "voucher-" + secrets.token_hex(7)
-        secret = secrets.token_urlsafe(24)
-        db.execute(
-            "INSERT INTO vouchers (id,recipient_ref,secret,status,delivery_status,created_at) VALUES (?,?,?,?,?,?)",
-            (voucher_id, ref, secret, "active", "pending", now()),
-        )
-        db.execute("UPDATE recipients SET quota_remaining=quota_remaining-1 WHERE ref=?", (ref,))
-        update_balance(db, a=-b["price"], r=b["price"])
-        op = create_op(db, actor, name, key, "SUCCESS", voucher_id, "success")
-        event(db, "voucher_issued", b["price"], "机构模拟发行确认")
-        return {"message": "已为私有关联发行一张虚构单份券。", "operation": op, "voucher": {"id": voucher_id, "secret": secret}}
+        op = create_op(db, actor, name, key, "SUCCESS", None, "success")
+        db.execute("UPDATE operations SET target=? WHERE id=?", (op["id"], op["id"]))
+        db.execute("INSERT INTO issuances VALUES (?,?)", (op["id"], issue_snapshot(body)))
+        first = None
+        for position in range(quantity):
+            voucher_id, secret = "voucher-" + secrets.token_hex(7), secrets.token_urlsafe(24)
+            db.execute("INSERT INTO vouchers (id,recipient_ref,secret,status,delivery_status,created_at) VALUES (?,?,?,?,?,?)", (voucher_id, ref, secret, "active", "pending", now()))
+            db.execute("INSERT INTO issuance_vouchers VALUES (?,?,?)", (op["id"], voucher_id, position))
+            first = first or {"id": voucher_id, "secret": secret}
+        db.execute("UPDATE recipients SET quota_remaining=quota_remaining-? WHERE ref=?", (quantity, ref))
+        update_balance(db, a=-quantity * b["price"], r=quantity * b["price"])
+        event(db, "voucher_issued", quantity * b["price"], "机构模拟发行确认")
+        result = {"message": f"已确认发行{quantity}张单份券。", "operation": op_dict(db, op["id"]), "issuance": issuance_view(db, op["id"], actor)}
+        if quantity == 1:  # Retain the single-voucher action response for CP8 clients.
+            result["voucher"] = first
+        return result
+
+    if name == "group_create":
+        require_role(session, "staff")
+        group_id = "group-" + secrets.token_hex(8)
+        db.execute("INSERT INTO processing_groups VALUES (?,?,?,?)", (group_id, actor, SHOP["id"], now()))
+        op = create_op(db, actor, name, key, "SUCCESS", group_id, "success")
+        return {"message": "已建立本次处理列表；尚未获得任何处理权。", "operation": op}
+
+    if name == "group_add":
+        require_role(session, "staff")
+        group = own_group(db, body.get("group_id"), actor)
+        v = checked_code(db, body.get("code"))
+        position = db.execute("SELECT COUNT(*) FROM processing_items WHERE group_id=?", (group["id"],)).fetchone()[0]
+        if position >= 20:
+            raise ApiError(409, "GROUP_FULL", "本地每次处理最多20张券。")
+        db.execute("INSERT OR IGNORE INTO processing_items VALUES (?,?,?)", (group["id"], v["id"], position))
+        op = create_op(db, actor, name, key, "SUCCESS", group["id"], "success")
+        return {"message": "已加入本次处理；仍需主动申请唯一处理权。", "operation": op}
 
     if name == "deliver":
         require_role(session, "partner")
@@ -368,6 +469,10 @@ def action(db: sqlite3.Connection, session: sqlite3.Row, body: dict) -> dict:
             raise ApiError(404, "CODE_INVALID", "展示码不存在或已过期。")
         if v["delivery_status"] not in ("sent", "handover", "acknowledged") or v["status"] != "active":
             raise ApiError(409, "LOCK_CONFLICT", "此券不可取得新的处理权。")
+        if body.get("group_id"):
+            group = own_group(db, body["group_id"], actor)
+            if not db.execute("SELECT 1 FROM processing_items WHERE group_id=? AND voucher_id=?", (group["id"], v["id"])).fetchone():
+                raise ApiError(409, "NOT_IN_GROUP", "请先主动把此券加入本次处理。")
         op = create_op(db, actor, name, key, "WAITING_CONFIRMATION", v["id"], None)
         db.execute(
             "UPDATE vouchers SET status='locked',lock_actor=?,lock_operation=?,code=NULL,code_expires=NULL WHERE id=?",
@@ -502,8 +607,9 @@ def work_state(db: sqlite3.Connection, session: sqlite3.Row | None) -> dict | No
     if role == "partner":
         return {
             "actor": actor, "role": role,
+            "issuances": [issuance_view(db, row["id"], actor) for row in db.execute("SELECT o.id FROM operations o JOIN issuances i ON i.operation_id=o.id WHERE o.actor=? ORDER BY o.created_at DESC,o.rowid DESC", (actor,)).fetchall()],
             "recipients": [rowdict(x) for x in db.execute("SELECT * FROM recipients ORDER BY ref")],
-            "vouchers": [rowdict(x) for x in db.execute("SELECT id,recipient_ref,secret,status,delivery_status,delivery_method,delivery_actor,delivery_at,created_at FROM vouchers ORDER BY created_at DESC")],
+            "vouchers": [rowdict(x) for x in db.execute("SELECT id,recipient_ref,status,delivery_status,delivery_method,delivery_actor,delivery_at,created_at FROM vouchers ORDER BY created_at DESC")],
             "cases": [rowdict(x) for x in db.execute("SELECT * FROM cases WHERE voucher_id IS NOT NULL OR actor=? ORDER BY created_at DESC", (actor,))],
         }
     if role == "staff":
@@ -513,6 +619,7 @@ def work_state(db: sqlite3.Connection, session: sqlite3.Row | None) -> dict | No
         )
         return {
             "actor": actor, "role": role, "redemptions": [rowdict(x) for x in rows],
+            "groups": [group_view(db, g) for g in db.execute("SELECT * FROM processing_groups WHERE staff_actor=? AND shop_id=? ORDER BY rowid DESC", (actor, SHOP["id"])).fetchall()],
             "payables": payable_rows(db),
             "cases": [rowdict(x) for x in db.execute("SELECT id,voucher_id,kind,stage,created_at FROM cases WHERE actor=? ORDER BY created_at DESC", (actor,))],
         }
@@ -605,6 +712,28 @@ class Handler(BaseHTTPRequestHandler):
                     result = voucher_view(db, session)
                     db.commit()
                     self.send_json(200, result)
+                    return
+                if path.startswith("/api/issuances/"):
+                    require_role(session, "partner")
+                    value = unquote(path.removeprefix("/api/issuances/"))
+                    if value.startswith("by-intent/"):
+                        op = old_op(db, session["actor"], "issue", value.removeprefix("by-intent/"))
+                        if not op:
+                            raise ApiError(404, "NOT_FOUND", "未查到原发行；不可据此断言未提交或重发。")
+                        value = op["id"]
+                    self.send_json(200, {"issuance": issuance_view(db, value, session["actor"])})
+                    return
+                if path.startswith("/api/partner-invite/"):
+                    require_role(session, "partner")
+                    v = get_voucher(db, unquote(path.removeprefix("/api/partner-invite/")))
+                    if v["status"] != "active":
+                        raise ApiError(409, "BAD_VOUCHER_STATE", "此券已进入处理，不能再展示邀请。")
+                    self.send_json(200, {"id": v["id"], "secret": v["secret"]})
+                    return
+                if path.startswith("/api/groups/"):
+                    require_role(session, "staff")
+                    group = own_group(db, unquote(path.removeprefix("/api/groups/")), session["actor"])
+                    self.send_json(200, {"group": group_view(db, group)})
                     return
                 if path.startswith("/api/operations/"):
                     require_role(session, "supporter", "partner", "staff", "settler", "recipient")

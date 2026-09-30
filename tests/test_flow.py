@@ -53,6 +53,11 @@ class FlowTests(unittest.TestCase):
         return result["token"]
 
     def act(self, token, action, key, **kwargs):
+        if action == "issue":
+            kwargs.setdefault("quantity", 1)
+            kwargs.setdefault("batch_id", "batch-demo")
+            kwargs.setdefault("quote_price", 100)
+            kwargs.setdefault("rule_version", "R-demo-v1")
         if action == "support":
             kwargs.setdefault("quote_price", 100)
             kwargs.setdefault("rule_version", "R-demo-v1")
@@ -87,6 +92,129 @@ class FlowTests(unittest.TestCase):
         self.assertEqual((b["updated_at"] + 8 * 3600) % 86400, 0)
         return state
 
+    def issue_many(self, quantity=3, key="family-issue-001"):
+        supporter, partner = self.login("supporter"), self.login("partner")
+        self.assertEqual(self.act(supporter, "support", "family-fund-001", quantity=quantity)[0], 200)
+        status, result = self.act(partner, "issue", key, quantity=quantity, recipient_ref="REF-A")
+        self.assertEqual(status, 200)
+        return partner, result["issuance"]
+
+    def test_family_atomic_quantity_idempotency_and_privacy(self):
+        partner, issuance = self.issue_many()
+        ids = [v["id"] for v in issuance["vouchers"]]
+        self.assertEqual(len(set(ids)), 3)
+        self.assert_balance(300, 0, 300, 0, 0)
+        self.assertNotIn("secret", json.dumps(issuance))
+        status, repeated = self.act(partner, "issue", "family-issue-001", quantity=3, recipient_ref="REF-A")
+        self.assertEqual(status, 200)
+        self.assertEqual(repeated["issuance"], issuance)
+        self.assertEqual(self.act(partner, "issue", "family-issue-001", quantity=2, recipient_ref="REF-A")[1]["code"], "INTENT_CONFLICT")
+        status, recovered = self.req("GET", "/api/issuances/by-intent/family-issue-001", token=partner)
+        self.assertEqual(recovered["issuance"], issuance)
+        secrets = [self.req("GET", "/api/partner-invite/" + vid, token=partner)[1]["secret"] for vid in ids]
+        self.assertEqual(len(set(secrets)), 3)
+        _, exchange = self.req("POST", "/api/invite/exchange", {"secret": secrets[0]})
+        for token in (None, self.login("supporter"), self.login("staff_a"), self.login("settler"), exchange["token"]):
+            self.assertIn(self.req("GET", "/api/issuances/" + issuance["operation"]["id"], token=token)[0], (401, 403))
+            self.assertIn(self.req("GET", "/api/partner-invite/" + ids[0], token=token)[0], (401, 403))
+        _, state = self.req("GET", "/api/state", token=self.login("staff_a"))
+        for hidden in ("recipient_ref", "issuances", *secrets, *ids):
+            self.assertNotIn(hidden, json.dumps(state))
+
+    def test_family_invalid_requests_and_transaction_rollback(self):
+        from server.app import connect
+        from contextlib import closing
+        supporter, partner = self.login("supporter"), self.login("partner")
+        self.act(supporter, "support", "fund-invalid-001", quantity=3)
+        for i, quantity in enumerate((0, -1, 1.5, True, "3", 21, 4)):
+            self.assertNotEqual(self.act(partner, "issue", "bad-count-" + str(i), quantity=quantity, recipient_ref="REF-A")[0], 200)
+        self.assertEqual(self.act(partner, "issue", "bad-price-001", quantity=3, recipient_ref="REF-A", quote_price=101)[1]["code"], "QUOTE_CHANGED")
+        self.assertEqual(self.act(partner, "issue", "bad-rule-001", quantity=3, recipient_ref="REF-A", rule_version="changed")[1]["code"], "QUOTE_CHANGED")
+        with closing(connect(Handler.db_path)) as db:
+            db.execute("UPDATE batch SET l=100")
+        self.assertEqual(self.act(partner, "issue", "insufficient-001", quantity=3, recipient_ref="REF-A")[1]["code"], "INSUFFICIENT_A")
+        with closing(connect(Handler.db_path)) as db:
+            db.execute("UPDATE batch SET l=0")
+            db.execute("CREATE TRIGGER fail_second BEFORE INSERT ON vouchers WHEN (SELECT COUNT(*) FROM vouchers)=1 BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        try:
+            self.assertEqual(self.act(partner, "issue", "rollback-issue-001", quantity=3, recipient_ref="REF-A")[0], 409)
+            self.assert_balance(300, 300, 0, 0, 0)
+            with closing(connect(Handler.db_path)) as db:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM vouchers").fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT quota_remaining FROM recipients WHERE ref='REF-A'").fetchone()[0], 3)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM issuances").fetchone()[0], 0)
+        finally:
+            with closing(connect(Handler.db_path)) as db:
+                db.execute("DROP TRIGGER fail_second")
+
+    def test_family_same_intent_concurrently_returns_original_set(self):
+        supporter, partner = self.login("supporter"), self.login("partner")
+        self.act(supporter, "support", "fund-identical-01", quantity=3)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: self.act(partner, "issue", "same-intent-001", quantity=3, recipient_ref="REF-A"), range(2)))
+        self.assertEqual([r[0] for r in results], [200, 200])
+        self.assertEqual(results[0][1]["issuance"], results[1][1]["issuance"])
+        self.assert_balance(300, 0, 300, 0, 0)
+
+    def test_family_competing_issue_intents_never_overspend(self):
+        supporter, partner = self.login("supporter"), self.login("partner")
+        self.act(supporter, "support", "fund-compete-01", quantity=3)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda key: self.act(partner, "issue", key, quantity=2, recipient_ref="REF-A"), ["issue-compete-a", "issue-compete-b"]))
+        self.assertEqual(sorted(x[0] for x in results), [200, 409])
+        self.assert_balance(300, 100, 200, 0, 0)
+
+    def test_processing_groups_restore_only_presented_vouchers(self):
+        partner, issuance = self.issue_many()
+        a, b = self.login("staff_a"), self.login("staff_b")
+        status, group = self.act(a, "group_create", "group-create-01")
+        gid = group["operation"]["target"]
+        codes = []
+        for i, v in enumerate(issuance["vouchers"][:2]):
+            self.act(partner, "deliver", "send-family-" + str(i), voucher_id=v["id"], method="sent")
+            _, secret = self.req("GET", "/api/partner-invite/" + v["id"], token=partner)
+            _, session = self.req("POST", "/api/invite/exchange", {"secret": secret["secret"]})
+            _, view = self.req("GET", "/api/voucher", token=session["token"])
+            codes.append(view["code"])
+            self.assertEqual(self.act(a, "group_add", "group-add-" + str(i), group_id=gid, code=view["code"])[0], 200)
+        self.assertEqual(self.act(a, "group_add", "group-add-again", group_id=gid, code=codes[0])[0], 200)
+        status, response = self.req("GET", "/api/groups/" + gid, token=a)
+        self.assertEqual(len(response["group"]["items"]), 2)
+        self.assertNotIn(issuance["vouchers"][2]["id"], json.dumps(response))
+        for forbidden in ("recipient_ref", "secret", "code", "issuance"):
+            self.assertNotIn('"' + forbidden + '"', json.dumps(response))
+        self.assertEqual(self.req("GET", "/api/groups/" + gid, token=b)[0], 404)
+        self.assertEqual(self.act(b, "group_add", "foreign-group-01", group_id=gid, code=codes[0])[0], 404)
+        self.assertNotEqual(self.act(a, "lock", "no-code-lock-01", voucher_id=issuance["vouchers"][0]["id"], group_id=gid)[0], 200)
+        _, lock = self.act(a, "lock", "group-lock-001", code=codes[0], group_id=gid)
+        self.act(a, "confirm_lock", "group-confirm-1", operation_id=lock["operation"]["id"])
+        self.act(a, "handoff", "group-handoff-1", voucher_id=issuance["vouchers"][0]["id"])
+        self.act(a, "report", "group-report-01", voucher_id=issuance["vouchers"][0]["id"], outcome="unknown")
+        _, restored = self.req("GET", "/api/groups/" + gid, token=self.login("staff_a"))
+        self.assertEqual([i["status"] for i in restored["group"]["items"]], ["report_unknown", "needs_code"])
+        self.assert_balance(300, 0, 300, 0, 0)
+
+    def test_cp10_additive_migration_preserves_all_existing_data(self):
+        from server.app import connect
+        from contextlib import closing
+        _, _, _, vid, _, _ = self.funded_voucher()
+        with tempfile.TemporaryDirectory() as directory:
+            oldpath = Path(directory) / "old.sqlite3"
+            with closing(connect(Handler.db_path)) as source, closing(connect(oldpath)) as old:
+                source.backup(old)
+                # Reconstruct CP10 schema/target semantics without CP11 tables.
+                old.execute("UPDATE operations SET target=? WHERE action='issue'", (vid,))
+                for table in ("processing_items", "processing_groups", "issuance_vouchers", "issuances"):
+                    old.execute("DROP TABLE " + table)
+                tables = ("batch", "recipients", "sessions", "operations", "vouchers", "events", "cases")
+                before = {t: [dict(x) for x in old.execute("SELECT * FROM " + t)] for t in tables}
+            init(oldpath)
+            init(oldpath)
+            with closing(connect(oldpath)) as migrated:
+                after = {t: [dict(x) for x in migrated.execute("SELECT * FROM " + t)] for t in tables}
+                self.assertEqual(before, after)
+                self.assertEqual(migrated.execute("SELECT COUNT(*) FROM issuance_vouchers").fetchone()[0], 1)
+
     def test_recipient_status_probe_does_not_reissue_code(self):
         supporter, _, recipient, _, _, code = self.funded_voucher()
         status, response = self.req("GET", "/api/voucher/status")
@@ -110,7 +238,7 @@ class FlowTests(unittest.TestCase):
         self.assert_balance(100, 0, 100, 0, 0)
         status, old = self.act(partner, "issue", "issue-once-0001", recipient_ref="REF-A")
         self.assertEqual(status, 200)
-        self.assertEqual(old["operation"]["target"], voucher_id)
+        self.assertEqual(old["issuance"]["vouchers"][0]["id"], voucher_id)
         status, state = self.req("GET", "/api/state")
         self.assertNotIn("REF-A", json.dumps(state))
         self.assertNotIn(secret, json.dumps(state))

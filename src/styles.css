@@ -175,3 +175,12 @@ main:focus{outline:none}
 @media(max-width:520px){.voucher-page{margin-top:4px}.voucher-page .panel{padding:16px}.voucher-status{align-items:flex-start;flex-direction:column;gap:2px}.voucher-card .code-box{padding:10px}.voucher-card .code-box svg{width:132px;height:132px}.large-code{font-size:25px}.site-footer{gap:4px}.top-nav{gap:6px}.top-nav a{font-size:11px;padding-inline:1px}.role-nav{gap:12px}}
 @media(max-width:380px){main{padding-top:12px}.hero-meta{margin:4px auto 7px;gap:2px}.home-page h1{font-size:34px;letter-spacing:0;margin:5px 0}.hero-lead{font-size:15px;line-height:1.45;margin-bottom:0}.meal-scene{height:160px;margin-bottom:0}.tray{transform:scale(.52) rotate(-4deg)}.hero-select{margin:2px auto 8px}}
 @media(prefers-reduced-motion:reduce){.safe-page-enter{animation:none}.button{transition:none}.button:hover:not(:disabled){transform:none}}
+
+/* Compact working forms keep the current task ahead of supporting detail. */
+.issuance-page .panel p,.work-page .panel p{margin:8px 0}
+.group-summary p{font-size:13px}
+.inline-error{color:#9c2027}
+.status-priority .button,.status-priority>a{margin:5px 8px 5px 0}
+@media(max-width:520px){.issuance-page h1,.work-page h1{font-size:30px;margin:10px 0}.issuance-page>p,.work-page>p{font-size:14px;line-height:1.5}.issuance-page .panel,.work-page .panel{padding:14px;margin-top:12px}.issuance-page .split-stats{margin:12px 0}.issuance-page .panel p,.work-page .panel p{font-size:14px}.work-page .group-summary{padding:12px}.group-summary h2{font-size:19px}.work-page .group-summary p{font-size:12px;margin:5px 0}}
+
+.group-picker summary{min-height:44px;cursor:pointer;padding-block:10px;font-weight:700}

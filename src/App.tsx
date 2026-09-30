@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, intentKey } from './api'
-import type { ActionResult, Actor, Operation, Redemption, State, VoucherView } from './api'
+import type { ActionResult, Actor, Operation, Redemption, State, VoucherView, Issuance, ProcessingGroup } from './api'
 
 const pages = ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09', 'P10', 'P11', 'P12', 'P13', 'P14'] as const
 type Page = typeof pages[number]
 type Route = { page: Page; tail: string | null }
-type PendingWrite = { actor: string; action: 'report' | 'settle'; voucherId: string; intent: string; storageKey: string; operationId?: string }
+type PendingWrite = { actor: string; action: 'report' | 'settle' | 'lock'; voucherId: string; intent: string; storageKey: string; operationId?: string }
+type PendingIssue = { actor: string; intent: string; request: Issuance['request']; operationId?: string }
+const issueStorageKey = 'mealforward-pending-issues'
+const issueKey = (actor: string, ref: string) => JSON.stringify([actor, 'batch-demo', ref])
 const pendingStorageKey = 'mealforward-pending-writes'
 const pendingKey = (actor: string | null, action: string, voucherId: string) => JSON.stringify([actor, action, voucherId])
 
@@ -90,6 +93,17 @@ export default function App() {
     pendingWritesRef.current = next
     setPendingWrites(next)
   }, [])
+  const [pendingIssues, setPendingIssues] = useState<Record<string, PendingIssue>>(() => {
+    try { return JSON.parse(sessionStorage.getItem(issueStorageKey) ?? '{}') } catch { return {} }
+  })
+  const pendingIssuesRef = useRef(pendingIssues)
+  const savePendingIssues = useCallback((next: Record<string, PendingIssue>) => {
+    sessionStorage.setItem(issueStorageKey, JSON.stringify(next)); pendingIssuesRef.current = next; setPendingIssues(next)
+  }, [])
+  const [issueQuantities, setIssueQuantities] = useState<Record<string, number>>({})
+  const [shownInvite, setShownInvite] = useState<{ id: string; secret: string } | null>(null)
+  const privateEpoch = useRef(0)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [supportOutcome, setSupportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
   const [reportOutcome, setReportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
@@ -115,14 +129,21 @@ export default function App() {
 
   const refresh = useCallback(async (usingToken: string | null = token) => {
     const request = ++stateEpoch.current
+    privateEpoch.current++; setShownInvite(null)
     try {
       const next = await api<State>('/state', usingToken)
       if (request !== stateEpoch.current) return null
+      const issues = { ...pendingIssuesRef.current }
+      for (const [key, pending] of Object.entries(issues)) {
+        if (pending.actor !== next.work?.actor) continue
+        const found = next.work.issuances?.find(i => i.operation.intent_key === pending.intent)
+        if (found && Object.entries(pending.request).every(([k, v]) => found.request[k as keyof Issuance['request']] === v)) issues[key] = { ...pending, operationId: found.operation.id }
+      }
       const reconciled: Array<{ key: string; pending: PendingWrite; release: boolean }> = []
       // Only a matching original operation plus fresh state can release a write gate.
       for (const [key, pending] of Object.entries(pendingWritesRef.current)) {
         if (pending.actor !== next.work?.actor) continue
-        const originalId = pending.operationId ?? (pending.action === 'report'
+        const originalId = pending.operationId ?? (pending.action === 'lock' ? next.work.redemptions?.find(red => red.id === pending.voucherId)?.lock_operation : pending.action === 'report'
           ? next.work.redemptions?.find(red => red.id === pending.voucherId)?.report_operation
           : next.work.payables?.find(pay => pay.voucher_id === pending.voucherId)?.settlement_operation)
         if (!originalId) continue
@@ -132,10 +153,10 @@ export default function App() {
           if (pendingWritesRef.current[key]?.intent !== pending.intent || original.intent_key !== pending.intent || original.actor !== pending.actor || original.action !== pending.action || original.target !== pending.voucherId) continue
           const red = next.work.redemptions?.find(item => item.id === pending.voucherId)
           const pay = next.work.payables?.find(item => item.voucher_id === pending.voucherId)
-          const stateConfirms = pending.action === 'report'
+          const stateConfirms = pending.action === 'lock' ? red?.lock_operation === original.id : pending.action === 'report'
             ? red?.report_operation === original.id && (original.status === 'FAILED' ? red.status === 'handoff' : ['reported', 'settlement_unknown', 'settled'].includes(red.status))
             : pay?.settlement_operation === original.id && pay.settlement_status === original.status && (original.status === 'FAILED' ? pay.status === 'reported' : pay.status === 'settled')
-          reconciled.push({ key, pending: { ...pending, operationId: original.id }, release: ['SUCCESS', 'FAILED'].includes(original.status) && stateConfirms })
+          reconciled.push({ key, pending: { ...pending, operationId: original.id }, release: (['SUCCESS', 'FAILED'].includes(original.status) || pending.action === 'lock' && original.status === 'WAITING_CONFIRMATION') && stateConfirms })
         } catch { /* A missing/failed original query keeps this write conservatively blocked. */ }
       }
       if (request !== stateEpoch.current) return null
@@ -145,6 +166,11 @@ export default function App() {
         if (release) { sessionStorage.removeItem(pending.storageKey); delete updated[key] }
         else updated[key] = pending
       }
+      const currentIssues = { ...pendingIssuesRef.current }
+      for (const [key, pending] of Object.entries(issues)) {
+        if (currentIssues[key]?.intent === pending.intent) currentIssues[key] = pending
+      }
+      savePendingIssues(currentIssues)
       savePendingWrites(updated)
       setState(next)
       setError(null)
@@ -153,6 +179,7 @@ export default function App() {
       if (request !== stateEpoch.current) return null
       const apiError = e as Error & { status?: number }
       if (apiError.status === 401 && usingToken) {
+        privateEpoch.current++; setShownInvite(null)
         voucherEpoch.current++
         setVoucher(null)
         setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
@@ -171,7 +198,7 @@ export default function App() {
       setError(apiError.message)
       return null
     }
-  }, [token, savePendingWrites])
+  }, [token, savePendingWrites, savePendingIssues])
 
   const refreshVoucher = useCallback(async (usingToken: string | null = token) => {
     const request = ++voucherEpoch.current
@@ -206,6 +233,8 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       const next = parseRoute()
+      setBusy(false)
+      privateEpoch.current++; setShownInvite(null)
       setMessage(null); setLastOperation(null); setError(null)
       if (next.page !== 'P05' || next.tail) { voucherEpoch.current++; inviteEpoch.current++; setVoucher(null); setVoucherOpen(false); setPendingInvite(null) }
       operationEpoch.current++; setOperation(null); setOperationQueriedAt(null)
@@ -224,6 +253,7 @@ export default function App() {
       inviteEpoch.current++
       setVoucher(null)
       setVoucherOpen(false)
+      privateEpoch.current++; setShownInvite(null)
       setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
       setPendingInvite(secret)
       setToken(null)
@@ -332,6 +362,8 @@ export default function App() {
   }
 
   async function selectActor(selected: Exclude<Actor, 'recipient'>, target: Page) {
+    privateEpoch.current++; setShownInvite(null); setSelectedGroupId(null)
+    sessionStorage.removeItem('mealforward-token')
     voucherEpoch.current++
     inviteEpoch.current++
     operationEpoch.current++
@@ -340,20 +372,22 @@ export default function App() {
     setBusy(true); setError(null); setMessage(null); setVoucher(null); setCheck(undefined); setHasMeal(false); setLastOperation(null); setOperation(null)
     setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
     setPendingInvite(null); setVoucherOpen(false)
-    setState(null)
+    setState(null); setToken(null); stateEpoch.current++
+    const selection = actionEpoch.current
     try {
       const session = await api<{ token: string }>('/session', null, { actor: selected })
+      if (selection !== actionEpoch.current) return
       sessionStorage.setItem('mealforward-token', session.token)
       setToken(session.token)
       await refresh(session.token)
-      navigate(target)
-    } catch (e) { setError((e as Error).message) }
-    finally { setBusy(false) }
+      if (selection === actionEpoch.current) navigate(target)
+    } catch (e) { if (selection === actionEpoch.current) setError((e as Error).message) }
+    finally { if (selection === actionEpoch.current) setBusy(false) }
   }
 
   async function perform(fields: Record<string, unknown>, options?: { page?: Page; stay?: boolean }) {
     if (!token) { navigate('P06'); return }
-    const guardedAction = fields.action === 'report' || fields.action === 'settle' ? fields.action : null
+    const guardedAction = fields.action === 'report' || fields.action === 'settle' || fields.action === 'lock' ? fields.action : null
     const guardKey = guardedAction ? pendingKey(actor, guardedAction, String(fields.voucher_id)) : null
     if (guardKey && pendingWritesRef.current[guardKey]) { setMessage('此笔结果待核，请只查原操作与服务端状态。'); return }
     const actionRequest = actionEpoch.current
@@ -374,6 +408,7 @@ export default function App() {
       }
       if (guardKey && pendingWritesRef.current[guardKey]) return null
       if (guardKey && guardedAction && actor) savePendingWrites({ ...pendingWritesRef.current, [guardKey]: { actor, action: guardedAction, voucherId: String(fields.voucher_id), intent: String(payload.intent_key), storageKey: intentStorageKey! } })
+      if (actionRequest !== actionEpoch.current) return null
       const result = await api<ActionResult>('/act', token, payload)
       if (guardKey && result.operation && pendingWritesRef.current[guardKey]?.intent === payload.intent_key) {
         savePendingWrites({ ...pendingWritesRef.current, [guardKey]: { ...pendingWritesRef.current[guardKey], operationId: result.operation.id } })
@@ -393,6 +428,8 @@ export default function App() {
       if (actionRequest !== actionEpoch.current) return result
       if (role === 'recipient' && voucherOpen && route.page === 'P05') await refreshVoucher(token)
       if (actionRequest !== actionEpoch.current) return result
+      if (fields.action === 'group_create' && result.operation?.target) setSelectedGroupId(result.operation.target)
+      if (fields.action === 'group_add') setHasMeal(false)
       if (options?.page) navigate(options.page, options.page === 'P03' ? result.operation?.id : undefined)
       else if (result.operation && !options?.stay && ['UNKNOWN', 'FAILED'].includes(result.operation.status)) navigate('P03', result.operation.id)
       return result
@@ -400,16 +437,18 @@ export default function App() {
       if (actionRequest !== actionEpoch.current) return null
       if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return null
       const failure = (e as Error).message
+      if (guardKey && fields.action === 'lock' && [400, 403, 404, 409].includes((e as Error & { status?: number }).status ?? 0)) { const next = { ...pendingWritesRef.current }; delete next[guardKey]; savePendingWrites(next) }
       if (fields.action === 'precheck' || fields.action === 'lock') { setCheck(undefined); setHasMeal(false) }
       await refresh(token)
       if (actionRequest !== actionEpoch.current) return null
       if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return null
       setError(failure)
       return null
-    } finally { setBusy(false) }
+    } finally { if (actionRequest === actionEpoch.current) setBusy(false) }
   }
 
   async function reset(scenario: 'normal' | 'paused') {
+    privateEpoch.current++; setShownInvite(null); setSelectedGroupId(null)
     setBusy(true); setError(null); setMessage(null)
     voucherEpoch.current++
     inviteEpoch.current++
@@ -419,7 +458,7 @@ export default function App() {
     setVoucher(null); setRecipientCases([]); setPendingInvite(null); setVoucherOpen(false); setRecentSupport(null); setSupportUncertain(false); setState(null)
     try {
       await api('/reset', null, { scenario })
-      savePendingWrites({})
+      savePendingWrites({}); savePendingIssues({}); setShownInvite(null); setSelectedGroupId(null)
       voucherEpoch.current++
       sessionStorage.removeItem('mealforward-token')
       setToken(null); setVoucher(null); setPendingInvite(null); setCheck(undefined); setLastOperation(null)
@@ -427,6 +466,60 @@ export default function App() {
       navigate('P06')
     } catch (e) { setError((e as Error).message) }
     finally { setBusy(false) }
+  }
+
+  async function issueMeals(ref: string) {
+    if (!actor || !token || !batch || busy) return
+    const key = issueKey(actor, ref)
+    if (pendingIssuesRef.current[key]) return
+    const request = { recipient_ref: ref, quantity: issueQuantities[ref] ?? 1, batch_id: batch.id, quote_price: batch.price, rule_version: batch.rule_version }
+    const pending: PendingIssue = { actor, intent: intentKey(), request }
+    savePendingIssues({ ...pendingIssuesRef.current, [key]: pending })
+    const epoch = actionEpoch.current
+    setBusy(true); setError(null)
+    try {
+      const result = await api<ActionResult>('/act', token, { action: 'issue', ...request, intent_key: pending.intent })
+      if (epoch !== actionEpoch.current) return
+      if (result.issuance && result.operation?.status === 'SUCCESS') {
+        savePendingIssues({ ...pendingIssuesRef.current, [key]: { ...pending, operationId: result.operation.id } })
+        await refresh(token)
+        if (epoch === actionEpoch.current) navigate('P08', result.operation.id)
+      }
+    } catch (e) {
+      const failure = e as Error & { status?: number; code?: string }
+      // Explicit transactional rejection is not a lost response. Conflicting intent stays blocked.
+      if ([400, 403, 404, 409].includes(failure.status ?? 0) && failure.code !== 'INTENT_CONFLICT' && (pendingIssuesRef.current as Record<string, PendingIssue>)[key]?.intent === pending.intent) {
+        const next = { ...pendingIssuesRef.current }; delete next[key]; savePendingIssues(next)
+      }
+      if (epoch !== actionEpoch.current) return
+      await refresh(token)
+      if (epoch === actionEpoch.current) setError(failure.message)
+    } finally { if (epoch === actionEpoch.current) setBusy(false) }
+  }
+
+  async function recoverIssue(pending: PendingIssue) {
+    const epoch = actionEpoch.current
+    setBusy(true); setError(null)
+    try {
+      const result = await api<{ issuance: Issuance }>(`/issuances/by-intent/${encodeURIComponent(pending.intent)}`, token)
+      if (epoch !== actionEpoch.current) return
+      const original = result.issuance
+      if (original.operation.actor !== pending.actor || original.operation.intent_key !== pending.intent || !Object.entries(pending.request).every(([key, value]) => original.request[key as keyof Issuance['request']] === value)) throw new Error('原发行快照不匹配，继续待核。')
+      if (original.operation.status !== 'SUCCESS') throw new Error('原发行仍未确认，继续待核。')
+      savePendingIssues({ ...pendingIssuesRef.current, [issueKey(pending.actor, pending.request.recipient_ref)]: { ...pending, operationId: original.operation.id } })
+      const next = await refresh(token)
+      if (epoch === actionEpoch.current && next) navigate('P08', original.operation.id)
+    } catch (e) { if (epoch === actionEpoch.current) setError((e as Error).message) }
+    finally { if (epoch === actionEpoch.current) setBusy(false) }
+  }
+
+  async function showInvite(id: string) {
+    const epoch = ++privateEpoch.current
+    setShownInvite(null); setError(null)
+    try {
+      const result = await api<{ id: string; secret: string }>(`/partner-invite/${encodeURIComponent(id)}`, token)
+      if (epoch === privateEpoch.current) setShownInvite(result)
+    } catch (e) { if (epoch === privateEpoch.current) setError((e as Error).message) }
   }
 
   const page = route.page
@@ -441,6 +534,8 @@ export default function App() {
   const supportCompleted = role === 'supporter' ? state?.work?.operations?.find(op => op.action === 'support' && op.status === 'SUCCESS') : null
   const supportGuard = role === 'supporter' && (supportUnknown || supportCompleted || recentSupport?.status === 'SUCCESS' || supportUncertain)
   const currentVoucher = role === 'recipient' && !!token && voucherOpen && !pendingInvite && !route.tail && voucher && (!voucher.code_expires || voucher.code_expires * 1000 > Date.now()) ? voucher : null
+  const activeGroup = state?.work?.groups?.find(g => g.id === selectedGroupId) ?? state?.work?.groups?.[0]
+  const activeIssuance = state?.work?.issuances?.find(i => i.operation.id === route.tail)
   const navItems: Array<{ page: Page; name: string }> = [
     { page: 'P01', name: '首页' }, { page: 'P04', name: '公开餐账' },
     { page: 'P12', name: '联系求助' }, { page: 'P06', name: '工作入口' },
@@ -504,6 +599,7 @@ export default function App() {
             {operation && <><div className="detail-list"><div><span>动作</span><strong>{operation.action}</strong></div><div><span>目标</span><strong>{operation.target ?? '未生成目标'}</strong></div><div><span>创建时间</span><strong>{fmt(operation.created_at)}</strong></div><div><span>原角色</span><strong>{operation.actor}</strong></div></div><p className="fineprint">{operationQueriedAt ? `本次查询于 ${new Date(operationQueriedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}（本机显示）` : '正在查询服务端'}。本机时间不表示服务端确认时间。</p></>}
             <button type="button" className="button secondary" disabled={busy} onClick={async () => { const request = ++operationEpoch.current; setOperation(null); setOperationQueriedAt(null); setError(null); try { const result = await api<{ operation: Operation }>(`/operations/${encodeURIComponent(route.tail!)}`, token); if (request !== operationEpoch.current) return; setOperation(result.operation); setOperationQueriedAt(Date.now()); setError(null); await refresh(token) } catch (e) { if (request === operationEpoch.current) { setOperation(null); setOperationQueriedAt(null); setError((e as Error).message) } } }}>查询原操作</button>
           </div> : <div className="panel"><p>请从刚完成的操作或角色工作页进入原操作。仅支持者会看到自己的操作列表。</p>{state.work?.operations?.map(op => <Link key={op.id} page="P03" tail={op.id} className="list-link"><span>{op.action} · {label(op.status)}</span><code>{op.id}</code></Link>)}</div>}
+          {operation?.status === 'SUCCESS' && operation.action === 'issue' && <Link page="P08" tail={operation.id}>查看原发行单份券 →</Link>}
           {operation?.status === 'SUCCESS' && operation.action === 'support' && <Link page="P04">查看本批餐账 →</Link>}{operation?.status === 'FAILED' && operation.action === 'support' && <Link page="P02">返回重新审阅报价 →</Link>}{operation?.status === 'UNKNOWN' && <Link page="P12">联系处理人 →</Link>}
         </section>}
 
@@ -524,13 +620,45 @@ export default function App() {
 
         {page === 'P06' && <section className="narrow-page"><p className="eyebrow">P06 · 演示工作入口</p><h1>选择虚构角色</h1><p>每次切换都会取得新的本地假会话。它只用于演练页面与服务端权限，不代表真实认证或组织授权。</p><div className="actor-grid">{actors.map(a => <button className="actor-card" key={a.id} type="button" disabled={busy} onClick={() => void selectActor(a.id, a.page)}><strong>{a.label}</strong><span>{a.detail}</span><small>进入 {a.page} →</small></button>)}</div><div className="panel reset-panel"><h2>重置虚构样例</h2><p>重置会清空所有旧假会话与模拟记录。请在演示之间使用；旧操作 ID 将不可查询。</p><div className="button-row"><button type="button" className="button secondary" disabled={busy} onClick={() => void reset('normal')}>重置正常链路</button><button type="button" className="button secondary" disabled={busy} onClick={() => void reset('paused')}>载入预置暂停</button></div></div></section>}
 
-        {page === 'P07' && <section className="narrow-page"><p className="eyebrow">P07 · 社区伙伴私有工作台</p><h1>按预置资格结论发一张券</h1><p>以下资格与渠道结论均由服务端预置为虚构样例，并非在此完成真实身份核验。演示规则 {batch?.rule_version}：服务计划已确认、当期额度至少 1、私人渠道已核对，且 A−L 足以覆盖一份餐。私有领取关联只在机构作用域显示。</p><div className="split-stats"><div><small>可发餐款 A−L</small><strong>{money(batch?.available)}</strong></div><div><small>一份餐款</small><strong>{money(batch?.price)}</strong></div></div>{state.work?.recipients?.map(rec => { const eligible = !!rec.eligible && rec.quota_remaining > 0 && !!rec.channel_verified; return <div className="panel recipient-row" key={rec.ref}><div><strong>{rec.ref}</strong><p>{rec.reason}</p><small>资格 {rec.eligible ? '已确认' : '不合格'} · 本期剩余 {rec.quota_remaining} · 渠道 {rec.channel_verified ? '已核对' : '未核对'} · {rec.rule_version}</small></div><button type="button" className="button" disabled={busy || !eligible || state.paused || (batch?.available ?? 0) < (batch?.price ?? 0)} onClick={() => void perform({ action: 'issue', recipient_ref: rec.ref }, { page: 'P08' })}>发行单份券</button></div> })}<p className="fineprint">按钮状态方便演示，实际资格、渠道、额度与暂停由服务端重验。后续家庭 N 券及真实资格政策尚未纳入本轮。</p><Link page="P08">查看原券与交付记录 →</Link></section>}
+        {page === 'P07' && <section className="narrow-page issuance-page"><p className="eyebrow">P07 · 机构私有发行</p><h1>每券一份，按需安排</h1><p>按虚构资格批准份数，不代表家庭人数。一次确认原子发行 N 张单份券。</p>
+          <div className="split-stats"><div><small>可发餐款 A−L</small><strong>{money(batch?.available)}</strong></div><div><small>每券餐款</small><strong>{money(batch?.price)}</strong></div></div>
+          {state.work?.recipients?.map(rec => {
+            const n = issueQuantities[rec.ref] ?? 1
+            const pending = actor ? pendingIssues[issueKey(actor, rec.ref)] : undefined
+            const reason = !rec.eligible ? '资格未确认' : !rec.channel_verified ? '渠道未核对' : !Number.isInteger(n) || n < 1 || n > 20 ? '请输入1–20的整数' : rec.quota_remaining < n ? '本期额度不足' : state.paused ? '批次已暂停' : batch!.available < n * batch!.price ? '可发餐款不足' : null
+            return <div className="panel" key={rec.ref}><h2>{rec.ref} · 私有领取关联</h2><p>本期剩余 {rec.quota_remaining} 份 · 渠道{rec.channel_verified ? '已核对' : '未核对'} · {rec.rule_version}</p>
+              {pending ? <div className="status-priority"><strong>{pending.operationId ? '原发行已记录' : '发行结果待核'}</strong><p>{pending.request.quantity} 张单份券 · {pending.operationId ? '请查询原组，不重复发行。' : `本地待核引用 …${pending.intent.slice(-6)}（不是服务端操作编号）`}</p><button className="button secondary" disabled={busy} onClick={() => void recoverIssue(pending)}>查询原发行结果</button>{pending.operationId && <><Link page="P03" tail={pending.operationId}>查看原操作</Link><button className="text-button" disabled={busy} onClick={() => { const next = { ...pendingIssuesRef.current }; delete next[issueKey(pending.actor, rec.ref)]; savePendingIssues(next) }}>重新审阅另一笔发行</button></>}</div> : <>
+                <label className="field">发行数量（每券一份）<input type="number" min="1" max="20" value={n} onChange={e => setIssueQuantities(previous => ({ ...previous, [rec.ref]: Number(e.target.value) }))} /></label>
+                <p>{Number.isInteger(n) ? n : '—'} 张 × {money(batch?.price)}；将预留 {money(Number.isInteger(n) ? n * batch!.price : 0)}。预计可发剩余 {money(Math.max(0, batch!.available - (Number.isInteger(n) ? n : 0) * batch!.price))}。</p>
+                {reason && <p className="inline-error">{reason}，请重新审阅或联系处理人。</p>}
+                <button className="button" disabled={busy || !!reason} onClick={() => void issueMeals(rec.ref)}>确认发行 {Number.isInteger(n) ? n : 'N'} 张单份券</button>
+              </>}
+            </div>
+          })}<Link page="P08">恢复原发行与逐券交付 →</Link></section>}
 
-        {page === 'P08' && <section className="narrow-page"><p className="eyebrow">P08 · 机构私有交付</p><h1>把同一张券定向交付</h1><p>仅记录机构已执行模拟发送或当面交接。失败后再次分享仍用原券，不能据此宣称指定自然人收到。</p>{state.work?.vouchers?.length ? state.work.vouchers.map(v => <div className="panel" key={v.id}><div className="card-heading"><div><small>{v.recipient_ref} · 私有机构关联</small><h2>{v.id}</h2></div><span className="status-chip">{label(v.status)}</span></div><p>交付记录：<strong>{label(v.delivery_status)}</strong>{v.delivery_at && ` · ${fmt(v.delivery_at)}`}</p><div className="button-row"><button type="button" className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'sent' }, { stay: true })}>记录已执行私有发送</button><button type="button" className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'handover' }, { stay: true })}>记录已当面交接</button><button type="button" className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'failed' }, { stay: true })}>记录失败待联系</button>{['failed', 'sent', 'handover'].includes(v.delivery_status) && <button type="button" className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'reshare' }, { stay: true })}>再次分享原券</button>}</div><label className="field">本机演示私密邀请（仅供此流程，不实际发送）<input readOnly value={`${location.origin}${location.pathname}#/P05/${v.secret}`} onFocus={e => e.currentTarget.select()} /></label><p className="fineprint">私密链接会赋予此单券查看权。不要放入公开餐账；在不同浏览器标签页打开可演练独立角色。</p></div>) : <div className="panel empty"><p>当前机构尚无已发行单份券。</p><Link page="P07">前往资格与发券 →</Link></div>}</section>}
+        {page === 'P08' && <section className="narrow-page"><p className="eyebrow">P08 · 机构私有交付</p><h1>逐券安排，保留原结果</h1><p>机构已执行交付动作不等于指定本人收到。每次只查看一张邀请，不汇集或批量发送。</p>
+          {!activeIssuance ? <div className="panel"><h2>选择原发行结果</h2>{state.work?.issuances?.map(i => <Link key={i.operation.id} page="P08" tail={i.operation.id} className="list-link"><span>{i.request.recipient_ref} · {i.request.quantity} 张单份券</span><span>…{i.operation.id.slice(-6)}</span></Link>)}{!state.work?.issuances?.length && <p>暂无确认发行。待核请求请回P07只读查询。</p>}{route.tail && <p>此原发行不在当前已加载结果中，请重新查询服务端。</p>}</div> : <>
+            <div className="panel"><h2>已确认发行 {activeIssuance.request.quantity} 张单份券</h2><p>{activeIssuance.request.recipient_ref} · 单价 {money(activeIssuance.request.quote_price)}</p><Link page="P03" tail={activeIssuance.operation.id}>查询原发行操作</Link><p>已模拟结算 {activeIssuance.vouchers.filter(v => v.status === 'settled').length} 张 · 申报待核 {activeIssuance.vouchers.filter(v => v.status === 'report_unknown').length} 张 · 交付待联系 {activeIssuance.vouchers.filter(v => v.delivery_status === 'failed').length} 张</p></div>
+            {activeIssuance.vouchers.map(v => <div className="panel" key={v.id}><div className="card-heading"><h2>单份券 …{v.id.slice(-6)}</h2><span className="status-chip">{label(v.status)}</span></div><p>交付：{label(v.delivery_status)}{v.delivery_at && ` · ${fmt(v.delivery_at)}`}</p>
+              <div className="button-row">{(['sent', 'handover', 'failed'] as const).map(method => <button key={method} className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => { privateEpoch.current++; setShownInvite(null); void perform({ action: 'deliver', voucher_id: v.id, method }, { stay: true }) }}>{method === 'sent' ? '记录此券已执行发送' : method === 'handover' ? '记录此券当面交接' : '记录此券失败待联系'}</button>)}{['failed', 'sent', 'handover'].includes(v.delivery_status) && <button className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'reshare' }, { stay: true })}>再次分享同一原券</button>}</div>
+              {v.status === 'active' && <button className="button secondary" disabled={busy} onClick={() => void showInvite(v.id)}>单独查看此券邀请</button>}
+              {shownInvite?.id === v.id && v.status === 'active' && <label className="field">仅此券私密邀请（不实际发送）<input readOnly value={`${location.origin}${location.pathname}#/P05/${shownInvite.secret}`} onFocus={e => e.currentTarget.select()} /><button className="text-button" onClick={() => { privateEpoch.current++; setShownInvite(null) }}>收起邀请</button></label>}
+            </div>)}<Link page="P08">查看其他原发行 →</Link>
+          </>}<Link page="P07">返回发行页 →</Link></section>}
 
-        {page === 'P09' && <section className="narrow-page"><p className="eyebrow">P09 · 店员预检查</p><h1>先看券，再决定是否交餐</h1><p>预检不锁券、不扣款。店员只见本店餐品与处理状态，不见领取关联、资格、私人渠道或邀请秘密。</p><div className="panel form-panel"><label className="field">持链接者出示的在线短码<input value={code} autoCapitalize="characters" placeholder="例如 A1B2C3" onChange={e => { precheckEpoch.current++; setCode(e.target.value.toUpperCase().trim()); setCheck(undefined); setHasMeal(false) }} /></label><button type="button" className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>{check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · {check.shop}</p><small>券号 {check.voucher_id} · 预检未取得处理权</small><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} /> 本店当前有这份餐，可以继续处理</label><button type="button" className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', code: check.code }, { page: 'P10' })}>申请唯一处理权</button></div>}<p className="fineprint">若本店缺餐，请勿申请处理权；联系社区伙伴安排。另一个店员若先取得锁，此码将失效。</p></div><Link page="P12">缺餐或异常求助 →</Link></section>}
-
-        {page === 'P10' && <section className="narrow-page"><p className="eyebrow">P10 · 原店员处理</p><h1>确认处理权，再声明交餐</h1><p>先看当前状态与可执行动作。只有持原锁的店员能确认、声明交餐和申报；申报未知时只查原操作。</p>{state.work?.redemptions?.length ? state.work.redemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} pending={pendingWrites[pendingKey(actor, 'report', red.id)]} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />) : <div className="panel empty"><p>此演示店员尚未取得任何券的处理权。</p><Link page="P09">返回预检查 →</Link></div>}<Link page="P11">查看本店 H/S →</Link></section>}
+        {(page === 'P09' || page === 'P10') && <section className="narrow-page work-page"><p className="eyebrow">{page} · 本店本人处理</p><h1>逐券确认，按原结果继续</h1><p>处理列表只记录现场主动出示的券，不代表家庭人数，也不授予处理权。</p>
+          <details className="panel group-picker" open={!activeGroup}><summary>选择或新建本人处理组</summary><label className="field">恢复本人处理组<select value={activeGroup?.id ?? ''} onChange={e => { setSelectedGroupId(e.target.value); precheckEpoch.current++; setCheck(undefined); setHasMeal(false); setCode('') }}><option value="" disabled>尚无处理组</option>{state.work?.groups?.map(g => <option key={g.id} value={g.id}>…{g.id.slice(-6)} · {g.items.length} 张 · {fmt(g.created_at)}</option>)}</select></label><button className="button secondary" disabled={busy} onClick={() => void perform({ action: 'group_create' }, { stay: true })}>新建本次处理组</button><button className="text-button" disabled={busy} onClick={() => { precheckEpoch.current++; setCheck(undefined); setHasMeal(false); void refresh() }}>重查本次服务端状态</button></details>
+          {activeGroup && <GroupSummary group={activeGroup} />}
+          {page === 'P09' && <div className="panel form-panel"><label className="field">在线短码（逐券主动输入）<input value={code} autoCapitalize="characters" onChange={e => { precheckEpoch.current++; setCode(e.target.value.toUpperCase().trim()); setCheck(undefined); setHasMeal(false) }} /></label><button className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>
+            {check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · …{check.voucher_id.slice(-6)}</p>{!activeGroup ? <p>请先新建或选择处理组。</p> : !activeGroup.items.some(i => i.voucher_id === check.voucher_id) ? <button className="button" disabled={busy} onClick={() => void perform({ action: 'group_add', group_id: activeGroup.id, code: check.code }, { stay: true })}>把此券加入本次处理</button> : pendingWrites[pendingKey(actor, 'lock', check.voucher_id)] ? <PendingWriteNotice pending={pendingWrites[pendingKey(actor, 'lock', check.voucher_id)]} busy={busy} refresh={() => void refresh()} /> : <><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} />当前有这一份餐，可以申请处理权</label><button className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', voucher_id: check.voucher_id, group_id: activeGroup.id, code: check.code }, { page: 'P10' })}>申请此券唯一处理权</button></>}</div>}
+            <p className="fineprint">加入列表不拿锁、不扣款。未锁项刷新后需重新出示有效码并预检；不保存短码。</p></div>}
+          {activeGroup?.items.map(item => {
+            const red = item.owned ? state.work?.redemptions?.find(r => r.id === item.voucher_id) : undefined
+            const pending = pendingWrites[pendingKey(actor, 'lock', item.voucher_id)] ?? pendingWrites[pendingKey(actor, 'report', item.voucher_id)]
+            return red ? <RedemptionCard key={item.voucher_id} red={red} busy={busy} pending={pending} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} /> : <div className="panel" key={item.voucher_id}><h2>单份券 …{item.voucher_id.slice(-6)}</h2>{pending ? <PendingWriteNotice pending={pending} busy={busy} refresh={() => void refresh()} /> : <p>{item.status === 'needs_code' ? '需重新出示有效短码并预检；尚未取得处理权。' : '当前不可由本人继续处理，请联系伙伴或重查状态。'}</p>}</div>
+          })}
+          {state.work?.redemptions?.filter(red => !activeGroup?.items.some(i => i.voucher_id === red.id)).map(red => <RedemptionCard key={red.id} red={red} busy={busy} pending={pendingWrites[pendingKey(actor, 'report', red.id)]} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />)}
+          <div className="button-row"><Link page={page === 'P09' ? 'P10' : 'P09'} className="button secondary">{page === 'P09' ? '查看逐券处理与申报' : '返回逐券预检查'}</Link><Link page="P11">查看本店申报与结算 →</Link></div></section>}
 
         {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div>{pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)] ? <PendingWriteNotice pending={pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)]} busy={busy} refresh={() => void refresh()} /> : pay.status === 'settlement_unknown' ? <div className="status-priority"><strong>结果待核，只查原付款</strong><p>H 保留；不要换操作 ID 再付。</p>{pay.settlement_operation && <Link page="P03" tail={pay.settlement_operation} className="button secondary">查询原付款</Link>}</div> : role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') ? <div className="task-action">{pay.settlement_status === 'FAILED' && <p>上次已明确失败，H 保留。可查看原付款后主动新试。</p>}<label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label><button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></div> : <p className="muted">{pay.status === 'settled' ? '这笔 H 已模拟结算为 S。' : '当前没有可执行的结算动作。'}</p>}<div className="detail-list"><div><span>原申报</span><strong>{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</strong></div><div><span>原付款</span><strong>{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</strong></div></div></div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}<p className="fineprint">店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H。{role === 'settler' && `预置本店虚构目的地：${state.work?.destination}`}</p></section>}
 
@@ -546,7 +674,7 @@ export default function App() {
 }
 
 function PendingWriteNotice({ pending, busy, refresh }: { pending: PendingWrite; busy: boolean; refresh: () => void }) {
-  return <div className="status-priority"><strong>{pending.action === 'report' ? '申报' : '结算'}结果待核</strong><p>此笔提交尚未完成权威核对，暂不能再次提交。只查询原操作与服务端状态。</p><div className="button-row">{pending.operationId && <Link page="P03" tail={pending.operationId} className="button secondary">查询原操作</Link>}<button type="button" className="button secondary" disabled={busy} onClick={refresh}>重查服务端状态</button></div></div>
+  return <div className="status-priority"><strong>{pending.action === 'report' ? '申报' : pending.action === 'lock' ? '处理权' : '结算'}结果待核</strong><p>此笔提交尚未完成权威核对，暂不能再次提交。只查询原操作与服务端状态。</p><div className="button-row">{pending.operationId && <Link page="P03" tail={pending.operationId} className="button secondary">查询原操作</Link>}<button type="button" className="button secondary" disabled={busy} onClick={refresh}>重查服务端状态</button></div></div>
 }
 
 function RedemptionCard({ red, busy, pending, refresh, perform, reportOutcome, setReportOutcome }: {
@@ -562,4 +690,8 @@ function RedemptionCard({ red, busy, pending, refresh, perform, reportOutcome, s
     {pending ? <PendingWriteNotice pending={pending} busy={busy} refresh={refresh} /> : red.status === 'report_unknown' ? <div className="status-priority"><strong>申报结果待核</strong><p>保留原处理权与 R，只查原申报，不重发。</p>{red.report_operation && <Link page="P03" tail={red.report_operation} className="button secondary">查询原申报</Link>}</div> : red.status === 'locked' && !red.lock_confirmed && red.lock_operation ? <div className="task-action"><p>尚未确认处理权，不可交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'confirm_lock', operation_id: red.lock_operation }, { stay: true })}>显式模拟确认处理权</button></div> : red.status === 'locked' && !!red.lock_confirmed ? <div className="task-action"><p>已确认处理权，现可声明交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'handoff', voucher_id: red.id }, { stay: true })}>声明已交餐（模拟）</button></div> : red.status === 'handoff' ? <div className="task-action"><label className="field">申报结果演练<select value={reportOutcome} onChange={e => setReportOutcome(e.target.value as typeof reportOutcome)}><option value="success">模拟申报成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟申报失败</option></select></label><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'report', voucher_id: red.id, outcome: reportOutcome }, { stay: true })}>提交店员声明的模拟申报</button></div> : <p className="muted">{red.status === 'settled' ? '这笔餐款已由独立结算角色模拟结算，H→S。' : '已模拟申报，R→H。等待独立结算角色处理。'}</p>}
     <div className="detail-list"><div><span>原处理权</span><strong>{red.lock_operation ? <Link page="P03" tail={red.lock_operation}>{red.lock_operation}</Link> : '无'}</strong></div><div><span>显式确认</span><strong>{red.lock_confirmed ? '已确认' : '尚未确认，不可交餐'}</strong></div><div><span>交餐声明</span><strong>{red.handoff_declared ? '店员已声明' : '尚无声明'}</strong></div><div><span>原申报</span><strong>{red.report_operation ? <Link page="P03" tail={red.report_operation}>{red.report_operation}</Link> : '无'}</strong></div></div>
   </div>
+}
+
+function GroupSummary({ group }: { group: ProcessingGroup }) {
+  return <div className="panel group-summary"><h2>本次准备处理 {group.items.length} 张券</h2><p>仅本次出示数量 · …{group.id.slice(-6)}</p><p>已确认处理权 {group.items.filter(i => i.lock_confirmed).length} 张 · 申报待核 {group.items.filter(i => i.status === 'report_unknown').length} 张 · 已申报 {group.items.filter(i => ['reported', 'settlement_unknown', 'settled'].includes(i.status)).length} 张</p></div>
 }

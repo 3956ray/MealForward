@@ -49,7 +49,6 @@ export interface Recipient {
 export interface PartnerVoucher {
   id: string
   recipient_ref: string
-  secret: string
   status: string
   delivery_status: string
   delivery_method: string | null
@@ -80,10 +79,23 @@ export interface Payable {
   created_at: number
 }
 
+export interface Issuance {
+  operation: Operation
+  request: { recipient_ref: string; quantity: number; batch_id: string; quote_price: number; rule_version: string }
+  vouchers: PartnerVoucher[]
+}
+export interface ProcessingGroup {
+  id: string
+  created_at: number
+  items: Array<{ voucher_id: string; status: string; owned: boolean; lock_confirmed: boolean }>
+}
+
 export interface Work {
   actor: Actor
   role: string
   operations?: Operation[]
+  issuances?: Issuance[]
+  groups?: ProcessingGroup[]
   recipients?: Recipient[]
   vouchers?: PartnerVoucher[]
   redemptions?: Redemption[]
@@ -119,6 +131,7 @@ export interface VoucherView {
 export interface ActionResult {
   message: string
   operation?: Operation
+  issuance?: Issuance
   voucher?: { id: string; secret: string }
   check?: { voucher_id: string; meal: string; shop: string; status: string; code: string }
   case?: { id: string; stage: string }
