@@ -14,7 +14,7 @@ from server.storage import Store
 
 REPO=Path(__file__).resolve().parents[1]
 
-def fixture(directory, rpc_url, origin='http://127.0.0.1:8875'):
+def fixture(directory, rpc_url, origin='http://127.0.0.1:8875', *, owner_mode=False):
     from server.auth import hash_password
     root=Path(directory)
     if root.exists() and any(root.iterdir()): raise ValueError('Fixture directory must be empty; never reset an existing database')
@@ -28,16 +28,17 @@ def fixture(directory, rpc_url, origin='http://127.0.0.1:8875'):
     receipt=w3.eth.wait_for_transaction_receipt(tx)
     contract=w3.eth.contract(address=receipt['contractAddress'],abi=ABI)
     issuer=Account.create()
-    operator=Account.create();settler=Account.create()
-    for signer in (issuer,operator,settler):
+    operator=Account.create();settler=None if owner_mode else Account.create()
+    backend_signers={'operator':operator,**({'settler':settler} if settler else {})}
+    for signer in (issuer,*backend_signers.values()):
         w3.provider.make_request('anvil_setBalance',[signer.address,hex(10**18)])
     for role,account in [('SUPPORTER_ROLE',accounts[1]),('SUPPORTER_ROLE',accounts[6]),('ISSUER_ROLE',issuer.address),
-                         ('OPERATOR_ROLE',operator.address),('SETTLER_ROLE',settler.address)]:
+                         ('OPERATOR_ROLE',operator.address),('SETTLER_ROLE',accounts[5] if owner_mode else settler.address)]:
         role_id=getattr(contract.functions,role)().call()
         w3.eth.wait_for_transaction_receipt(contract.functions.grantRole(role_id,account).transact({'from':accounts[0]}))
     root.mkdir(parents=True,exist_ok=True); root.chmod(0o700)
     keyfile=root/'issuer.key'; keyfile.write_bytes(issuer.key); keyfile.chmod(0o600)
-    for name,signer in (('operator',operator),('settler',settler)):
+    for name,signer in backend_signers.items():
         path=root/(name+'.key');path.write_bytes(signer.key);path.chmod(0o600)
     encryption=root/'encryption.key'; encryption.write_bytes(Fernet.generate_key()); encryption.chmod(0o600)
     deployment={'mode':'localchain','deploymentId':secrets.token_hex(16),'chainId':31337,'rpcUrl':rpc_url,
@@ -47,22 +48,26 @@ def fixture(directory, rpc_url, origin='http://127.0.0.1:8875'):
                 'issuer':issuer.address,'supporter':accounts[1],'merchant':accounts[5]}
     config={'deployment':deployment,'databasePath':str((root/'backend.sqlite3').resolve()),
             'issuerKeyFile':str(keyfile.resolve()),'secretKeyFile':str(encryption.resolve()),'origin':origin,
-            'operatorKeyFile':str((root/'operator.key').resolve()),'settlerKeyFile':str((root/'settler.key').resolve()),
-            'workSigners':{'operator':operator.address,'settler':settler.address}}
+            **{role+'KeyFile':str((root/(role+'.key')).resolve()) for role in backend_signers},
+            'workSigners':{role:signer.address for role,signer in backend_signers.items()},'ownerWalletMode':owner_mode}
     configfile=root/'config.json'; configfile.write_text(json.dumps(config,indent=2)+'\n'); configfile.chmod(0o600)
     backend=load_backend(config)
     for uid,partner in [('partner-a','partner-a'),('partner-b','partner-b')]:
         backend.store.create_user(uid,uid.strip().casefold(),hash_password('local-only-password'),'partner',partner,'shop-local')
         backend.store.execute('INSERT INTO qualifications VALUES(?,?,1,1,3,0,0)',(partner,'REF-A'))
-    for uid,role,shop in [('staff-a','staff','shop-local'),('staff-b','staff','shop-local'),
+    work_users=[('owner-a','owner','shop-local')] if owner_mode else [('staff-a','staff','shop-local'),('staff-b','staff','shop-local'),
                           ('staff-other','staff','shop-other'),('settler-a','settler','shop-local'),
-                          ('settler-other','settler','shop-other')]:
+                          ('settler-other','settler','shop-other')]
+    for uid,role,shop in work_users:
         backend.store.create_user(uid,uid,hash_password('local-only-password'),role,None,shop)
+    if owner_mode:
+        backend.store.execute('INSERT INTO owner_wallet_bindings VALUES(?,?,?,?,1)',
+                              ('owner-a','shop-local',deployment['deploymentId'],accounts[5]))
     return config
 
 def load_backend(config):
     return Backend(Store(config['databasePath']),ChainRpc(config['deployment']),Path(config['secretKeyFile']).read_bytes(),
-                   config['deployment']['issuer'],signers=config.get('workSigners'))
+                   config['deployment']['issuer'],signers=config.get('workSigners'),owner_mode=config.get('ownerWalletMode',False))
 
 def load_worker_keys(config):
     return {role:Path(config[role+'KeyFile']).read_bytes() for role in ('issuer','operator','settler')
@@ -83,8 +88,8 @@ def main():
         print('Restored in QUARANTINED mode: original operations only; no new signatures or business writes')
         return
     if args.command=='setup':
-        config=fixture(root,'http://127.0.0.1:18645')
-        print('CP15 local fixture ready; configuration:',root/'config.json')
+        config=fixture(root,'http://127.0.0.1:18645',owner_mode=True)
+        print('CP16 owner fixture ready; owner wallet is external to backend; configuration:',root/'config.json')
         return
     config=json.loads((root/'config.json').read_text())
     if args.command=='backup':

@@ -49,7 +49,7 @@ class BackendChainTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(prefix='cp15-backend-')
         self.origin=f'http://127.0.0.1:{free_port()}'
-        self.config=fixture(Path(self.tmp.name)/'fixture',self.rpc_url,self.origin)
+        self.config=fixture(Path(self.tmp.name)/'fixture',self.rpc_url,self.origin,**getattr(self,'fixture_options',{}))
         self.backend=load_backend(self.config)
         self.rpc=self.backend.rpc; self.w3=self.rpc.w3
         self.worker=Worker(self.backend,Path(self.config['issuerKeyFile']).read_bytes())

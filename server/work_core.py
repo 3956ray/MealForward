@@ -12,13 +12,17 @@ class WorkCore:
         self._code_key=hashlib.sha256(secret_key+b'/cp16/presentation').digest()
     def code_hash(self, code):
         return hmac.new(self._code_key,code.encode(),hashlib.sha256).hexdigest()
+    def actor_role(self, kind):
+        return 'owner' if self.b.owner_mode and kind!='issue' else ACTIONS[kind].actor_role
+    def require_owner(self, db, actor):
+        return self.b.owner_wallet.require(db,actor)
     def require_actor(self, db, actor, role=None):
         row=db.execute('SELECT * FROM users WHERE id=?',(actor.actor_id,)).fetchone()
         if not row or not row['enabled']: raise ApiError(401,'AUTH_REQUIRED','Current work account required')
         if (row['role']!=actor.role or row['partner_id']!=actor.partner_id or row['shop_id']!=actor.shop_id
                 or (role and row['role']!=role)):
             raise ApiError(403,'FORBIDDEN','Current work scope required')
-        if row['role'] in ('staff','settler') and row['shop_id']!=LOCAL_SHOP_ID:
+        if row['role'] in ('owner','staff','settler') and row['shop_id']!=LOCAL_SHOP_ID:
             raise ApiError(403,'FORBIDDEN','Current shop scope required')
         if row['role']=='partner' and not row['partner_id']: raise ApiError(403,'FORBIDDEN','Partner required')
         return dict(row)
@@ -44,7 +48,8 @@ class WorkCore:
                        (SELECT token_hash FROM recipient_sessions WHERE revoked=1 OR expires_at<=? OR last_seen_at<=?))''',
                    (now,now,now-RECIPIENT_IDLE_TTL))
     def validate_code(self, db, actor, code, now=None):
-        self.require_actor(db,actor,'staff')
+        self.require_actor(db,actor,self.actor_role('lock'))
+        if self.b.owner_mode: self.require_owner(db,actor)
         now=self.b.now() if now is None else now
         if not isinstance(code,str) or len(code)!=8 or not code.isascii() or not code.isdigit():
             raise ApiError(404,'CODE_UNAVAILABLE','Code unavailable')
@@ -63,7 +68,8 @@ class WorkCore:
                    (operation_id,row['codeId']))
         return row
     def original(self, db, actor, kind, intent_key, request):
-        self.require_actor(db,actor,ACTIONS[kind].actor_role)
+        self.require_actor(db,actor,self.actor_role(kind))
+        if self.b.owner_mode and kind!='issue': self.require_owner(db,actor)
         row=db.execute('SELECT * FROM operations WHERE actor_id=? AND kind=? AND intent_key=?',
                        (actor.actor_id,kind,require_id(intent_key))).fetchone()
         if row:
@@ -73,6 +79,8 @@ class WorkCore:
             return dict(row)
         return None
     def enqueue(self, db, actor, kind, intent_key, target, request, payload, *, redemption_id=None, operation_id=None):
+        if self.b.owner_mode and kind=='settle':
+            raise ApiError(409,'EXTERNAL_WALLET_REQUIRED','Settlement must use original owner wallet intent')
         self.writable(db,allow_paused=kind=='report')
         original=self.original(db,actor,kind,intent_key,request)
         if original: return original
@@ -95,9 +103,13 @@ class WorkCore:
     def dispatch_authorized(self, db, op):
         spec=ACTIONS.get(op['kind'])
         user=db.execute('SELECT * FROM users WHERE id=?',(op['actor_id'],)).fetchone()
-        if not spec or not user or not user['enabled'] or user['role']!=spec.actor_role: return False
+        if not spec or not user or not user['enabled'] or user['role']!=self.actor_role(op['kind']): return False
         if op['kind']=='issue': return bool(user['partner_id'] and user['partner_id']==op['partner_id'])
         if user['shop_id']!=LOCAL_SHOP_ID or user['shop_id']!=op['shop_id']: return False
+        if self.b.owner_mode:
+            if op['kind']=='settle': return False
+            binding=db.execute('SELECT * FROM owner_wallet_bindings WHERE actor_id=?',(user['id'],)).fetchone()
+            if not binding or not binding['enabled'] or binding['shop_id']!=user['shop_id'] or binding['deployment_id']!=self.b.deployment['deploymentId'] or binding['address'].lower()!=self.b.deployment['merchant'].lower(): return False
         r=db.execute('SELECT * FROM redemptions WHERE id=?',(op['redemption_id'],)).fetchone()
         if not r or r['voucher_id']!=op['target'] or r['shop_id']!=user['shop_id']: return False
         if op['kind'] in ('lock','report') and r['actor_id']!=user['id']: return False

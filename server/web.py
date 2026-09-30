@@ -57,6 +57,7 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
         d=backend.deployment
         return jsonify({**{k:v for k,v in d.items() if k not in ('rpcUrl','issuer')},
                         'capabilities':[] if backend.quarantined() else ['support','issue']+(['recipient'] if recipient else [])+(['lock','handoff','report','settle'] if redemption else []),
+                        'ownerWalletMode':backend.owner_mode,'ownerWalletProtocol':'cp16-owner-v1' if backend.owner_mode else None,
                         'recovery':backend.recovery_view(),'finalityPolicy':'receipt-canonical-finalized-local'})
     @app.post('/api/v1/support-session')
     def support_session():
@@ -84,10 +85,34 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     @app.get('/api/v1/operations/<op_id>')
     def work_operation(op_id):
         actor=service.require()
+        if backend.store.one('SELECT 1 FROM owner_settlements WHERE operation_id=?',(op_id,)):
+            return jsonify(backend.owner_wallet.operation(actor,op_id=op_id))
         op=backend.store.one('SELECT kind FROM operations WHERE id=?',(op_id,))
         if op and op['kind'] in ('lock','report','settle') and redemption:
             return jsonify(redemption.operation(actor,op_id=op_id))
         return jsonify(backend.get_issue(actor,op_id=op_id))
+    @app.post('/api/v1/work/wallet/challenge')
+    def owner_challenge(): return jsonify(backend.owner_wallet.challenge(service.require('owner',csrf=True),body(),origin))
+    @app.post('/api/v1/work/wallet/verify')
+    def owner_verify(): return jsonify(backend.owner_wallet.verify(service.require('owner',csrf=True),body(),origin))
+    @app.get('/api/v1/work/wallet/session')
+    def owner_session(): return jsonify(backend.owner_wallet.session(service.require('owner')))
+    @app.post('/api/v1/work/wallet/logout')
+    def owner_logout():
+        backend.owner_wallet.logout(service.require('owner',csrf=True),body());return '',204
+    @app.post('/api/v1/work/operations/<op_id>/submission-start')
+    def owner_submission_start(op_id):
+        actor=service.require('owner',csrf=True);projector.sync()
+        return jsonify(backend.owner_wallet.start(actor,op_id,body()))
+    @app.post('/api/v1/work/operations/<op_id>/transaction')
+    def owner_transaction(op_id):
+        return jsonify(backend.owner_wallet.transaction(service.require('owner',csrf=True),op_id,body()))
+    @app.post('/api/v1/work/payables/<redemption_id>/settle')
+    def settle(redemption_id):
+        actor=service.require('owner',csrf=True);projector.sync()
+        return jsonify(backend.owner_wallet.prepare(actor,redemption_id,body())),201
+    @app.get('/api/v1/work/operations/by-intent/settle/<key>')
+    def owner_by_intent(key): return jsonify(backend.owner_wallet.operation(service.require('owner'),key=key))
     if recipient:
         @app.get('/api/v1/work/vouchers')
         def work_vouchers(): return jsonify(recipient.list_vouchers(service.require('partner')))
@@ -123,38 +148,34 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     if redemption:
         @app.post('/api/v1/work/prechecks')
         def precheck():
-            actor=service.require('staff',csrf=True);projector.sync()
+            actor=service.require(backend.work.actor_role('lock'),csrf=True);projector.sync()
             return jsonify(redemption.precheck(actor,body(),str(request.remote_addr)))
         @app.post('/api/v1/work/groups')
-        def create_group(): return jsonify(redemption.create_group(service.require('staff',csrf=True),body())),201
+        def create_group(): return jsonify(redemption.create_group(service.require(backend.work.actor_role('lock'),csrf=True),body())),201
         @app.get('/api/v1/work/groups/<group_id>')
-        def group(group_id): return jsonify(redemption.group(service.require('staff'),group_id))
+        def group(group_id): return jsonify(redemption.group(service.require(backend.work.actor_role('lock')),group_id))
         @app.post('/api/v1/work/groups/<group_id>/items')
         def add_group(group_id):
-            actor=service.require('staff',csrf=True);projector.sync()
+            actor=service.require(backend.work.actor_role('lock'),csrf=True);projector.sync()
             return jsonify(redemption.add(actor,group_id,body(),str(request.remote_addr)))
         @app.post('/api/v1/work/locks')
         def lock():
-            actor=service.require('staff',csrf=True);projector.sync()
+            actor=service.require(backend.work.actor_role('lock'),csrf=True);projector.sync()
             return jsonify(redemption.lock(actor,body(),str(request.remote_addr))),202
         @app.get('/api/v1/work/redemptions/<redemption_id>')
-        def get_redemption(redemption_id): return jsonify(redemption.get(service.require('staff'),redemption_id))
+        def get_redemption(redemption_id): return jsonify(redemption.get(service.require(backend.work.actor_role('lock')),redemption_id))
         @app.post('/api/v1/work/redemptions/<redemption_id>/handoff')
         def handoff(redemption_id):
-            actor=service.require('staff',csrf=True);projector.sync()
+            actor=service.require(backend.work.actor_role('lock'),csrf=True);projector.sync()
             return jsonify(redemption.handoff(actor,redemption_id,body()))
         @app.post('/api/v1/work/redemptions/<redemption_id>/report')
         def report(redemption_id):
-            actor=service.require('staff',csrf=True);projector.sync()
+            actor=service.require(backend.work.actor_role('lock'),csrf=True);projector.sync()
             return jsonify(redemption.report(actor,redemption_id,body())),202
         @app.get('/api/v1/work/payables')
-        def payables(): return jsonify(redemption.payables(service.require('settler')))
+        def payables(): return jsonify(redemption.payables(service.require(backend.work.actor_role('settle'))))
         @app.get('/api/v1/work/payables/<redemption_id>')
-        def payable(redemption_id): return jsonify(redemption.payable(service.require('settler'),redemption_id))
-        @app.post('/api/v1/work/payables/<redemption_id>/settle')
-        def settle(redemption_id):
-            actor=service.require('settler',csrf=True);projector.sync()
-            return jsonify(redemption.settle(actor,redemption_id,body())),202
+        def payable(redemption_id): return jsonify(redemption.payable(service.require(backend.work.actor_role('settle')),redemption_id))
         @app.get('/api/v1/work/operations/by-intent/<kind>/<key>')
         def work_by_intent(kind,key): return jsonify(redemption.operation(service.require(),kind=kind,key=key))
     @app.get('/api/v1/batches/<batch_id>')

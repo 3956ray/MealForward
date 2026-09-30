@@ -55,3 +55,11 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 
 增量schema v2、事务辅助函数、动作编码、三个独立本地signer与v1/v2隔离备份合同见 [CP16-CONTRACT](docs/CP16-CONTRACT.md)。领取与工作模块在C0固定后独立实现；C0不代表完整工作HTTP已可用。
 接口验证：`.venv/bin/python -m unittest tests.test_backend_chain_contracts -v`；原认证/后端回归：`.venv/bin/python -m unittest tests.test_auth tests.test_backend_chain -q`。均使用隔离venv、自有临时库/随机Anvil端口。
+
+## CP16 老板钱包 C0（方案 A）
+
+四类产品身份已确认为支持者、机构伙伴、领取者、餐馆老板。模拟 P06 修正与真实链钱包分开交付；模拟角色选择不证明钱包身份。新接口见 [CP16-OWNER-CONTRACT.md](docs/CP16-OWNER-CONTRACT.md)。
+
+新隔离 `server.local setup` 创建 owner 模式：后台只有 issuer/operator 签名材料，老板测试钱包为部署 merchant，后台不持其私钥。锁/report 由后台明确代发；settle 由外部老板钱包主动发原交易，后台只核结果。旧库不自动升级老板资格，备份 v3 恢复仍隔离并撤销旧钱包证明。不得对现有预览目录运行 setup。
+
+已验证命令：`.venv/bin/python -m unittest tests.test_backend_chain_owner -q`，使用自有随机端口 Anvil 与临时库。测试覆盖钱包身份挑战、外部签名/原交易恢复、finality、提交争用、实际 revert 与 v2/v3 备份边界。C0 锁/report 测试使用共享 helper；完整 redemption HTTP 及经营钱包浏览器仍待各模块交付，不能据此宣称完整钱包体验完成。

@@ -36,6 +36,10 @@ class Worker:
             self.projector.sync()
             for op in self.store.all("SELECT * FROM operations WHERE kind='support' AND status NOT IN ('FINALIZED_SUCCESS','FINALIZED_REVERT','NOT_SUBMITTED')"):
                 self.observe_support(op)
+            for op in self.store.all("SELECT o.* FROM operations o JOIN owner_settlements s ON s.operation_id=o.id WHERE o.status NOT IN ('FINALIZED_SUCCESS','FINALIZED_REVERT','NOT_SUBMITTED')"):
+                try: self.b.owner_wallet.observe(op)
+                except ChainConflict:
+                    self.b.halt('OWNER_EVIDENCE_CONFLICT');raise
             with self.store.transaction() as db: self.b.work.expire_codes(db)
             for address in self.accounts:
                 job=self.store.one("SELECT * FROM outbox WHERE state!='DONE' AND signer=? ORDER BY rowid LIMIT 1",(address,))
@@ -44,6 +48,8 @@ class Worker:
                     self.process_job(job)
     def process_job(self, job):
         op=self.store.one('SELECT * FROM operations WHERE id=?',(job['operation_id'],))
+        if self.b.owner_mode and op['kind']=='settle':
+            raise ChainConflict('Owner settlement cannot enter backend signing queue')
         if op['kind'] not in ACTIONS or self.b.signers.get(ACTIONS[op['kind']].signer_role,'').lower()!=job['signer'].lower():
             self.b.halt('SIGNER_ROLE_CONFLICT');raise ChainConflict('Action signer role mismatch')
         self.b.check_halted(); self.rpc.guard()

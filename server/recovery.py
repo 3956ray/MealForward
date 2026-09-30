@@ -36,6 +36,8 @@ def quarantine(store, reason, *, bind_path=False):
         db.execute('UPDATE support_caps SET expires_at=0')
         db.execute('UPDATE recipient_sessions SET revoked=1')
         db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
+        db.execute('UPDATE owner_wallet_sessions SET revoked=1')
+        db.execute('UPDATE owner_wallet_challenges SET consumed=1')
 
 def write_private(path, data):
     path.write_bytes(data);path.chmod(0o600)
@@ -57,8 +59,8 @@ def backup_bundle(config, destination):
             write_private(root/name,Path(config[role+'KeyFile']).read_bytes());files.append(name)
     saved=relocated_config(config,root)
     write_private(root/'config.json',(json.dumps(saved,indent=2)+'\n').encode())
-    manifest={'format':'mealforward-cp16-quarantined-backup-v2',
-              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':2,
+    manifest={'format':'mealforward-cp16-quarantined-backup-v3',
+              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':3,
               'deploymentId':backend.deployment['deploymentId'],
               'sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in files}}
     # Last file is the completion marker; interrupted bundles cannot be restored.
@@ -68,7 +70,8 @@ def backup_bundle(config, destination):
 def restore_bundle(backup, destination):
     root=Path(backup).resolve()
     manifest=json.loads((root/'backup.json').read_text())
-    versions={'mealforward-cp15-quarantined-backup-v1':1,'mealforward-cp16-quarantined-backup-v2':2}
+    versions={'mealforward-cp15-quarantined-backup-v1':1,'mealforward-cp16-quarantined-backup-v2':2,
+              'mealforward-cp16-quarantined-backup-v3':3}
     version=versions.get(manifest.get('format'));files=set(manifest.get('sha256',{}))
     if not version or not set(FILES)<=files or files-set(FILES)-set(SIGNER_FILES.values()):
         raise ValueError('Unsupported or incomplete backup bundle')

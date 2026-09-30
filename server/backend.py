@@ -22,13 +22,17 @@ def quantity(value):
     return value
 
 class Backend:
-    def __init__(self, store, rpc, secret_key, signer, clock=time.time, *, signers=None):
+    def __init__(self, store, rpc, secret_key, signer, clock=time.time, *, signers=None, owner_mode=False):
         self.store,self.rpc,self.box,self.signer,self.clock=store,rpc,Fernet(secret_key),signer,clock
         self.deployment=rpc.deployment
+        self.owner_mode=owner_mode
         self.signers={'issuer':signer,**(signers or {})}
         if self.signers['issuer'].lower()!=signer.lower(): raise ValueError('Issuer binding mismatch')
         if set(self.signers)-{'issuer','operator','settler'}: raise ValueError('Unknown signer role')
         self.signers={role:Web3.to_checksum_address(address) for role,address in self.signers.items()}
+        if owner_mode and 'settler' in self.signers: raise ValueError('Owner settlement cannot use a backend signer')
+        if owner_mode and self.deployment['merchant'].lower() in {address.lower() for address in self.signers.values()}:
+            raise ValueError('Owner wallet cannot be a backend signer')
         if len({a.lower() for a in self.signers.values()})!=len(self.signers): raise ValueError('Signers must be distinct')
         public_identity={k:v for k,v in self.deployment.items() if k!='rpcUrl'}
         binding=canonical(public_identity)
@@ -53,6 +57,8 @@ class Backend:
                 db.execute('UPDATE support_caps SET expires_at=0')
                 db.execute('UPDATE recipient_sessions SET revoked=1')
                 db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
+                db.execute('UPDATE owner_wallet_sessions SET revoked=1')
+                db.execute('UPDATE owner_wallet_challenges SET consumed=1')
             else:
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_state','ACTIVE')")
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_reason','')")
@@ -61,7 +67,14 @@ class Backend:
                 if previous and previous['address'].lower()!=address.lower(): raise ValueError('Work signer binding changed')
                 db.execute('INSERT OR IGNORE INTO work_signers VALUES(?,?)',(role,address))
         from server.work_core import WorkCore
+        with store.transaction() as db:
+            mode=db.execute("SELECT value FROM metadata WHERE key='owner_wallet_mode'").fetchone()
+            if mode and mode['value']!=str(int(owner_mode)): raise ValueError('Wallet mode cannot change in place')
+            if not mode and old and owner_mode: raise ValueError('Legacy database cannot auto-enable owner wallet mode')
+            db.execute("INSERT OR IGNORE INTO metadata VALUES('owner_wallet_mode',?)",(str(int(owner_mode)),))
         self.work=WorkCore(self,secret_key)
+        from server.owner_wallet import OwnerWalletService
+        self.owner_wallet=OwnerWalletService(self)
     def now(self): return int(self.clock())
     def encrypt(self, value): return self.box.encrypt(value.encode()).decode()
     def decrypt(self, value): return self.box.decrypt(value.encode()).decode()

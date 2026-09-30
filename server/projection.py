@@ -58,6 +58,11 @@ class Projector:
         kinds={spec.event:kind for kind,spec in ACTIONS.items()}
         if name in kinds:
             row=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(args['operationId'],))
+            owner=self.store.one('SELECT * FROM owner_settlements WHERE operation_id=?',(args['operationId'],))
+            if owner:
+                if name!='Settled' or owner['submission_started_at'] is None or not self.rpc.transaction_matches(event['transactionHash'],sender=owner['address'],data=owner['data'],value=0):
+                    raise ChainConflict('Original owner settlement mismatch')
+                return
             if row:
                 op=self.store.one('SELECT kind FROM operations WHERE id=?',(args['operationId'],))
                 if op['kind']!=kinds[name]: raise ChainConflict('Action evidence mismatch')
@@ -68,6 +73,8 @@ class Projector:
                 # A backup older than acceptance lost private quota/recipient context.
                 # Public events cannot safely reconstruct that authorization.
                 raise ChainConflict('Local issuance missing private recovery context')
+            elif name=='Settled' and self.b.owner_mode and self.rpc.w3.eth.get_transaction(event['transactionHash'])['from'].lower()==self.b.deployment['merchant'].lower():
+                raise ChainConflict('Owner settlement missing private recovery context')
     def apply(self, db, event):
         a=event['args']; name=event['eventName']
         if name=='Funded':
@@ -116,7 +123,6 @@ class Projector:
                     if not statement or statement['actor_id']!=r['actor_id'] or not lock or lock['status']!='FINALIZED_SUCCESS':
                         raise ChainConflict('Missing original handoff/lock proof')
                 if kind=='settle':
-                    if op['actor_id']==statement['actor_id']: raise ChainConflict('Self settlement evidence')
                     if not db.execute("SELECT 1 FROM operations WHERE kind='report' AND redemption_id=? AND status='FINALIZED_SUCCESS'",(r['id'],)).fetchone():
                         raise ChainConflict('Missing original report proof')
                 state={'lock':'LOCKED','report':'REPORTED','settle':'SETTLED'}[kind]

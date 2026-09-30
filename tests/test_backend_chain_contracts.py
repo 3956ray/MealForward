@@ -44,7 +44,7 @@ class C0Tests(unittest.TestCase):
         db.execute("INSERT INTO outbox(operation_id,signer,tx_json,state) VALUES('old','signer','{}','QUEUED')")
         db.execute('PRAGMA user_version=1');db.commit();db.close()
         store=Store(path)
-        self.assertEqual(store.one('PRAGMA user_version')['user_version'],2)
+        self.assertEqual(store.one('PRAGMA user_version')['user_version'],3)
         self.assertEqual(store.one("SELECT value FROM metadata WHERE key='recovery_state'")['value'],'QUARANTINED')
         self.assertEqual(store.one('SELECT F,A FROM batches'),{'F':3,'A':3})
         self.assertEqual(store.one('SELECT signing_stage FROM outbox')['signing_stage'],'LEGACY_UNKNOWN')
@@ -186,6 +186,6 @@ class C0Tests(unittest.TestCase):
         (root/'backup.json').write_text(json.dumps(manifest))
         restored=load_backend(restore_bundle(root,Path(self.h.tmp.name)/'v1-restore'))
         self.assertTrue(restored.quarantined());self.assertEqual(set(restored.signers),{'issuer'})
-        self.assertEqual(restored.store.one('PRAGMA user_version')['user_version'],2)
+        self.assertEqual(restored.store.one('PRAGMA user_version')['user_version'],3)
 
 if __name__=='__main__': unittest.main()
