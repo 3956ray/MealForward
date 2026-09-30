@@ -1,0 +1,36 @@
+type ChainEvent {
+  id: ID!
+  deploymentId: String!
+  chainId: Int!
+  contract: String!
+  blockNumber: Int!
+  blockHash: String!
+  transactionHash: String!
+  transactionIndex: Int!
+  logIndex: Int!
+  eventName: String!
+  argsJson: String!
+}
+type Batch {
+  id: ID!
+  deploymentId: String!
+  batchId: String!
+  fundedWei: BigInt!
+  issuedCount: Int!
+}
+type Voucher {
+  id: ID!
+  deploymentId: String!
+  voucherId: String!
+  batchId: String!
+  status: String!
+  lastEventId: String!
+  settledWei: BigInt!
+}
+type IssuedVoucher {
+  id: ID!
+  eventId: String!
+  voucherId: String!
+  arrayIndex: Int!
+  batchId: String!
+}

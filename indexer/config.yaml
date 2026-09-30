@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: mealforward-cp15-public
+rollback_on_reorg: true
+address_format: lowercase
+field_selection:
+  transaction_fields: [hash, transactionIndex]
+contracts:
+  - name: MealForward
+    abi_file_path: abis/MealForward.abi.json
+    handler: src/handlers/MealForward.ts
+    events:
+      - event: Funded
+      - event: Issued
+      - event: Locked
+      - event: Reported
+      - event: Settled
+      - event: PauseChanged
+      - event: RoleGranted
+      - event: RoleRevoked
+      - event: RoleAdminChanged
+chains:
+  - id: 31337
+    rpc: ${ENVIO_RPC_URL:-http://127.0.0.1:18646}
+    start_block: ${ENVIO_START_BLOCK:-0}
+    contracts:
+      - name: MealForward
+        address: ["${ENVIO_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000001}"]

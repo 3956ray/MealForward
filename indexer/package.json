@@ -1,0 +1,23 @@
+{
+  "name": "mealforward-public-indexer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "abi": "node scripts/sync-abi.mjs",
+    "codegen": "npm run abi && envio codegen",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "dev": "docker compose -p mealforward-cp15-indexer up --build"
+  },
+  "dependencies": {
+    "envio": "3.12.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "tsx": "4.21.0",
+    "@types/node": "24.10.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,16 @@
+**
+!shared/
+!shared/MealForward.abi.json
+!shared/abi-manifest.json
+!indexer/
+!indexer/package.json
+!indexer/package-lock.json
+!indexer/config.yaml
+!indexer/schema.graphql
+!indexer/tsconfig.json
+!indexer/abis/
+!indexer/abis/**
+!indexer/scripts/
+!indexer/scripts/**
+!indexer/src/
+!indexer/src/**

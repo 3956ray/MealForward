@@ -1,0 +1,54 @@
+# Future runtime template. Real services are NOT_RUN on this machine (Docker absent).
+services:
+  postgres:
+    image: postgres:17.5
+    ports: ["127.0.0.1:5435:5432"]
+    environment:
+      POSTGRES_USER: envio
+      POSTGRES_DB: mealforward
+      POSTGRES_PASSWORD: ${ENVIO_PG_PASSWORD:?set isolated local DB password}
+    volumes: ["indexer-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U envio -d mealforward"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  hasura:
+    image: hasura/graphql-engine:v2.43.0
+    ports: ["127.0.0.1:8085:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://envio:${ENVIO_PG_PASSWORD}@postgres:5432/mealforward
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:?set isolated local admin secret}
+      HASURA_GRAPHQL_UNAUTHORIZED_ROLE: public
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "false"
+      HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1s bash -c ':> /dev/tcp/127.0.0.1/8080'"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  indexer:
+    build: {context: .., dockerfile: indexer/Dockerfile}
+    depends_on:
+      hasura: {condition: service_healthy}
+    environment:
+      ENVIO_DEPLOYMENT_ID: ${ENVIO_DEPLOYMENT_ID:?set unique chain-reset/deployment generation}
+      ENVIO_CONTRACT_ADDRESS: ${ENVIO_CONTRACT_ADDRESS:?set deployed local contract}
+      ENVIO_START_BLOCK: ${ENVIO_START_BLOCK:?set deployment block}
+      ENVIO_RPC_URL: http://host.docker.internal:18646
+      ENVIO_PG_HOST: postgres
+      ENVIO_PG_PORT: "5432"
+      ENVIO_PG_USER: envio
+      ENVIO_PG_DATABASE: mealforward
+      ENVIO_PG_SCHEMA: public
+      ENVIO_PG_SSL_MODE: "false"
+      ENVIO_PG_PASSWORD: ${ENVIO_PG_PASSWORD}
+      ENVIO_INDEXER_PORT: "9895"
+      HASURA_GRAPHQL_ENDPOINT: http://hasura:8080/v1/metadata
+      HASURA_GRAPHQL_ROLE: admin
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
+      ENVIO_TUI: "false"
+volumes:
+  indexer-data:
