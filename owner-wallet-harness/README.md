@@ -1,10 +1,15 @@
 # CP16 owner wallet — isolated local harness
 
-This is a separate Anvil31337 owner-wallet module. It does not replace P01–P14,
+This is a separate Anvil31337 owner workbench. P06 links here explicitly; it does not replace P01–P14,
 connect an existing user wallet automatically, or demonstrate real food delivery.
 The backend owns the settlement state machine and finality. The controller stores
 only an original intent pointer, backend DTO, attempted-start guard and known hash.
 Cookies, CSRF tokens, identity signatures and private keys are not stored there.
+The work panel prechecks the recipient's current code, locks, records an explicit
+handoff, reports, then selects a finalized payable for the existing wallet controller.
+The code stays in React memory. A separate small journal stores only original work
+IDs/intent keys; ambiguous writes remain query-only. Known preacceptance rejections
+can clear that attempt, including a code rotated after precheck.
 
 ## Behavior
 
@@ -33,6 +38,16 @@ be allowed. The harness uses the same-origin `/api/v1` cookie/CSRF transport.
 
 Use existing root dependencies; do not change the root lock. Pick an unused local
 port and a dedicated backend/database. Never point this at the old8765 simulator.
+Run the following long-lived commands in separate terminals from the repository.
+Setup runs once and refuses a nonempty directory. Existing previews on 5173/8765,
+18545/5195 and 18645/8875 must remain untouched.
+
+```sh
+node_modules/.bin/anvil --host 127.0.0.1 --port 18845 --chain-id 31337 --silent
+.venv/bin/python -m server.local setup --directory .localbackend/cp16-owner --rpc-url http://127.0.0.1:18845 --origin http://127.0.0.1:15197
+.venv/bin/python -m server.local web --directory .localbackend/cp16-owner --port 18875
+.venv/bin/python -m server.local worker --directory .localbackend/cp16-owner
+```
 
 ```sh
 OWNER_BACKEND_ORIGIN=http://127.0.0.1:18875 \
@@ -42,7 +57,15 @@ OWNER_BACKEND_ORIGIN=http://127.0.0.1:18875 \
 The backend origin allowlist must be `http://127.0.0.1:15197`. Log in with an explicit
 local owner fixture account; the page does not provide or install a wallet. An
 EIP1193 provider with account/chain events must be explicitly available. Do not use
-real accounts or wallets in this local harness.
+real accounts or wallets in this local harness. The disposable fixture account is
+`owner-a` / `local-only-password`, bound to the node's account 5. Setup creates an
+empty deployment; issue/delivery/presentation must occur before owner lock/report.
+The browser regression below supplies that setup through actual HTTP.
+
+P06 defaults to `http://127.0.0.1:15197`. `VITE_OWNER_APP_URL` may override only a
+different HTTP loopback origin, without credentials, path, query or fragment.
+No voucher, code, session or proof is passed in the link. The 5173 simulator still
+does not connect or sign with a wallet. A running workbench requires its own services.
 
 ```sh
 npm run build
@@ -53,9 +76,11 @@ node --experimental-strip-types --test tests/wallet/owner-controller.test.ts
 
 ## Reproducible isolated real-chain tests
 
-`test-server.py` creates its own random-port Anvil, temporary DB, HTTP server and
-C0 finalized payable. It prepares lock/report via C0 helpers; therefore this is
-wallet HTTP/transaction evidence, not full redemption-module HTTP acceptance.
+`test-server.py` creates its own random-port Anvil, temporary DB and HTTP server.
+Its default C0-helper payable is used only by `owner-anvil.test.ts`. The browser
+driver explicitly selects `OWNER_TEST_FULL_HTTP=1`: HTTP fund/issue/invitation/
+delivery/recipient presentation prepare a voucher, and browser clicks perform
+precheck/lock/handoff/report/settle without a prebuilt payable or seeded journal.
 It serves the built harness at the API's own origin and exposes a test-only worker
 tick route. Do not run this driver as a deployed service.
 
@@ -84,7 +109,8 @@ OWNER_TEST_PYTHON=/absolute/project/.venv/bin/python \
 
 The browser driver injects a controlled EIP1193 bridge. Its disposable Anvil owner
 signer lives in the external Node test driver, never backend/browser storage. It
-checks no automatic signing, explicit identity proof, fixed review, one actual
+checks rejected rotated codes followed by fresh-code recovery, finalized lock and
+report gates, payable selection, no automatic signing, explicit identity proof, fixed review, one actual
 transaction with deliberately lost hash, reload/original finality recovery, desktop
 rendering and390px overflow. It does not test real extension UI, human confirmation,
 biometrics, hardware wallets, smart accounts or a public network.

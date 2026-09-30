@@ -18,6 +18,14 @@ export interface OwnerJournal {
   redemptionId: string; intentKey: string; startAttempted: boolean; view?: OwnerView; txHash?: string
 }
 export interface OwnerApi { request<T>(path: string, body?: Record<string, unknown>): Promise<T> }
+export class OwnerApiError extends Error {
+  readonly status: number
+  readonly code?: string
+  constructor(status: number, code?: string) {
+    super(`Owner API unavailable (${status}); retain the original operation`)
+    this.status = status; this.code = code
+  }
+}
 export type OwnerLock = <T>(name: string, action: () => Promise<T>) => Promise<T>
 export const ownerBrowserLock: OwnerLock = async (name, action) => {
   if (typeof navigator === 'undefined' || !navigator.locks) throw new Error('Browser cross-tab locking unavailable')
@@ -36,7 +44,10 @@ export function ownerHttpApi(csrf: () => string): OwnerApi {
       headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
       body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000),
     })
-    if (!response.ok) throw new Error(`Owner API unavailable (${response.status}); retain the original operation`)
+    if (!response.ok) {
+      const problem = await response.json().catch(() => ({})) as { code?: unknown }
+      throw new OwnerApiError(response.status, typeof problem.code === 'string' ? problem.code : undefined)
+    }
     return response.status === 204 ? undefined as T : await response.json() as T
   } }
 }

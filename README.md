@@ -62,4 +62,6 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 
 新隔离 `server.local setup` 创建 owner 模式：后台只有 issuer/operator 签名材料，老板测试钱包为部署 merchant，后台不持其私钥。锁/report 由后台明确代发；settle 由外部老板钱包主动发原交易，后台只核结果。旧库不自动升级老板资格，备份 v3 恢复仍隔离并撤销旧钱包证明。不得对现有预览目录运行 setup。
 
-已验证命令：`.venv/bin/python -m unittest tests.test_backend_chain_owner -q`，使用自有随机端口 Anvil 与临时库。测试覆盖钱包身份挑战、外部签名/原交易恢复、finality、提交争用、实际 revert 与 v2/v3 备份边界。C0 锁/report 测试使用共享 helper；另以 `.venv/bin/python -m unittest tests.test_redemption tests.test_backend_chain_redemption -q` 验证完整 redemption HTTP/真实链集成。经营钱包浏览器仍待独立模块实测，不能据此宣称完整钱包体验完成。
+已验证命令：`.venv/bin/python -m unittest tests.test_backend_chain_owner -q`，使用自有随机端口 Anvil 与临时库。测试覆盖钱包身份挑战、外部签名/原交易恢复、finality、提交争用、实际 revert 与 v2/v3 备份边界。C0 锁/report 测试使用共享 helper；另以 `.venv/bin/python -m unittest tests.test_redemption tests.test_backend_chain_redemption -q` 验证完整 redemption HTTP/真实链集成。
+
+P06 现提供独立本地链经营入口，默认 `http://127.0.0.1:15197`，需另行启动专用服务；原模拟页面不连接钱包。独立工作台用同一 owner controller 完成验码、锁定、交付声明、申报、选择应付款及逐笔钱包结算。受控 EIP1193 浏览器与真实 Anvil 完整 HTTP 流程已验证；真实钱包扩展和人类确认仍 NOT_RUN，不代表 CP16 整体验收。启动、测试命令及证据边界见 [经营工作台说明](owner-wallet-harness/README.md)。

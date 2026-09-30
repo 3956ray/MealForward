@@ -30,6 +30,14 @@ const actors: Array<{ id: Actor; label: string; detail: string; page: Page }> = 
 ]
 
 const actorLabel = (id: string) => actors.find(a => a.id === id)?.label ?? (id === 'admin' ? '内部只读工具' : '内部历史测试账号')
+const ownerAppUrl = (() => {
+  try {
+    const configured = (import.meta as ImportMeta & { env: { VITE_OWNER_APP_URL?: string } }).env.VITE_OWNER_APP_URL
+    const url = new URL(configured ?? 'http://127.0.0.1:15197')
+    return url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+      && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash && url.origin !== location.origin ? url.origin : null
+  } catch { return null }
+})()
 
 function parseRoute(): Route {
   const [candidate, encodedTail] = location.hash.replace(/^#\/?/, '').split('/')
@@ -644,6 +652,7 @@ export default function App() {
           <p>支持一份餐、安排餐券、凭邀请领取，或在本店供餐。选择你的入口，继续这一份餐的流程。</p>
           <div className="actor-grid">{actors.map(a => <button className="actor-card" key={a.id} type="button" disabled={busy} onClick={() => a.id === 'recipient' ? navigate('P05') : void selectActor(a.id, a.page)}><strong>{a.label}</strong><span>{a.detail}</span><small>{a.id === 'recipient' ? '了解如何打开私密邀请' : `进入${a.label}页面`} →</small></button>)}</div>
           <p className="fineprint">当前为本地模拟，所有资料与餐券均为虚构。工作入口使用演示会话，不代表真实组织授权；钱包签名与链上支付尚未接入本页面。</p>
+          {ownerAppUrl && <div className="panel"><h2>本地链经营工作台</h2><p>独立 Anvil 31337 测试入口，仅用测试资产，需自行启动专用服务。此模拟页面不连接钱包；新页面也不会自动请求签名。</p><a className="button secondary" href={ownerAppUrl} target="_blank" rel="noopener noreferrer">打开独立本地链测试入口</a></div>}
           <details className="panel internal-tools"><summary>内部演示工具</summary>
             <p className="fineprint">以下仅用于内部检查与样例管理，不是额外的产品角色。</p>
             <button type="button" className="text-button" disabled={busy} onClick={() => void selectActor('admin', 'P13')}>查看预置暂停状态（内部只读）</button>

@@ -81,6 +81,9 @@ def main():
     parser.add_argument('--directory',default='.localbackend')
     parser.add_argument('--destination')
     parser.add_argument('--backup')
+    parser.add_argument('--rpc-url',default='http://127.0.0.1:18645')
+    parser.add_argument('--origin',default='http://127.0.0.1:8875')
+    parser.add_argument('--port',type=int,default=8875)
     args=parser.parse_args()
     root=Path(args.directory)
     if args.command=='restore':
@@ -90,7 +93,7 @@ def main():
         print('Restored in QUARANTINED mode: original operations only; no new signatures or business writes')
         return
     if args.command=='setup':
-        config=fixture(root,'http://127.0.0.1:18645',owner_mode=True)
+        config=fixture(root,args.rpc_url,args.origin,owner_mode=True)
         print('CP16 owner fixture ready; owner wallet is external to backend; configuration:',root/'config.json')
         return
     config=json.loads((root/'config.json').read_text())
@@ -103,7 +106,7 @@ def main():
     backend=load_backend(config)
     if args.command=='web':
         from server.web import create_app
-        create_app(backend,origin=config['origin']).run(host='127.0.0.1',port=8875,debug=False,use_reloader=False)
+        create_app(backend,origin=config['origin']).run(host='127.0.0.1',port=args.port,debug=False,use_reloader=False)
     else:
         from server.outbox import Worker
         worker=Worker(backend,load_worker_keys(config))

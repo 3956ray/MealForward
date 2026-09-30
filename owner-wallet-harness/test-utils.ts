@@ -6,12 +6,12 @@ import { mnemonicToAccount } from 'viem/accounts'
 import { foundry } from 'viem/chains'
 import type { OwnerDeployment } from '../src/wallet/owner-controller.ts'
 import type { Provider } from '../src/wallet/controller.ts'
-export async function startOwnerFixture() {
+export async function startOwnerFixture(fullHttp = false) {
  const python=process.env.OWNER_TEST_PYTHON ?? '.venv/bin/python'
- const child=spawn(python,['owner-wallet-harness/test-server.py'],{stdio:['ignore','pipe','pipe'],env:process.env})
+ const child=spawn(python,['owner-wallet-harness/test-server.py'],{stdio:['ignore','pipe','pipe'],env:{...process.env,OWNER_TEST_FULL_HTTP:fullHttp?'1':'0'}})
  let errors='';child.stderr.on('data',chunk=>{errors+=String(chunk)})
  const lines=createInterface({input:child.stdout})
- const info=await new Promise<{origin:string;rpcUrl:string;redemptionId:string;intentKey:string;deployment:OwnerDeployment}>((resolve,reject)=>{
+ const info=await new Promise<{origin:string;rpcUrl:string;redemptionId:string;intentKey:string;code?:string;voucherId?:string;deployment:OwnerDeployment}>((resolve,reject)=>{
   const timer=setTimeout(()=>{child.kill('SIGTERM');reject(new Error('Owned fixture startup timeout '+errors))},30000)
   child.on('exit',()=>{clearTimeout(timer);reject(new Error('Owned fixture stopped '+errors))})
   lines.on('line',line=>{if(line.startsWith('{')){clearTimeout(timer);resolve(JSON.parse(line))}})

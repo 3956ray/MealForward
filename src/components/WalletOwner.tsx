@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { formatEther } from 'viem'
 import { OwnerWalletController, type OwnerJournal } from '../wallet/owner-controller.ts'
 
-export function WalletOwner({ controller, providerLabel = '注入式钱包（需要本人主动确认）' }: {
-  controller: OwnerWalletController; providerLabel?: string
+export function WalletOwner({ controller, providerLabel = '注入式钱包（需要本人主动确认）', selectedRedemption, children }: {
+  controller: OwnerWalletController; providerLabel?: string; selectedRedemption?: string; children?: ReactNode
 }) {
   const [journal, setJournal] = useState<OwnerJournal | undefined>()
   const [account, setAccount] = useState<string>()
@@ -12,6 +12,9 @@ export function WalletOwner({ controller, providerLabel = '注入式钱包（需
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [redemption, setRedemption] = useState('')
+  useEffect(() => {
+    if (selectedRedemption) { setRedemption(selectedRedemption); controller.invalidateReview() }
+  }, [controller, selectedRedemption])
   useEffect(() => {
     const update = () => {
       try { setJournal(controller.load()) } catch { setError('原记录无法读取，请保留记录并联系维护人员；不要新建替代操作。') }
@@ -30,7 +33,7 @@ export function WalletOwner({ controller, providerLabel = '注入式钱包（需
   const started = journal?.startAttempted || i?.submissionStarted
   return <section className="owner-wallet" aria-label="老板钱包逐笔结算">
     <p className="eyebrow">mealforward · 独立本地钱包验证</p>
-    <h1>餐馆老板 · 逐笔结算</h1>
+    <h1>{children ? '餐馆老板 · 本地链工作台' : '餐馆老板 · 逐笔结算'}</h1>
     <p>仅 Anvil 31337 虚构余额，非 Monad 测试网，无真实供餐。此独立页面未接入模拟 P01–P14。</p>
     <p>{providerLabel}</p>
     <div className="wallet-panel"><h2>连接与身份验证</h2>
@@ -43,6 +46,7 @@ export function WalletOwner({ controller, providerLabel = '注入式钱包（需
         <button disabled={busy} onClick={() => void run(() => controller.logout())}>撤销钱包身份证明</button></div>
       {controller.revocationFailed && <p role="alert">撤销尚未确认，暂不能重新审核或发送。请重试撤销。</p>}
     </div>
+    {children}
     <div className="wallet-panel"><h2>审核这一笔原应付款</h2>
       <label>原应付款 ID<input value={redemption} onChange={e => { setRedemption(e.target.value); controller.invalidateReview() }} placeholder="redemptionId" disabled={busy} /></label>
       <p>验券、锁定、交餐声明与申报由老板逐次操作，后台 operator 提交；只有已最终确认的申报才能准备这一笔钱包结算。</p>
