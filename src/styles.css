@@ -34,7 +34,7 @@ p{line-height:1.7}
 .micro{color:#756b61}
 .muted,.fineprint{color:#776e65}
 .fineprint{font-size:13px;line-height:1.65}
-.button{border:1px solid #c61e29;border-radius:10px;background:#c9222b;color:#fff;text-decoration:none;font-weight:800;padding:12px 18px;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 16px #b7192330;transition:transform .15s,background .15s}
+.button{border:1px solid #c61e29;border-radius:10px;background:#c9222b;color:#fff;text-decoration:none;font-weight:800;padding:12px 18px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 16px #b7192330;transition:transform .12s,background .12s}
 .button:hover:not(:disabled){background:#a81720;color:#fff;transform:translateY(-1px)}
 .button:disabled,.button-disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
 .button.secondary{background:#fffdf6;color:#8f161e;box-shadow:none;border-color:#bb9f92}
@@ -140,3 +140,38 @@ p{line-height:1.7}
 .site-footer{max-width:1300px;width:100%;margin:auto;border-top:1px solid #e5d8c8;padding:23px 36px 30px;display:flex;gap:20px;justify-content:space-between;color:#7c7169;font-size:12px}
 @media(max-width:800px){.site-header{padding:17px 18px;flex-wrap:wrap;gap:10px}.top-nav{order:3;width:100%;justify-content:space-between;gap:8px;overflow:auto}.top-nav a{white-space:nowrap;font-size:12px}.actor-pill{margin-left:auto;font-size:11px}.role-nav{padding:9px 18px;gap:16px}.role-nav a{white-space:nowrap;font-size:12px}main{padding:23px 18px 55px}.page-grid{grid-template-columns:1fr;gap:18px;margin:16px auto}.page-intro p{font-size:15px}.meal-scene{height:260px}.tray{transform:scale(.82) rotate(-4deg)}.hero-stats{flex-wrap:wrap;text-align:center;justify-content:center;padding:15px 8px}.hero-stats>div{border:0;padding:0 10px}.hero-stats small{font-size:12px}.hero-stats strong{font-size:26px}.hero-stats>a{width:100%;text-align:center}.ledger-grid{grid-template-columns:repeat(2,1fr)}.site-footer{padding:22px 18px;flex-wrap:wrap}}
 @media(max-width:520px){.brand strong{font-size:21px}.brand-mark{width:31px;height:31px}.home-page h1{font-size:39px}.hero-lead{font-size:17px}.hero-meta{font-size:14px}.meal-scene{height:220px}.tray{transform:scale(.65) rotate(-4deg);flex-shrink:0}.hero-select button{font-size:14px}.hero-cta{font-size:16px}.hero-stats>div{width:30%;flex-direction:column;gap:2px;padding:0}.hero-stats strong{font-size:24px}.hero-note{font-size:12px}.actor-grid{grid-template-columns:1fr}.actor-card{min-height:105px}.recipient-row{align-items:start;flex-direction:column}.recipient-row button{width:100%}.panel{padding:18px}.split-stats strong{font-size:21px}.card-heading{flex-direction:column}.status-chip{white-space:normal}.detail-list>div{flex-direction:column;gap:3px}.detail-list strong{text-align:left}.button-row .button{width:100%}.ledger-cell{padding:13px}.ledger-cell strong{font-size:19px}}
+
+/* Public entry motion never wraps a private view or an actionable status transition. */
+@keyframes safe-enter{from{opacity:.65;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.safe-page-enter{animation:safe-enter .21s ease-out both}
+.notice.pending,.status-priority{background:#fff2d5;color:#6b4815;border:1px solid #e8cd8d}
+.status-priority{border-radius:12px;padding:17px;margin:14px 0}
+.status-priority>strong{display:block;font-size:18px;color:#673d0c}
+.status-priority p{margin:6px 0 13px}
+.task-action{border-radius:12px;background:#f7f1e6;padding:15px 17px;margin:16px 0}
+.task-action p{margin:0 0 10px}
+.task-action .field{margin-top:0}
+.voucher-page{max-width:580px;margin-top:12px}
+.voucher-page h1{font-size:clamp(30px,5vw,42px)}
+.voucher-card{margin-top:12px}
+.voucher-card h2{margin-bottom:4px}
+.voucher-location{margin:2px 0 12px}
+.voucher-status{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
+.voucher-status strong{color:#68131c}
+.voucher-status span{color:#6d6259}
+.voucher-card .code-box{margin:13px 0;padding:14px}
+.voucher-card .button-row{margin:12px 0}
+.invite-panel{margin-top:16px}
+.private-nav{margin-left:auto}
+.top-nav a,.role-nav a,.private-nav a,.actor-pill,.site-footer a,.home-foot a,.narrow-page>a,.page-intro a,.detail-list a,.notice a,.text-button{min-height:44px;display:inline-flex;align-items:center}
+.top-nav a,.role-nav a{padding-block:10px}
+.brand{min-height:44px}
+.hero-select button{min-height:44px}
+.field input,.field select,.field textarea{min-height:44px}
+.checkbox{min-height:44px}
+.checkbox input{min-width:22px;min-height:22px}
+:focus-visible{outline:3px solid #2458aa;outline-offset:3px}
+main:focus{outline:none}
+@media(max-width:520px){.voucher-page{margin-top:4px}.voucher-page .panel{padding:16px}.voucher-status{align-items:flex-start;flex-direction:column;gap:2px}.voucher-card .code-box{padding:10px}.voucher-card .code-box svg{width:132px;height:132px}.large-code{font-size:25px}.site-footer{gap:4px}.top-nav{gap:6px}.top-nav a{font-size:11px;padding-inline:1px}.role-nav{gap:12px}}
+@media(max-width:380px){main{padding-top:12px}.hero-meta{margin:4px auto 7px;gap:2px}.home-page h1{font-size:34px;letter-spacing:0;margin:5px 0}.hero-lead{font-size:15px;line-height:1.45;margin-bottom:0}.meal-scene{height:160px;margin-bottom:0}.tray{transform:scale(.52) rotate(-4deg)}.hero-select{margin:2px auto 8px}}
+@media(prefers-reduced-motion:reduce){.safe-page-enter{animation:none}.button{transition:none}.button:hover:not(:disabled){transform:none}}

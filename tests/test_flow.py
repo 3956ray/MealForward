@@ -87,6 +87,24 @@ class FlowTests(unittest.TestCase):
         self.assertEqual((b["updated_at"] + 8 * 3600) % 86400, 0)
         return state
 
+    def test_recipient_status_probe_does_not_reissue_code(self):
+        supporter, _, recipient, _, _, code = self.funded_voucher()
+        status, response = self.req("GET", "/api/voucher/status")
+        self.assertEqual(status, 401)
+        status, response = self.req("GET", "/api/voucher/status", token=supporter)
+        self.assertEqual(status, 403)
+        status, response = self.req("GET", "/api/voucher/status", token=recipient)
+        self.assertEqual((status, response), (200, {"status": "active", "delivery_status": "sent", "paused": False}))
+        staff = self.login("staff_a")
+        status, response = self.req("POST", "/api/act", {"action": "precheck", "code": code}, staff)
+        self.assertEqual(status, 200)
+        self.assertEqual(response["check"]["status"], "可申请处理权")
+        status, response = self.act(staff, "lock", "status-lock-a01", code=code)
+        self.assertEqual(status, 200)
+        status, response = self.req("GET", "/api/voucher/status", token=recipient)
+        self.assertEqual((status, response), (200, {"status": "locked", "delivery_status": "sent", "paused": False}))
+        self.assertNotIn("code", response)
+
     def test_full_flow_permissions_and_idempotency(self):
         supporter, partner, recipient, voucher_id, secret, code = self.funded_voucher()
         self.assert_balance(100, 0, 100, 0, 0)

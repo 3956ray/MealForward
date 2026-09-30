@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, intentKey } from './api'
 import type { ActionResult, Actor, Operation, Redemption, State, VoucherView } from './api'
@@ -67,11 +67,17 @@ export default function App() {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('mealforward-token'))
   const [state, setState] = useState<State | null>(null)
   const [voucher, setVoucher] = useState<VoucherView | null>(null)
+  const [recipientCases, setRecipientCases] = useState<Array<{ id: string; kind: string; stage: string }>>([])
+  const [voucherOpen, setVoucherOpen] = useState(false)
   const [operation, setOperation] = useState<Operation | null>(null)
+  const [operationQueriedAt, setOperationQueriedAt] = useState<number | null>(null)
+  const [pendingInvite, setPendingInvite] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [lastOperation, setLastOperation] = useState<Operation | null>(null)
+  const [recentSupport, setRecentSupport] = useState<Operation | null>(null)
+  const [supportUncertain, setSupportUncertain] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [supportOutcome, setSupportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
   const [reportOutcome, setReportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
@@ -82,26 +88,44 @@ export default function App() {
   const [caseKind, setCaseKind] = useState('餐券或交付求助')
   const [caseText, setCaseText] = useState('')
   const [caseVoucherId, setCaseVoucherId] = useState('')
-  const exchangedInvite = useRef<string | null>(null)
+  const voucherEpoch = useRef(0)
+  const voucherInFlight = useRef<Promise<VoucherView> | null>(null)
+  const inviteEpoch = useRef(0)
+  const operationEpoch = useRef(0)
+  const precheckEpoch = useRef(0)
+  const actionEpoch = useRef(0)
+  const stateEpoch = useRef(0)
 
-  const actor = state?.work?.actor ?? null
-  const role = state?.work?.role ?? null
+  const actor = token ? state?.work?.actor ?? null : null
+  const role = token ? state?.work?.role ?? null : null
   const batch = state?.batch
   const shop = state?.shop
 
   const refresh = useCallback(async (usingToken: string | null = token) => {
+    const request = ++stateEpoch.current
     try {
       const next = await api<State>('/state', usingToken)
+      if (request !== stateEpoch.current) return null
       setState(next)
       setError(null)
       return next
     } catch (e) {
+      if (request !== stateEpoch.current) return null
       const apiError = e as Error & { status?: number }
       if (apiError.status === 401 && usingToken) {
+        voucherEpoch.current++
+        setVoucher(null)
+        setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
         sessionStorage.removeItem('mealforward-token')
         setToken(null)
-        setState(await api<State>('/state', null))
-        setMessage('旧演示会话已失效，请重新选择模拟角色。')
+        setState(null)
+        try {
+          const publicState = await api<State>('/state', null)
+          if (request === stateEpoch.current) setState(publicState)
+        } catch (publicError) {
+          if (request === stateEpoch.current) setError((publicError as Error).message)
+        }
+        if (request === stateEpoch.current) setMessage('旧演示会话已失效，请重新选择模拟角色。')
         return null
       }
       setError(apiError.message)
@@ -110,75 +134,190 @@ export default function App() {
   }, [token])
 
   const refreshVoucher = useCallback(async (usingToken: string | null = token) => {
-    if (!usingToken) { setVoucher(null); return }
+    const request = ++voucherEpoch.current
+    setVoucher(null)
+    if (!usingToken) return
+    const prior = voucherInFlight.current
+    if (prior) { try { await prior } catch { /* The next request still needs the server's latest state. */ } }
+    if (request !== voucherEpoch.current) return
+    const pending = api<VoucherView>('/voucher', usingToken)
+    voucherInFlight.current = pending
     try {
-      const next = await api<VoucherView>('/voucher', usingToken)
+      const next = await pending
+      if (request !== voucherEpoch.current) return
       setVoucher(next)
+      setRecipientCases(next.cases)
       setError(null)
     } catch (e) {
+      if (request !== voucherEpoch.current) return
       setVoucher(null)
-      setError((e as Error).message)
-    }
-  }, [token])
+      const failure = e as Error & { status?: number }
+      if (failure.status === 401) {
+        sessionStorage.removeItem('mealforward-token')
+        setToken(null)
+        setVoucherOpen(false)
+        setRecipientCases([])
+        void refresh(null)
+      }
+      setError(failure.message)
+    } finally { if (voucherInFlight.current === pending) voucherInFlight.current = null }
+  }, [token, refresh])
 
   useEffect(() => {
-    const onHash = () => setRoute(parseRoute())
+    const onHash = () => {
+      const next = parseRoute()
+      setMessage(null); setLastOperation(null); setError(null)
+      if (next.page !== 'P05' || next.tail) { voucherEpoch.current++; inviteEpoch.current++; setVoucher(null); setVoucherOpen(false); setPendingInvite(null) }
+      operationEpoch.current++; setOperation(null); setOperationQueriedAt(null)
+      actionEpoch.current++
+      if (next.page !== 'P09') { precheckEpoch.current++; setCheck(undefined); setHasMeal(false) }
+      setRoute(next)
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (route.page === 'P05' && route.tail) {
       const secret = route.tail
-      if (exchangedInvite.current === secret) return
-      exchangedInvite.current = secret
+      voucherEpoch.current++
+      inviteEpoch.current++
+      setVoucher(null)
+      setVoucherOpen(false)
+      setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
+      setPendingInvite(secret)
+      setToken(null)
+      setState(null)
+      sessionStorage.removeItem('mealforward-token')
+      setLastOperation(null)
+      operationEpoch.current++
+      actionEpoch.current++
+      setOperation(null)
+      setCheck(undefined)
       history.replaceState(null, '', `${location.pathname}${location.search}#/P05`)
       setRoute({ page: 'P05', tail: null })
-      setBusy(true)
-      api<{ token: string }>('/invite/exchange', null, { secret })
-        .then(async result => {
-          sessionStorage.setItem('mealforward-token', result.token)
-          setToken(result.token)
-          setMessage('已在本浏览器打开这一张演示餐券；无需钱包或平台注册。')
-          await refresh(result.token)
-          await refreshVoucher(result.token)
-        })
-        .catch(e => setError(`私密邀请无法打开：${(e as Error).message}`))
-        .finally(() => setBusy(false))
-      return
+      setMessage(null)
+      setError(null)
+      void refresh(null)
     }
-    void refresh()
-  // Only bootstrap the current browser session; other route changes have focused loads below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [route.page, route.tail])
+
+  useEffect(() => { if (!(route.page === 'P05' && route.tail)) void refresh(token) }, []) // Initial read only.
+
+  useLayoutEffect(() => {
+    if (route.page === 'P05' && route.tail) return
+    window.scrollTo(0, 0)
+    document.getElementById('main-content')?.focus()
+  }, [route.page, route.tail])
 
   useEffect(() => {
-    if (route.page === 'P05' && role === 'recipient' && !route.tail) void refreshVoucher()
-  }, [route.page, route.tail, role, refreshVoucher])
+    if (route.page === 'P05' && role === 'recipient' && !route.tail && !pendingInvite && voucherOpen) void refreshVoucher()
+  }, [route.page, route.tail, role, pendingInvite, voucherOpen, refreshVoucher])
 
   useEffect(() => {
-    if (route.page !== 'P03' || !route.tail || !token) { setOperation(null); return }
+    if (!voucher?.code_expires) return
+    const delay = Math.max(0, voucher.code_expires * 1000 - Date.now())
+    const timer = window.setTimeout(() => setVoucher(null), delay)
+    return () => window.clearTimeout(timer)
+  }, [voucher])
+
+  useEffect(() => {
+    if (route.page !== 'P05' || !voucherOpen || role !== 'recipient' || !token || !voucher?.code) return
+    let checking = false
+    const observedEpoch = voucherEpoch.current
+    const hideCode = (reason?: string) => {
+      if (observedEpoch !== voucherEpoch.current) return
+      voucherEpoch.current++
+      setVoucher(null)
+      if (reason) setError(reason)
+    }
+    const checkStatus = async () => {
+      if (checking || document.visibilityState !== 'visible') return
+      checking = true
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 3000)
+      try {
+        const result = await api<{ status: string; delivery_status: string; paused: boolean }>('/voucher/status', token, undefined, controller.signal)
+        if (observedEpoch !== voucherEpoch.current) return
+        if (result.status !== 'active' || !['sent', 'handover', 'acknowledged'].includes(result.delivery_status) || result.paused) hideCode('券状态已变化或本批已暂停，短码已隐藏。请重查服务端状态。')
+      } catch (e) {
+        if (observedEpoch !== voucherEpoch.current) return
+        hideCode('无法确认当前券状态，短码已隐藏。请重查服务端状态。')
+        if ((e as Error & { status?: number }).status === 401) {
+          sessionStorage.removeItem('mealforward-token')
+          setToken(null)
+          setVoucherOpen(false)
+          setRecipientCases([])
+          void refresh(null)
+        }
+      }
+      finally { window.clearTimeout(timeout); checking = false }
+    }
+    const onVisibility = () => { if (document.visibilityState !== 'visible') hideCode() }
+    document.addEventListener('visibilitychange', onVisibility)
+    const timer = window.setInterval(() => { void checkStatus() }, 2000)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [route.page, voucherOpen, role, token, voucher?.code, refresh])
+
+  useEffect(() => {
+    const request = ++operationEpoch.current
+    if (route.page !== 'P03' || !route.tail || !token) { setOperation(null); setOperationQueriedAt(null); return }
     api<{ operation: Operation }>(`/operations/${encodeURIComponent(route.tail)}`, token)
-      .then(result => { setOperation(result.operation); setError(null) })
-      .catch(e => { setOperation(null); setError((e as Error).message) })
+      .then(result => { if (request !== operationEpoch.current) return; setOperation(result.operation); setOperationQueriedAt(Date.now()); setError(null) })
+      .catch(e => { if (request !== operationEpoch.current) return; setOperation(null); setOperationQueriedAt(null); setError((e as Error).message) })
+    return () => { if (request === operationEpoch.current) operationEpoch.current++ }
   }, [route.page, route.tail, token])
 
+  async function openInvite() {
+    if (!pendingInvite || busy) return
+    const secret = pendingInvite
+    const request = ++inviteEpoch.current
+    setBusy(true); setError(null); setVoucher(null)
+    try {
+      const result = await api<{ token: string }>('/invite/exchange', null, { secret })
+      if (request !== inviteEpoch.current) return
+      sessionStorage.setItem('mealforward-token', result.token)
+      setToken(result.token)
+      setState(null)
+      const opened = await refresh(result.token)
+      if (request !== inviteEpoch.current) return
+      setPendingInvite(null)
+      if (opened?.work?.role === 'recipient') setVoucherOpen(true)
+      else setError('本机未确认这一份餐券的访问状态；请从原私信重新打开。')
+    } catch (e) {
+      if (request !== inviteEpoch.current) return
+      setPendingInvite(null)
+      setError(`私密邀请无法确认：${(e as Error).message} 请从原私信重新打开，或联系社区伙伴。`)
+    } finally { setBusy(false) }
+  }
+
   async function selectActor(selected: Exclude<Actor, 'recipient'>, target: Page) {
-    setBusy(true); setError(null); setMessage(null); setVoucher(null); setCheck(undefined); setLastOperation(null); setOperation(null)
+    voucherEpoch.current++
+    inviteEpoch.current++
+    operationEpoch.current++
+    precheckEpoch.current++
+    actionEpoch.current++
+    setBusy(true); setError(null); setMessage(null); setVoucher(null); setCheck(undefined); setHasMeal(false); setLastOperation(null); setOperation(null)
+    setRecipientCases([]); setRecentSupport(null); setSupportUncertain(false)
+    setPendingInvite(null); setVoucherOpen(false)
+    setState(null)
     try {
       const session = await api<{ token: string }>('/session', null, { actor: selected })
       sessionStorage.setItem('mealforward-token', session.token)
       setToken(session.token)
       await refresh(session.token)
       navigate(target)
-      setMessage(`已进入“${actors.find(a => a.id === selected)?.label}”虚构角色。此选择不是现实身份认证。`)
     } catch (e) { setError((e as Error).message) }
     finally { setBusy(false) }
   }
 
   async function perform(fields: Record<string, unknown>, options?: { page?: Page; stay?: boolean }) {
     if (!token) { navigate('P06'); return }
+    const actionRequest = actionEpoch.current
     setBusy(true); setError(null); setMessage(null)
+    const precheckRequest = fields.action === 'precheck' ? ++precheckEpoch.current : null
+    if (fields.action === 'precheck') { setCheck(undefined); setHasMeal(false) }
+    if (fields.action === 'support') setSupportUncertain(true)
     try {
       let intentStorageKey: string | null = null
       let payload = fields
@@ -191,17 +330,29 @@ export default function App() {
         payload = { ...fields, intent_key: stableKey }
       }
       const result = await api<ActionResult>('/act', token, payload)
+      if (actionRequest !== actionEpoch.current) return result
+      if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return result
       if (intentStorageKey && result.operation && result.operation.status !== 'UNKNOWN') sessionStorage.removeItem(intentStorageKey)
-      setMessage(result.message)
-      if (result.operation) setLastOperation(result.operation)
+      if (fields.action === 'support') {
+        setRecentSupport(result.operation ?? null)
+        setSupportUncertain(result.operation?.status === 'UNKNOWN')
+      }
+      setMessage(result.operation?.status === 'UNKNOWN' ? '结果待核，只查这笔原操作；没有重新提交。' : result.operation?.status === 'FAILED' ? '本次模拟操作未成功；请先查看原操作。' : result.message)
+      setLastOperation(result.operation ?? null)
       if (result.check) setCheck(result.check)
+      if (role === 'recipient' && fields.action === 'case' && result.case) setRecipientCases(previous => previous.some(item => item.id === result.case!.id) ? previous : [{ id: result.case!.id, kind: String(fields.kind ?? '一般求助'), stage: result.case!.stage }, ...previous])
       await refresh(token)
-      if (role === 'recipient') await refreshVoucher(token)
+      if (actionRequest !== actionEpoch.current) return result
+      if (role === 'recipient' && voucherOpen && route.page === 'P05') await refreshVoucher(token)
+      if (actionRequest !== actionEpoch.current) return result
       if (options?.page) navigate(options.page, options.page === 'P03' ? result.operation?.id : undefined)
       else if (result.operation && !options?.stay && ['UNKNOWN', 'FAILED'].includes(result.operation.status)) navigate('P03', result.operation.id)
       return result
     } catch (e) {
+      if (actionRequest !== actionEpoch.current) return null
+      if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return null
       const failure = (e as Error).message
+      if (fields.action === 'precheck' || fields.action === 'lock') { setCheck(undefined); setHasMeal(false) }
       await refresh(token)
       setError(failure)
       return null
@@ -210,13 +361,19 @@ export default function App() {
 
   async function reset(scenario: 'normal' | 'paused') {
     setBusy(true); setError(null); setMessage(null)
+    voucherEpoch.current++
+    inviteEpoch.current++
+    operationEpoch.current++
+    precheckEpoch.current++
+    actionEpoch.current++
+    setVoucher(null); setRecipientCases([]); setPendingInvite(null); setVoucherOpen(false); setRecentSupport(null); setSupportUncertain(false); setState(null)
     try {
       await api('/reset', null, { scenario })
+      voucherEpoch.current++
       sessionStorage.removeItem('mealforward-token')
-      setToken(null); setVoucher(null); setCheck(undefined); setLastOperation(null)
+      setToken(null); setVoucher(null); setPendingInvite(null); setCheck(undefined); setLastOperation(null)
       await refresh(null)
       navigate('P06')
-      setMessage(`已重置为“${scenario === 'normal' ? '正常主链路' : '预置暂停'}”虚构样例。旧会话已清除，请重新选择角色。`)
     } catch (e) { setError((e as Error).message) }
     finally { setBusy(false) }
   }
@@ -224,10 +381,15 @@ export default function App() {
   const page = route.page
   const needRole: Partial<Record<Page, string[]>> = {
     P03: ['supporter', 'partner', 'staff', 'settler', 'recipient'],
-    P05: ['recipient'], P07: ['partner'], P08: ['partner'], P09: ['staff'],
+    P07: ['partner'], P08: ['partner'], P09: ['staff'],
     P10: ['staff'], P11: ['staff', 'settler'], P13: ['admin'],
   }
   const allowed = !needRole[page] || !!role && needRole[page]!.includes(role)
+  const privateShell = page === 'P05' || page === 'P12' && role === 'recipient'
+  const supportUnknown = role === 'supporter' ? (recentSupport?.status === 'UNKNOWN' ? recentSupport : state?.work?.operations?.find(op => op.action === 'support' && op.status === 'UNKNOWN')) : null
+  const supportCompleted = role === 'supporter' ? state?.work?.operations?.find(op => op.action === 'support' && op.status === 'SUCCESS') : null
+  const supportGuard = role === 'supporter' && (supportUnknown || supportCompleted || recentSupport?.status === 'SUCCESS' || supportUncertain)
+  const currentVoucher = role === 'recipient' && !!token && voucherOpen && !pendingInvite && !route.tail && voucher && (!voucher.code_expires || voucher.code_expires * 1000 > Date.now()) ? voucher : null
   const navItems: Array<{ page: Page; name: string }> = [
     { page: 'P01', name: '首页' }, { page: 'P04', name: '公开餐账' },
     { page: 'P12', name: '联系求助' }, { page: 'P06', name: '工作入口' },
@@ -244,19 +406,20 @@ export default function App() {
   }, [role])
 
   return <div className="app-shell">
-    <div className="simulation-ribbon">● 本地模拟 · 所有店、机构、角色、餐券与 DU 均为虚构 · 无真实支付或外部发送</div>
-    <header className="site-header">
+    <header>
+      <div className="simulation-ribbon">● 本地模拟 · 所有店、机构、角色、餐券与 DU 均为虚构 · 无真实支付或外部发送</div>
+      <div className="site-header">
       <Link page="P01" className="brand"><span className="brand-mark" aria-hidden="true">◡</span><span><strong>留膳</strong><small>mealforward</small></span></Link>
-      <nav className="top-nav" aria-label="主导航">{navItems.map(item => <Link key={item.page} page={item.page} className={page === item.page ? 'active' : ''}>{item.name}</Link>)}</nav>
-      <Link page="P06" className="actor-pill">{actor ? `${role === 'recipient' ? '持券链接' : actors.find(a => a.id === actor)?.label ?? actor} · 切换` : '选择模拟角色'}</Link>
+      {privateShell ? <div className="private-nav">{page === 'P05' ? <Link page="P12">联系与求助</Link> : <Link page="P05">返回这一份餐券</Link>}</div> : <><nav className="top-nav" aria-label="主导航">{navItems.map(item => <Link key={item.page} page={item.page} className={page === item.page ? 'active' : ''}>{item.name}</Link>)}</nav><Link page="P06" className="actor-pill">{actor ? `${actors.find(a => a.id === actor)?.label ?? actor} · 切换` : '选择模拟角色'}</Link></>}
+      </div>
     </header>
-    {roleNav.length > 0 && <nav className="role-nav" aria-label="角色工作导航">{roleNav.map(id => <Link key={id} page={id} className={page === id ? 'active' : ''}>{titles[id]}</Link>)}</nav>}
+    {!privateShell && roleNav.length > 0 && <nav className="role-nav" aria-label="角色工作导航">{roleNav.map(id => <Link key={id} page={id} className={page === id ? 'active' : ''}>{titles[id]}</Link>)}</nav>}
     {state?.paused && <div className="pause-strip">预置暂停演练：新入款、发券、新锁及新付款被服务端阻断。既有 R/H 和原操作查询保留。<Link page="P04">查看餐账</Link></div>}
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       {error && <div className="notice error" role="alert"><strong>操作未完成</strong><span>{error}</span><button type="button" className="text-button" onClick={() => void refresh()}>重查服务端状态</button></div>}
-      {message && <div className="notice success" role="status"><span>{message}</span>{lastOperation && <Link page="P03" tail={lastOperation.id}>查看原操作 {lastOperation.id}</Link>}</div>}
+      {message && <div className={`notice ${lastOperation?.status === 'UNKNOWN' || lastOperation?.status === 'FAILED' ? 'pending' : 'success'}`} role="status"><span>{message}</span>{lastOperation && <Link page="P03" tail={lastOperation.id}>查看原操作 {lastOperation.id}</Link>}</div>}
       {!state ? <section className="panel empty"><h1>连接本机模拟服务</h1><p>页面正在读取服务端状态。请同时运行 Vite 前端与 127.0.0.1:8765 的 Python API；无法连接时上方会显示错误。</p><button type="button" className="button" onClick={() => void refresh()}>重新连接</button></section> : !allowed ? <section className="panel empty"><p className="eyebrow">{page} · 受限视图</p><h1>此页面需要对应的演示身份</h1><p>当前{actor ? `为 ${actor}` : '未选择角色'}。服务端会再次核验角色与对象范围；切换后需查询原操作以恢复进度。</p><Link page="P06" className="button">选择模拟角色</Link>{page === 'P05' && <p className="fineprint">持券页只能通过机构提供的本地私密邀请打开。</p>}</section> : <>
-        {page === 'P01' && <section className="home-page">
+        {page === 'P01' && <section className="home-page safe-page-enter">
           <div className="hero-meta"><span>{shop?.name} × {shop?.partner}</span><small>虚构餐食与社区伙伴 · 本地模拟</small></div>
           <h1>留一膳，待一人。</h1>
           <p className="hero-lead">社区伙伴安排餐券，餐厅负责供餐。一膳之微，亦可为善。</p>
@@ -268,13 +431,45 @@ export default function App() {
           <div className="home-foot"><span>需要餐食安排或使用帮助，请联系社区伙伴。</span><Link page="P12">查看联系与求助 →</Link><Link page="P14">社区公告</Link></div>
         </section>}
 
-        {page === 'P02' && <section className="page-grid"><div className="page-intro"><p className="eyebrow">P02 · 支持者</p><h1>为一份热餐留位</h1><p>这里使用虚构 DU 和模拟结果。确认后由服务端写入原操作与餐账，绝无真实付款、钱包连接或手续费扣取。</p><Link page="P01">← 返回首页</Link></div><div className="panel form-panel"><h2>模拟支持报价</h2><label className="field">份数 <input type="number" min="1" max="20" value={quantity} onChange={e => setQuantity(Number(e.target.value))} /></label><div className="quote-row"><span>标准餐单价</span><strong>{money(batch?.price)}</strong></div><div className="quote-row"><span>净餐款（进入 F/A）</span><strong>{money(Number.isInteger(quantity) ? quantity * (batch?.price ?? 0) : 0)}</strong></div><div className="quote-row"><span>演示费用</span><strong>0 DU</strong></div><p className="fineprint">单价与规则版本由当前批次提供：{batch?.rule_version}。修改份数后以新报价提交；旧报价若变化会由服务端拒绝。</p><label className="field">本地结果演练 <select value={supportOutcome} onChange={e => setSupportOutcome(e.target.value as typeof supportOutcome)}><option value="success">模拟成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟失败</option></select></label>{role === 'supporter' ? <button type="button" className="button full" disabled={busy || state.paused || !Number.isInteger(quantity) || quantity < 1 || quantity > 20 || batch!.F > 0} onClick={() => void perform({ action: 'support', quantity, outcome: supportOutcome, quote_price: batch!.price, rule_version: batch!.rule_version }, { page: 'P03' })}>确认模拟支持</button> : <Link page="P06" className="button full">先选择模拟支持者</Link>}{batch!.F > 0 && <p className="fineprint">此单批样例已有支持记录；如需重跑，前往工作入口重置虚构数据。</p>}{state.paused && <p className="fineprint">当前预置暂停，服务端拒绝新入款。</p>}</div></section>}
+        {page === 'P02' && <section className="page-grid">
+          <div className="page-intro"><p className="eyebrow">P02 · 支持者</p><h1>为一份热餐留位</h1><p>这里使用虚构 DU 和模拟结果，绝无真实付款、钱包连接或手续费扣取。</p><Link page="P01">← 返回首页</Link></div>
+          <div className="panel form-panel"><h2>模拟支持报价</h2>
+            {supportGuard ? <div className="status-priority" role="status"><strong>{supportUnknown || supportUncertain ? '结果待核，只查原操作' : '原支持已记录'}</strong><p>{supportUnknown || supportUncertain ? '此前的支持意图尚未确认，不要再提交一笔。' : '这批餐的支持操作已确认，请查看原记录。'}</p><Link page="P03" tail={supportUnknown?.id ?? supportCompleted?.id ?? recentSupport?.id} className="button">查询原操作</Link></div> : <>
+              <label className="field">份数 <input type="number" min="1" max="20" value={quantity} onChange={e => setQuantity(Number(e.target.value))} /></label>
+              <div className="quote-row"><span>标准餐单价</span><strong>{money(batch?.price)}</strong></div><div className="quote-row"><span>净餐款</span><strong>{money(Number.isInteger(quantity) ? quantity * (batch?.price ?? 0) : 0)}</strong></div><div className="quote-row"><span>演示费用</span><strong>0 DU</strong></div>
+              <label className="field">本地结果演练 <select value={supportOutcome} onChange={e => setSupportOutcome(e.target.value as typeof supportOutcome)}><option value="success">模拟成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟失败</option></select></label>
+              {role === 'supporter' ? <button type="button" className="button full" disabled={busy || state.paused || !Number.isInteger(quantity) || quantity < 1 || quantity > 20 || batch!.F > 0} onClick={() => void perform({ action: 'support', quantity, outcome: supportOutcome, quote_price: batch!.price, rule_version: batch!.rule_version }, { page: 'P03' })}>{busy ? '正在提交或查询原操作…' : '确认模拟支持'}</button> : <Link page="P06" className="button full">先选择模拟支持者</Link>}
+              <p className="fineprint">本地模拟 · 单价与规则版本由当前批次提供：{batch?.rule_version}。修改份数后须重新审阅报价。</p>
+            </>}
+            {batch!.F > 0 && <p className="fineprint">此单批样例已有支持记录；如需重跑，前往工作入口重置虚构数据。</p>}{state.paused && <p className="fineprint">当前预置暂停，服务端拒绝新入款。</p>}
+          </div>
+        </section>}
 
-        {page === 'P03' && <section className="narrow-page"><p className="eyebrow">P03 · 原操作</p><h1>查原操作，不重复提交</h1><p>结果未知时保留原 ID，只刷新这一笔。此页面不发起新的入款、申报或付款。</p>{route.tail ? <div className="panel"><p className="micro">原操作 ID</p><code className="break-code">{route.tail}</code>{operation ? <><div className="detail-list"><div><span>动作</span><strong>{operation.action}</strong></div><div><span>状态</span><strong>{label(operation.status)}</strong></div><div><span>目标</span><strong>{operation.target ?? '未生成目标'}</strong></div><div><span>创建时间</span><strong>{fmt(operation.created_at)}</strong></div><div><span>原角色</span><strong>{operation.actor}</strong></div></div><p className="fineprint">原业务意图键由浏览器单次动作生成，服务端按角色和作用域保存。查询本身不改变资金状态。</p></> : <p>正在读取可访问的原操作，或本角色无权查看。</p>}<button type="button" className="button secondary" disabled={busy} onClick={async () => { try { const result = await api<{ operation: Operation }>(`/operations/${encodeURIComponent(route.tail!)}`, token); setOperation(result.operation); setError(null); await refresh(token) } catch (e) { setError((e as Error).message) } }}>仅刷新此原操作</button></div> : <div className="panel"><p>请从刚完成的操作或角色工作页进入原操作。仅支持者会看到自己的操作列表。</p>{state.work?.operations?.map(op => <Link key={op.id} page="P03" tail={op.id} className="list-link"><span>{op.action} · {label(op.status)}</span><code>{op.id}</code></Link>)}</div>}<Link page="P04">查看公开餐账 →</Link></section>}
+        {page === 'P03' && <section className="narrow-page"><p className="eyebrow">P03 · 原操作</p><h1>{operation?.status === 'UNKNOWN' ? '结果待核，只查原操作' : '查原操作，不重复提交'}</h1>
+          <p>此页面只查询原 ID，不发起新的入款、申报或付款。</p>
+          {route.tail ? <div className="panel">
+            <div className="status-priority" role="status"><strong>{operation ? label(operation.status) : '正在查询服务端状态'}</strong><p>{operation?.status === 'UNKNOWN' ? '不要重新提交；请查询这笔原操作或联系处理人。' : '操作状态只取自服务端。'}</p></div>
+            <p className="micro">原操作 ID</p><code className="break-code">{route.tail}</code>
+            {operation && <><div className="detail-list"><div><span>动作</span><strong>{operation.action}</strong></div><div><span>目标</span><strong>{operation.target ?? '未生成目标'}</strong></div><div><span>创建时间</span><strong>{fmt(operation.created_at)}</strong></div><div><span>原角色</span><strong>{operation.actor}</strong></div></div><p className="fineprint">{operationQueriedAt ? `本次查询于 ${new Date(operationQueriedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}（本机显示）` : '正在查询服务端'}。本机时间不表示服务端确认时间。</p></>}
+            <button type="button" className="button secondary" disabled={busy} onClick={async () => { const request = ++operationEpoch.current; setOperation(null); setOperationQueriedAt(null); setError(null); try { const result = await api<{ operation: Operation }>(`/operations/${encodeURIComponent(route.tail!)}`, token); if (request !== operationEpoch.current) return; setOperation(result.operation); setOperationQueriedAt(Date.now()); setError(null); await refresh(token) } catch (e) { if (request === operationEpoch.current) { setOperation(null); setOperationQueriedAt(null); setError((e as Error).message) } } }}>查询原操作</button>
+          </div> : <div className="panel"><p>请从刚完成的操作或角色工作页进入原操作。仅支持者会看到自己的操作列表。</p>{state.work?.operations?.map(op => <Link key={op.id} page="P03" tail={op.id} className="list-link"><span>{op.action} · {label(op.status)}</span><code>{op.id}</code></Link>)}</div>}
+          {operation?.status === 'SUCCESS' && operation.action === 'support' && <Link page="P04">查看本批餐账 →</Link>}{operation?.status === 'FAILED' && operation.action === 'support' && <Link page="P02">返回重新审阅报价 →</Link>}{operation?.status === 'UNKNOWN' && <Link page="P12">联系处理人 →</Link>}
+        </section>}
 
-        {page === 'P04' && <section className="narrow-page"><p className="eyebrow">P04 · 公开去身份餐账</p><h1>每一份餐，都有清楚去向</h1><p>以下仅为单批虚构 DU 状态，不展示领取关联、渠道、券号或私密邀请。申报是店员声明，不能推断指定自然人实际就餐。</p><div className="ledger-grid">{([['F', '本批累计支持'], ['A', '待安排'], ['R', '已发券待申报'], ['H', '商家已申报待结算'], ['S', '已模拟结算'], ['X', '已取消'], ['L', '暂占额度'], ['available', '可发餐款 A−L']] as const).map(([key, name]) => <div className="ledger-cell" key={key}><small>{name} · {key}</small><strong>{money(batch?.[key])}</strong></div>)}</div><div className="panel"><h2>守恒与来源</h2><p>F = A + R + H + S + X：{money(batch?.F)} = {money((batch?.A ?? 0) + (batch?.R ?? 0) + (batch?.H ?? 0) + (batch?.S ?? 0) + (batch?.X ?? 0))}</p><p>规则版本 {batch?.rule_version} · 最近公开更新日 {fmtDay(batch?.updated_at)}</p><p className="fineprint">L 只对可发余额暂占；普通咨询不会占 L。本轮无资金退款动作。</p></div><h2>去身份事件</h2>{state.events.length ? <div className="event-list">{state.events.map((event, index) => <div className="event-row" key={`${event.kind}-${event.created_at}-${index}`}><span><strong>{event.source}</strong><small>{fmt(event.created_at)}</small></span><b>{money(event.amount)}</b></div>)}</div> : <p className="muted">此虚构批次尚无已确认的资金事件。</p>}<Link page="P12">对餐账有疑问？联系与求助 →</Link></section>}
+        {page === 'P04' && <section className="narrow-page safe-page-enter"><p className="eyebrow">P04 · 公开去身份餐账</p><h1>每一份餐，都有清楚去向</h1><p>以下仅为单批虚构 DU 状态，不展示领取关联、渠道、券号或私密邀请。申报是店员声明，不能推断指定自然人实际就餐。</p><div className="ledger-grid">{([['F', '本批累计支持'], ['A', '待安排'], ['R', '已发券待申报'], ['H', '商家已申报待结算'], ['S', '已模拟结算'], ['X', '已取消'], ['L', '暂占额度'], ['available', '可发餐款 A−L']] as const).map(([key, name]) => <div className="ledger-cell" key={key}><small>{name} · {key}</small><strong>{money(batch?.[key])}</strong></div>)}</div><div className="panel"><h2>守恒与来源</h2><p>F = A + R + H + S + X：{money(batch?.F)} = {money((batch?.A ?? 0) + (batch?.R ?? 0) + (batch?.H ?? 0) + (batch?.S ?? 0) + (batch?.X ?? 0))}</p><p>规则版本 {batch?.rule_version} · 最近公开更新日 {fmtDay(batch?.updated_at)}</p><p className="fineprint">L 只对可发余额暂占；普通咨询不会占 L。本轮无资金退款动作。</p></div><h2>去身份事件</h2>{state.events.length ? <div className="event-list">{state.events.map((event, index) => <div className="event-row" key={`${event.kind}-${event.created_at}-${index}`}><span><strong>{event.source}</strong><small>{fmt(event.created_at)}</small></span><b>{money(event.amount)}</b></div>)}</div> : <p className="muted">此虚构批次尚无已确认的资金事件。</p>}<Link page="P12">对餐账有疑问？联系与求助 →</Link></section>}
 
-        {page === 'P05' && <section className="narrow-page"><p className="eyebrow">P05 · 私密单份视图</p><h1>这一份餐券</h1><p>仅凭机构提供的演示私密邀请打开。需联网设备，无需钱包或平台注册；请勿将链接当作身份核验。</p>{voucher ? <div className="panel voucher-card"><div className="voucher-top"><span>留膳 / mealforward</span><span>单份 · 本地模拟</span></div><h2>{voucher.meal}</h2><p>{voucher.shop} · {voucher.hours}</p><div className="detail-list"><div><span>券状态</span><strong>{label(voucher.status)}</strong></div><div><span>交付记录</span><strong>{label(voucher.delivery_status)}</strong></div></div>{voucher.code ? <div className="code-box"><QRCodeSVG value={voucher.code} size={150} includeMargin aria-label="短时演示展示码" /><span className="large-code">{voucher.code}</span><small>在线短时展示码 · 到期 {fmt(voucher.code_expires)}。店员可手输；刷新会由服务端重发新码。</small></div> : <div className="code-box no-code">当前不能显示可兑码。请查看状态并联系社区伙伴，不要尝试再次发行。</div>}<button type="button" className="button secondary" onClick={() => void refreshVoucher()}>刷新此券服务端状态</button>{voucher.delivery_status !== 'acknowledged' && ['sent', 'handover'].includes(voucher.delivery_status) && <button type="button" className="button subtle" disabled={busy} onClick={() => void perform({ action: 'acknowledge' }, { stay: true })}>自愿声明：持链接者已看到</button>}<p className="fineprint">{voucher.note} 机构执行发送/交接、此处自愿声明与实际自然人收到/吃到餐是不同的事。</p></div> : <div className="panel"><p>正在获取私密券状态。若邀请失效，请联系原社区伙伴。</p></div>}<Link page="P12">需要帮助 →</Link></section>}
+        {page === 'P05' && <section className="narrow-page voucher-page">
+          <p className="eyebrow">P05 · 私密单份视图</p><h1>这一份餐券</h1>
+          {pendingInvite ? <div className="panel invite-panel"><h2>查看机构发来的这一份餐券</h2><p>邀请地址已从浏览器地址栏清除。此入口只在本次打开时有效；点击后才会向本机服务确认。</p><button type="button" className="button" disabled={busy} onClick={() => void openInvite()}>{busy ? '正在确认邀请…' : '查看餐券'}</button><p className="fineprint">无需钱包或平台注册。此演示链接并非身份核验，也不会对外发送。</p></div> : currentVoucher ? <div className="panel voucher-card">
+            <div className="voucher-top"><span>留膳 / mealforward</span><span>单份 · 本地模拟</span></div>
+            <h2>{currentVoucher.meal}</h2><p className="voucher-location">{currentVoucher.shop} · {currentVoucher.hours}</p>
+            <div className="voucher-status"><strong>{label(currentVoucher.status)}</strong><span>交付记录：{label(currentVoucher.delivery_status)}</span></div>
+            {currentVoucher.status === 'active' && currentVoucher.code ? <div className="code-box"><QRCodeSVG value={currentVoucher.code} size={150} includeMargin aria-label="短时演示展示码" /><span className="large-code">{currentVoucher.code}</span><small>在线短时展示码 · 到期 {fmt(currentVoucher.code_expires)}。店员可手输；刷新会由服务端重发新码。</small></div> : <div className="code-box no-code">当前不能显示可兑码。请查看状态并联系社区伙伴，不要尝试再次发行。</div>}
+            <div className="button-row"><button type="button" className="button secondary" disabled={busy} onClick={() => void refreshVoucher()}>重查此券状态</button>{currentVoucher.status === 'active' && ['sent', 'handover'].includes(currentVoucher.delivery_status) && <button type="button" className="button subtle" disabled={busy} onClick={() => void perform({ action: 'acknowledge' }, { stay: true })}>自愿声明：持链接者已看到</button>}</div>
+            <p className="fineprint">{currentVoucher.note} 机构执行发送/交接、此处自愿声明与实际自然人收到/吃到餐是不同的事。</p>
+          </div> : <div className="panel invite-panel"><h2>{role === 'recipient' && token && voucherOpen ? '短码已隐藏' : '需要原私密邀请'}</h2><p>{role === 'recipient' && token && voucherOpen ? '短码到期、状态变化或查询未完成。请重查服务端；若仍无法显示，请联系原社区伙伴。' : '请从机构原私信重新打开演示邀请，或联系社区伙伴。无需钱包或平台注册。'}</p>{role === 'recipient' && token && voucherOpen && <button type="button" className="button secondary" disabled={busy} onClick={() => void refreshVoucher()}>重查此券状态</button>}</div>}
+          <Link page="P12">需要帮助 →</Link>
+        </section>}
 
         {page === 'P06' && <section className="narrow-page"><p className="eyebrow">P06 · 演示工作入口</p><h1>选择虚构角色</h1><p>每次切换都会取得新的本地假会话。它只用于演练页面与服务端权限，不代表真实认证或组织授权。</p><div className="actor-grid">{actors.map(a => <button className="actor-card" key={a.id} type="button" disabled={busy} onClick={() => void selectActor(a.id, a.page)}><strong>{a.label}</strong><span>{a.detail}</span><small>进入 {a.page} →</small></button>)}</div><div className="panel reset-panel"><h2>重置虚构样例</h2><p>重置会清空所有旧假会话与模拟记录。请在演示之间使用；旧操作 ID 将不可查询。</p><div className="button-row"><button type="button" className="button secondary" disabled={busy} onClick={() => void reset('normal')}>重置正常链路</button><button type="button" className="button secondary" disabled={busy} onClick={() => void reset('paused')}>载入预置暂停</button></div></div></section>}
 
@@ -282,20 +477,20 @@ export default function App() {
 
         {page === 'P08' && <section className="narrow-page"><p className="eyebrow">P08 · 机构私有交付</p><h1>把同一张券定向交付</h1><p>仅记录机构已执行模拟发送或当面交接。失败后再次分享仍用原券，不能据此宣称指定自然人收到。</p>{state.work?.vouchers?.length ? state.work.vouchers.map(v => <div className="panel" key={v.id}><div className="card-heading"><div><small>{v.recipient_ref} · 私有机构关联</small><h2>{v.id}</h2></div><span className="status-chip">{label(v.status)}</span></div><p>交付记录：<strong>{label(v.delivery_status)}</strong>{v.delivery_at && ` · ${fmt(v.delivery_at)}`}</p><div className="button-row"><button type="button" className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'sent' }, { stay: true })}>记录已执行私有发送</button><button type="button" className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'handover' }, { stay: true })}>记录已当面交接</button><button type="button" className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'failed' }, { stay: true })}>记录失败待联系</button>{['failed', 'sent', 'handover'].includes(v.delivery_status) && <button type="button" className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'reshare' }, { stay: true })}>再次分享原券</button>}</div><label className="field">本机演示私密邀请（仅供此流程，不实际发送）<input readOnly value={`${location.origin}${location.pathname}#/P05/${v.secret}`} onFocus={e => e.currentTarget.select()} /></label><p className="fineprint">私密链接会赋予此单券查看权。不要放入公开餐账；在不同浏览器标签页打开可演练独立角色。</p></div>) : <div className="panel empty"><p>当前机构尚无已发行单份券。</p><Link page="P07">前往资格与发券 →</Link></div>}</section>}
 
-        {page === 'P09' && <section className="narrow-page"><p className="eyebrow">P09 · 店员预检查</p><h1>先看券，再决定是否交餐</h1><p>预检不锁券、不扣款。店员只见本店餐品与处理状态，不见领取关联、资格、私人渠道或邀请秘密。</p><div className="panel form-panel"><label className="field">持链接者出示的在线短码<input value={code} autoCapitalize="characters" placeholder="例如 A1B2C3" onChange={e => { setCode(e.target.value.toUpperCase().trim()); setCheck(undefined) }} /></label><button type="button" className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>{check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · {check.shop}</p><small>券号 {check.voucher_id} · 预检未取得处理权</small><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} /> 本店当前有这份餐，可以继续处理</label><button type="button" className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', code: check.code }, { page: 'P10' })}>申请唯一处理权</button></div>}<p className="fineprint">若本店缺餐，请勿申请处理权；联系社区伙伴安排。另一个店员若先取得锁，此码将失效。</p></div><Link page="P12">缺餐或异常求助 →</Link></section>}
+        {page === 'P09' && <section className="narrow-page"><p className="eyebrow">P09 · 店员预检查</p><h1>先看券，再决定是否交餐</h1><p>预检不锁券、不扣款。店员只见本店餐品与处理状态，不见领取关联、资格、私人渠道或邀请秘密。</p><div className="panel form-panel"><label className="field">持链接者出示的在线短码<input value={code} autoCapitalize="characters" placeholder="例如 A1B2C3" onChange={e => { precheckEpoch.current++; setCode(e.target.value.toUpperCase().trim()); setCheck(undefined); setHasMeal(false) }} /></label><button type="button" className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>{check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · {check.shop}</p><small>券号 {check.voucher_id} · 预检未取得处理权</small><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} /> 本店当前有这份餐，可以继续处理</label><button type="button" className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', code: check.code }, { page: 'P10' })}>申请唯一处理权</button></div>}<p className="fineprint">若本店缺餐，请勿申请处理权；联系社区伙伴安排。另一个店员若先取得锁，此码将失效。</p></div><Link page="P12">缺餐或异常求助 →</Link></section>}
 
-        {page === 'P10' && <section className="narrow-page"><p className="eyebrow">P10 · 原店员处理</p><h1>确认处理权，再声明交餐</h1><p>只有持原锁的店员能显式确认、声明交餐和申报。未确认前不提供交餐许可；申报未知时只查原操作。</p>{state.work?.redemptions?.length ? state.work.redemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />) : <div className="panel empty"><p>此演示店员尚未取得任何券的处理权。</p><Link page="P09">返回预检查 →</Link></div>}<Link page="P11">查看本店 H/S →</Link></section>}
+        {page === 'P10' && <section className="narrow-page"><p className="eyebrow">P10 · 原店员处理</p><h1>确认处理权，再声明交餐</h1><p>先看当前状态与可执行动作。只有持原锁的店员能确认、声明交餐和申报；申报未知时只查原操作。</p>{state.work?.redemptions?.length ? state.work.redemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />) : <div className="panel empty"><p>此演示店员尚未取得任何券的处理权。</p><Link page="P09">返回预检查 →</Link></div>}<Link page="P11">查看本店 H/S →</Link></section>}
 
-        {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><p>店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H，未知只查原付款。</p><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{role === 'settler' && <p className="fineprint">预置本店虚构目的地：{state.work?.destination}</p>}{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div><p>原申报：{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</p><p>原付款：{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</p>{role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') && <><label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label>{pay.settlement_status === 'FAILED' && <p className="fineprint">上一次模拟结算已明确失败，H 保留；请先查看原付款。可主动发起一笔新的本地尝试。</p>}<button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></>}{pay.status === 'settlement_unknown' && <p className="fineprint">结果未知。不要换操作 ID 再付，只查询上方原付款。</p>}</div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}</section>}
+        {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div>{pay.status === 'settlement_unknown' ? <div className="status-priority"><strong>结果待核，只查原付款</strong><p>H 保留；不要换操作 ID 再付。</p>{pay.settlement_operation && <Link page="P03" tail={pay.settlement_operation} className="button secondary">查询原付款</Link>}</div> : role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') ? <div className="task-action">{pay.settlement_status === 'FAILED' && <p>上次已明确失败，H 保留。可查看原付款后主动新试。</p>}<label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label><button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></div> : <p className="muted">{pay.status === 'settled' ? '这笔 H 已模拟结算为 S。' : '当前没有可执行的结算动作。'}</p>}<div className="detail-list"><div><span>原申报</span><strong>{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</strong></div><div><span>原付款</span><strong>{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</strong></div></div></div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}<p className="fineprint">店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H。{role === 'settler' && `预置本店虚构目的地：${state.work?.destination}`}</p></section>}
 
-        {page === 'P12' && <section className="narrow-page"><p className="eyebrow">P12 · 联系与求助</p><h1>需要帮助，就从这里开始</h1><div className="panel"><h2>社区伙伴联系</h2><p>{shop?.contact}</p><p className="fineprint">所有组织、地址和联系方式都是虚构占位；此站不对外发送消息或处理真实求助。领取者不必注册钱包，但电子版需联网设备。</p></div>{role && role !== 'admin' && <div className="panel form-panel"><h2>建立私人演示案件</h2><p>普通咨询仅记录案件，不占餐款 L，也不触发退款。案件 ID 不是访问其他人的权限。</p><label className="field">求助类型<input value={caseKind} maxLength={80} onChange={e => setCaseKind(e.target.value)} /></label>{['partner', 'staff'].includes(role) && <label className="field">相关演示券号（可选）<input value={caseVoucherId} onChange={e => setCaseVoucherId(e.target.value)} /></label>}<label className="field">简述（仅虚构内容）<textarea value={caseText} maxLength={200} onChange={e => setCaseText(e.target.value)} placeholder="请勿输入真实姓名、联系方式或个人资料" /></label><button type="button" className="button" disabled={busy || !caseKind.trim()} onClick={async () => { const result = await perform({ action: 'case', kind: caseKind, text: caseText, ...(caseVoucherId && ['partner', 'staff'].includes(role) ? { voucher_id: caseVoucherId } : {}) }, { stay: true }); if (result) setCaseText('') }}>记录模拟求助</button></div>}{role === 'recipient' && voucher?.cases?.length ? <div className="panel"><h2>此券的本人演示求助</h2>{voucher.cases.map(c => <p key={c.id}>{c.id} · {c.kind} · {c.stage}</p>)}</div> : null}</section>}
+        {page === 'P12' && <section className="narrow-page"><p className="eyebrow">P12 · 联系与求助</p><h1>需要帮助，就从这里开始</h1><div className="panel"><h2>社区伙伴联系</h2><p>{shop?.contact}</p><p className="fineprint">所有组织、地址和联系方式都是虚构占位；此站不对外发送消息或处理真实求助。领取者不必注册钱包，但电子版需联网设备。</p></div>{role && role !== 'admin' && <div className="panel form-panel"><h2>建立私人演示案件</h2><p>普通咨询仅记录案件，不占餐款 L，也不触发退款。案件 ID 不是访问其他人的权限。</p><label className="field">求助类型<input value={caseKind} maxLength={80} onChange={e => setCaseKind(e.target.value)} /></label>{['partner', 'staff'].includes(role) && <label className="field">相关演示券号（可选）<input value={caseVoucherId} onChange={e => setCaseVoucherId(e.target.value)} /></label>}<label className="field">简述（仅虚构内容）<textarea value={caseText} maxLength={200} onChange={e => setCaseText(e.target.value)} placeholder="请勿输入真实姓名、联系方式或个人资料" /></label><button type="button" className="button" disabled={busy || !caseKind.trim()} onClick={async () => { const result = await perform({ action: 'case', kind: caseKind, text: caseText, ...(caseVoucherId && ['partner', 'staff'].includes(role) ? { voucher_id: caseVoucherId } : {}) }, { stay: true }); if (result) setCaseText('') }}>记录模拟求助</button></div>}{role === 'recipient' && recipientCases.length ? <div className="panel"><h2>此券的本人演示求助</h2>{recipientCases.map(c => <p key={c.id}>{c.id} · {c.kind} · {c.stage}</p>)}</div> : null}</section>}
 
         {page === 'P13' && <section className="narrow-page"><p className="eyebrow">P13 · 受限只读</p><h1>预置暂停状态</h1><div className="panel"><div className="card-heading"><h2>{state.work?.pause?.paused ? '当前已暂停' : '当前未暂停'}</h2><span className="status-chip">只读</span></div><p>{state.work?.pause?.reason}</p><div className="detail-list"><div><span>阻断范围</span><strong>{state.work?.pause?.scope}</strong></div><div><span>既有 R/H</span><strong>{state.work?.pause?.old_balances_retained ? '保留并可查询' : '正常状态'}</strong></div><div><span>本批规则</span><strong>{batch?.rule_version}</strong></div></div><p className="fineprint">本轮仅展示预置异常与阻断效果，不提供可写暂停、恢复、地址迁移或管理员密钥。</p></div><Link page="P04">查看既有公开余额 →</Link></section>}
 
-        {page === 'P14' && <section className="narrow-page"><p className="eyebrow">P14 · 自愿公告</p><h1>一份餐的善意，可以被看见</h1><div className="panel"><h2>本地模拟社区公告</h2><p>这是一段虚构的公开说明，用来演示留膳如何把支持者的餐款交给社区伙伴安排餐券，并由餐厅负责供餐。</p><p>领取餐券、查看当前单份券和在门店处理，都不以阅读或参与公告为条件。</p><p className="fineprint">不展示自然人身份、私有领取关联、交付渠道或逐券记录；没有真实公告发布或外部链接。</p></div><Link page="P01">返回首页 →</Link></section>}
+        {page === 'P14' && <section className="narrow-page safe-page-enter"><p className="eyebrow">P14 · 自愿公告</p><h1>一份餐的善意，可以被看见</h1><div className="panel"><h2>本地模拟社区公告</h2><p>这是一段虚构的公开说明，用来演示留膳如何把支持者的餐款交给社区伙伴安排餐券，并由餐厅负责供餐。</p><p>领取餐券、查看当前单份券和在门店处理，都不以阅读或参与公告为条件。</p><p className="fineprint">不展示自然人身份、私有领取关联、交付渠道或逐券记录；没有真实公告发布或外部链接。</p></div><Link page="P01">返回首页 →</Link></section>}
       </>}
     </main>
-    <footer className="site-footer"><span>留膳 / mealforward · 本地模拟</span><span>虚构 DU · 无真实支付、链上交易或对外发送</span><Link page="P04">公开去身份餐账</Link></footer>
+    <footer className="site-footer"><span>留膳 / mealforward · 本地模拟</span><span>虚构 DU · 无真实支付、链上交易或对外发送</span>{!privateShell && <Link page="P04">公开去身份餐账</Link>}</footer>
   </div>
 }
 
@@ -306,5 +501,8 @@ function RedemptionCard({ red, busy, perform, reportOutcome, setReportOutcome }:
   reportOutcome: 'success' | 'unknown' | 'failure'
   setReportOutcome: (value: 'success' | 'unknown' | 'failure') => void
 }) {
-  return <div className="panel"><div className="card-heading"><h2>{red.id}</h2><span className="status-chip">{label(red.status)}</span></div><div className="detail-list"><div><span>原处理权</span><strong>{red.lock_operation ? <Link page="P03" tail={red.lock_operation}>{red.lock_operation}</Link> : '无'}</strong></div><div><span>显式确认</span><strong>{red.lock_confirmed ? '已确认' : '尚未确认，不可交餐'}</strong></div><div><span>交餐声明</span><strong>{red.handoff_declared ? '店员已声明' : '尚无声明'}</strong></div><div><span>原申报</span><strong>{red.report_operation ? <Link page="P03" tail={red.report_operation}>{red.report_operation}</Link> : '无'}</strong></div></div>{red.status === 'locked' && !red.lock_confirmed && red.lock_operation && <button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'confirm_lock', operation_id: red.lock_operation }, { stay: true })}>显式模拟确认处理权</button>}{red.status === 'locked' && !!red.lock_confirmed && <button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'handoff', voucher_id: red.id }, { stay: true })}>声明已交餐（模拟）</button>}{red.status === 'handoff' && <><label className="field">申报结果演练<select value={reportOutcome} onChange={e => setReportOutcome(e.target.value as typeof reportOutcome)}><option value="success">模拟申报成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟申报失败</option></select></label><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'report', voucher_id: red.id, outcome: reportOutcome }, { stay: true })}>提交店员声明的模拟申报</button></>}{red.status === 'report_unknown' && <p className="fineprint">申报结果未知；保留原处理权与 R，只查上方原申报，不重发。</p>}{red.status === 'reported' && <p className="fineprint">已模拟申报，R→H。等待独立结算角色处理。</p>}</div>
+  return <div className="panel"><div className="card-heading"><h2>{red.id}</h2><span className="status-chip">{label(red.status)}</span></div>
+    {red.status === 'report_unknown' ? <div className="status-priority"><strong>申报结果待核</strong><p>保留原处理权与 R，只查原申报，不重发。</p>{red.report_operation && <Link page="P03" tail={red.report_operation} className="button secondary">查询原申报</Link>}</div> : red.status === 'locked' && !red.lock_confirmed && red.lock_operation ? <div className="task-action"><p>尚未确认处理权，不可交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'confirm_lock', operation_id: red.lock_operation }, { stay: true })}>显式模拟确认处理权</button></div> : red.status === 'locked' && !!red.lock_confirmed ? <div className="task-action"><p>已确认处理权，现可声明交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'handoff', voucher_id: red.id }, { stay: true })}>声明已交餐（模拟）</button></div> : red.status === 'handoff' ? <div className="task-action"><label className="field">申报结果演练<select value={reportOutcome} onChange={e => setReportOutcome(e.target.value as typeof reportOutcome)}><option value="success">模拟申报成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟申报失败</option></select></label><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'report', voucher_id: red.id, outcome: reportOutcome }, { stay: true })}>提交店员声明的模拟申报</button></div> : <p className="muted">{red.status === 'settled' ? '这笔餐款已由独立结算角色模拟结算，H→S。' : '已模拟申报，R→H。等待独立结算角色处理。'}</p>}
+    <div className="detail-list"><div><span>原处理权</span><strong>{red.lock_operation ? <Link page="P03" tail={red.lock_operation}>{red.lock_operation}</Link> : '无'}</strong></div><div><span>显式确认</span><strong>{red.lock_confirmed ? '已确认' : '尚未确认，不可交餐'}</strong></div><div><span>交餐声明</span><strong>{red.handoff_declared ? '店员已声明' : '尚无声明'}</strong></div><div><span>原申报</span><strong>{red.report_operation ? <Link page="P03" tail={red.report_operation}>{red.report_operation}</Link> : '无'}</strong></div></div>
+  </div>
 }

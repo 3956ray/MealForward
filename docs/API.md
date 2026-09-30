@@ -1,6 +1,6 @@
 # CP8 本地模拟接口约定
 
-所有请求同源 `/api`，仅回环本机。所有数据虚构。私有操作使用 `Authorization: Bearer <token>`；前端通过 `POST /api/session {"actor":"supporter|partner|staff_a|staff_b|settler|admin"}` 显式选择**假角色**，得到 `{token,actor,role}`。选择角色是演示用，非真实认证。领取者通过私密邀请 URL 的 fragment 进入：`/#/P05/<secret>`；浏览器主动 `POST /api/invite/exchange {secret}` 得到 `{token}`，立即从地址栏移除 secret。请求日志不记录正文。
+所有请求同源 `/api`，仅回环本机。所有数据虚构。私有操作使用 `Authorization: Bearer <token>`；前端通过 `POST /api/session {"actor":"supporter|partner|staff_a|staff_b|settler|admin"}` 显式选择**假角色**，得到 `{token,actor,role}`。选择角色是演示用，非真实认证。领取者通过私密邀请 URL 的 fragment 进入：`/#/P05/<secret>`；页面先清除地址栏的 secret，只在本次内存保留，用户点“查看餐券”后才 `POST /api/invite/exchange {secret}` 得到 `{token}`。刷新或返回不自动重开旧码。请求日志不记录正文。
 
 `GET /api/state` 返回 `{brand,shop,batch,events,paused,work}`。公共字段对所有会话相同：`shop` 为虚构店/标准餐/机构/联系，`batch` 为单批整数 DU 字段 `F,A,R,H,S,X,L,available,price,rule_version,updated_at`；公开 `updated_at` 只保留上海时区的日期精度，避免单券动作精确时间可关联。`events` 仅公开批次支持/暂停摘要，不公开逐券发行、申报或结算事件时间。`work` 随 token 角色变化：
 
@@ -11,7 +11,7 @@
 - `admin`: `{pause}`，只读预设暂停信息。
 - 未带角色 token：`work:null`。
 
-`GET /api/voucher` 使用领取 token，只返回当前单券的门店/餐/时段/状态、短时在线码和求助阶段；若申报未知/已处理则不返回可兑码。`GET /api/operations/<id>` 依角色/所属 scope 访问原操作；无权限返回 403。
+`GET /api/voucher` 使用领取 token，只返回当前单券的门店/餐/时段/状态、短时在线码和求助阶段；若申报未知/已处理则不返回可兑码。`GET /api/voucher/status` 只读返回该单券 `{status,delivery_status,paused}`，不重发码、不包含领取关联或邀请；持券页可用它察觉他处锁定、交付变化或暂停后卸载旧码。`GET /api/operations/<id>` 依角色/所属 scope 访问原操作；无权限返回 403。
 
 写操作统一 `POST /api/act`；始终由服务端检查 token、角色、作用域和状态。成功 JSON 包含 `message`、可选 `operation`、`voucher`；出错 JSON `{error,code}` 和相应 HTTP 状态。客户端收到结果后重取 `/api/state`，不从本地直接改资金。每个可能重试的写动作带稳定 `intent_key`，服务端返回原结果，不重复状态变更。
 

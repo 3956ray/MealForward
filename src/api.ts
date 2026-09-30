@@ -131,7 +131,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, token: string | null, body?: Record<string, unknown>): Promise<T> {
+export async function api<T>(path: string, token: string | null, body?: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   let response: Response
   try {
     response = await fetch(`/api${path}`, {
@@ -142,6 +142,7 @@ export async function api<T>(path: string, token: string | null, body?: Record<s
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: 'no-store',
+      signal,
     })
   } catch {
     throw new ApiError(0, 'OFFLINE', '无法连接本机模拟服务。请先启动 Python API（127.0.0.1:8765），再刷新。')

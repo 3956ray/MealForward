@@ -594,6 +594,11 @@ class Handler(BaseHTTPRequestHandler):
                     state["work"] = work_state(db, session)
                     self.send_json(200, state)
                     return
+                if path == "/api/voucher/status":
+                    require_role(session, "recipient")
+                    v = get_voucher(db, session["voucher_id"])
+                    self.send_json(200, {"status": v["status"], "delivery_status": v["delivery_status"], "paused": bool(batch(db)["paused"])})
+                    return
                 if path == "/api/voucher":
                     require_role(session, "recipient")
                     db.execute("BEGIN IMMEDIATE")
