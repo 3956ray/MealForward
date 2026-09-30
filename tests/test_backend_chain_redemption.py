@@ -5,6 +5,9 @@ import unittest
 import threading
 from contextlib import contextmanager
 from unittest.mock import patch
+from requests.exceptions import Timeout, ConnectionError
+from web3.exceptions import TransactionNotFound
+from server.chain.client import ChainConflict
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from werkzeug.serving import make_server
@@ -88,6 +91,86 @@ class RedemptionHttpTests(unittest.TestCase):
         session=self.recipient(self.invitation(voucher));code=self.present(session)['code']
         response,_=self.lock(owner,code);self.assertEqual(response.status_code,202,response.text)
         redemption=response.json()['redemptionId'];self.final();return redemption,session
+    def test_owner_reorg_missing_tx_and_pending_receipt_do_not_starve_next_lock(self):
+        _,vouchers=self.issue_three();owner=self.owner_session()
+        redemption,_=self.lock_ready(owner,vouchers[0])
+        self.statement(owner,redemption);self.report(owner,redemption);self.final()
+        prepared=self.h.post(owner,'/work/payables/'+redemption+'/settle',{'intentKey':random_id()})
+        self.assertEqual(prepared.status_code,201,prepared.text)
+        op_id=prepared.json()['operation']['id']
+        original_nonce=self.h.w3.eth.get_transaction_count(self.wallet.address)
+        snapshot=self.h.w3.provider.make_request('evm_snapshot',[])['result']
+        receipt=self.send_settlement(owner,prepared.json());tx_hash=self.h.w3.to_hex(receipt['transactionHash'])
+        raw=self.h.w3.eth.get_raw_transaction(tx_hash)
+        self.h.worker.tick();self.assertEqual(self.h.op(op_id)['status'],'INCLUDED_SUCCESS')
+        self.assertTrue(self.h.w3.provider.make_request('evm_revert',[snapshot])['result'])
+        self.h.w3.provider.make_request('anvil_mine',['0x2'])
+        with self.assertRaises(TransactionNotFound):self.h.w3.eth.get_transaction(tx_hash)
+        self.h.worker.tick()
+        missing=self.h.op(op_id)
+        self.assertEqual(missing['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(missing['error_code'],'OWNER_TX_NOT_FOUND')
+        self.assertEqual(missing['tx_hash'],tx_hash)
+        self.assertIsNone(missing['receipt_block']);self.assertIsNone(missing['receipt_hash'])
+        self.assertEqual(self.b.store.one('SELECT H,S FROM batches'),{'H':P,'S':0})
+        self.assertFalse(self.h.post(owner,'/work/operations/'+op_id+'/submission-start',{}).json()['maySubmit'])
+        recipient=self.recipient(self.invitation(vouchers[1]))
+        locked,_=self.lock(owner,self.present(recipient)['code'])
+        self.assertEqual(locked.status_code,202,locked.text);next_op=locked.json()['operation']['id']
+        self.final();self.assertEqual(self.h.op(next_op)['status'],'FINALIZED_SUCCESS')
+        self.assertEqual(self.h.op(op_id)['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(self.h.w3.eth.get_transaction_count(self.wallet.address),original_nonce)
+        # Reintroduce the identical external signed bytes, not a new signature or permit.
+        # With automining off the transaction exists but its receipt is truly absent.
+        self.h.w3.provider.make_request('evm_setAutomine',[False])
+        try:
+            self.assertEqual(self.h.w3.to_hex(self.h.w3.eth.send_raw_transaction(raw)),tx_hash)
+            self.assertIsNone(self.h.rpc.receipt(tx_hash))
+            self.h.worker.tick()
+            self.assertEqual(self.h.op(op_id)['error_code'],'OWNER_RECEIPT_MISSING')
+            self.assertEqual(self.h.op(op_id)['status'],'SUBMISSION_UNKNOWN')
+            self.assertEqual(self.b.store.one('SELECT H,S FROM batches'),{'H':P,'S':0})
+            self.assertFalse(self.h.post(owner,'/work/operations/'+op_id+'/submission-start',{}).json()['maySubmit'])
+        finally:self.h.w3.provider.make_request('evm_setAutomine',[True])
+        self.h.mine();self.h.worker.tick()
+        self.assertEqual(self.h.op(op_id)['status'],'FINALIZED_SUCCESS')
+        self.assertEqual(self.h.op(op_id)['tx_hash'],tx_hash)
+        self.assertEqual(self.b.store.one('SELECT H,S FROM batches'),{'H':0,'S':P})
+        self.assertIsNone(self.b.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,)))
+        # A stale caller must not regress a finalized result, even during RPC failure.
+        with patch.object(self.h.rpc,'transaction_matches',side_effect=TransactionNotFound):
+            self.b.owner_wallet.observe(missing)
+        self.assertEqual(self.h.op(op_id)['status'],'FINALIZED_SUCCESS')
+        self.assertFalse(self.h.post(owner,'/work/operations/'+op_id+'/submission-start',{}).json()['maySubmit'])
+    def test_owner_transient_observation_is_local_but_conflicts_and_unknown_errors_propagate(self):
+        _,vouchers=self.issue_three();owner=self.owner_session()
+        redemption,_=self.lock_ready(owner,vouchers[0])
+        self.statement(owner,redemption);self.report(owner,redemption);self.final()
+        prepared=self.h.post(owner,'/work/payables/'+redemption+'/settle',{'intentKey':random_id()}).json()
+        op_id=prepared['operation']['id'];self.send_settlement(owner,prepared);self.h.worker.tick()
+        recipient=self.recipient(self.invitation(vouchers[1]))
+        locked,_=self.lock(owner,self.present(recipient)['code']);self.assertEqual(locked.status_code,202)
+        next_op=locked.json()['operation']['id'];original=self.h.rpc.transaction_matches
+        for failure in (Timeout('test timeout'),ConnectionError('test disconnected')):
+            with self.subTest(failure=type(failure).__name__):
+                def observe(tx_hash,**kwargs):
+                    if tx_hash==self.h.op(op_id)['tx_hash']:raise failure
+                    return original(tx_hash,**kwargs)
+                with patch.object(self.h.rpc,'transaction_matches',side_effect=observe):self.h.worker.tick()
+                self.assertEqual(self.h.op(op_id)['status'],'SUBMISSION_UNKNOWN')
+                self.assertEqual(self.h.op(op_id)['error_code'],'OWNER_RPC_UNAVAILABLE')
+                self.assertNotEqual(self.h.op(next_op)['status'],'QUEUED')
+                self.assertEqual(self.b.store.one('SELECT H,S FROM batches'),{'H':P,'S':0})
+        def unknown_error(tx_hash,**kwargs):
+            if tx_hash==self.h.op(op_id)['tx_hash']:raise ValueError('unclassified')
+            return original(tx_hash,**kwargs)
+        with patch.object(self.h.rpc,'transaction_matches',side_effect=unknown_error):
+            with self.assertRaisesRegex(ValueError,'unclassified'):self.h.worker.tick()
+        def conflicting_payload(tx_hash,**kwargs):
+            return False if tx_hash==self.h.op(op_id)['tx_hash'] else original(tx_hash,**kwargs)
+        with patch.object(self.h.rpc,'transaction_matches',side_effect=conflicting_payload):
+            with self.assertRaises(ChainConflict):self.h.worker.tick()
+        self.assertEqual(self.b.store.one("SELECT value FROM metadata WHERE key='halted'")['value'],'OWNER_EVIDENCE_CONFLICT')
     def test_recipient_http_bootstrap_finality_privacy_and_revocation(self):
         _,_,funded=self.h.funded();r,_=self.h.issue(funded['intent']['batchId'])
         voucher=self.b.store.one('SELECT id FROM private_vouchers ORDER BY rowid LIMIT 1')['id']

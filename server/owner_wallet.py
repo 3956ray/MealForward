@@ -7,11 +7,13 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
+from web3.exceptions import BlockNotFound, ProviderConnectionError, RequestTimedOut
+from requests.exceptions import ConnectionError, Timeout
 from server.backend import canonical, digest, random_id, require_id
 from server.actions import action_transaction
 from server.contracts import (ApiError, LOCAL_SHOP_ID, AUTH_IDLE_TTL, OWNER_CHALLENGE_TTL,
                               OWNER_PROOF_TTL, OWNER_REVIEW_TTL)
-from server.chain.client import PRICE, ChainConflict, hx
+from server.chain.client import PRICE, ChainConflict, ChainUnavailable, hx
 
 _VERIFY_LOCK=threading.RLock()
 
@@ -182,6 +184,22 @@ class OwnerWalletService:
         return self.operation(actor,op_id=op_id)
     def observe(self, op):
         """Internal read-only chain recovery; does not require a live browser session."""
+        current=self.store.one('SELECT status FROM operations WHERE id=?',(op['id'],))
+        if current['status'] in ('FINALIZED_SUCCESS','FINALIZED_REVERT'): return
+        try: self._observe(op)
+        except TransactionNotFound: self.observation_unknown(op,'OWNER_TX_NOT_FOUND')
+        except BlockNotFound: self.observation_unknown(op,'OWNER_BLOCK_NOT_FOUND')
+        except (ChainUnavailable, ConnectionError, Timeout, ProviderConnectionError, RequestTimedOut):
+            # A temporary failure of this observation must not starve other queues.
+            # Payload/canonical conflicts and unclassified errors still propagate.
+            self.observation_unknown(op,'OWNER_RPC_UNAVAILABLE')
+    def observation_unknown(self, op, reason):
+        # Keep the original hash, submission marker and occupancy. Never grant a retry.
+        self.store.execute('''UPDATE operations SET status='SUBMISSION_UNKNOWN',receipt_block=NULL,
+                           receipt_hash=NULL,finalized_block=NULL,error_code=?,updated_at=?
+                           WHERE id=? AND status NOT IN ('FINALIZED_SUCCESS','FINALIZED_REVERT')''',
+                           (reason,self.b.now(),op['id']))
+    def _observe(self, op):
         intent=self.store.one('SELECT * FROM owner_settlements WHERE operation_id=?',(op['id'],))
         if not intent: raise ChainConflict('Missing original owner intent')
         if intent['submission_started_at'] is None: return
@@ -195,9 +213,10 @@ class OwnerWalletService:
         if not self.rpc.transaction_matches(tx_hash,sender=intent['address'],data=intent['data'],value=0):
             raise ChainConflict('Original owner transaction mismatch')
         receipt=self.rpc.receipt(tx_hash)
-        if not receipt: return
+        if not receipt:
+            self.observation_unknown(op,'OWNER_RECEIPT_MISSING');return
         if hx(self.rpc.w3.eth.get_block(receipt['blockNumber'])['hash'])!=hx(receipt['blockHash']):
-            self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN' WHERE id=?",(op['id'],));return
+            self.observation_unknown(op,'OWNER_RECEIPT_NONCANONICAL');return
         final=self.rpc.w3.eth.get_block('finalized')['number'];success=receipt['status']==1
         if success and final>=receipt['blockNumber']:
             raise ChainConflict('Finalized owner event missing from projection')
@@ -205,6 +224,6 @@ class OwnerWalletService:
         with self.store.transaction() as db:
             current=db.execute('SELECT status FROM operations WHERE id=?',(op['id'],)).fetchone()
             if current['status'] in ('FINALIZED_SUCCESS','FINALIZED_REVERT'): return
-            db.execute('''UPDATE operations SET tx_hash=?,status=?,receipt_block=?,receipt_hash=?,finalized_block=?,updated_at=? WHERE id=?''',
+            db.execute('''UPDATE operations SET tx_hash=?,status=?,receipt_block=?,receipt_hash=?,finalized_block=?,error_code=NULL,updated_at=? WHERE id=?''',
                        (tx_hash,state,receipt['blockNumber'],hx(receipt['blockHash']),final if state=='FINALIZED_REVERT' else None,self.b.now(),op['id']))
             if state=='FINALIZED_REVERT': self.b.work.release_failed(db,op)
