@@ -3,6 +3,7 @@ import argparse
 import json
 import secrets
 import time
+import requests
 from pathlib import Path
 from urllib.parse import urlsplit
 from cryptography.fernet import Fernet
@@ -20,7 +21,8 @@ def fixture(directory, rpc_url, origin='http://127.0.0.1:8875', *, owner_mode=Fa
     if root.exists() and any(root.iterdir()): raise ValueError('Fixture directory must be empty; never reset an existing database')
     u=urlsplit(rpc_url)
     if u.scheme!='http' or u.hostname not in ('127.0.0.1','localhost','::1') or u.username or u.password or u.path not in ('','/') or u.query or u.fragment: raise ValueError('Loopback only')
-    w3=Web3(HTTPProvider(rpc_url,request_kwargs={'timeout':3,'allow_redirects':False},exception_retry_configuration=None))
+    session=requests.Session();session.trust_env=False
+    w3=Web3(HTTPProvider(rpc_url,session=session,request_kwargs={'timeout':3,'allow_redirects':False},exception_retry_configuration=None))
     if w3.eth.chain_id!=31337 or 'anvil' not in w3.client_version.lower(): raise ValueError('Anvil31337 only')
     artifact=json.loads((REPO/'out/MealForward.sol/MealForward.json').read_text())
     accounts=w3.eth.accounts

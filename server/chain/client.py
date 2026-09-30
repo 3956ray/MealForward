@@ -1,5 +1,6 @@
 """Public-chain-only adapter; no qualification, cookie or invitation data crosses this boundary."""
 import json
+import requests
 from pathlib import Path
 from urllib.parse import urlsplit
 from eth_utils import event_abi_to_log_topic
@@ -31,7 +32,10 @@ class ChainRpc:
         if u.scheme != 'http' or u.hostname not in ('127.0.0.1','localhost','::1') or u.username or u.password or u.path not in ('','/') or u.query or u.fragment:
             raise ValueError('Only credential-free loopback RPC is allowed')
         if deployment['chainId'] != 31337: raise ValueError('Local chain only')
-        self.w3 = Web3(HTTPProvider(deployment['rpcUrl'],request_kwargs={'timeout':3,'allow_redirects':False},exception_retry_configuration=None))
+        # This endpoint is explicitly loopback. Never route signed transactions
+        # through environment/system proxies (including on Flask request threads).
+        session=requests.Session();session.trust_env=False
+        self.w3 = Web3(HTTPProvider(deployment['rpcUrl'],session=session,request_kwargs={'timeout':3,'allow_redirects':False},exception_retry_configuration=None))
         self.contract = self.w3.eth.contract(address=Web3.to_checksum_address(deployment['contractAddress']),abi=ABI)
         self.event_abis = {hx(event_abi_to_log_topic(a)): a for a in ABI if a['type']=='event'}
         self.guard()

@@ -36,13 +36,15 @@ class BackendChainTests(unittest.TestCase):
         cls.rpc_port=free_port()
         cls.node=subprocess.Popen([str(ROOT/'node_modules/.bin/anvil'),'--host','127.0.0.1','--port',str(cls.rpc_port),'--chain-id','31337','--silent'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         cls.rpc_url=f'http://127.0.0.1:{cls.rpc_port}'
+        probe=requests.Session();probe.trust_env=False
         for _ in range(100):
             if cls.node.poll() is not None: raise RuntimeError('Owned Anvil failed')
             try:
-                response=requests.post(cls.rpc_url,json={'jsonrpc':'2.0','id':1,'method':'eth_chainId','params':[]},timeout=.2)
+                response=probe.post(cls.rpc_url,json={'jsonrpc':'2.0','id':1,'method':'eth_chainId','params':[]},timeout=.2)
                 if response.json().get('result')=='0x7a69': break
             except requests.RequestException: time.sleep(.05)
         else: cls.node.terminate(); raise RuntimeError('Anvil not ready')
+        probe.close()
     @classmethod
     def tearDownClass(cls):
         cls.node.terminate(); cls.node.wait(timeout=10)
@@ -60,7 +62,7 @@ class BackendChainTests(unittest.TestCase):
     def tearDown(self):
         self.http.shutdown();self.http.server_close();self.thread.join(timeout=5);self.tmp.cleanup()
     def session(self):
-        s=requests.Session();s.headers['Origin']=self.origin; return s
+        s=requests.Session();s.trust_env=False;s.headers['Origin']=self.origin; return s
     def post(self,session,path,body): return session.post(self.origin+'/api/v1'+path,json=body,timeout=10)
     def get(self,session,path): return session.get(self.origin+'/api/v1'+path,timeout=10)
     def login(self,name):
@@ -413,7 +415,11 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         self.assertEqual(self.op(funded['operation']['id'])['status'],'PREPARED')
     def test_two_batches_duplicate_event_feed_and_restart(self):
         _,_,a=self.funded(3);_,_,b=self.funded(2)
-        r,_=self.issue(a['intent']['batchId']);self.worker.tick();self.mine();self.worker.tick()
+        r,_=self.issue(a['intent']['batchId']);self.assertEqual(r.status_code,202,r.text)
+        op_id=r.json()['operation']['id']
+        self.worker.tick();self.mine();self.worker.tick()
+        op=self.op(op_id)
+        self.assertEqual(op['status'],'FINALIZED_SUCCESS',{'status':op['status'],'errorCode':op['error_code']})
         original=self.rpc.events
         with patch.object(self.rpc,'events',side_effect=lambda *args:original(*args)*2):self.worker.tick()
         fresh=load_backend(self.config);Projector(fresh).sync()
@@ -422,6 +428,20 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         self.assertEqual((batch_a['A'],batch_a['R']),('0',str(3*PRICE)))
         self.assertEqual((batch_b['A'],batch_b['R']),(str(2*PRICE),'0'))
         self.assertEqual(self.backend.store.one("SELECT used FROM qualifications WHERE partner_id='partner-a'")['used'],3)
+    def test_loopback_rpc_and_http_ignore_poisoned_proxy_environment(self):
+        poison={name:'http://127.0.0.1:1' for name in
+                ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy')}
+        poison.update({'NO_PROXY':'','no_proxy':''})
+        with patch.dict(os.environ,poison):
+            self.assertEqual(requests.utils.get_environ_proxies(self.rpc_url)['http'],'http://127.0.0.1:1')
+            config=fixture(Path(self.tmp.name)/'direct-loopback',self.rpc_url,self.origin)
+            fresh=load_backend(config)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                self.assertEqual(list(pool.map(lambda _:fresh.rpc.w3.eth.chain_id,range(2))),[31337,31337])
+            # Crosses the real Flask request thread and RPC session, not just the calling thread.
+            _,_,funded=self.funded(1)
+            response,_=self.issue(funded['intent']['batchId'],1)
+            self.assertEqual(response.status_code,202,response.text)
     def test_pause_and_prefinalized_reorg(self):
         s,body,result=self.prepare()
         snapshot=self.w3.provider.make_request('evm_snapshot',[])['result']

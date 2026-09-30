@@ -15,6 +15,9 @@ class WorkCore:
     def actor_role(self, kind):
         return 'owner' if self.b.owner_mode and kind!='issue' else ACTIONS[kind].actor_role
     def require_owner(self, db, actor):
+        # New business remains quarantined even though restored wallet proofs were revoked.
+        # Do not turn the recovery barrier into a misleading request to re-authorize a wallet.
+        self.b._writable_in_transaction(db)
         return self.b.owner_wallet.require(db,actor)
     def require_actor(self, db, actor, role=None):
         row=db.execute('SELECT * FROM users WHERE id=?',(actor.actor_id,)).fetchone()

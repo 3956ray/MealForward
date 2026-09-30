@@ -113,6 +113,9 @@ rather than inventing a declaration or authorization.
 `tests.test_backend_chain_owner` proves real HTTP identity/settlement protocol and
 real test-driver-signed chain transactions; lock/report setup uses C0 shared
 helpers. It is not full redemption-module HTTP acceptance or browser acceptance.
-The next module must complete HTTP redemption; a separately owned controller /
-owner-wallet-harness must prove explicit browser wallet interaction. No simulated
-P06 UI result may be reported as completion of the real owner wallet flow.
+The integrated `tests.test_backend_chain_redemption` now separately exercises the
+complete work HTTP path on owned Anvil: three-voucher S/H/R, original operation
+recovery, real owner payment/revert and restore isolation. A separately owned
+controller / owner-wallet-harness must still prove explicit browser wallet
+interaction. No simulated P06 UI result may be reported as completion of the real
+owner wallet flow.
