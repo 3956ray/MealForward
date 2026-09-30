@@ -184,3 +184,14 @@ main:focus{outline:none}
 @media(max-width:520px){.issuance-page h1,.work-page h1{font-size:30px;margin:10px 0}.issuance-page>p,.work-page>p{font-size:14px;line-height:1.5}.issuance-page .panel,.work-page .panel{padding:14px;margin-top:12px}.issuance-page .split-stats{margin:12px 0}.issuance-page .panel p,.work-page .panel p{font-size:14px}.work-page .group-summary{padding:12px}.group-summary h2{font-size:19px}.work-page .group-summary p{font-size:12px;margin:5px 0}}
 
 .group-picker summary{min-height:44px;cursor:pointer;padding-block:10px;font-weight:700}
+
+/* Four product entries; internal simulation controls stay secondary. */
+.role-entry .actor-card{min-height:165px;padding:24px;gap:12px}
+.role-entry .actor-card span{line-height:1.65;max-width:30em}
+.actor-card:focus-visible,.internal-tools summary:focus-visible{outline:3px solid #bd5b42;outline-offset:4px}
+.internal-tools summary{cursor:pointer;color:#776e65;font-size:14px;font-weight:700}
+.internal-tools[open] summary{margin-bottom:16px}
+.internal-tools .reset-panel{border-top:1px solid #e6d9c6;margin-top:22px;padding-top:20px}
+.internal-tools .reset-panel h2{font-size:18px}
+.owner-flow-note{color:#6f6259}
+@media(max-width:520px){.role-entry .actor-card{min-height:140px;padding:20px}}

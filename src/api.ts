@@ -102,6 +102,7 @@ export interface Work {
   payables?: Payable[]
   cases?: Array<Record<string, unknown>>
   destination?: string
+  can_settle?: boolean
   pause?: { paused: boolean; reason: string; scope: string; old_balances_retained: boolean }
 }
 
