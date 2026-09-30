@@ -15,6 +15,7 @@ from unittest.mock import patch
 import requests
 from werkzeug.serving import make_server, WSGIRequestHandler
 from server.local import fixture, load_backend
+from server.recovery import backup_bundle, restore_bundle
 from server.outbox import Worker
 from server.projection import Projector
 from server.web import create_app
@@ -173,6 +174,103 @@ class BackendChainTests(unittest.TestCase):
         restored=load_backend({**self.config,'databasePath':str(backup_path)})
         with self.assertRaises(ChainConflict): Projector(restored).sync()
         self.assertTrue(restored.store.one("SELECT value FROM metadata WHERE key='halted'")['value'])
+    def test_controlled_restore_after_dropped_transaction_stays_quarantined(self):
+        supporter,body,funded=self.funded();r,issue_body=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        bundle=Path(self.tmp.name)/'controlled-backup';target=Path(self.tmp.name)/'controlled-restore'
+        for args in (['backup','--directory',str(Path(self.tmp.name)/'fixture'),'--destination',str(bundle)],
+                     ['restore','--backup',str(bundle),'--directory',str(target)]):
+            proc=subprocess.run([sys.executable,'-m','server.local',*args],cwd=ROOT,capture_output=True,timeout=20)
+            self.assertEqual(proc.returncode,0,proc.stderr.decode())
+        self.w3.provider.make_request('evm_setAutomine',[False])
+        try:
+            self.worker.tick()
+            old=self.backend.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+            self.assertEqual(self.w3.provider.make_request('anvil_dropTransaction',[old['tx_hash']])['result'],old['tx_hash'])
+            self.w3.provider.make_request('anvil_setNextBlockBaseFeePerGas',[hex(10**9)])
+            self.w3.provider.make_request('anvil_mine',['0x1'])
+            restored_config=json.loads((target/'config.json').read_text());restored=load_backend(restored_config)
+            for _ in range(2):
+                worker=Worker(restored,Path(restored_config['issuerKeyFile']).read_bytes())
+                with patch.object(worker.account,'sign_transaction',side_effect=AssertionError('Must never sign in restore')): worker.tick()
+                restored=load_backend(restored_config) # Quarantine survives process-equivalent reopen.
+            row=restored.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+            self.assertIsNone(row['raw_cipher']);self.assertIsNone(row['nonce']);self.assertIsNone(row['tx_hash'])
+            self.assertEqual(row['broadcast_count'],0)
+            self.assertEqual(restored.store.one('SELECT status FROM operations WHERE id=?',(op_id,))['status'],'SUBMISSION_UNKNOWN')
+            self.assertEqual(restored.store.one('SELECT state FROM reservations WHERE operation_id=?',(op_id,))['state'],'PENDING')
+            q=restored.store.one("SELECT reserved,used FROM qualifications WHERE partner_id='partner-a'")
+            self.assertEqual((q['reserved'],q['used']),(3,0))
+            self.assertEqual(self.w3.eth.get_transaction_count(self.config['deployment']['issuer'],'pending'),old['nonce'])
+        finally: self.w3.provider.make_request('evm_setAutomine',[True])
+        origin=f'http://127.0.0.1:{free_port()}'
+        server=make_server('127.0.0.1',int(origin.rsplit(':',1)[1]),create_app(restored,origin=origin),threaded=True,request_handler=QuietHandler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        try:
+            session=requests.Session();session.headers['Origin']=origin
+            stale=requests.Session();stale.cookies.update(self.partner.cookies)
+            self.assertEqual(stale.get(origin+'/api/v1/operations/'+op_id,timeout=10).status_code,401)
+            self.assertEqual(self.get(self.partner,'/auth/session').status_code,200) # Backup did not revoke the live source session.
+            self.assertEqual(session.get(origin+'/api/v1/support-intents/'+funded['operation']['id'],timeout=10).status_code,401)
+            login=session.post(origin+'/api/v1/auth/login',json={'username':'partner-a','password':'local-only-password'},timeout=10)
+            self.assertEqual(login.status_code,200);session.headers['X-CSRF-Token']=login.json()['csrfToken']
+            config=session.get(origin+'/api/v1/config',timeout=10).json()
+            self.assertEqual(config['capabilities'],[]);self.assertEqual(config['recovery']['state'],'RESTORE_QUARANTINE')
+            self.assertFalse(session.get(origin+'/healthz',timeout=10).json()['recovery']['writeAvailable'])
+            for request_body in (issue_body,{**issue_body,'intentKey':random_id()}):
+                response=session.post(origin+'/api/v1/work/issuances',json=request_body,timeout=10)
+                self.assertEqual(response.status_code,503);self.assertEqual(response.json()['code'],'RESTORE_QUARANTINED')
+            read=session.get(origin+'/api/v1/operations/'+op_id,timeout=10)
+            self.assertEqual(read.status_code,200);self.assertEqual(read.json()['operation']['recovery']['policy'],'READ_ORIGINAL_ONLY')
+            response=session.post(origin+'/api/v1/support-session',json={},timeout=10)
+            self.assertEqual(response.status_code,503)
+            session.cookies.update(supporter.cookies)
+            response=session.post(origin+'/api/v1/support-intents',json=body,timeout=10)
+            self.assertEqual(response.status_code,503)
+            self.assertEqual(session.get(origin+'/api/v1/support-intents/'+funded['operation']['id'],timeout=10).status_code,401)
+            self.assertEqual(session.post(origin+'/api/v1/support-session',json={},timeout=10).status_code,503)
+            public=session.get(origin+'/api/v1/public/fund-status',params={'payer':funded['intent']['account'],'intent':funded['intent']['intentId']},timeout=10)
+            self.assertEqual(public.status_code,200);self.assertEqual(public.json()['batchId'],funded['intent']['batchId'])
+            self.assertNotIn('operation',public.json());self.assertNotIn('request',public.json())
+            other=requests.Session();other.headers['Origin']=origin
+            self.assertEqual(other.post(origin+'/api/v1/auth/login',json={'username':'partner-b','password':'local-only-password'},timeout=10).status_code,200)
+            self.assertEqual(other.get(origin+'/api/v1/operations/'+op_id,timeout=10).status_code,403)
+        finally: server.shutdown();server.server_close();thread.join(timeout=5)
+    def test_controlled_signed_restore_replays_only_original_raw(self):
+        _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        def stop(phase):
+            if phase=='after_sign': raise RuntimeError('Signed backup')
+        with self.assertRaises(RuntimeError): Worker(self.backend,Path(self.config['issuerKeyFile']).read_bytes(),stop).tick()
+        original=self.backend.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        bundle=backup_bundle(self.config,Path(self.tmp.name)/'signed-bundle')
+        config=restore_bundle(bundle,Path(self.tmp.name)/'signed-restore');restored=load_backend(config)
+        for key in ('databasePath','secretKeyFile','issuerKeyFile'):
+            self.assertEqual(Path(config[key]).stat().st_mode & 0o777,0o600)
+        worker=Worker(restored,Path(config['issuerKeyFile']).read_bytes())
+        with patch.object(worker.account,'sign_transaction',side_effect=AssertionError('Must reuse raw')):worker.tick()
+        row=restored.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        self.assertEqual((row['nonce'],row['tx_hash'],row['raw_cipher']),(original['nonce'],original['tx_hash'],original['raw_cipher']))
+        self.mine();worker.tick()
+        self.assertEqual(restored.store.one("SELECT used FROM qualifications WHERE partner_id='partner-a'")['used'],3)
+        self.assertTrue(restored.quarantined()) # Success never unlocks new business/signing.
+    def test_restore_rejects_raw_nonce_binding_conflict_before_broadcast(self):
+        _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        def stop(phase):
+            if phase=='after_sign': raise RuntimeError('Signed backup')
+        with self.assertRaises(RuntimeError): Worker(self.backend,Path(self.config['issuerKeyFile']).read_bytes(),stop).tick()
+        bundle=backup_bundle(self.config,Path(self.tmp.name)/'raw-bundle')
+        config=restore_bundle(bundle,Path(self.tmp.name)/'raw-restore');restored=load_backend(config)
+        restored.store.execute('UPDATE outbox SET nonce=nonce+1 WHERE operation_id=?',(op_id,))
+        worker=Worker(restored,Path(config['issuerKeyFile']).read_bytes())
+        with self.assertRaises(ChainConflict): worker.tick()
+        self.assertEqual(restored.store.one('SELECT broadcast_count FROM outbox WHERE operation_id=?',(op_id,))['broadcast_count'],0)
+        self.assertEqual(restored.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],3)
+    def test_backup_rejects_tamper_and_existing_restore_directory(self):
+        bundle=backup_bundle(self.config,Path(self.tmp.name)/'bundle')
+        with self.assertRaises(FileExistsError): restore_bundle(bundle,Path(self.tmp.name)/'fixture')
+        (bundle/'issuer.key').write_bytes(b'corrupt')
+        destination=Path(self.tmp.name)/'rejected'
+        with self.assertRaises(ValueError): restore_bundle(bundle,destination)
+        self.assertFalse(destination.exists())
     def test_hard_process_crash_boundaries_keep_same_raw_and_nonce(self):
         # Actually terminate three subprocesses at durable boundaries, then reopen DB/worker.
         for phase in ('before_sign','after_sign','after_broadcast'):
@@ -193,7 +291,8 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
                 self.assertEqual(proc.returncode,71,proc.stderr.decode())
                 before=self.backend.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
                 self.assertIsNotNone(before['nonce'])
-                fresh=load_backend(self.config);worker=Worker(fresh,Path(self.config['issuerKeyFile']).read_bytes());worker.tick();self.mine();worker.tick()
+                fresh=load_backend(self.config);self.assertFalse(fresh.quarantined())
+                worker=Worker(fresh,Path(self.config['issuerKeyFile']).read_bytes());worker.tick();self.mine();worker.tick()
                 after=self.backend.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
                 self.assertEqual(after['nonce'],before['nonce']);self.assertEqual(after['state'],'DONE')
                 if before['tx_hash']:self.assertEqual(before['tx_hash'],after['tx_hash'])

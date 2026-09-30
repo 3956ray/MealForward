@@ -105,3 +105,32 @@ HALTED is global chain evidence conflict, not an on-chain result. Missing event/
 is not failure. quoteExpiresAt is UI review milliseconds, no chain deadline.
 Existing final result does not regress on RPC/indexer outage; actual canonical conflict
 halts dependent new writes and requires reconciliation. Envios public lag is informational.
+
+## Controlled backup / restore quarantine
+
+`python -m server.local backup --directory SOURCE --destination NEW_BUNDLE` makes a
+consistent, private SQLite/key/config bundle with completion manifest and SHA256.
+`restore --backup BUNDLE --directory NEW_DIRECTORY` refuses an existing destination,
+verifies integrity and restores into persistent quarantine. Hashes detect corruption,
+not an authorized operator rewriting both data and manifest. Restore revokes old work
+sessions and support capabilities; current-scope work login and authenticated original
+issuance queries remain available. Old support caps fail401 even if previously unexpired
+and correctly bound. No replacement capability or automatic private-intent claim is
+issued. Support recovery is public chain/contract/payer/intent lookup only.
+
+API recovery.state=RESTORE_QUARANTINE, writeAvailable=false; new support cap/intent,
+issuance and idempotent POST attempts fail503 with RESTORE_QUARANTINED. GET original
+work operations remains scoped to a fresh authorized session; public evidence remains available.
+Health may report alive but also exposes writeAvailable=false. Chain observations and
+finalized accounting can continue. A restored job without raw never signs, regardless
+of current nonce or absent events. Surviving raw is checked against hash/signer/chain/
+contract/nonce/payload before identical-byte replay. Successful recovery of one job
+does not remove instance quarantine. CP15 implements no release/unquarantine control.
+
+New databases and ordinary same-path restarts remain ACTIVE. Relocated or legacy
+untracked databases fail closed into quarantine. Arbitrary same-path file replacement
+is unsupported and not automatically detectable; use the controlled new-directory
+restore, never overwrite a live database and call it a normal restart. Reopening new
+writes requires a future explicit audited recovery gate covering complete post-backup
+operations/signing history, private materials, financial/qualification state and nonce,
+with named recovery owner, independent verification and authorized execution.

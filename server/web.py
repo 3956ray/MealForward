@@ -42,11 +42,13 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
         if not isinstance(value,dict): raise ApiError(422,'INVALID_INPUT','Object required')
         return value
     @app.get('/healthz')
-    def health(): return jsonify(status='alive',mode='localchain')
+    def health(): return jsonify(status='alive',mode='localchain',recovery=backend.recovery_view())
     @app.get('/api/v1/config')
     def config():
         d=backend.deployment
-        return jsonify({k:v for k,v in d.items() if k not in ('rpcUrl','issuer')},capabilities=['support','issue'],finalityPolicy='receipt-canonical-finalized-local')
+        return jsonify({**{k:v for k,v in d.items() if k not in ('rpcUrl','issuer')},
+                        'capabilities':[] if backend.quarantined() else ['support','issue'],
+                        'recovery':backend.recovery_view(),'finalityPolicy':'receipt-canonical-finalized-local'})
     @app.post('/api/v1/support-session')
     def support_session():
         payload=body()

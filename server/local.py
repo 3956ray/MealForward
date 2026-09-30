@@ -54,15 +54,29 @@ def load_backend(config):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('command',choices=['setup','web','worker'])
+    parser.add_argument('command',choices=['setup','web','worker','backup','restore'])
     parser.add_argument('--directory',default='.localbackend')
+    parser.add_argument('--destination')
+    parser.add_argument('--backup')
     args=parser.parse_args()
     root=Path(args.directory)
+    if args.command=='restore':
+        if not args.backup: parser.error('restore requires --backup and a new --directory')
+        from server.recovery import restore_bundle
+        restore_bundle(args.backup,root)
+        print('Restored in QUARANTINED mode: original operations only; no new signatures or business writes')
+        return
     if args.command=='setup':
         config=fixture(root,'http://127.0.0.1:18645')
         print('CP15 local fixture ready; configuration:',root/'config.json')
         return
     config=json.loads((root/'config.json').read_text())
+    if args.command=='backup':
+        if not args.destination: parser.error('backup requires a new --destination directory')
+        from server.recovery import backup_bundle
+        backup_bundle(config,args.destination)
+        print('Private quarantined backup created; restore only through the restore command')
+        return
     backend=load_backend(config)
     if args.command=='web':
         from server.web import create_app

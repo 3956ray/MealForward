@@ -3,7 +3,9 @@ import fcntl
 import json
 from contextlib import contextmanager
 from eth_account import Account
+from eth_account._utils.legacy_transactions import Transaction
 from eth_abi import encode
+from hexbytes import HexBytes
 from web3.exceptions import ContractLogicError
 from server.backend import TERMINAL, canonical
 from server.chain.client import ChainConflict, ZERO, hx
@@ -35,6 +37,9 @@ class Worker:
                 # A restored backup can predate signing/broadcast. Recover original
                 # evidence before estimation; absence of raw is not proof of no send.
                 if self.recover_unsigned(job): return
+                if self.b.quarantined():
+                    self.unsigned_unknown(job,'RESTORE_SIGNING_HISTORY_MISSING')
+                    return
                 if self.rpc.contract.functions.paused().call(): return
                 tx=json.loads(job['tx_json']); tx['from']=self.account.address
                 try: gas=self.rpc.w3.eth.estimate_gas(tx)
@@ -61,6 +66,7 @@ class Worker:
                     db.execute("UPDATE operations SET tx_hash=?,status='SIGNED',updated_at=? WHERE id=?",(tx_hash,self.b.now(),job['operation_id']))
                 self.fault('after_sign')
                 job=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],))
+            raw=self.validate_saved_raw(job)
             receipt=self.rpc.receipt(job['tx_hash'])
             if receipt:
                 self.observe_work(job,receipt)
@@ -69,7 +75,7 @@ class Worker:
             # Mark possibility of propagation before network call; all exceptions preserve reservation.
             self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
             try:
-                result=self.rpc.broadcast_same_raw(self.b.decrypt(job['raw_cipher']))
+                result=self.rpc.broadcast_same_raw(raw)
                 if result.lower()!=job['tx_hash'].lower(): raise ChainConflict('Broadcast hash mismatch')
                 self.fault('after_broadcast')
             except ChainConflict:
@@ -79,6 +85,23 @@ class Worker:
                 return
             self.store.execute("UPDATE outbox SET state='BROADCAST',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
             self.store.execute("UPDATE operations SET status='BROADCAST',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
+    def validate_saved_raw(self, job):
+        try:
+            raw=self.b.decrypt(job['raw_cipher']);encoded=HexBytes(raw)
+            signed=Transaction.from_bytes(encoded).as_dict() # This worker only creates EIP-155 legacy transactions.
+            expected=json.loads(job['tx_json'])
+            if (hx(self.rpc.w3.keccak(encoded))!=job['tx_hash']
+                    or Account.recover_transaction(raw).lower()!=job['signer'].lower()
+                    or job['signer'].lower()!=self.account.address.lower()
+                    or signed['nonce']!=job['nonce'] or signed['v']<35 or (signed['v']-35)//2!=31337
+                    or bytes(signed['to'])!=bytes.fromhex(self.rpc.contract.address[2:])
+                    or expected['to'].lower()!=self.rpc.contract.address.lower() or expected['chainId']!=31337
+                    or signed['value']!=expected['value'] or bytes(signed['data'])!=bytes(HexBytes(expected['data']))):
+                raise ValueError('Original raw binding mismatch')
+            return raw
+        except Exception:
+            self.b.halt('RAW_BINDING_CONFLICT')
+            raise ChainConflict('Original raw cannot be verified') from None
     def unsigned_unknown(self, job, reason):
         self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',error_code=?,updated_at=? WHERE id=?",
                            (reason,self.b.now(),job['operation_id']))

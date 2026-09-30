@@ -33,6 +33,22 @@ class Backend:
             db.execute("INSERT OR IGNORE INTO metadata VALUES('deployment',?)",(binding,))
             db.execute("INSERT OR IGNORE INTO metadata VALUES('halted','')")
             db.execute("INSERT OR IGNORE INTO metadata VALUES('paused','0')")
+            origin=db.execute("SELECT value FROM metadata WHERE key='database_origin_path'").fetchone()
+            current_path=str(store.path.resolve())
+            if not origin:
+                db.execute("INSERT INTO metadata VALUES('database_origin_path',?)",(current_path,))
+            # Only a newly created database starts writable. Existing untracked or
+            # relocated databases lack trustworthy signing continuity.
+            reason='MOVED_DATABASE' if origin and origin['value']!=current_path else ('LEGACY_UNTRACKED_DATABASE' if old and not origin else None)
+            if reason:
+                db.execute("INSERT OR REPLACE INTO metadata VALUES('recovery_state','QUARANTINED')")
+                db.execute("INSERT OR REPLACE INTO metadata VALUES('recovery_reason',?)",(reason,))
+                db.execute("INSERT OR REPLACE INTO metadata VALUES('database_origin_path',?)",(current_path,))
+                db.execute('UPDATE work_sessions SET revoked=1')
+                db.execute('UPDATE support_caps SET expires_at=0')
+            else:
+                db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_state','ACTIVE')")
+                db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_reason','')")
     def now(self): return int(self.clock())
     def encrypt(self, value): return self.box.encrypt(value.encode()).decode()
     def decrypt(self, value): return self.box.decrypt(value.encode()).decode()
@@ -40,6 +56,18 @@ class Backend:
     def check_halted(self):
         if self.store.one("SELECT value FROM metadata WHERE key='halted'")['value']:
             raise ApiError(503,'CHAIN_HALTED','Chain evidence requires reconciliation')
+    def quarantined(self):
+        return self.store.one("SELECT value FROM metadata WHERE key='recovery_state'")['value']!='ACTIVE'
+    def recovery_view(self):
+        quarantined=self.quarantined()
+        return {'state':'RESTORE_QUARANTINE' if quarantined else 'ACTIVE','writeAvailable':not quarantined,
+                'allowNewBusiness':not quarantined,'allowNewSignatures':not quarantined,
+                'policy':'READ_ORIGINAL_ONLY' if quarantined else 'NORMAL'}
+    @staticmethod
+    def _writable_in_transaction(db):
+        row=db.execute("SELECT value FROM metadata WHERE key='recovery_state'").fetchone()
+        if not row or row['value']!='ACTIVE':
+            raise ApiError(503,'RESTORE_QUARANTINED','New support and issuance paused for recovery; query original operations, do not resubmit')
     def cap(self, token):
         if not token: raise ApiError(401,'SUPPORT_SESSION_REQUIRED','Support session required')
         cap=self.store.one('SELECT * FROM support_caps WHERE token_hash=?',(digest(token),))
@@ -55,9 +83,12 @@ class Backend:
                 if not start_new or old['status'] not in TERMINAL:
                     return token,current
         token=secrets.token_urlsafe(32); now=self.now(); cap_id=random_id()
-        self.store.execute('INSERT INTO support_caps VALUES(?,?,?,?,NULL)',(cap_id,digest(token),now,now+SUPPORT_TTL))
+        with self.store.transaction() as db:
+            self._writable_in_transaction(db)
+            db.execute('INSERT INTO support_caps VALUES(?,?,?,?,NULL)',(cap_id,digest(token),now,now+SUPPORT_TTL))
         return token,self.cap(token)
     def create_support(self, token, body):
+        with self.store.transaction() as db: self._writable_in_transaction(db)
         cap=self.cap(token)
         expected={'clientRequestId','account','chainId','quantity','ruleVersion','walletKind'}
         if set(body)!=expected or body['chainId']!=31337 or body['ruleVersion']!=RULE or body['walletKind'] not in ('local-test','dynamic','mera'):
@@ -68,6 +99,7 @@ class Backend:
         body={**body,'account':Web3.to_checksum_address(body['account'])}
         snapshot=canonical(body); now=self.now()
         with self.store.transaction() as db:
+            self._writable_in_transaction(db)
             current=db.execute('SELECT * FROM support_caps WHERE id=?',(cap['id'],)).fetchone()
             if current['operation_id']:
                 old=dict(db.execute('SELECT * FROM operations WHERE id=?',(current['operation_id'],)).fetchone())
@@ -81,12 +113,12 @@ class Backend:
             db.execute('INSERT INTO support_intents VALUES(?,?,?,?,?,?,?,?)',(op_id,intent,body['account'],n,n*PRICE,batch,data,(now+120)*1000))
             db.execute('UPDATE support_caps SET operation_id=? WHERE id=?',(op_id,cap['id']))
             return self.support_view_db(db,op_id)
-    @staticmethod
-    def operation_view(op):
+    def operation_view(self, op):
         return {'id':op['id'],'action':op['kind'],'target':op['target'],'status':op['status'],'txHash':op['tx_hash'],
                 'receiptBlock':op['receipt_block'],'receiptBlockHash':op['receipt_hash'],'finalizedBlock':op['finalized_block'],
                 'errorCode':op['error_code'],'lastCheckedAt':op['updated_at'],
-                'retryPolicy':'COMPLETE' if op['status']=='FINALIZED_SUCCESS' else 'READ_ORIGINAL_ONLY'}
+                'retryPolicy':'COMPLETE' if op['status']=='FINALIZED_SUCCESS' else 'READ_ORIGINAL_ONLY',
+                'recovery':self.recovery_view()}
     def support_view_db(self, db, op_id):
         op=dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone())
         intent=dict(db.execute('SELECT * FROM support_intents WHERE operation_id=?',(op_id,)).fetchone())
@@ -106,6 +138,7 @@ class Backend:
         if body['quotePriceWei']!=str(PRICE) or body['ruleVersion']!=RULE: raise ApiError(409,'QUOTE_CHANGED','Review quote')
         snapshot=canonical(body)
         with self.store.transaction() as db:
+            self._writable_in_transaction(db)
             old=db.execute("SELECT * FROM operations WHERE actor_id=? AND kind='issue' AND intent_key=?",(actor.actor_id,key)).fetchone()
             if old:
                 if old['partner_id']!=actor.partner_id:
