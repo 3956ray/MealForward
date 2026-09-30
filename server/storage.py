@@ -51,7 +51,11 @@ class Store:
         self.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id,username,password_hash,role,partner_id,shop_id,int(enabled)))
     def get_user_by_username(self, username): return self.one('SELECT * FROM users WHERE username=?',(username,))
     def get_user(self, user_id): return self.one('SELECT * FROM users WHERE id=?',(user_id,))
-    def set_user_enabled(self, user_id, enabled): self.execute('UPDATE users SET enabled=? WHERE id=?',(int(enabled),user_id))
+    def set_user_enabled(self, user_id, enabled):
+        with self.transaction() as db:
+            db.execute('UPDATE users SET enabled=? WHERE id=?',(int(enabled),user_id))
+            if not enabled:
+                db.execute('UPDATE work_sessions SET revoked=1 WHERE user_id=?',(user_id,))
     def create_session(self, token_hash, user_id, csrf_hash, created_at, expires_at):
         self.execute('INSERT INTO work_sessions VALUES(?,?,?,?,?,?,0)',(token_hash,user_id,csrf_hash,created_at,expires_at,created_at))
     def get_session(self, token_hash): return self.one('SELECT * FROM work_sessions WHERE token_hash=?',(token_hash,))

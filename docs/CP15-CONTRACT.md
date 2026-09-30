@@ -1,4 +1,4 @@
-# CP15 C0 interfaces / ownership
+# CP15 interfaces / ownership
 
 Only Anvil31337/loopback, new DB and explicit local fixtures. No original app,
 contract or wallet changes. Core scope: support intent→fund finality→API issueN3→
@@ -10,7 +10,7 @@ lock/report/settle HTTP, real network or production deployment.
 Python3.12.14 found at `python3.12`; project `.venv` via `uv venv --python python3.12 .venv`.
 Install exact hashed transitive lock: `uv pip sync requirements.lock --python .venv/bin/python`.
 Auth tests: `.venv/bin/python -m unittest discover -s tests -p 'test_auth*.py' -v`.
-Backend tests (main implementation follows C0): same command `-p 'test_backend_chain*.py'`.
+Backend tests: same command `-p 'test_backend_chain*.py'`.
 Do not run global Python expecting new dependencies. Existing stdlib simulation stays unchanged.
 Manual reserved ports: CP15 Anvil18645, Flask HTTP8875, expected origin http://127.0.0.1:8875.
 Automated tests create their own random loopback ports and temporary DB; never kill/reset peers.
@@ -43,6 +43,10 @@ Argon2id at least19MiB/2/1. Generic bad-login errors; revoke on logout. Clock in
 Store failures use arbitrary string keys (e.g. user:name/ip:127...); store does not hash
 passwords or interpret roles. Main routes use service.require('partner',csrf=True).
 Auth does not read/write support caps or outbox, does not create own migrations.
+Store disables users and revokes all their sessions in the same transaction; enabling
+again does not revive an old session. The local API is one process with threaded
+requests. Auth's lock is process-local: multi-process/Gunicorn workers are unsupported
+until throttle check-and-record is atomic in the shared store.
 
 ## Envio owner / ABI
 
@@ -90,6 +94,8 @@ but confirmed flag only after finality; no sharing API in this slice.
 
 Operational states: PREPARED (support), QUEUED/SIGNED (work), BROADCAST,
 INCLUDED_SUCCESS/INCLUDED_REVERT, SUBMISSION_UNKNOWN, FINALIZED_SUCCESS/FINALIZED_REVERT.
+NOT_SUBMITTED means preflight definitively rejected an unsigned work transaction;
+its reservation is released. It never applies to a signed/broadcast unknown.
 HALTED is global chain evidence conflict, not an on-chain result. Missing event/receipt
 is not failure. quoteExpiresAt is UI review milliseconds, no chain deadline.
 Existing final result does not regress on RPC/indexer outage; actual canonical conflict

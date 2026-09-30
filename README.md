@@ -9,7 +9,7 @@
 - 重置普通虚构场景：`python3 server/app.py --reset normal`。预置暂停异常用 `--reset paused`；重置会清空旧演示会话。
 - 终端 A：`python3 server/app.py`，本地模拟 API 仅监听 `127.0.0.1:8765`。
 - 终端 B：`npm run dev`，打开 Vite 报出的 `127.0.0.1` 地址；Vite 将 `/api` 代理至本机 API。
-- 构建：`npm run build`。接口与状态机测试：`python3 -m unittest discover -s tests -v`。
+- 构建：`npm run build`。模拟接口与状态机测试：`python3 -m unittest tests.test_flow -v`；CP15测试须用下述Python3.12隔离环境。
 
 模拟数据库写到 `data/demo.sqlite3`，已被 `.gitignore` 排除。服务和前端只供本机演示；不要将此服务暴露到公网或放入生产。演示角色选择不等于真实身份认证。
 
@@ -46,7 +46,7 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 本地单位非测试网MON，无真实供餐、退款、补券、释锁或改址恢复。钱包provider不是已验证的真实扩展；
 本片没有持久后台/认证/outbox/完整App接链。不得把本地开发账户用于公开网络；脚本拒绝非31337/非loopback/非Anvil。
 
-## CP15持久后台（C0接口，实施中）
+## CP15持久后台（隔离本地实现，待独立验收）
 
-运行时/隔离venv/锁定依赖、Auth协议、Envio事件接口与端口约定见 [CP15-CONTRACT](docs/CP15-CONTRACT.md)。
-此阶段不改原模拟App、合约或隔离钱包；C0不宣称持久链路已经实现。
+真实Anvil HTTP链路已实现：支持意图→最终确认资金→个人机构账号发行N3→持久预留/nonce/加密原始交易→最终确认投影与恢复。运行步骤和验证证据见 [CP15-VERIFICATION](docs/CP15-VERIFICATION.md)，接口见 [CP15-CONTRACT](docs/CP15-CONTRACT.md)。
+现有模拟App和钱包预览保持原行为；没有完整锁券/申报/结算HTTP、分享接口或真实网络连接。Envio独立模块仅通过handler模拟测试，真实HyperIndex/GraphQL服务未运行。
