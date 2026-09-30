@@ -1,5 +1,15 @@
 # CP16 C0 frozen module contract
 
+> Role correction: the user confirmed supporter / institutional partner / recipient /
+> restaurant owner and option A. The owner handles lock, handoff and report in the
+> application (operator broadcasts lock/report), then directly wallet-signs settle.
+> Separate staff/settler identities and the no-self-settlement rule below are
+> superseded. Backend settlement signing is not owner authorization. Preserve old
+> code/data as historical work; do not accept it as the corrected wallet flow.
+> Revised shared interface proposal: Leader research/cp16/developer/C0-OWNER-A.md,
+> pending targeted PM readback before implementation. The simulated P06 change is
+> separate and does not connect a real wallet.
+
 Scope: Anvil31337/loopback only. CP15 baseline00d23d1. C0 provides shared schema,
 transaction helpers, encodings, signer configuration and backup compatibility;
 it is not a claim that lock/report/settle HTTP or their worker is already complete.

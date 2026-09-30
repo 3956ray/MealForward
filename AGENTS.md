@@ -42,3 +42,10 @@
 - 主开发先C0固定schema/API/helpers/action registry/三signer/备份兼容；Leader之后派模块。共享storage/contracts/auth边界、migrations/backend/web/chain/outbox/projection/recovery/local与依赖锁/文档/tests/test_backend_chain*仍唯一主开发整合。
 - 领取代理仅server/recipient.py、tests/test_recipient.py；工作代理仅server/redemption.py、tests/test_redemption.py。冻结接口见docs/CP16-CONTRACT.md；任何共享变更先回主开发，不自行改schema或新建签名队列。
 - 真源为Leader项目research/cp16/developer/READINESS.md及pm/ANSWERS.md。恢复库旧能力撤销/新业务隔离，可信NEVER_SIGNED与可能签名后缺raw不得混同。短码消费与claim/op/outbox须同事务。
+
+## CP16 用户角色纠正（优先于上述旧角色要求）
+
+- 用户已确认四类产品身份：支持者、机构伙伴、领取者、餐馆老板；领取者免注册。餐馆老板统一验券/锁、交餐声明/report与结算，不再要求独立员工/settler或禁止原actor结算。
+- 选择A：后台operator明确代发锁/report；settle由可信绑定收款钱包的老板本人逐笔直接链签，后端不持老板私钥、不代签settle。钱包地址字符串不构成授权；现有合约不强制验码/交餐声明，不改合约或引入额外授权合约。
+- Leader授权先修正模拟P06入口及必要模拟API兼容，和真实本地链改动分提交。保留既有数据、5173服务，不重置/停止现有预览。模拟必须明确无真实钱包接入。
+- 前端范围src/App.tsx、src/styles.css、必要src/api.ts由Leader另派owner；主开发不双写，负责server/app.py、模拟测试及链共享C0。角色相关链实现先与PM定向冻结新接口；ROLE-CORRECTION.md及最新用户决定覆盖旧角色文档。
