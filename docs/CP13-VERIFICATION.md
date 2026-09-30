@@ -2,7 +2,9 @@
 
 2026-09-30. C0 `d1a7b4a`; core `21d1953`; wallet original `1fd3e25` was
 cherry-picked alone as integration code commit `0fcaeec8666dd76d5d22c96ba2228c7cfc1ff111`.
-Final delivery commit adds this verification record/README only; executable source equals that integration SHA.
+That initial integrated delivery was b22f985. The W-01 revision below supersedes its wallet source;
+current executable source is `a4cb468738bf52ba50b9a5cbdbecf7310fa49e8e`.
+The following delivery commit updates this record only.
 Local Anvil31337 only; no existing user wallet, real network, cloud, push or public
 release. Existing CP11 app and DB untouched. No persistent backend/auth/outbox/full UI.
 
@@ -38,7 +40,7 @@ it proves budget/uniqueness/role constraints, not identity or physical delivery.
 Unknown absent mapping is not proof of failure. Work actors share scoped backend
 operator trust in the future backend slice; there is no secret/recipient field onchain.
 
-## Integrated wallet checks
+## Initial integrated wallet checks (before W-01 revision)
 
 Only wallet commit 1fd3e25 was cherry-picked (9 owned files). No duplicate core pick,
 no change to existing App/main/Python service/CP11 flow tests. Shared ABI remains C0.
@@ -95,3 +97,32 @@ storage holds one active operation, not persistent backend history/outbox. Curre
 App/P01–P14 are not connected to chain. Real extension/mobile/Monad10143, backend
 identity/nonce/outbox/projection service and cloud deployment were not implemented
 or tested. No claims of actual meals, refunds, recovery or production readiness.
+
+## W-01 / P2 targeted integration revision
+
+Independent wallet review reproduced a stale asynchronous review restoring payment
+authorization after the quantity changed. Initial report:
+`research/cp13/review/WALLET-REVIEW.md` under Leader's MCPAY project. Its initial
+REQUEST CHANGES result is retained as history, not silently reclassified as PASS.
+
+Author fix `500b2a0e00ed102b2198e99b3e55091bdc08414e` alone was cherry-picked as
+`a4cb468738bf52ba50b9a5cbdbecf7310fa49e8e`. Exactly three owned files changed:
+WalletSupport disables quantity input while busy, controller uses review epochs to
+reject stale completions, and controller tests add four delayed-review regressions
+for quantity/account/chain/new-review invalidation. Main made no additional wallet
+implementation changes.
+
+Targeted checks on the revised integrated source:
+
+- `npm run build`: PASS (TypeScript and current application bundle).
+- `npm run test:wallet`: **10 PASS, 1 real-chain SKIP**, zero failures. Four new race
+  cases passed. These are controlled-provider regressions, not eleven real-chain tests.
+- `git diff --check`: PASS.
+
+Prior seven-test real Anvil evidence above remains historical evidence on the original
+wallet revision. It was not rerun or relabeled as post-fix real-chain verification.
+No new main-developer UI/extension test is claimed. Author reported IAB unavailable;
+independent reviewer is performing targeted fix verification and attempting browser
+coverage separately. Final reviewer outcome and Leader Gate are still pending here.
+Core21d1953 PASS carries forward unchanged; no redundant core/Python full rerun.
+No existing node/preview/DB was reset or stopped; no public network, push or deployment.
