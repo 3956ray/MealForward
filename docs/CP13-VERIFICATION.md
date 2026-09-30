@@ -1,6 +1,8 @@
-# CP13 verification (core complete; wallet integration pending)
+# CP13 integrated verification (independent wallet review / Leader Gate pending)
 
-2026-09-30. C0 `d1a7b4a`; core source is this commit's contracts/scripts/tests.
+2026-09-30. C0 `d1a7b4a`; core `21d1953`; wallet original `1fd3e25` was
+cherry-picked alone as integration code commit `0fcaeec8666dd76d5d22c96ba2228c7cfc1ff111`.
+Final delivery commit adds this verification record/README only; executable source equals that integration SHA.
 Local Anvil31337 only; no existing user wallet, real network, cloud, push or public
 release. Existing CP11 app and DB untouched. No persistent backend/auth/outbox/full UI.
 
@@ -36,16 +38,60 @@ it proves budget/uniqueness/role constraints, not identity or physical delivery.
 Unknown absent mapping is not proof of failure. Work actors share scoped backend
 operator trust in the future backend slice; there is no secret/recipient field onchain.
 
-## Wallet handoff and limitations
+## Integrated wallet checks
 
-Fixed ABI and files/commands in [CP13-CONTRACT](CP13-CONTRACT.md). Main owns core;
-Leader's wallet agent owns src/wallet, WalletSupport, wallet-harness, tests/wallet.
-`npm run chain:node`18545 is reserved for that isolated wallet harness;
-`npm run chain:deploy` compiles and deploys there, grants local test roles, writes
-public-only `.localchain/deployment.json`. Main has not started/reset that node.
-Manifest never includes keys. `dev:wallet`5195/test:wallet become available with
-wallet agent's files; not claimed verified in the core commit.
+Only wallet commit 1fd3e25 was cherry-picked (9 owned files). No duplicate core pick,
+no change to existing App/main/Python service/CP11 flow tests. Shared ABI remains C0.
 
-Final integrated build/regression/browser evidence and fixed SHA follow after wallet
-integration and independent review. Real extension testing is not covered by an
-EIP1193 test provider. No claim of Monad/mobile or production readiness.
+- `npm run build`: PASS on integrated source, including TypeScript checks of new
+  src controller/component; current application remains the CP11 simulation.
+- `npm run test:wallet`: 6 PASS, 1 explicit real-chain SKIP. This default result is
+  not claimed as full-chain verification.
+- Main developer separately ran all same 7 tests with `CP13_REAL_CHAIN=1`: **7 PASS,
+  0 SKIP**. A fresh owned Anvil31337 was started on an OS-assigned loopback port,
+  deployFixture deployed the integrated core/roles, and its public manifest was
+  written in a temporary working directory for the unchanged tests to consume.
+  Tests loaded integrated repository source; only that owned child/temp directory
+  was removed. No read/write/reset of wallet18545/5195 or CP11 DB/services.
+  Output is local ignored `evidence/cp13-integrated-wallet.txt`.
+- This real-chain test sent two fund transactions, including a post-broadcast
+  response loss, recovered the original intent/batch/hash after controller reload,
+  kept absent mappings unknown, and prohibited blind resend. Explicit test-only
+  mining advanced local finalized; controller did not mine. Simulated inconsistent
+  canonical block responses preserved UNKNOWN. Unit cases additionally cover
+  wrong chain/account, rejection, quote expiry, storage failure, code mismatch
+  and stale review across tabs.
+- `npx --no-install vite build --config wallet-harness/vite.config.ts`: PASS,
+  independent harness bundle built. No new dev server started for integration.
+- `git diff --check`: PASS. Before wallet integration, main also ran original
+  Python suite **14/14 PASS** and build PASS on core21d1953; those untouched files
+  were not redundantly retested after the wallet-only cherry-pick.
+
+Wallet agent's separate CUA evidence records actual browser connect/review/send,
+reload/read-only recovery, real send with response dropped, and 390x844 layout.
+It used a LocalTestProvider with actual Anvil, **not MetaMask or another extension**.
+Main did not relabel that delegated browser evidence as its own rerun. Product
+record: `research/cp13/wallet/VERIFICATION.md` under Leader's MCPAY project.
+
+Core independent review of21d1953 is PASS: reviewer reran13 tests and real Anvil
+E2E, plus7 independently designed cases and256 two-batch interleaving fuzz rounds.
+Source report: `research/cp13/review/CORE-REVIEW.md`. Core source remains unchanged
+in the integrated SHA. Wallet independent review and final Leader Gate remain pending;
+this document does not self-approve them.
+
+## Run and limitations
+
+See [CP13-CONTRACT](CP13-CONTRACT.md). In a fresh local checkout with ports free:
+`npm run chain:node` starts18545; `npm run chain:deploy` produces public-only
+`.localchain/deployment.json`; `npm run dev:wallet` starts5195.
+`CP13_REAL_CHAIN=1 npm run test:wallet` performs actual local writes/mining against
+that manifest. Do not run it against another person's active preview; use a fresh
+isolated fixture and respect the cumulative funding cap. Main left wallet agent's
+existing18545/5195 processes intact for read-only preview.
+
+WalletSupport explicitly uses the isolated EIP1193 LocalTestProvider, does not
+read window.ethereum or request any user wallet. No keys in manifest or UI. Local
+storage holds one active operation, not persistent backend history/outbox. Current
+App/P01–P14 are not connected to chain. Real extension/mobile/Monad10143, backend
+identity/nonce/outbox/projection service and cloud deployment were not implemented
+or tested. No claims of actual meals, refunds, recovery or production readiness.

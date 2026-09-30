@@ -32,13 +32,16 @@ CP11 多券演示：新的 normal 样例中 REF-A 有3份虚构额度。先支�
 
 CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION.md)。
 
-## CP13 localchain（隔离开发中）
+## CP13 localchain（隔离核心与钱包模块）
 
-C0已冻结接口；合约和钱包模块按独立提交实现。仅本地Anvil31337，不触及用户钱包或Monad测试网。
-共享接口、文件所有权、fixture和harness启动约定见 [CP13-CONTRACT](docs/CP13-CONTRACT.md)。
-此处chain/wallet脚本在对应实施提交完成后才可运行，C0不宣称链路已实现或验收。
+仅本地Anvil31337及隔离测试provider，不触及用户钱包或Monad测试网。现有P01–P14仍是CP11模拟。
+共享ABI、fixture与范围见 [CP13-CONTRACT](docs/CP13-CONTRACT.md)，证据和限制见 [CP13-VERIFICATION](docs/CP13-VERIFICATION.md)。
 
-CP13核心实施后可运行：`npm run chain:test`（13项合约测试）、`npm run chain:e2e`（独立18546真实交易并自动关闭）。
-`node scripts/check-abi.mjs` 在合约编译后校验共享ABI。钱包节点18545由钱包harness单独启动；
-`npm run chain:node` 后另终端 `npm run chain:deploy` 生成仅公开字段的 `.localchain/deployment.json`。
-不得把本地开发账户用于公开网络；本地链脚本拒绝非31337/非loopback/非Anvil。
+- `npm run chain:test`：13项合约测试（含256组fuzz）。
+- `npm run chain:e2e`：独立18546真实交易验证，仅结束自己启动的节点。
+- `node scripts/check-abi.mjs`：合约编译后核对共享ABI。
+- 独立钱包预览：空闲端口下先 `npm run chain:node`（18545），另终端 `npm run chain:deploy` 生成本机公开manifest，再 `npm run dev:wallet`（5195）。
+- `npm run test:wallet` 默认跳过真实链项；`CP13_REAL_CHAIN=1 npm run test:wallet` 才实际发送交易/推进本地块，须使用自己隔离的节点与manifest，勿写他人正在使用的预览。
+
+本地单位非测试网MON，无真实供餐、退款、补券、释锁或改址恢复。钱包provider不是已验证的真实扩展；
+本片没有持久后台/认证/outbox/完整App接链。不得把本地开发账户用于公开网络；脚本拒绝非31337/非loopback/非Anvil。
