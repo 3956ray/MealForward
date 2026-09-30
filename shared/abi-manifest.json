@@ -1,0 +1,7 @@
+{
+  "sourceCommit": "21d1953dd3c095c03debc8b08378584f316f502e",
+  "source": "contracts/MealForward.sol",
+  "abiSha256": "8b922614a26c2cd379c8ffc85dd3b0af47ba2748666d733df52e7e5ebf99b1d4",
+  "chainId": 31337,
+  "ruleVersion": "mealforward-cp13-local-v1"
+}

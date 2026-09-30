@@ -28,3 +28,10 @@
 - 不改现有 App.tsx/P01–P14，不做持久backend/auth/outbox；不得重置或停止5173/8765及CP11演示数据。
 - 链状态以合约与确认结果为准；本地chain单位不是Monad testnet MON，gas与本金分开。独立harness不代表完整DApp。
 - 所有开发/审查Astra Medium；Leader派钱包代理及独立审查，主开发不重复委派同范围。
+
+## CP15 持久后台授权（覆盖CP13的后端暂缓条款）
+
+- 正式BUILD仅本地31337独立后台，支持intent→issueN3/个人工作认证/outbox/finalized/恢复；不改CP13合约、钱包、既有App/server/app.py，不实现完整锁/申报/结算HTTP。
+- 主开发拥有共享schema/storage/contracts/依赖/ABI/config/docs与server/web.py、server/chain/、outbox/projection/服务及tests/test_backend_chain*。
+- Leader Auth子代理独占server/auth.py、tests/test_auth*；Envio子代理独占indexer/。共享文件由主开发单一整合；不另建迁移或改根锁。
+- Python3.12项目.venv及requirements.lock；不装系统Dockerdaemon，不碰5173/8765/18545/5195预览；CP15自有节点18645、HTTP8875，自动测试随机空闲loopback端口。

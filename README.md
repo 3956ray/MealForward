@@ -45,3 +45,8 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 
 本地单位非测试网MON，无真实供餐、退款、补券、释锁或改址恢复。钱包provider不是已验证的真实扩展；
 本片没有持久后台/认证/outbox/完整App接链。不得把本地开发账户用于公开网络；脚本拒绝非31337/非loopback/非Anvil。
+
+## CP15持久后台（C0接口，实施中）
+
+运行时/隔离venv/锁定依赖、Auth协议、Envio事件接口与端口约定见 [CP15-CONTRACT](docs/CP15-CONTRACT.md)。
+此阶段不改原模拟App、合约或隔离钱包；C0不宣称持久链路已经实现。

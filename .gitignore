@@ -14,3 +14,5 @@ out/
 cache/
 .localchain/
 wallet-harness/dist/
+.venv/
+.localbackend/
