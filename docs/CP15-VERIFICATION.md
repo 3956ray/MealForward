@@ -43,16 +43,24 @@ HTTP 为 http://127.0.0.1:8875；所有POST要求相同 Origin 和 JSON。本地
 - 真正子进程在签名前、持久raw后、广播后分别os._exit；重启保持原业务ID、nonce、raw/hash并仅产生一次Issued。签名后撤销链权限得到真实revert，最终确认前保预留、最终revert后释放。
 - 广播已送达但响应丢失保留unknown及预留；RPC故障不回退已保存finalized。支持交易未finalized重组先保持不可用，规范链恢复后转unknown，不自动补付。
 - SQLite备份恢复读取已上链原交易，无第二次广播；过旧备份缺私有接受记录停写。禁用再启用账号，期间未访问的旧session仍401。
-- 重复事件不重复计账；完整receipt log解码与事件内容比较；finalized checkpoint或事件内容矛盾停写。签名前崩溃后若预检拒绝，释放未签名nonce供后续交易使用，不形成nonce空洞。
+- 重复事件不重复计账；完整receipt log解码与事件内容比较；finalized checkpoint或事件内容矛盾停写。预检拒绝不证明未广播：保留原资格与预算，标记unknown；只允许原操作在证据一致时继续，不释放nonce另发新业务。
 - 暂停禁止新发行，worker仍投影已完成交易；无旧actor/reset/outcome假接口。异常HTTP只返回通用错误，不序列化RPC错误payload。
 
-最终命令 `.venv/bin/python -m unittest tests.test_auth tests.test_backend_chain tests.test_flow -q`：**41项 PASS，31.282秒**（Auth11 + 后台16 + 原模拟14）。追加原业务键查询和异参409断言后，定向重跑完整HTTP链路通过。现有14项模拟状态测试仅为隔离回归，不算真实链验收。CP13合约/钱包源码未改，不重复宣称重新完成其全部验收。
+初版602ce49的41项测试通过，但独立审查发现了下述恢复/权限缺口，初版不应验收。修订增加4项真实HTTP/Anvil回归，并收紧原有预检失败测试。现有14项模拟状态测试仅为隔离回归，不算真实链验收。CP13合约/钱包源码未改，不重复宣称重新完成其全部验收。
+
+### 独立审查修订 R1/R2
+
+R1原复现：接受issue后备份QUEUED；原库广播并INCLUDED_SUCCESS；恢复旧库估gas得到重复业务revert，错误释放预留，最终成功却used=0。修订先查原operation映射、完整Issued/receipt/交易payload和nonce；恢复相同原txHash，确认前保持reserved=3，最终变used=3，恢复库broadcast_count=0。若原交易还在mempool，nonce已占用但raw丢失，保持unknown/预留，不重签或换nonce；原交易入块后再恢复。预检失败不再自动释放。已有RELEASED却出现链上成功的矛盾数据库会停写，不静默标成功。
+
+R2原复现：用户从partner-a调到partner-b，GET原操作403，但同键POST返回partner-a私有发行。修订幂等分支先核当前partner scope，原操作GET、by-intent GET与重复POST全部403且不含request/vouchers。
+
+修订验证：`.venv/bin/python -m unittest tests.test_auth tests.test_backend_chain tests.test_flow -q` **45项PASS / 41.890秒**（Auth11 + 后台20 + 原模拟14）。以修订源码重跑审查者原脚本，恢复前最终确认状态为INCLUDED_SUCCESS / reserved=3 / used=0 / PENDING；最终确认后为FINALIZED_SUCCESS / reserved=0 / used=3 / USED；改机构后GET=403、POST=403、泄露券数=0。修订仍待独立复核，不自宣ACCEPTED。
 
 ## Envio 独立状态
 
-固定源提交1871961；本仓库串行整合。`indexer/` 依赖与根依赖分离，执行 npm ci --ignore-scripts、npm run codegen、npm run check、npm test 成功，4项SDK内存模拟测试通过。它们不是实际Anvil摄取证据。
+固定源提交1871961及依赖修复d5443ab；本仓库串行整合，后者为093967a。`indexer/` 依赖与根依赖分离；初版在本仓库运行ci/codegen/check/4项SDK模拟测试通过，依赖修订由作者与Leader独立reviewer fresh ci/codegen/check/4tests/audit复核通过，npm audit为0，保留Envio3.12.1。它们不是实际Anvil摄取证据。
 
-真实HyperIndex/Postgres/Hasura、GraphQL摄取、服务重启持久性和链重组自动回滚：**NOT_RUN**，本机缺Docker；没有安装daemon。审查与运行前提见 [indexer/README](../indexer/README.md)。作者记录11项npm传递依赖audit报告（6 high）；未强制降级Envio，独立风险审查待Leader。后台权威来自直接RPC，Envio未接入业务写，索引延迟不回退最终结果。
+真实HyperIndex/Postgres/Hasura、GraphQL摄取、服务重启持久性和链重组自动回滚：**NOT_RUN**，本机缺Docker；没有安装daemon。审查与运行前提见 [indexer/README](../indexer/README.md)。原11项npm audit报告已通过固定overrides清零，并未降级Envio；audit0不代表真实服务已验收。后台权威来自直接RPC，Envio未接入业务写，索引延迟不回退最终结果。
 
 ## 仍未实现
 

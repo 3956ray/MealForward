@@ -94,8 +94,13 @@ but confirmed flag only after finality; no sharing API in this slice.
 
 Operational states: PREPARED (support), QUEUED/SIGNED (work), BROADCAST,
 INCLUDED_SUCCESS/INCLUDED_REVERT, SUBMISSION_UNKNOWN, FINALIZED_SUCCESS/FINALIZED_REVERT.
-NOT_SUBMITTED means preflight definitively rejected an unsigned work transaction;
-its reservation is released. It never applies to a signed/broadcast unknown.
+The worker does not infer NOT_SUBMITTED from estimateGas rejection: an old backup
+may lack a previously broadcast raw. It retains reservations as SUBMISSION_UNKNOWN,
+checks the original on-chain operation mapping/event/payload and signer nonce, and
+never allocates a new nonce to bypass unexplained pending/consumed signer state.
+Only verified finalized revert releases work reservations automatically. Recovery
+without a surviving raw may observe the original transaction, but cannot fabricate
+a replacement raw if that transaction disappears. Missing evidence needs reconciliation.
 HALTED is global chain evidence conflict, not an on-chain result. Missing event/receipt
 is not failure. quoteExpiresAt is UI review milliseconds, no chain deadline.
 Existing final result does not regress on RPC/indexer outage; actual canonical conflict

@@ -108,6 +108,8 @@ class Backend:
         with self.store.transaction() as db:
             old=db.execute("SELECT * FROM operations WHERE actor_id=? AND kind='issue' AND intent_key=?",(actor.actor_id,key)).fetchone()
             if old:
+                if old['partner_id']!=actor.partner_id:
+                    raise ApiError(403,'FORBIDDEN','Operation scope mismatch')
                 if old['request_json']!=snapshot: raise ApiError(409,'INTENT_CONFLICT','Intent parameters changed')
                 return self.issuance_view_db(db,dict(old))
             self._healthy_in_transaction(db)
@@ -147,7 +149,10 @@ class Backend:
     @staticmethod
     def resolve_reservation(db, op_id, success):
         r=db.execute('SELECT * FROM reservations WHERE operation_id=?',(op_id,)).fetchone()
-        if not r or r['state']!='PENDING': return
+        if not r or (success and r['state']=='RELEASED'):
+            from server.chain.client import ChainConflict
+            raise ChainConflict('Confirmed issuance has no live reservation')
+        if r['state']!='PENDING': return
         db.execute('UPDATE qualifications SET reserved=reserved-?,used=used+? WHERE partner_id=? AND recipient_ref=?',
                    (r['quantity'],r['quantity'] if success else 0,r['partner_id'],r['recipient_ref']))
         db.execute('UPDATE reservations SET state=? WHERE operation_id=?',('USED' if success else 'RELEASED',op_id))

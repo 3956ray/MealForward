@@ -227,7 +227,7 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         self.mine();self.worker.tick();self.assertEqual(self.op(op_id)['status'],'FINALIZED_REVERT')
         self.assertEqual(self.backend.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],0)
         self.assertEqual(self.get(self.partner,'/operations/'+op_id).json()['vouchers'],[])
-    def test_unsigned_preflight_rejection_reclaims_reserved_nonce(self):
+    def test_unsigned_preflight_rejection_preserves_original_reservation(self):
         _,_,funded=self.funded();r,body=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
         def stop(phase):
             if phase=='before_sign': raise RuntimeError('Unsigned crash')
@@ -236,11 +236,68 @@ Worker(load_backend(c),Path(c['issuerKeyFile']).read_bytes(),crash).tick()
         role=self.rpc.contract.functions.ISSUER_ROLE().call()
         admin={'from':self.w3.eth.accounts[0]}
         self.w3.eth.wait_for_transaction_receipt(self.rpc.contract.functions.revokeRole(role,self.config['deployment']['issuer']).transact(admin))
-        self.worker.tick();self.assertEqual(self.op(op_id)['status'],'NOT_SUBMITTED')
+        self.worker.tick();self.assertEqual(self.op(op_id)['status'],'SUBMISSION_UNKNOWN')
+        self.assertEqual(self.backend.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],3)
+        self.assertEqual(self.backend.store.one('SELECT state FROM reservations WHERE operation_id=?',(op_id,))['state'],'PENDING')
         self.w3.eth.wait_for_transaction_receipt(self.rpc.contract.functions.grantRole(role,self.config['deployment']['issuer']).transact(admin))
-        r,_=self.issue(funded['intent']['batchId']);new_id=r.json()['operation']['id'];self.worker.tick()
-        self.assertEqual(self.backend.store.one('SELECT nonce FROM outbox WHERE operation_id=?',(new_id,))['nonce'],original)
-        self.mine();self.worker.tick();self.assertEqual(self.op(new_id)['status'],'FINALIZED_SUCCESS')
+        self.worker.tick()
+        self.assertEqual(self.backend.store.one('SELECT nonce FROM outbox WHERE operation_id=?',(op_id,))['nonce'],original)
+        self.mine();self.worker.tick();self.assertEqual(self.op(op_id)['status'],'FINALIZED_SUCCESS')
+    def test_queued_backup_recovers_included_issuance_without_releasing_quota(self):
+        _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        backup_path=Path(self.tmp.name)/'queued-backup.sqlite3'
+        source=self.backend.store.connect();backup=sqlite3.connect(backup_path)
+        source.backup(backup);source.close();backup.close()
+        self.worker.tick();self.worker.tick();self.assertEqual(self.op(op_id)['status'],'INCLUDED_SUCCESS')
+        original=self.backend.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        restored=load_backend({**self.config,'databasePath':str(backup_path)})
+        replay=Worker(restored,Path(self.config['issuerKeyFile']).read_bytes());replay.tick()
+        op=restored.store.one('SELECT * FROM operations WHERE id=?',(op_id,))
+        self.assertEqual((op['status'],op['tx_hash']),('INCLUDED_SUCCESS',original['tx_hash']))
+        self.assertEqual(restored.store.one('SELECT state FROM reservations WHERE operation_id=?',(op_id,))['state'],'PENDING')
+        q=restored.store.one("SELECT reserved,used FROM qualifications WHERE partner_id='partner-a'")
+        self.assertEqual((q['reserved'],q['used']),(3,0))
+        self.mine();replay.tick()
+        self.assertEqual(restored.store.one('SELECT status FROM operations WHERE id=?',(op_id,))['status'],'FINALIZED_SUCCESS')
+        q=restored.store.one("SELECT reserved,used FROM qualifications WHERE partner_id='partner-a'")
+        self.assertEqual((q['reserved'],q['used']),(0,3))
+        row=restored.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+        self.assertEqual((row['nonce'],row['tx_hash'],row['broadcast_count']),(original['nonce'],original['tx_hash'],0))
+    def test_queued_backup_pending_nonce_never_signs_a_replacement(self):
+        _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        backup_path=Path(self.tmp.name)/'pending-backup.sqlite3'
+        source=self.backend.store.connect();backup=sqlite3.connect(backup_path)
+        source.backup(backup);source.close();backup.close()
+        self.w3.provider.make_request('evm_setAutomine',[False])
+        try:
+            self.worker.tick()
+            restored=load_backend({**self.config,'databasePath':str(backup_path)})
+            replay=Worker(restored,Path(self.config['issuerKeyFile']).read_bytes());replay.tick()
+            op=restored.store.one('SELECT * FROM operations WHERE id=?',(op_id,))
+            self.assertEqual((op['status'],op['error_code']),('SUBMISSION_UNKNOWN','SIGNER_NONCE_UNRESOLVED'))
+            row=restored.store.one('SELECT * FROM outbox WHERE operation_id=?',(op_id,))
+            self.assertIsNone(row['raw_cipher']);self.assertEqual(row['broadcast_count'],0)
+            self.assertEqual(restored.store.one("SELECT reserved FROM qualifications WHERE partner_id='partner-a'")['reserved'],3)
+        finally: self.w3.provider.make_request('evm_setAutomine',[True])
+        self.mine();replay.tick()
+        self.assertEqual(restored.store.one("SELECT used FROM qualifications WHERE partner_id='partner-a'")['used'],3)
+    def test_changed_partner_scope_rejects_idempotent_post_and_reads(self):
+        _,_,funded=self.funded();r,body=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        self.worker.tick();self.mine();self.worker.tick()
+        self.backend.store.execute("UPDATE users SET partner_id='partner-b' WHERE id='partner-a'")
+        for response in (self.get(self.partner,'/operations/'+op_id),self.get(self.partner,'/work/issuances/by-intent/'+body['intentKey']),self.post(self.partner,'/work/issuances',body)):
+            self.assertEqual(response.status_code,403,response.text)
+            self.assertNotIn('vouchers',response.json());self.assertNotIn('request',response.json())
+    def test_released_reservation_cannot_silently_finalize_success(self):
+        _,_,funded=self.funded();r,_=self.issue(funded['intent']['batchId']);op_id=r.json()['operation']['id']
+        self.worker.tick()
+        # Model an old database carrying the reviewer's already-corrupted state.
+        self.backend.store.execute("UPDATE reservations SET state='RELEASED' WHERE operation_id=?",(op_id,))
+        self.backend.store.execute("UPDATE qualifications SET reserved=0 WHERE partner_id='partner-a'")
+        self.mine()
+        with self.assertRaises(ChainConflict): self.worker.tick()
+        self.assertNotEqual(self.op(op_id)['status'],'FINALIZED_SUCCESS')
+        self.assertTrue(self.backend.store.one("SELECT value FROM metadata WHERE key='halted'")['value'])
     def test_receipt_payload_mismatch_is_rejected_before_projection(self):
         _,_,funded=self.prepare();self.fund(funded);self.mine()
         original=self.rpc.events

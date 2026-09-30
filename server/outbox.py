@@ -3,9 +3,10 @@ import fcntl
 import json
 from contextlib import contextmanager
 from eth_account import Account
+from eth_abi import encode
 from web3.exceptions import ContractLogicError
 from server.backend import TERMINAL, canonical
-from server.chain.client import ChainConflict, hx
+from server.chain.client import ChainConflict, ZERO, hx
 from server.projection import Projector
 
 class Worker:
@@ -31,22 +32,20 @@ class Worker:
             if not job: return
             self.b.check_halted(); self.rpc.guard()
             if job['raw_cipher'] is None:
+                # A restored backup can predate signing/broadcast. Recover original
+                # evidence before estimation; absence of raw is not proof of no send.
+                if self.recover_unsigned(job): return
                 if self.rpc.contract.functions.paused().call(): return
                 tx=json.loads(job['tx_json']); tx['from']=self.account.address
                 try: gas=self.rpc.w3.eth.estimate_gas(tx)
                 except ContractLogicError:
-                    with self.store.transaction() as db:
-                        self.b.resolve_reservation(db,job['operation_id'],False)
-                        # A crash may have reserved this nonce before any raw existed.
-                        # With the worker lease and serial queue it can be safely reclaimed.
-                        if job['nonce'] is not None:
-                            db.execute('UPDATE signer_nonces SET next_nonce=? WHERE signer=? AND next_nonce=?',
-                                       (job['nonce'],self.account.address,job['nonce']+1))
-                            db.execute('UPDATE outbox SET nonce=NULL WHERE operation_id=?',(job['operation_id'],))
-                        db.execute("UPDATE operations SET status='NOT_SUBMITTED',error_code='PREFLIGHT_REJECTED',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
-                        db.execute("UPDATE outbox SET state='DONE' WHERE operation_id=?",(job['operation_id'],))
+                    self.unsigned_unknown(job,'PREFLIGHT_UNRESOLVED')
                     return
                 pending_nonce=self.rpc.w3.eth.get_transaction_count(self.account.address,'pending')
+                saved=self.store.one('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,))
+                expected=job['nonce'] if job['nonce'] is not None else (saved['next_nonce'] if saved else 0)
+                if pending_nonce!=expected:
+                    self.unsigned_unknown(job,'SIGNER_NONCE_UNRESOLVED'); return
                 with self.store.transaction() as db:
                     saved=db.execute('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,)).fetchone()
                     nonce=job['nonce'] if job['nonce'] is not None else max(pending_nonce,saved['next_nonce'] if saved else 0)
@@ -80,6 +79,56 @@ class Worker:
                 return
             self.store.execute("UPDATE outbox SET state='BROADCAST',broadcast_count=broadcast_count+1 WHERE operation_id=?",(job['operation_id'],))
             self.store.execute("UPDATE operations SET status='BROADCAST',updated_at=? WHERE id=?",(self.b.now(),job['operation_id']))
+    def unsigned_unknown(self, job, reason):
+        self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',error_code=?,updated_at=? WHERE id=?",
+                           (reason,self.b.now(),job['operation_id']))
+    def recover_unsigned(self, job):
+        payload,result=self.rpc.contract.functions.getOperation(1,job['operation_id']).call()
+        recorded=hx(payload)!=ZERO
+        if recorded:
+            _,args=self.rpc.contract.decode_function_input(json.loads(job['tx_json'])['data'])
+            expected=self.rpc.w3.keccak(encode(['bytes32','bytes32[]'],[args['batchId'],args['voucherIds']]))
+            if bytes(payload)!=bytes(expected) or bytes(result)!=bytes(args['batchId']):
+                self.b.halt('RECOVERY_CONFLICT'); raise ChainConflict('Original operation mapping conflict')
+        matches=[e for e in self.rpc.events(int(self.b.deployment['deploymentBlock']),'latest')
+                 if e['eventName']=='Issued' and e['args']['operationId']==job['operation_id']]
+        if matches:
+            if len(matches)!=1:
+                self.b.halt('RECOVERY_CONFLICT'); raise ChainConflict('Duplicate original issuance')
+            event=matches[0]
+            try:
+                receipt=self.rpc.verify_event(event)
+                self.projector.validate_operation_event(event)
+                tx=self.rpc.w3.eth.get_transaction(event['transactionHash'])
+                if (job['tx_hash'] and job['tx_hash']!=event['transactionHash']) or (job['nonce'] is not None and job['nonce']!=tx['nonce']):
+                    raise ChainConflict('Original issuance nonce/hash conflict')
+            except ChainConflict:
+                self.b.halt('RECOVERY_CONFLICT'); raise
+            with self.store.transaction() as db:
+                db.execute("UPDATE outbox SET tx_hash=?,nonce=?,state='OBSERVED' WHERE operation_id=?",
+                           (event['transactionHash'],tx['nonce'],job['operation_id']))
+                db.execute('UPDATE operations SET tx_hash=? WHERE id=?',(event['transactionHash'],job['operation_id']))
+                db.execute('INSERT INTO signer_nonces VALUES(?,?) ON CONFLICT(signer) DO UPDATE SET next_nonce=max(next_nonce,excluded.next_nonce)',
+                           (self.account.address,tx['nonce']+1))
+            job=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],))
+            self.observe_work(job,receipt)
+            return True
+        if job['tx_hash']:
+            receipt=self.rpc.receipt(job['tx_hash'])
+            if receipt: self.observe_work(job,receipt)
+            else: self.unsigned_unknown(job,'ORIGINAL_RAW_UNAVAILABLE')
+            return True # Never fabricate replacement raw for an observed original.
+        if recorded:
+            self.unsigned_unknown(job,'ORIGINAL_EVENT_UNAVAILABLE')
+            return True
+        saved=self.store.one('SELECT next_nonce FROM signer_nonces WHERE signer=?',(self.account.address,))
+        expected=job['nonce'] if job['nonce'] is not None else (saved['next_nonce'] if saved else 0)
+        latest=self.rpc.w3.eth.get_transaction_count(self.account.address,'latest')
+        pending=self.rpc.w3.eth.get_transaction_count(self.account.address,'pending')
+        if latest!=expected or pending!=expected:
+            self.unsigned_unknown(job,'SIGNER_NONCE_UNRESOLVED')
+            return True # Pending/reverted original without recoverable raw needs reconciliation.
+        return False
     def observe_work(self, job, receipt):
         tx=json.loads(job['tx_json'])
         if not self.rpc.transaction_matches(job['tx_hash'],sender=job['signer'],data=tx['data'],value=0):
