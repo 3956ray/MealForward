@@ -35,3 +35,10 @@
 - 主开发拥有共享schema/storage/contracts/依赖/ABI/config/docs与server/web.py、server/chain/、outbox/projection/服务及tests/test_backend_chain*。
 - Leader Auth子代理独占server/auth.py、tests/test_auth*；Envio子代理独占indexer/。共享文件由主开发单一整合；不另建迁移或改根锁。
 - Python3.12项目.venv及requirements.lock；不装系统Dockerdaemon，不碰5173/8765/18545/5195预览；CP15自有节点18645、HTTP8875，自动测试随机空闲loopback端口。
+
+## CP16 正式BUILD（覆盖CP15工作闭环暂缓）
+
+- Leader已完成Dev–PM DESIGN闭环并授权完整本地HTTP领券→锁→原员工handoff/report→独立settle；不改CP13合约、模拟App或真实网络边界。
+- 主开发先C0固定schema/API/helpers/action registry/三signer/备份兼容；Leader之后派模块。共享storage/contracts/auth边界、migrations/backend/web/chain/outbox/projection/recovery/local与依赖锁/文档/tests/test_backend_chain*仍唯一主开发整合。
+- 领取代理仅server/recipient.py、tests/test_recipient.py；工作代理仅server/redemption.py、tests/test_redemption.py。冻结接口见docs/CP16-CONTRACT.md；任何共享变更先回主开发，不自行改schema或新建签名队列。
+- 真源为Leader项目research/cp16/developer/READINESS.md及pm/ANSWERS.md。恢复库旧能力撤销/新业务隔离，可信NEVER_SIGNED与可能签名后缺raw不得混同。短码消费与claim/op/outbox须同事务。

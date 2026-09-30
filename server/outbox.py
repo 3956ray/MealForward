@@ -40,6 +40,9 @@ class Worker:
                 if self.b.quarantined():
                     self.unsigned_unknown(job,'RESTORE_SIGNING_HISTORY_MISSING')
                     return
+                if job['signing_stage']!='NEVER_SIGNED':
+                    self.unsigned_unknown(job,'SIGNING_HISTORY_INCOMPLETE')
+                    return
                 if self.rpc.contract.functions.paused().call(): return
                 tx=json.loads(job['tx_json']); tx['from']=self.account.address
                 try: gas=self.rpc.w3.eth.estimate_gas(tx)
@@ -59,10 +62,17 @@ class Worker:
                         db.execute('UPDATE outbox SET nonce=? WHERE operation_id=?',(nonce,job['operation_id']))
                 self.fault('before_sign')
                 tx.update(nonce=nonce,gas=(gas*110+99)//100,gasPrice=self.rpc.w3.eth.gas_price)
+                with self.store.transaction() as db:
+                    db.execute("UPDATE outbox SET signing_stage='SIGNING_STARTED' WHERE operation_id=?",(job['operation_id'],))
+                    db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
+                               (job['operation_id'],'SIGNING_STARTED',self.b.now()))
+                self.fault('signing_started')
                 signed=self.account.sign_transaction(tx)
                 raw=hx(signed.raw_transaction); tx_hash=hx(signed.hash)
                 with self.store.transaction() as db:
-                    db.execute("UPDATE outbox SET raw_cipher=?,tx_hash=?,state='SIGNED' WHERE operation_id=?",(self.b.encrypt(raw),tx_hash,job['operation_id']))
+                    db.execute("UPDATE outbox SET raw_cipher=?,tx_hash=?,state='SIGNED',signing_stage='RAW_SAVED' WHERE operation_id=?",(self.b.encrypt(raw),tx_hash,job['operation_id']))
+                    db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
+                               (job['operation_id'],'RAW_SAVED',self.b.now()))
                     db.execute("UPDATE operations SET tx_hash=?,status='SIGNED',updated_at=? WHERE id=?",(tx_hash,self.b.now(),job['operation_id']))
                 self.fault('after_sign')
                 job=self.store.one('SELECT * FROM outbox WHERE operation_id=?',(job['operation_id'],))

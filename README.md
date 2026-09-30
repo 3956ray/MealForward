@@ -50,3 +50,8 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 
 真实Anvil HTTP链路已实现：支持意图→最终确认资金→个人机构账号发行N3→持久预留/nonce/加密原始交易→最终确认投影与恢复。运行步骤和验证证据见 [CP15-VERIFICATION](docs/CP15-VERIFICATION.md)，接口见 [CP15-CONTRACT](docs/CP15-CONTRACT.md)。
 现有模拟App和钱包预览保持原行为；没有完整锁券/申报/结算HTTP、分享接口或真实网络连接。Envio独立模块仅通过handler模拟测试，真实HyperIndex/GraphQL服务未运行。
+
+## CP16 BUILD：C0共享接口
+
+增量schema v2、事务辅助函数、动作编码、三个独立本地signer与v1/v2隔离备份合同见 [CP16-CONTRACT](docs/CP16-CONTRACT.md)。领取与工作模块在C0固定后独立实现；C0不代表完整工作HTTP已可用。
+接口验证：`.venv/bin/python -m unittest tests.test_backend_chain_contracts -v`；原认证/后端回归：`.venv/bin/python -m unittest tests.test_auth tests.test_backend_chain -q`。均使用隔离venv、自有临时库/随机Anvil端口。

@@ -14,7 +14,11 @@ class Store:
                     raise RuntimeError('Refusing non-CP15 database')
                 schema = (Path(__file__).parent / 'migrations/001_backend.sql').read_text()
                 db.executescript('BEGIN IMMEDIATE;\n' + schema + '\nPRAGMA user_version=1;\nCOMMIT;')
-            elif version != 1:
+                version=1
+            if version == 1:
+                schema=(Path(__file__).parent/'migrations/002_redemption.sql').read_text()
+                db.executescript('BEGIN IMMEDIATE;\n'+schema+'\nPRAGMA user_version=2;\nCOMMIT;')
+            elif version != 2:
                 raise RuntimeError('Unsupported backend schema')
         self.path.chmod(0o600)
     def connect(self):

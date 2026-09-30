@@ -10,6 +10,7 @@ from contextlib import closing
 from server.storage import Store
 
 FILES=('backend.sqlite3','encryption.key','issuer.key','config.json')
+SIGNER_FILES={'operator':'operator.key','settler':'settler.key'}
 
 def new_directory(path):
     root=Path(path).resolve()
@@ -18,8 +19,11 @@ def new_directory(path):
     return root
 
 def relocated_config(config, root):
-    return {**config,'databasePath':str(root/'backend.sqlite3'),
+    result={**config,'databasePath':str(root/'backend.sqlite3'),
             'secretKeyFile':str(root/'encryption.key'),'issuerKeyFile':str(root/'issuer.key')}
+    for role,name in SIGNER_FILES.items():
+        if role in config.get('workSigners',{}): result[role+'KeyFile']=str(root/name)
+    return result
 
 def quarantine(store, reason, *, bind_path=False):
     with store.transaction() as db:
@@ -30,6 +34,8 @@ def quarantine(store, reason, *, bind_path=False):
         # Restoring old sessions must not undo a later logout/revocation.
         db.execute('UPDATE work_sessions SET revoked=1')
         db.execute('UPDATE support_caps SET expires_at=0')
+        db.execute('UPDATE recipient_sessions SET revoked=1')
+        db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
 
 def write_private(path, data):
     path.write_bytes(data);path.chmod(0o600)
@@ -45,12 +51,16 @@ def backup_bundle(config, destination):
     with closing(store.connect()) as db: db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
     write_private(root/'encryption.key',Path(config['secretKeyFile']).read_bytes())
     write_private(root/'issuer.key',Path(config['issuerKeyFile']).read_bytes())
+    files=list(FILES)
+    for role,name in SIGNER_FILES.items():
+        if role in config.get('workSigners',{}):
+            write_private(root/name,Path(config[role+'KeyFile']).read_bytes());files.append(name)
     saved=relocated_config(config,root)
     write_private(root/'config.json',(json.dumps(saved,indent=2)+'\n').encode())
-    manifest={'format':'mealforward-cp15-quarantined-backup-v1',
-              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':1,
+    manifest={'format':'mealforward-cp16-quarantined-backup-v2',
+              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':2,
               'deploymentId':backend.deployment['deploymentId'],
-              'sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in FILES}}
+              'sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in files}}
     # Last file is the completion marker; interrupted bundles cannot be restored.
     write_private(root/'backup.json',(json.dumps(manifest,indent=2)+'\n').encode())
     return root
@@ -58,18 +68,23 @@ def backup_bundle(config, destination):
 def restore_bundle(backup, destination):
     root=Path(backup).resolve()
     manifest=json.loads((root/'backup.json').read_text())
-    if manifest.get('format')!='mealforward-cp15-quarantined-backup-v1' or set(manifest.get('sha256',{}))!=set(FILES):
+    versions={'mealforward-cp15-quarantined-backup-v1':1,'mealforward-cp16-quarantined-backup-v2':2}
+    version=versions.get(manifest.get('format'));files=set(manifest.get('sha256',{}))
+    if not version or not set(FILES)<=files or files-set(FILES)-set(SIGNER_FILES.values()):
         raise ValueError('Unsupported or incomplete backup bundle')
-    if manifest.get('schemaVersion')!=1 or type(manifest.get('createdAt')) is not int or not isinstance(manifest.get('backupId'),str):
+    if (version==1 and files!=set(FILES)) or manifest.get('schemaVersion')!=version or type(manifest.get('createdAt')) is not int or not isinstance(manifest.get('backupId'),str):
         raise ValueError('Missing backup provenance')
-    for name in FILES:
+    for name in files:
         if (root/name).is_symlink() or hashlib.sha256((root/name).read_bytes()).hexdigest()!=manifest['sha256'][name]:
             raise ValueError('Backup integrity mismatch')
     config=json.loads((root/'config.json').read_text())
+    if set(config.get('workSigners',{}))-set(SIGNER_FILES): raise ValueError('Unsupported backup signer role')
+    expected=set(FILES)|{SIGNER_FILES[role] for role in config.get('workSigners',{})}
+    if files!=expected: raise ValueError('Missing or unexpected signer material')
     if config['deployment']['deploymentId']!=manifest['deploymentId']:
         raise ValueError('Backup deployment mismatch')
     target=new_directory(destination)
-    for name in FILES:
+    for name in files:
         shutil.copyfile(root/name,target/name);(target/name).chmod(0o600)
     store=Store(target/'backend.sqlite3')
     quarantine(store,'RESTORED_BACKUP',bind_path=True)

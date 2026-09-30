@@ -22,9 +22,14 @@ def quantity(value):
     return value
 
 class Backend:
-    def __init__(self, store, rpc, secret_key, signer, clock=time.time):
+    def __init__(self, store, rpc, secret_key, signer, clock=time.time, *, signers=None):
         self.store,self.rpc,self.box,self.signer,self.clock=store,rpc,Fernet(secret_key),signer,clock
         self.deployment=rpc.deployment
+        self.signers={'issuer':signer,**(signers or {})}
+        if self.signers['issuer'].lower()!=signer.lower(): raise ValueError('Issuer binding mismatch')
+        if set(self.signers)-{'issuer','operator','settler'}: raise ValueError('Unknown signer role')
+        self.signers={role:Web3.to_checksum_address(address) for role,address in self.signers.items()}
+        if len({a.lower() for a in self.signers.values()})!=len(self.signers): raise ValueError('Signers must be distinct')
         public_identity={k:v for k,v in self.deployment.items() if k!='rpcUrl'}
         binding=canonical(public_identity)
         with store.transaction() as db:
@@ -46,9 +51,17 @@ class Backend:
                 db.execute("INSERT OR REPLACE INTO metadata VALUES('database_origin_path',?)",(current_path,))
                 db.execute('UPDATE work_sessions SET revoked=1')
                 db.execute('UPDATE support_caps SET expires_at=0')
+                db.execute('UPDATE recipient_sessions SET revoked=1')
+                db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
             else:
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_state','ACTIVE')")
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_reason','')")
+            for role,address in self.signers.items():
+                previous=db.execute('SELECT address FROM work_signers WHERE role=?',(role,)).fetchone()
+                if previous and previous['address'].lower()!=address.lower(): raise ValueError('Work signer binding changed')
+                db.execute('INSERT OR IGNORE INTO work_signers VALUES(?,?)',(role,address))
+        from server.work_core import WorkCore
+        self.work=WorkCore(self,secret_key)
     def now(self): return int(self.clock())
     def encrypt(self, value): return self.box.encrypt(value.encode()).decode()
     def decrypt(self, value): return self.box.decrypt(value.encode()).decode()
@@ -162,7 +175,8 @@ class Backend:
             db.execute('UPDATE qualifications SET reserved=reserved+? WHERE partner_id=? AND recipient_ref=?',(n,actor.partner_id,ref))
             db.execute("INSERT INTO reservations VALUES(?,?,?,?,?,?,'PENDING')",(op_id,actor.partner_id,ref,batch_id,n,n*PRICE))
             tx={'to':self.rpc.contract.address,'data':self.rpc.contract.encode_abi('issue',args=[op_id,batch_id,voucher_ids]),'value':0,'chainId':31337}
-            db.execute("INSERT INTO outbox(operation_id,signer,tx_json,state) VALUES(?,?,?,'QUEUED')",(op_id,self.signer,canonical(tx)))
+            db.execute("INSERT INTO outbox(operation_id,signer,tx_json,state,signing_stage) VALUES(?,?,?,'QUEUED','NEVER_SIGNED')",(op_id,self.signer,canonical(tx)))
+            db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(op_id,'ACCEPTED_NEVER_SIGNED',now))
             return self.issuance_view_db(db,dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone()))
     @staticmethod
     def _healthy_in_transaction(db):
