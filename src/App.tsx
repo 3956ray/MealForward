@@ -6,6 +6,9 @@ import type { ActionResult, Actor, Operation, Redemption, State, VoucherView } f
 const pages = ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09', 'P10', 'P11', 'P12', 'P13', 'P14'] as const
 type Page = typeof pages[number]
 type Route = { page: Page; tail: string | null }
+type PendingWrite = { actor: string; action: 'report' | 'settle'; voucherId: string; intent: string; storageKey: string; operationId?: string }
+const pendingStorageKey = 'mealforward-pending-writes'
+const pendingKey = (actor: string | null, action: string, voucherId: string) => JSON.stringify([actor, action, voucherId])
 
 const titles: Record<Page, string> = {
   P01: '首页', P02: '支持一份餐', P03: '原操作查询', P04: '本批餐账',
@@ -78,6 +81,15 @@ export default function App() {
   const [lastOperation, setLastOperation] = useState<Operation | null>(null)
   const [recentSupport, setRecentSupport] = useState<Operation | null>(null)
   const [supportUncertain, setSupportUncertain] = useState(false)
+  const [pendingWrites, setPendingWrites] = useState<Record<string, PendingWrite>>(() => {
+    try { return JSON.parse(sessionStorage.getItem(pendingStorageKey) ?? '{}') } catch { return {} }
+  })
+  const pendingWritesRef = useRef(pendingWrites)
+  const savePendingWrites = useCallback((next: Record<string, PendingWrite>) => {
+    sessionStorage.setItem(pendingStorageKey, JSON.stringify(next))
+    pendingWritesRef.current = next
+    setPendingWrites(next)
+  }, [])
   const [quantity, setQuantity] = useState(1)
   const [supportOutcome, setSupportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
   const [reportOutcome, setReportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
@@ -106,6 +118,34 @@ export default function App() {
     try {
       const next = await api<State>('/state', usingToken)
       if (request !== stateEpoch.current) return null
+      const reconciled: Array<{ key: string; pending: PendingWrite; release: boolean }> = []
+      // Only a matching original operation plus fresh state can release a write gate.
+      for (const [key, pending] of Object.entries(pendingWritesRef.current)) {
+        if (pending.actor !== next.work?.actor) continue
+        const originalId = pending.operationId ?? (pending.action === 'report'
+          ? next.work.redemptions?.find(red => red.id === pending.voucherId)?.report_operation
+          : next.work.payables?.find(pay => pay.voucher_id === pending.voucherId)?.settlement_operation)
+        if (!originalId) continue
+        try {
+          const { operation: original } = await api<{ operation: Operation }>(`/operations/${encodeURIComponent(originalId)}`, usingToken)
+          if (request !== stateEpoch.current) return null
+          if (pendingWritesRef.current[key]?.intent !== pending.intent || original.intent_key !== pending.intent || original.actor !== pending.actor || original.action !== pending.action || original.target !== pending.voucherId) continue
+          const red = next.work.redemptions?.find(item => item.id === pending.voucherId)
+          const pay = next.work.payables?.find(item => item.voucher_id === pending.voucherId)
+          const stateConfirms = pending.action === 'report'
+            ? red?.report_operation === original.id && (original.status === 'FAILED' ? red.status === 'handoff' : ['reported', 'settlement_unknown', 'settled'].includes(red.status))
+            : pay?.settlement_operation === original.id && pay.settlement_status === original.status && (original.status === 'FAILED' ? pay.status === 'reported' : pay.status === 'settled')
+          reconciled.push({ key, pending: { ...pending, operationId: original.id }, release: ['SUCCESS', 'FAILED'].includes(original.status) && stateConfirms })
+        } catch { /* A missing/failed original query keeps this write conservatively blocked. */ }
+      }
+      if (request !== stateEpoch.current) return null
+      const updated = { ...pendingWritesRef.current }
+      for (const { key, pending, release } of reconciled) {
+        if (updated[key]?.intent !== pending.intent) continue
+        if (release) { sessionStorage.removeItem(pending.storageKey); delete updated[key] }
+        else updated[key] = pending
+      }
+      savePendingWrites(updated)
       setState(next)
       setError(null)
       return next
@@ -131,7 +171,7 @@ export default function App() {
       setError(apiError.message)
       return null
     }
-  }, [token])
+  }, [token, savePendingWrites])
 
   const refreshVoucher = useCallback(async (usingToken: string | null = token) => {
     const request = ++voucherEpoch.current
@@ -313,6 +353,9 @@ export default function App() {
 
   async function perform(fields: Record<string, unknown>, options?: { page?: Page; stay?: boolean }) {
     if (!token) { navigate('P06'); return }
+    const guardedAction = fields.action === 'report' || fields.action === 'settle' ? fields.action : null
+    const guardKey = guardedAction ? pendingKey(actor, guardedAction, String(fields.voucher_id)) : null
+    if (guardKey && pendingWritesRef.current[guardKey]) { setMessage('此笔结果待核，请只查原操作与服务端状态。'); return }
     const actionRequest = actionEpoch.current
     setBusy(true); setError(null); setMessage(null)
     const precheckRequest = fields.action === 'precheck' ? ++precheckEpoch.current : null
@@ -329,7 +372,12 @@ export default function App() {
         sessionStorage.setItem(intentStorageKey, stableKey)
         payload = { ...fields, intent_key: stableKey }
       }
+      if (guardKey && pendingWritesRef.current[guardKey]) return null
+      if (guardKey && guardedAction && actor) savePendingWrites({ ...pendingWritesRef.current, [guardKey]: { actor, action: guardedAction, voucherId: String(fields.voucher_id), intent: String(payload.intent_key), storageKey: intentStorageKey! } })
       const result = await api<ActionResult>('/act', token, payload)
+      if (guardKey && result.operation && pendingWritesRef.current[guardKey]?.intent === payload.intent_key) {
+        savePendingWrites({ ...pendingWritesRef.current, [guardKey]: { ...pendingWritesRef.current[guardKey], operationId: result.operation.id } })
+      }
       if (actionRequest !== actionEpoch.current) return result
       if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return result
       if (intentStorageKey && result.operation && result.operation.status !== 'UNKNOWN') sessionStorage.removeItem(intentStorageKey)
@@ -354,6 +402,8 @@ export default function App() {
       const failure = (e as Error).message
       if (fields.action === 'precheck' || fields.action === 'lock') { setCheck(undefined); setHasMeal(false) }
       await refresh(token)
+      if (actionRequest !== actionEpoch.current) return null
+      if (precheckRequest !== null && precheckRequest !== precheckEpoch.current) return null
       setError(failure)
       return null
     } finally { setBusy(false) }
@@ -369,6 +419,7 @@ export default function App() {
     setVoucher(null); setRecipientCases([]); setPendingInvite(null); setVoucherOpen(false); setRecentSupport(null); setSupportUncertain(false); setState(null)
     try {
       await api('/reset', null, { scenario })
+      savePendingWrites({})
       voucherEpoch.current++
       sessionStorage.removeItem('mealforward-token')
       setToken(null); setVoucher(null); setPendingInvite(null); setCheck(undefined); setLastOperation(null)
@@ -479,9 +530,9 @@ export default function App() {
 
         {page === 'P09' && <section className="narrow-page"><p className="eyebrow">P09 · 店员预检查</p><h1>先看券，再决定是否交餐</h1><p>预检不锁券、不扣款。店员只见本店餐品与处理状态，不见领取关联、资格、私人渠道或邀请秘密。</p><div className="panel form-panel"><label className="field">持链接者出示的在线短码<input value={code} autoCapitalize="characters" placeholder="例如 A1B2C3" onChange={e => { precheckEpoch.current++; setCode(e.target.value.toUpperCase().trim()); setCheck(undefined); setHasMeal(false) }} /></label><button type="button" className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>{check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · {check.shop}</p><small>券号 {check.voucher_id} · 预检未取得处理权</small><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} /> 本店当前有这份餐，可以继续处理</label><button type="button" className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', code: check.code }, { page: 'P10' })}>申请唯一处理权</button></div>}<p className="fineprint">若本店缺餐，请勿申请处理权；联系社区伙伴安排。另一个店员若先取得锁，此码将失效。</p></div><Link page="P12">缺餐或异常求助 →</Link></section>}
 
-        {page === 'P10' && <section className="narrow-page"><p className="eyebrow">P10 · 原店员处理</p><h1>确认处理权，再声明交餐</h1><p>先看当前状态与可执行动作。只有持原锁的店员能确认、声明交餐和申报；申报未知时只查原操作。</p>{state.work?.redemptions?.length ? state.work.redemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />) : <div className="panel empty"><p>此演示店员尚未取得任何券的处理权。</p><Link page="P09">返回预检查 →</Link></div>}<Link page="P11">查看本店 H/S →</Link></section>}
+        {page === 'P10' && <section className="narrow-page"><p className="eyebrow">P10 · 原店员处理</p><h1>确认处理权，再声明交餐</h1><p>先看当前状态与可执行动作。只有持原锁的店员能确认、声明交餐和申报；申报未知时只查原操作。</p>{state.work?.redemptions?.length ? state.work.redemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} pending={pendingWrites[pendingKey(actor, 'report', red.id)]} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />) : <div className="panel empty"><p>此演示店员尚未取得任何券的处理权。</p><Link page="P09">返回预检查 →</Link></div>}<Link page="P11">查看本店 H/S →</Link></section>}
 
-        {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div>{pay.status === 'settlement_unknown' ? <div className="status-priority"><strong>结果待核，只查原付款</strong><p>H 保留；不要换操作 ID 再付。</p>{pay.settlement_operation && <Link page="P03" tail={pay.settlement_operation} className="button secondary">查询原付款</Link>}</div> : role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') ? <div className="task-action">{pay.settlement_status === 'FAILED' && <p>上次已明确失败，H 保留。可查看原付款后主动新试。</p>}<label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label><button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></div> : <p className="muted">{pay.status === 'settled' ? '这笔 H 已模拟结算为 S。' : '当前没有可执行的结算动作。'}</p>}<div className="detail-list"><div><span>原申报</span><strong>{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</strong></div><div><span>原付款</span><strong>{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</strong></div></div></div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}<p className="fineprint">店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H。{role === 'settler' && `预置本店虚构目的地：${state.work?.destination}`}</p></section>}
+        {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div>{pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)] ? <PendingWriteNotice pending={pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)]} busy={busy} refresh={() => void refresh()} /> : pay.status === 'settlement_unknown' ? <div className="status-priority"><strong>结果待核，只查原付款</strong><p>H 保留；不要换操作 ID 再付。</p>{pay.settlement_operation && <Link page="P03" tail={pay.settlement_operation} className="button secondary">查询原付款</Link>}</div> : role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') ? <div className="task-action">{pay.settlement_status === 'FAILED' && <p>上次已明确失败，H 保留。可查看原付款后主动新试。</p>}<label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label><button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></div> : <p className="muted">{pay.status === 'settled' ? '这笔 H 已模拟结算为 S。' : '当前没有可执行的结算动作。'}</p>}<div className="detail-list"><div><span>原申报</span><strong>{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</strong></div><div><span>原付款</span><strong>{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</strong></div></div></div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}<p className="fineprint">店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H。{role === 'settler' && `预置本店虚构目的地：${state.work?.destination}`}</p></section>}
 
         {page === 'P12' && <section className="narrow-page"><p className="eyebrow">P12 · 联系与求助</p><h1>需要帮助，就从这里开始</h1><div className="panel"><h2>社区伙伴联系</h2><p>{shop?.contact}</p><p className="fineprint">所有组织、地址和联系方式都是虚构占位；此站不对外发送消息或处理真实求助。领取者不必注册钱包，但电子版需联网设备。</p></div>{role && role !== 'admin' && <div className="panel form-panel"><h2>建立私人演示案件</h2><p>普通咨询仅记录案件，不占餐款 L，也不触发退款。案件 ID 不是访问其他人的权限。</p><label className="field">求助类型<input value={caseKind} maxLength={80} onChange={e => setCaseKind(e.target.value)} /></label>{['partner', 'staff'].includes(role) && <label className="field">相关演示券号（可选）<input value={caseVoucherId} onChange={e => setCaseVoucherId(e.target.value)} /></label>}<label className="field">简述（仅虚构内容）<textarea value={caseText} maxLength={200} onChange={e => setCaseText(e.target.value)} placeholder="请勿输入真实姓名、联系方式或个人资料" /></label><button type="button" className="button" disabled={busy || !caseKind.trim()} onClick={async () => { const result = await perform({ action: 'case', kind: caseKind, text: caseText, ...(caseVoucherId && ['partner', 'staff'].includes(role) ? { voucher_id: caseVoucherId } : {}) }, { stay: true }); if (result) setCaseText('') }}>记录模拟求助</button></div>}{role === 'recipient' && recipientCases.length ? <div className="panel"><h2>此券的本人演示求助</h2>{recipientCases.map(c => <p key={c.id}>{c.id} · {c.kind} · {c.stage}</p>)}</div> : null}</section>}
 
@@ -494,15 +545,21 @@ export default function App() {
   </div>
 }
 
-function RedemptionCard({ red, busy, perform, reportOutcome, setReportOutcome }: {
+function PendingWriteNotice({ pending, busy, refresh }: { pending: PendingWrite; busy: boolean; refresh: () => void }) {
+  return <div className="status-priority"><strong>{pending.action === 'report' ? '申报' : '结算'}结果待核</strong><p>此笔提交尚未完成权威核对，暂不能再次提交。只查询原操作与服务端状态。</p><div className="button-row">{pending.operationId && <Link page="P03" tail={pending.operationId} className="button secondary">查询原操作</Link>}<button type="button" className="button secondary" disabled={busy} onClick={refresh}>重查服务端状态</button></div></div>
+}
+
+function RedemptionCard({ red, busy, pending, refresh, perform, reportOutcome, setReportOutcome }: {
   red: Redemption
+  pending?: PendingWrite
+  refresh: () => void
   busy: boolean
   perform: (fields: Record<string, unknown>, options?: { page?: Page; stay?: boolean }) => Promise<ActionResult | null | undefined>
   reportOutcome: 'success' | 'unknown' | 'failure'
   setReportOutcome: (value: 'success' | 'unknown' | 'failure') => void
 }) {
   return <div className="panel"><div className="card-heading"><h2>{red.id}</h2><span className="status-chip">{label(red.status)}</span></div>
-    {red.status === 'report_unknown' ? <div className="status-priority"><strong>申报结果待核</strong><p>保留原处理权与 R，只查原申报，不重发。</p>{red.report_operation && <Link page="P03" tail={red.report_operation} className="button secondary">查询原申报</Link>}</div> : red.status === 'locked' && !red.lock_confirmed && red.lock_operation ? <div className="task-action"><p>尚未确认处理权，不可交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'confirm_lock', operation_id: red.lock_operation }, { stay: true })}>显式模拟确认处理权</button></div> : red.status === 'locked' && !!red.lock_confirmed ? <div className="task-action"><p>已确认处理权，现可声明交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'handoff', voucher_id: red.id }, { stay: true })}>声明已交餐（模拟）</button></div> : red.status === 'handoff' ? <div className="task-action"><label className="field">申报结果演练<select value={reportOutcome} onChange={e => setReportOutcome(e.target.value as typeof reportOutcome)}><option value="success">模拟申报成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟申报失败</option></select></label><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'report', voucher_id: red.id, outcome: reportOutcome }, { stay: true })}>提交店员声明的模拟申报</button></div> : <p className="muted">{red.status === 'settled' ? '这笔餐款已由独立结算角色模拟结算，H→S。' : '已模拟申报，R→H。等待独立结算角色处理。'}</p>}
+    {pending ? <PendingWriteNotice pending={pending} busy={busy} refresh={refresh} /> : red.status === 'report_unknown' ? <div className="status-priority"><strong>申报结果待核</strong><p>保留原处理权与 R，只查原申报，不重发。</p>{red.report_operation && <Link page="P03" tail={red.report_operation} className="button secondary">查询原申报</Link>}</div> : red.status === 'locked' && !red.lock_confirmed && red.lock_operation ? <div className="task-action"><p>尚未确认处理权，不可交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'confirm_lock', operation_id: red.lock_operation }, { stay: true })}>显式模拟确认处理权</button></div> : red.status === 'locked' && !!red.lock_confirmed ? <div className="task-action"><p>已确认处理权，现可声明交餐。</p><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'handoff', voucher_id: red.id }, { stay: true })}>声明已交餐（模拟）</button></div> : red.status === 'handoff' ? <div className="task-action"><label className="field">申报结果演练<select value={reportOutcome} onChange={e => setReportOutcome(e.target.value as typeof reportOutcome)}><option value="success">模拟申报成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟申报失败</option></select></label><button type="button" className="button" disabled={busy} onClick={() => void perform({ action: 'report', voucher_id: red.id, outcome: reportOutcome }, { stay: true })}>提交店员声明的模拟申报</button></div> : <p className="muted">{red.status === 'settled' ? '这笔餐款已由独立结算角色模拟结算，H→S。' : '已模拟申报，R→H。等待独立结算角色处理。'}</p>}
     <div className="detail-list"><div><span>原处理权</span><strong>{red.lock_operation ? <Link page="P03" tail={red.lock_operation}>{red.lock_operation}</Link> : '无'}</strong></div><div><span>显式确认</span><strong>{red.lock_confirmed ? '已确认' : '尚未确认，不可交餐'}</strong></div><div><span>交餐声明</span><strong>{red.handoff_declared ? '店员已声明' : '尚无声明'}</strong></div><div><span>原申报</span><strong>{red.report_operation ? <Link page="P03" tail={red.report_operation}>{red.report_operation}</Link> : '无'}</strong></div></div>
   </div>
 }
