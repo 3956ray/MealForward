@@ -37,3 +37,8 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 C0已冻结接口；合约和钱包模块按独立提交实现。仅本地Anvil31337，不触及用户钱包或Monad测试网。
 共享接口、文件所有权、fixture和harness启动约定见 [CP13-CONTRACT](docs/CP13-CONTRACT.md)。
 此处chain/wallet脚本在对应实施提交完成后才可运行，C0不宣称链路已实现或验收。
+
+CP13核心实施后可运行：`npm run chain:test`（13项合约测试）、`npm run chain:e2e`（独立18546真实交易并自动关闭）。
+`node scripts/check-abi.mjs` 在合约编译后校验共享ABI。钱包节点18545由钱包harness单独启动；
+`npm run chain:node` 后另终端 `npm run chain:deploy` 生成仅公开字段的 `.localchain/deployment.json`。
+不得把本地开发账户用于公开网络；本地链脚本拒绝非31337/非loopback/非Anvil。
