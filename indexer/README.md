@@ -18,7 +18,9 @@ npm test
 - Codegen、TypeScript 检查、4 个测试通过。SDK `createTestIndexer` 实际加载注册处理器，用 **simulate 虚构事件**验证九类事件、两批隔离、N3 独立逐券记录、部分逐券状态、超过 JS safe integer 的金额、重复事件不累计、从空索引确定性重建、私有额外参数丢弃。
 - EventFeed 用注入的模拟 GraphQL 响应验证游标作用域、稳定排序查询、滞后水位、503/GraphQL 错误/缺失水位；这不是 GraphQL 服务验收。
 - 本机 `command -v docker` 无结果。**真实 HyperIndex + PostgreSQL + Hasura GraphQL：NOT_RUN。真实 Anvil 事件摄取、服务重启持久性、snapshot/revert 自动回滚：NOT_RUN。** 没有安装 Docker daemon、启动节点或访问其他项目端口。
-- `npm audit`：11 项传递依赖报告（4 low / 1 moderate / 6 high，包含 Envio/express/viem/ws 依赖链）；自动建议降级 Envio 2.32.12，与本实现 V3 API 不兼容，未执行强制降级。Node24 下 Fuel 非使用路径依赖报告 engine warning，代码生成与测试仍成功；未来容器模板选 Node22，容器构建尚未运行。不能据此宣称生产安全或 bounty 集成验收。
+- 依赖修复后执行 `npm ci --ignore-scripts`、codegen、check、原4项测试、`npm audit --json` 均成功；当前 audit **0**（2026-09-30）。Envio仍为3.12.1，viem仍为2.54.0，未采用工具建议的V2降级。通过精确 overrides 固定 express4.22.3、body-parser1.20.6、qs6.16.0、path-to-regexp0.1.13、ws8.22.0、esbuild0.28.1，更新的锁同时消除了旧的viem嵌套ws8.20.1和Express依赖链报告。`npm ls` 已核实实际解析版本。原始11项报告（4 low / 1 moderate / 6 high）属于修复前状态。
+- 兼容性边界：Express/body-parser/qs/ws保持原major，path-to-regexp保持0.1系列；esbuild由0.27.7跨至0.28.1，超出tsx原依赖范围。[官方变更记录](https://github.com/evanw/esbuild/blob/main/CHANGELOG.md#0280)说明0.28版本边界涉及安装回退下载完整性校验及Go工具链更新；本机锁文件安装和tsx加载真实处理器测试已过，但不自动证明完整Envio服务/容器/全部编译场景兼容。上述真实服务NOT_RUN状态保持。
+- Node24 下 Fuel 非使用路径依赖仍报告 engine warning；未来容器模板选 Node22，容器构建尚未运行。audit0只表示本次已知依赖报告清空，不构成生产安全、真实服务验收或bounty集成证明。
 
 ## 模型与权限
 
