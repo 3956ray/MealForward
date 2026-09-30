@@ -25,6 +25,9 @@ ACTORS = {
     "settler": "settler",
     "admin": "admin",
 }
+# Keep this internal ID so the simulated owner's existing locks/groups remain usable.
+OWNER_ACTOR = "staff_a"
+SIMULATED_DESTINATION = "SHOP-DEMO-ALLOWLISTED-ADDRESS（虚构）"
 SHOP = {
     "id": "shop-demo",
     "name": "拾光小食堂（虚构演示）",
@@ -227,6 +230,11 @@ def require_role(session: sqlite3.Row | None, *roles: str) -> None:
         raise ApiError(401, "LOGIN_REQUIRED", "此动作需先选择本地模拟角色。")
     if session["role"] not in roles:
         raise ApiError(403, "FORBIDDEN", "当前演示角色无权执行此动作。")
+
+
+def can_settle(session: sqlite3.Row) -> bool:
+    # Legacy settler remains an internal fixture, not a separate product identity.
+    return session["role"] == "settler" or (session["role"] == "staff" and session["actor"] == OWNER_ACTOR)
 
 
 def ensure_active(db: sqlite3.Connection) -> None:
@@ -526,7 +534,8 @@ def action(db: sqlite3.Connection, session: sqlite3.Row, body: dict) -> dict:
         return {"message": "模拟申报已记录；未知时只查原操作。", "operation": op}
 
     if name == "settle":
-        require_role(session, "settler")
+        if not can_settle(session):
+            raise ApiError(403, "FORBIDDEN", "当前演示身份无权模拟本店结算。")
         ensure_active(db)
         v = get_voucher(db, body.get("voucher_id"))
         if v["status"] != "reported":
@@ -621,10 +630,12 @@ def work_state(db: sqlite3.Connection, session: sqlite3.Row | None) -> dict | No
             "actor": actor, "role": role, "redemptions": [rowdict(x) for x in rows],
             "groups": [group_view(db, g) for g in db.execute("SELECT * FROM processing_groups WHERE staff_actor=? AND shop_id=? ORDER BY rowid DESC", (actor, SHOP["id"])).fetchall()],
             "payables": payable_rows(db),
+            "can_settle": can_settle(session),
+            **({"destination": SIMULATED_DESTINATION} if can_settle(session) else {}),
             "cases": [rowdict(x) for x in db.execute("SELECT id,voucher_id,kind,stage,created_at FROM cases WHERE actor=? ORDER BY created_at DESC", (actor,))],
         }
     if role == "settler":
-        return {"actor": actor, "role": role, "payables": payable_rows(db), "destination": "SHOP-DEMO-ALLOWLISTED-ADDRESS（虚构）"}
+        return {"actor": actor, "role": role, "payables": payable_rows(db), "can_settle": True, "destination": SIMULATED_DESTINATION}
     if role == "admin":
         return {"actor": actor, "role": role, "pause": {"paused": bool(batch(db)["paused"]), "reason": "预设异常演练 · 仅本地模拟", "scope": "新入款、发行、新锁、新付款", "old_balances_retained": True}}
     if role == "recipient":

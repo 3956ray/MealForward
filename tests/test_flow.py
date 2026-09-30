@@ -233,6 +233,33 @@ class FlowTests(unittest.TestCase):
         self.assertEqual((status, response), (200, {"status": "locked", "delivery_status": "sent", "paused": False}))
         self.assertNotIn("code", response)
 
+    def test_owner_keeps_original_identity_through_simulated_settlement(self):
+        supporter, partner, recipient, voucher_id, secret, code = self.funded_voucher()
+        owner, other = self.login("staff_a"), self.login("staff_b")
+        _, state = self.req("GET", "/api/state", token=owner)
+        self.assertTrue(state["work"]["can_settle"])
+        self.assertIn("虚构", state["work"]["destination"])
+        _, state = self.req("GET", "/api/state", token=other)
+        self.assertFalse(state["work"]["can_settle"])
+        self.assertNotIn("destination", state["work"])
+        self.assertEqual(self.act(owner, "settle", "owner-before-report", voucher_id=voucher_id)[0], 409)
+        _, locked = self.act(owner, "lock", "owner-lock-001", code=code)
+        self.assertEqual(self.act(owner, "confirm_lock", "owner-confirm-001", operation_id=locked["operation"]["id"])[0], 200)
+        self.assertEqual(self.act(owner, "handoff", "owner-handoff-001", voucher_id=voucher_id)[0], 200)
+        self.assertEqual(self.act(owner, "report", "owner-report-001", voucher_id=voucher_id)[0], 200)
+        for token in (other, supporter, partner, recipient):
+            self.assertEqual(self.act(token, "settle", "owner-denied-001", voucher_id=voucher_id)[0], 403)
+        status, settled = self.act(owner, "settle", "owner-settle-001", voucher_id=voucher_id)
+        self.assertEqual(status, 200)
+        self.assertEqual(settled["operation"]["actor"], "staff_a")
+        status, original = self.req("GET", "/api/operations/" + settled["operation"]["id"], token=owner)
+        self.assertEqual(status, 200)
+        self.assertEqual(original["operation"], settled["operation"])
+        status, repeated = self.act(owner, "settle", "owner-settle-001", voucher_id=voucher_id)
+        self.assertEqual(status, 200)
+        self.assertEqual(repeated["operation"], settled["operation"])
+        self.assert_balance(100, 0, 0, 0, 100)
+
     def test_full_flow_permissions_and_idempotency(self):
         supporter, partner, recipient, voucher_id, secret, code = self.funded_voucher()
         self.assert_balance(100, 0, 100, 0, 0)
