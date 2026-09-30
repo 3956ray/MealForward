@@ -9,6 +9,8 @@ type Route = { page: Page; tail: string | null }
 type PendingWrite = { actor: string; action: 'report' | 'settle' | 'lock'; voucherId: string; intent: string; storageKey: string; operationId?: string }
 type PendingIssue = { actor: string; intent: string; request: Issuance['request']; operationId?: string }
 const issueStorageKey = 'mealforward-pending-issues'
+const groupSelectionStorageKey = 'mealforward-group-selections'
+const groupScopeKey = (actor: string, shopId: string) => JSON.stringify([actor, shopId])
 const issueKey = (actor: string, ref: string) => JSON.stringify([actor, 'batch-demo', ref])
 const pendingStorageKey = 'mealforward-pending-writes'
 const pendingKey = (actor: string | null, action: string, voucherId: string) => JSON.stringify([actor, action, voucherId])
@@ -103,7 +105,13 @@ export default function App() {
   const [issueQuantities, setIssueQuantities] = useState<Record<string, number>>({})
   const [shownInvite, setShownInvite] = useState<{ id: string; secret: string } | null>(null)
   const privateEpoch = useRef(0)
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [groupSelections, setGroupSelections] = useState<Record<string, string>>(() => {
+    try {
+      const saved: unknown = JSON.parse(sessionStorage.getItem(groupSelectionStorageKey) ?? '{}')
+      return saved && typeof saved === 'object' && !Array.isArray(saved)
+        ? Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'string')) : {}
+    } catch { return {} }
+  })
   const [quantity, setQuantity] = useState(1)
   const [supportOutcome, setSupportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
   const [reportOutcome, setReportOutcome] = useState<'success' | 'unknown' | 'failure'>('success')
@@ -362,7 +370,7 @@ export default function App() {
   }
 
   async function selectActor(selected: Exclude<Actor, 'recipient'>, target: Page) {
-    privateEpoch.current++; setShownInvite(null); setSelectedGroupId(null)
+    privateEpoch.current++; setShownInvite(null)
     sessionStorage.removeItem('mealforward-token')
     voucherEpoch.current++
     inviteEpoch.current++
@@ -428,7 +436,7 @@ export default function App() {
       if (actionRequest !== actionEpoch.current) return result
       if (role === 'recipient' && voucherOpen && route.page === 'P05') await refreshVoucher(token)
       if (actionRequest !== actionEpoch.current) return result
-      if (fields.action === 'group_create' && result.operation?.target) setSelectedGroupId(result.operation.target)
+      if (fields.action === 'group_create' && result.operation?.target) selectGroup(result.operation.target)
       if (fields.action === 'group_add') setHasMeal(false)
       if (options?.page) navigate(options.page, options.page === 'P03' ? result.operation?.id : undefined)
       else if (result.operation && !options?.stay && ['UNKNOWN', 'FAILED'].includes(result.operation.status)) navigate('P03', result.operation.id)
@@ -448,7 +456,7 @@ export default function App() {
   }
 
   async function reset(scenario: 'normal' | 'paused') {
-    privateEpoch.current++; setShownInvite(null); setSelectedGroupId(null)
+    privateEpoch.current++; setShownInvite(null)
     setBusy(true); setError(null); setMessage(null)
     voucherEpoch.current++
     inviteEpoch.current++
@@ -458,7 +466,8 @@ export default function App() {
     setVoucher(null); setRecipientCases([]); setPendingInvite(null); setVoucherOpen(false); setRecentSupport(null); setSupportUncertain(false); setState(null)
     try {
       await api('/reset', null, { scenario })
-      savePendingWrites({}); savePendingIssues({}); setShownInvite(null); setSelectedGroupId(null)
+      savePendingWrites({}); savePendingIssues({}); setShownInvite(null)
+      sessionStorage.removeItem(groupSelectionStorageKey); setGroupSelections({})
       voucherEpoch.current++
       sessionStorage.removeItem('mealforward-token')
       setToken(null); setVoucher(null); setPendingInvite(null); setCheck(undefined); setLastOperation(null)
@@ -522,6 +531,14 @@ export default function App() {
     } catch (e) { if (epoch === privateEpoch.current) setError((e as Error).message) }
   }
 
+  function selectGroup(id: string) {
+    if (!actor || role !== 'staff' || !shop) return
+    const next = { ...groupSelections, [groupScopeKey(actor, shop.id)]: id }
+    sessionStorage.setItem(groupSelectionStorageKey, JSON.stringify(next))
+    setGroupSelections(next)
+    precheckEpoch.current++; setCheck(undefined); setHasMeal(false); setCode('')
+  }
+
   const page = route.page
   const needRole: Partial<Record<Page, string[]>> = {
     P03: ['supporter', 'partner', 'staff', 'settler', 'recipient'],
@@ -534,7 +551,11 @@ export default function App() {
   const supportCompleted = role === 'supporter' ? state?.work?.operations?.find(op => op.action === 'support' && op.status === 'SUCCESS') : null
   const supportGuard = role === 'supporter' && (supportUnknown || supportCompleted || recentSupport?.status === 'SUCCESS' || supportUncertain)
   const currentVoucher = role === 'recipient' && !!token && voucherOpen && !pendingInvite && !route.tail && voucher && (!voucher.code_expires || voucher.code_expires * 1000 > Date.now()) ? voucher : null
-  const activeGroup = state?.work?.groups?.find(g => g.id === selectedGroupId) ?? state?.work?.groups?.[0]
+  const selectedGroupId = role === 'staff' && actor && shop ? groupSelections[groupScopeKey(actor, shop.id)] : undefined
+  // The persisted ID is only a preference: current server-authorized groups decide visibility.
+  const activeGroup = selectedGroupId ? state?.work?.groups?.find(g => g.id === selectedGroupId) : undefined
+  const unavailableGroup = !!selectedGroupId && !activeGroup
+  const legacyRedemptions = state?.work?.redemptions?.filter(red => !state.work?.groups?.some(g => g.items.some(i => i.voucher_id === red.id))) ?? []
   const activeIssuance = state?.work?.issuances?.find(i => i.operation.id === route.tail)
   const navItems: Array<{ page: Page; name: string }> = [
     { page: 'P01', name: '首页' }, { page: 'P04', name: '公开餐账' },
@@ -647,7 +668,8 @@ export default function App() {
           </>}<Link page="P07">返回发行页 →</Link></section>}
 
         {(page === 'P09' || page === 'P10') && <section className="narrow-page work-page"><p className="eyebrow">{page} · 本店本人处理</p><h1>逐券确认，按原结果继续</h1><p>处理列表只记录现场主动出示的券，不代表家庭人数，也不授予处理权。</p>
-          <details className="panel group-picker" open={!activeGroup}><summary>选择或新建本人处理组</summary><label className="field">恢复本人处理组<select value={activeGroup?.id ?? ''} onChange={e => { setSelectedGroupId(e.target.value); precheckEpoch.current++; setCheck(undefined); setHasMeal(false); setCode('') }}><option value="" disabled>尚无处理组</option>{state.work?.groups?.map(g => <option key={g.id} value={g.id}>…{g.id.slice(-6)} · {g.items.length} 张 · {fmt(g.created_at)}</option>)}</select></label><button className="button secondary" disabled={busy} onClick={() => void perform({ action: 'group_create' }, { stay: true })}>新建本次处理组</button><button className="text-button" disabled={busy} onClick={() => { precheckEpoch.current++; setCheck(undefined); setHasMeal(false); void refresh() }}>重查本次服务端状态</button></details>
+          <details className="panel group-picker" open={!activeGroup}><summary>选择或新建本人处理组</summary><label className="field">恢复本人处理组<select value={activeGroup?.id ?? ''} onChange={e => selectGroup(e.target.value)}><option value="" disabled>{unavailableGroup ? '原选择不可访问，请明确另选' : '请选择本人处理组'}</option>{state.work?.groups?.map(g => <option key={g.id} value={g.id}>…{g.id.slice(-6)} · {g.items.length} 张 · {fmt(g.created_at)}</option>)}</select></label><button className="button secondary" disabled={busy} onClick={() => void perform({ action: 'group_create' }, { stay: true })}>新建本次处理组</button><button className="text-button" disabled={busy} onClick={() => { precheckEpoch.current++; setCheck(undefined); setHasMeal(false); void refresh() }}>重查本次服务端状态</button></details>
+          {unavailableGroup && <div className="status-priority" role="status"><strong>原处理组不存在或当前不可访问</strong><p>没有自动切换到其他组。请重查服务端，或明确选择本人可见的处理组。</p></div>}
           {activeGroup && <GroupSummary group={activeGroup} />}
           {page === 'P09' && <div className="panel form-panel"><label className="field">在线短码（逐券主动输入）<input value={code} autoCapitalize="characters" onChange={e => { precheckEpoch.current++; setCode(e.target.value.toUpperCase().trim()); setCheck(undefined); setHasMeal(false) }} /></label><button className="button secondary" disabled={busy || !code} onClick={() => void perform({ action: 'precheck', code }, { stay: true })}>只读预检查</button>
             {check && <div className="check-result"><strong>{check.status}</strong><p>{check.meal} · …{check.voucher_id.slice(-6)}</p>{!activeGroup ? <p>请先新建或选择处理组。</p> : !activeGroup.items.some(i => i.voucher_id === check.voucher_id) ? <button className="button" disabled={busy} onClick={() => void perform({ action: 'group_add', group_id: activeGroup.id, code: check.code }, { stay: true })}>把此券加入本次处理</button> : pendingWrites[pendingKey(actor, 'lock', check.voucher_id)] ? <PendingWriteNotice pending={pendingWrites[pendingKey(actor, 'lock', check.voucher_id)]} busy={busy} refresh={() => void refresh()} /> : <><label className="checkbox"><input type="checkbox" checked={hasMeal} onChange={e => setHasMeal(e.target.checked)} />当前有这一份餐，可以申请处理权</label><button className="button" disabled={busy || !hasMeal || state.paused} onClick={() => void perform({ action: 'lock', voucher_id: check.voucher_id, group_id: activeGroup.id, code: check.code }, { page: 'P10' })}>申请此券唯一处理权</button></>}</div>}
@@ -657,7 +679,8 @@ export default function App() {
             const pending = pendingWrites[pendingKey(actor, 'lock', item.voucher_id)] ?? pendingWrites[pendingKey(actor, 'report', item.voucher_id)]
             return red ? <RedemptionCard key={item.voucher_id} red={red} busy={busy} pending={pending} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} /> : <div className="panel" key={item.voucher_id}><h2>单份券 …{item.voucher_id.slice(-6)}</h2>{pending ? <PendingWriteNotice pending={pending} busy={busy} refresh={() => void refresh()} /> : <p>{item.status === 'needs_code' ? '需重新出示有效短码并预检；尚未取得处理权。' : '当前不可由本人继续处理，请联系伙伴或重查状态。'}</p>}</div>
           })}
-          {state.work?.redemptions?.filter(red => !activeGroup?.items.some(i => i.voucher_id === red.id)).map(red => <RedemptionCard key={red.id} red={red} busy={busy} pending={pendingWrites[pendingKey(actor, 'report', red.id)]} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />)}
+          {!unavailableGroup && legacyRedemptions.length > 0 && <h2>未加入处理组的历史记录</h2>}
+          {!unavailableGroup && legacyRedemptions.map(red => <RedemptionCard key={red.id} red={red} busy={busy} pending={pendingWrites[pendingKey(actor, 'report', red.id)]} refresh={() => void refresh()} perform={perform} reportOutcome={reportOutcome} setReportOutcome={setReportOutcome} />)}
           <div className="button-row"><Link page={page === 'P09' ? 'P10' : 'P09'} className="button secondary">{page === 'P09' ? '查看逐券处理与申报' : '返回逐券预检查'}</Link><Link page="P11">查看本店申报与结算 →</Link></div></section>}
 
         {page === 'P11' && <section className="narrow-page"><p className="eyebrow">P11 · 本店应付与结算</p><h1>申报与结算分开看</h1><div className="split-stats"><div><small>已申报待结算 H</small><strong>{money(batch?.H)}</strong></div><div><small>已模拟结算 S</small><strong>{money(batch?.S)}</strong></div></div>{state.work?.payables?.length ? state.work.payables.map(pay => <div className="panel" key={pay.voucher_id}><div className="card-heading"><h2>{pay.voucher_id}</h2><span className="status-chip">{label(pay.status)}</span></div>{pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)] ? <PendingWriteNotice pending={pendingWrites[pendingKey(actor, 'settle', pay.voucher_id)]} busy={busy} refresh={() => void refresh()} /> : pay.status === 'settlement_unknown' ? <div className="status-priority"><strong>结果待核，只查原付款</strong><p>H 保留；不要换操作 ID 再付。</p>{pay.settlement_operation && <Link page="P03" tail={pay.settlement_operation} className="button secondary">查询原付款</Link>}</div> : role === 'settler' && pay.status === 'reported' && (!pay.settlement_status || pay.settlement_status === 'FAILED') ? <div className="task-action">{pay.settlement_status === 'FAILED' && <p>上次已明确失败，H 保留。可查看原付款后主动新试。</p>}<label className="field">本地结果演练<select value={settleOutcome} onChange={e => setSettleOutcome(e.target.value as typeof settleOutcome)}><option value="success">模拟结算成功</option><option value="unknown">模拟结果未知</option><option value="failure">模拟结算失败</option></select></label><button type="button" className="button" disabled={busy || state.paused} onClick={() => void perform({ action: 'settle', voucher_id: pay.voucher_id, outcome: settleOutcome }, { stay: true })}>{pay.settlement_status === 'FAILED' ? '再次发起模拟结算' : '发起本店模拟结算'}</button></div> : <p className="muted">{pay.status === 'settled' ? '这笔 H 已模拟结算为 S。' : '当前没有可执行的结算动作。'}</p>}<div className="detail-list"><div><span>原申报</span><strong>{pay.report_operation ? <Link page="P03" tail={pay.report_operation}>{pay.report_operation}</Link> : '无'}</strong></div><div><span>原付款</span><strong>{pay.settlement_operation ? <Link page="P03" tail={pay.settlement_operation}>{pay.settlement_operation}</Link> : '尚无'}</strong></div></div></div>) : <div className="panel empty"><p>本店当前尚无已申报的应付款。</p></div>}<p className="fineprint">店员声明交餐并申报后才有 H；仅独立结算角色能模拟 H→S。失败或未知保留 H。{role === 'settler' && `预置本店虚构目的地：${state.work?.destination}`}</p></section>}
