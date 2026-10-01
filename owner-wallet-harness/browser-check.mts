@@ -32,6 +32,39 @@ try {
  await page.getByText('当前身份已验证',{exact:false}).waitFor()
  assert.deepEqual(controlled.counts(),{sends:0,signs:1})
  assert(info.code)
+ // Hold an actual successful HTTP precheck response while its UI scope changes.
+ async function delayedPrecheck(change:()=>Promise<void>) {
+  let release!:()=>void, arrived!:()=>void
+  const held=new Promise<void>(resolve=>{release=resolve})
+  const received=new Promise<void>(resolve=>{arrived=resolve})
+  const pattern='**/api/v1/work/prechecks'
+  await page.route(pattern,async(route:any)=>{
+   const response=await route.fetch();assert.equal(response.status(),200)
+   arrived();await held;await route.fulfill({response})
+  })
+  try {
+   await page.getByRole('button',{name:'只读核验展示码',exact:true}).click()
+   await received;await change();release()
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='只读核验展示码'&&!b.disabled))
+   assert.equal(await page.getByRole('button',{name:'确认锁定这一券（后台代发）',exact:true}).isDisabled(),true)
+   assert.equal(await page.getByText('展示码预检通过，尚未锁定或扣款。',{exact:true}).count(),0)
+  } finally {release();await page.unroute(pattern)}
+ }
+ await page.getByLabel('领取者当前展示码').fill(info.code)
+ const differentCode=info.code.slice(0,7)+(info.code.endsWith('0')?'1':'0')
+ await delayedPrecheck(async()=>{await page.getByLabel('领取者当前展示码').fill(differentCode)})
+ await page.getByLabel('领取者当前展示码').fill(info.code)
+ await delayedPrecheck(async()=>{
+  await page.getByLabel('领取者当前展示码').fill(differentCode)
+  await page.getByLabel('领取者当前展示码').fill(info.code!)
+ })
+ await delayedPrecheck(async()=>{
+  await page.getByRole('button',{name:'撤销钱包身份证明',exact:true}).click()
+  await page.getByRole('button',{name:'主动连接钱包',exact:true}).click()
+  await page.getByRole('button',{name:'签署身份验证消息',exact:true}).click()
+  await page.getByText('当前身份已验证',{exact:false}).waitFor()
+ })
+ assert.deepEqual(controlled.counts(),{sends:0,signs:2})
  await page.getByLabel('领取者当前展示码').fill(info.code)
  await page.getByRole('button',{name:'只读核验展示码',exact:true}).click()
  await page.getByText('展示码预检通过，尚未锁定或扣款。',{exact:true}).waitFor()
@@ -55,7 +88,7 @@ try {
  await page.getByText('处理状态：LOCKED',{exact:true}).waitFor()
  await page.getByRole('button',{name:'声明本人已交餐',exact:true}).click()
  await page.getByText('处理状态：HANDED_OFF',{exact:true}).waitFor()
- assert.deepEqual(controlled.counts(),{sends:0,signs:1})
+ assert.deepEqual(controlled.counts(),{sends:0,signs:2})
  await page.getByRole('button',{name:'确认申报交餐（后台代发）',exact:true}).click()
  await page.getByText('处理状态：REPORT_PENDING',{exact:true}).waitFor()
  assert.equal(await page.getByRole('button',{name:'选择这笔应付款',exact:true}).count(),0)
@@ -64,7 +97,7 @@ try {
  await page.getByText('处理状态：REPORTED',{exact:true}).waitFor()
  await page.getByRole('button',{name:'选择这笔应付款',exact:true}).click()
  await page.waitForFunction(()=>!!(document.querySelector('input[placeholder="redemptionId"]') as HTMLInputElement)?.value)
- assert.deepEqual(controlled.counts(),{sends:0,signs:1})
+ assert.deepEqual(controlled.counts(),{sends:0,signs:2})
  await page.getByRole('button',{name:'准备并审核原应付款',exact:true}).click()
  const send=page.getByRole('button',{name:'确认此笔结算并请求钱包签名',exact:true})
  await send.waitFor();await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='确认此笔结算并请求钱包签名'&&!b.disabled))
@@ -72,7 +105,7 @@ try {
  await page.screenshot({path:output+'/owner-review-desktop.png',fullPage:true})
  controlled.dropHash();await send.click()
  await page.getByText('服务端状态：SUBMISSION_UNKNOWN',{exact:true}).waitFor()
- assert.equal(await send.isDisabled(),true);assert.deepEqual(controlled.counts(),{sends:1,signs:1})
+ assert.equal(await send.isDisabled(),true);assert.deepEqual(controlled.counts(),{sends:1,signs:2})
  await page.reload();await page.getByLabel('本地工作密码').fill('local-only-password');await page.getByRole('button',{name:'登录本地工作账号',exact:true}).click()
  await page.getByRole('button',{name:'只查询原操作',exact:true}).waitFor()
  assert.equal(controlled.counts().sends,1)
@@ -93,6 +126,6 @@ try {
  assert.equal(state.outboxKinds.some((item:{kind:string})=>item.kind==='settle'),false)
  assert.equal(state.operations.filter((item:{kind:string;status:string})=>['lock','report','settle'].includes(item.kind)&&item.status==='FINALIZED_SUCCESS').length,3)
  assert.deepEqual(errors,[])
- const result={checks:['actual HTTP issue/invitation/delivery/recipient presentation','rotated code rejected before acceptance then fresh code succeeds','browser precheck/lock/finalized handoff/report','automatic selected payable wiring without manual id','no auto wallet prompt','explicit identity personal_sign only','fixed merchant/contract/value0 and gas review','one external transaction with lost hash','reload read-only original recovery','real Anvil FINALIZED_SUCCESS','390px no horizontal overflow'],provider:'controlled injected EIP1193, external test-driver wallet only',counts:controlled.counts(),ledger:state.batch,errors}
+ const result={checks:['delayed precheck invalidated by code change and change-back','delayed precheck invalidated by proof logout/reverification','actual HTTP issue/invitation/delivery/recipient presentation','rotated code rejected before acceptance then fresh code succeeds','browser precheck/lock/finalized handoff/report','automatic selected payable wiring without manual id','no auto wallet prompt','explicit identity personal_sign only','fixed merchant/contract/value0 and gas review','one external transaction with lost hash','reload read-only original recovery','real Anvil FINALIZED_SUCCESS','390px no horizontal overflow'],provider:'controlled injected EIP1193, external test-driver wallet only',counts:controlled.counts(),ledger:state.batch,errors}
  await writeFile(output+'/results.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2))
 } finally {await browser.close();await fixture.stop()}

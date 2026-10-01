@@ -109,7 +109,8 @@ OWNER_TEST_PYTHON=/absolute/project/.venv/bin/python \
 
 The browser driver injects a controlled EIP1193 bridge. Its disposable Anvil owner
 signer lives in the external Node test driver, never backend/browser storage. It
-checks rejected rotated codes followed by fresh-code recovery, finalized lock and
+checks delayed precheck responses after code edits (including change-back) and
+proof logout/reverification, rejected rotated codes followed by fresh-code recovery, finalized lock and
 report gates, payable selection, no automatic signing, explicit identity proof, fixed review, one actual
 transaction with deliberately lost hash, reload/original finality recovery, desktop
 rendering and390px overflow. It does not test real extension UI, human confirmation,

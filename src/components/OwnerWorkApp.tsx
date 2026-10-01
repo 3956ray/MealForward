@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { OwnerApiError, OwnerWalletController, ownerBrowserLock, ownerHttpApi, type OwnerDeployment } from '../wallet/owner-controller.ts'
 import type { Provider } from '../wallet/controller.ts'
 import { WalletOwner } from './WalletOwner.tsx'
@@ -10,7 +10,12 @@ function WorkPanel({ controller, onPayable }: { controller: OwnerWalletControlle
   const [journal, setJournal] = useState<Journal>({})
   const [redemption, setRedemption] = useState<Redemption>()
   const [payables, setPayables] = useState<Redemption[]>([])
-  const [code, setCode] = useState(''), [checked, setChecked] = useState(false)
+  const [code, setCode] = useState('')
+  const [prechecked, setPrechecked] = useState<{ code: string; epoch: number; controller: OwnerWalletController }>()
+  const codeRef = useRef(''), precheckEpoch = useRef(0)
+  const checked = prechecked?.controller === controller && prechecked.code === code && prechecked.epoch === precheckEpoch.current
+  function invalidatePrecheck() { precheckEpoch.current++; setPrechecked(undefined) }
+  function changeCode(value: string) { codeRef.current = value; setCode(value); invalidatePrecheck() }
   const [verified, setVerified] = useState(controller.verified)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   function load(): Journal {
@@ -23,9 +28,20 @@ function WorkPanel({ controller, onPayable }: { controller: OwnerWalletControlle
   }
   function save(value: Journal) { localStorage.setItem(key, JSON.stringify(value)); setJournal(value) }
   useEffect(() => {
+    changeCode(''); setVerified(controller.verified)
     try { setJournal(load()) } catch (e) { setError(String(e)) }
-    return controller.subscribe(() => { setVerified(controller.verified); setChecked(false) })
+    const unsubscribe = controller.subscribe(() => { setVerified(controller.verified); invalidatePrecheck() })
+    return () => { precheckEpoch.current++; unsubscribe() }
   }, [controller, key])
+  async function precheck() {
+    const requestCode = codeRef.current
+    invalidatePrecheck()
+    const epoch = precheckEpoch.current
+    await controller.api.request('/work/prechecks', { code: requestCode })
+    if (epoch === precheckEpoch.current && requestCode === codeRef.current && controller.verified) {
+      setPrechecked({ code: requestCode, epoch, controller })
+    }
+  }
   async function refresh() {
     let value = load()
     if (value.pending && value.pending.kind !== 'handoff') {
@@ -49,11 +65,13 @@ function WorkPanel({ controller, onPayable }: { controller: OwnerWalletControlle
     const value = load()
     if (value.pending) throw new Error('已有待核动作，请先查询原处理，勿重复提交。')
     if (kind === 'lock' && value.redemptionId) throw new Error('已有原处理记录，请先查询并完成。')
+    if (kind === 'lock' && (!controller.verified || !prechecked || prechecked.controller !== controller ||
+        prechecked.code !== codeRef.current || prechecked.epoch !== precheckEpoch.current)) throw new Error('展示码或身份已变化，请重新核验当前码。')
     if (kind !== 'lock' && value.redemptionId !== redemption?.id) throw new Error('原处理记录已变化，请重新查询。')
     const intentKey = crypto.randomUUID()
     save({ ...value, pending: { kind, key: intentKey } })
     try { if (kind === 'lock') {
-      const currentCode = code; setCode(''); setChecked(false)
+      const currentCode = prechecked!.code; changeCode('')
       const result = await controller.api.request<{ redemptionId: string }>('/work/locks', { intentKey, code: currentCode })
       save({ redemptionId: result.redemptionId, pending: { kind, key: intentKey } })
     } else {
@@ -73,10 +91,10 @@ function WorkPanel({ controller, onPayable }: { controller: OwnerWalletControlle
   }
   return <div className="wallet-panel" aria-label="本店核销与交餐">
     <h2>本店验券、交餐与申报</h2><p>老板逐步操作；锁券和申报由后台 operator 代发，不是老板钱包交易签名。</p>
-    <label>领取者当前展示码<input value={code} inputMode="numeric" maxLength={8} autoComplete="off" onChange={e => { setCode(e.target.value); setChecked(false) }} /></label>
+    <label>领取者当前展示码<input value={code} inputMode="numeric" maxLength={8} autoComplete="off" onChange={e => changeCode(e.target.value)} /></label>
     <p>展示码仅在本页临时使用，不写入网址或浏览器存储。</p>
     <div className="wallet-actions">
-      <button disabled={busy || !verified || !/^\d{8}$/.test(code) || !!journal.pending || !!journal.redemptionId} onClick={() => void run(async () => { await controller.api.request('/work/prechecks', { code }); setChecked(true) })}>只读核验展示码</button>
+      <button disabled={busy || !verified || !/^\d{8}$/.test(code) || !!journal.pending || !!journal.redemptionId} onClick={() => void run(precheck)}>只读核验展示码</button>
       <button disabled={busy || !verified || !checked || !!journal.pending || !!journal.redemptionId} onClick={() => void run(() => write('lock'))}>确认锁定这一券（后台代发）</button>
       <button disabled={busy} onClick={() => void run(refresh)}>查询原处理与本店应付款</button>
     </div>
@@ -89,7 +107,7 @@ function WorkPanel({ controller, onPayable }: { controller: OwnerWalletControlle
         <button disabled={busy || !!journal.pending || !['REPORTED', 'SETTLED', 'LOCK_FAILED'].includes(redemption.status)} onClick={() => void run(async () => {
           const value = load()
           if (value.pending || value.redemptionId !== redemption.id) throw new Error('原处理记录已变化，请重新查询。')
-          save({}); setRedemption(undefined); setCode(''); setChecked(false)
+          save({}); setRedemption(undefined); changeCode('')
         })}>开始处理下一券</button>
       </div><p>锁券最终确认后才可交餐；声明、申报和付款是分开的动作。链记录不证明实物交付。</p></div>}
     <h3>本店已确认应付款</h3>
