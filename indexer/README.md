@@ -2,7 +2,7 @@
 
 独立 Envio HyperIndex **3.12.1** 包，仅本地 Anvil chainId **31337**。源 ABI 来自 `../shared/MealForward.abi.json`，`npm run abi` 对照 `abi-manifest.json` 核 SHA256 后复制；禁止手改 `abis/`。SDK 类型由 `envio codegen` 生成到忽略的 `.envio/types.d.ts`，不提交构建产物。
 
-## 已验证（2026-09-30）
+## SDK 阶段验证记录（2026-09-30，真实服务状态已由下节更新）
 
 在 Node **24.21.0** / npm **11.19.0** 运行：
 
@@ -22,6 +22,16 @@ npm test
 - 兼容性边界：Express/body-parser/qs/ws保持原major，path-to-regexp保持0.1系列；esbuild由0.27.7跨至0.28.1，超出tsx原依赖范围。[官方变更记录](https://github.com/evanw/esbuild/blob/main/CHANGELOG.md#0280)说明0.28版本边界涉及安装回退下载完整性校验及Go工具链更新；本机锁文件安装和tsx加载真实处理器测试已过，但不自动证明完整Envio服务/容器/全部编译场景兼容。上述真实服务NOT_RUN状态保持。
 - Node24 下 Fuel 非使用路径依赖仍报告 engine warning；未来容器模板选 Node22，容器构建尚未运行。audit0只表示本次已知依赖报告清空，不构成生产安全、真实服务验收或bounty集成证明。
 
+## 真实 runtime 验证（2026-10-03）
+
+基线 `248beb947c25aa76abd88df36be0caea6f4acde8`，已安装的 OrbStack 被用户启动后，在专属 Compose 项目和全新卷上运行原始 Dockerfile/config/handlers，**未修改运行时代码**。两套 Postgres17.5 + Hasura2.43.0 + Node22/Envio3.12.1 服务实际构建与启动通过。
+
+亲测通过：匿名 GraphQL 查询/匿名 mutation 拒绝；两批 N3 的六张券及部分结算状态，事件所有公开参数/tx/log/blockHash 对照真实 Anvil；真实 EventFeed keyset 分页和水位；全服务同卷重启快照不变；第二套空卷从部署块重建快照全等；snapshot/revert 删除分叉批/券/数组子实体；同 raw 交易重进新块更新 blockHash 且不重复累计；已有 Locked 券经 Reported/Settled 后重组恢复 Locked、settledWei=0，旧事件撤销；索引/Hasura 停机时同链真实 Backend+SQLite 仍经 directRPC 确认并保留 FINALIZED_SUCCESS，索引恢复追赶；真实 10000000000000000 wei 金额保持十进制字符串精确。
+
+完整报告、脱敏命令/结果和可复现测试脚本保存在 Leader 项目 `research/cp16/review/ENVIO-RUNTIME-QA.md` 与其证据目录。主测试服务端口为 Anvil18646、Postgres25435、GraphQL28085；这些属于专属测试实例，不是源码默认端口。运行配置/随机密码位于本地0600文件，不提交。第二套25436/28086仅用于重建验证，审查后停止并保留卷。
+
+这更新了上节历史 **NOT_RUN**；不能扩展成公网部署、云服务或产品页面接入通过。**UI 尚未消费 GraphqlEventFeed**；Monad10143、真实钱包/SDK、Cloud/token 流程仍不在本地 runtime 验收范围。索引是公开候选投影，业务最终性继续以后台 directRPC 为准。重组证据覆盖上述实际RPC测试场景，不承诺所有RPC非原子查询边界。
+
 ## 模型与权限
 
 `ChainEvent` 保存九种 ABI 事件的公开字段，`argsJson` 内所有 uint 金额为十进制字符串。事件 ID 为 `deploymentId:transactionHash:logIndex`。`IssuedVoucher` ID 再附 `voucherId:arrayIndex`，同一 Issued log 的三券不会互相覆盖。`Batch` 与 `Voucher` 的 ID 都带 deploymentId；金额使用 BigInt，重复父事件不会重复增加资金或券数。
@@ -32,7 +42,7 @@ npm test
 
 游标绑定部署和范围，但不是冻结快照或最终性证明。遇重组、重建、数据源改变，应从所需范围开头重读并按稳定事件键去重。索引为空/延迟/故障不能推导链上失败。**正式后台继续通过 directRPC、receipt、canonical block、finalized 核验并持久化最终结果；Envio lag 不回退已确认结果，也不单独禁止合法后台进展。**
 
-## 真实服务待验证步骤
+## 真实服务重现实测步骤
 
 `config.yaml` 是可通过 codegen 的实际 HyperIndex 配置，默认地址 `0x…0001` 仅用于 SDK 模拟，不能声称已有部署。未来前提：已有可用 Docker runtime（本轮不安装）、独立 Anvil **18646** 的经核验部署、独立本地数据库及管理员随机凭据。18645 为主后台共享节点，本模块不使用；不碰 5173/8765/18545/5195。
 
@@ -55,7 +65,7 @@ query PublicTimeline {
 }
 ```
 
-Compose / Dockerfile 是待执行模板，不把镜像构建、服务可用或 GraphQL schema 视为已验证。禁止对未知 Compose 项目执行 stop/down/restart；本项目也无需 `down -v` 删除持久证据。
+Compose / Dockerfile 已在上述本地环境执行；其他平台、网络和配置仍需独立验证。禁止对未知 Compose 项目执行 stop/down/restart；本项目也无需 `down -v` 删除持久证据。
 
 ## 核验来源
 
