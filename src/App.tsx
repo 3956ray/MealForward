@@ -616,7 +616,7 @@ export default function App() {
               {role === 'supporter' ? <button type="button" className="button full" disabled={busy || state.paused || !Number.isInteger(quantity) || quantity < 1 || quantity > 20 || batch!.F > 0} onClick={() => void perform({ action: 'support', quantity, outcome: supportOutcome, quote_price: batch!.price, rule_version: batch!.rule_version }, { page: 'P03' })}>{busy ? '正在提交或查询原操作…' : '确认模拟支持'}</button> : <Link page="P06" className="button full">先选择模拟支持者</Link>}
               <p className="fineprint">本地模拟 · 单价与规则版本由当前批次提供：{batch?.rule_version}。修改份数后须重新审阅报价。</p>
             </>}
-            {batch!.F > 0 && <p className="fineprint">此单批样例已有支持记录；如需重跑，前往工作入口重置虚构数据。</p>}{state.paused && <p className="fineprint">当前预置暂停，服务端拒绝新入款。</p>}
+            {batch!.F > 0 && <p className="fineprint">此批已有支持记录，请保留并查询原操作；如需从头体验，请使用独立新演示场景。</p>}{state.paused && <p className="fineprint">当前预置暂停，服务端拒绝新入款。</p>}
           </div>
         </section>}
 
