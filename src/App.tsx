@@ -690,7 +690,13 @@ export default function App() {
             {activeIssuance.vouchers.map(v => <div className="panel" key={v.id}><div className="card-heading"><h2>单份券 …{v.id.slice(-6)}</h2><span className="status-chip">{label(v.status)}</span></div><p>交付：{label(v.delivery_status)}{v.delivery_at && ` · ${fmt(v.delivery_at)}`}</p>
               <div className="button-row">{(['sent', 'handover', 'failed'] as const).map(method => <button key={method} className="button secondary" disabled={busy || v.status !== 'active'} onClick={() => { privateEpoch.current++; setShownInvite(null); void perform({ action: 'deliver', voucher_id: v.id, method }, { stay: true }) }}>{method === 'sent' ? '记录此券已执行发送' : method === 'handover' ? '记录此券当面交接' : '记录此券失败待联系'}</button>)}{['failed', 'sent', 'handover'].includes(v.delivery_status) && <button className="button subtle" disabled={busy || v.status !== 'active'} onClick={() => void perform({ action: 'deliver', voucher_id: v.id, method: 'reshare' }, { stay: true })}>再次分享同一原券</button>}</div>
               {v.status === 'active' && <button className="button secondary" disabled={busy} onClick={() => void showInvite(v.id)}>单独查看此券邀请</button>}
-              {shownInvite?.id === v.id && v.status === 'active' && <label className="field">仅此券私密邀请（不实际发送）<input readOnly value={`${location.origin}${location.pathname}#/P05/${shownInvite.secret}`} onFocus={e => e.currentTarget.select()} /><button className="text-button" onClick={() => { privateEpoch.current++; setShownInvite(null) }}>收起邀请</button></label>}
+              {shownInvite?.id === v.id && v.status === 'active' && <div>
+                <label className="field">仅此券私密邀请（不实际发送）<input readOnly value={`${location.origin}${location.pathname}#/P05/${encodeURIComponent(shownInvite.secret)}`} onFocus={e => e.currentTarget.select()} /></label>
+                <p>点击输入框可选中完整地址，再复制分享；不要只复制“领取者”入口。此邀请仅对应这一张券，请勿公开。</p>
+                <a className="button secondary" href={`${location.origin}${location.pathname}#/P05/${encodeURIComponent(shownInvite.secret)}`} target="_blank" rel="noopener noreferrer">打开这张餐券（领取者视图）</a>
+                <p>在新标签打开，保留本页机构会话；领取者仍需主动点击“查看餐券”，不会自动领取。</p>
+                <button className="text-button" onClick={() => { privateEpoch.current++; setShownInvite(null) }}>收起邀请</button>
+              </div>}
             </div>)}<Link page="P08">查看其他原发行 →</Link>
           </>}<Link page="P07">返回发行页 →</Link></section>}
 
