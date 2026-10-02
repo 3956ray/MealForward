@@ -665,13 +665,21 @@ export default function App() {
           {state.work?.recipients?.map(rec => {
             const n = issueQuantities[rec.ref] ?? 1
             const pending = actor ? pendingIssues[issueKey(actor, rec.ref)] : undefined
-            const reason = !rec.eligible ? '资格未确认' : !rec.channel_verified ? '渠道未核对' : !Number.isInteger(n) || n < 1 || n > 20 ? '请输入1–20的整数' : rec.quota_remaining < n ? '本期额度不足' : state.paused ? '批次已暂停' : batch!.available < n * batch!.price ? '可发餐款不足' : null
+            const validQuantity = Number.isInteger(n) && n >= 1 && n <= 20
+            const reasons = [
+              !rec.eligible && '资格未确认：此对象是异常演练样例，不能发行；请选资格与渠道都已确认且有额度的对象。',
+              !rec.channel_verified && '渠道未核对：此对象不能交付；当前演示不提供核准操作，请选渠道已核对的对象。',
+              !validQuantity && '数量无效：请输入1–20的整数，每券一份。',
+              validQuantity && rec.quota_remaining < n && (rec.quota_remaining > 0 ? `本期额度不足：请把数量减至${rec.quota_remaining}份以内。` : '本期额度已用完：不能再为此对象发行；选择其他有额度的合格对象，或在独立新演示场景从头体验，原记录保留。'),
+              state.paused && '批次已暂停：停止新发行，只查原券与原操作；不要重复提交。',
+              validQuantity && batch!.available < n * batch!.price && (batch!.F === 0 ? '餐款不足：先到支持者入口查看本批支持状态；尚未提交时完成模拟支持，结果待核时只查原操作。' : '餐款不足：减少发行份数至可用餐款范围；不足一份时，本批不能追加支持，请保留原记录并使用独立新演示场景。'),
+            ].filter(Boolean)
             return <div className="panel" key={rec.ref}><h2>{rec.ref} · 私有领取关联</h2><p>本期剩余 {rec.quota_remaining} 份 · 渠道{rec.channel_verified ? '已核对' : '未核对'} · {rec.rule_version}</p>
               {pending ? <div className="status-priority"><strong>{pending.operationId ? '原发行已记录' : '发行结果待核'}</strong><p>{pending.request.quantity} 张单份券 · {pending.operationId ? '请查询原组，不重复发行。' : `本地待核引用 …${pending.intent.slice(-6)}（不是服务端操作编号）`}</p><button className="button secondary" disabled={busy} onClick={() => void recoverIssue(pending)}>查询原发行结果</button>{pending.operationId && <><Link page="P03" tail={pending.operationId}>查看原操作</Link><button className="text-button" disabled={busy} onClick={() => { const next = { ...pendingIssuesRef.current }; delete next[issueKey(pending.actor, rec.ref)]; savePendingIssues(next) }}>重新审阅另一笔发行</button></>}</div> : <>
                 <label className="field">发行数量（每券一份）<input type="number" min="1" max="20" value={n} onChange={e => setIssueQuantities(previous => ({ ...previous, [rec.ref]: Number(e.target.value) }))} /></label>
                 <p>{Number.isInteger(n) ? n : '—'} 张 × {money(batch?.price)}；将预留 {money(Number.isInteger(n) ? n * batch!.price : 0)}。预计可发剩余 {money(Math.max(0, batch!.available - (Number.isInteger(n) ? n : 0) * batch!.price))}。</p>
-                {reason && <p className="inline-error">{reason}，请重新审阅或联系处理人。</p>}
-                <button className="button" disabled={busy || !!reason} onClick={() => void issueMeals(rec.ref)}>确认发行 {Number.isInteger(n) ? n : 'N'} 张单份券</button>
+                {reasons.map((reason, index) => <p className="inline-error" key={index}>{reason}</p>)}
+                <button className="button" disabled={busy || reasons.length > 0} onClick={() => void issueMeals(rec.ref)}>确认发行 {Number.isInteger(n) ? n : 'N'} 张单份券</button>
               </>}
             </div>
           })}<Link page="P08">恢复原发行与逐券交付 →</Link></section>}
