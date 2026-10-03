@@ -44,12 +44,22 @@ class Rpc:
         deadline = time.monotonic()+10
         try:
             with self.session.post(self.endpoint, json={'jsonrpc':'2.0','id':1,'method':method,'params':params},
+                                   headers={'Accept-Encoding':'identity'},
                                    timeout=(2,5), allow_redirects=False, stream=True) as response:
                 if response.status_code != 200: raise Stop('RPC_UNAVAILABLE')
+                # Reject compression rather than waiting inside a decompressor for output.
+                if response.headers.get('Content-Encoding','identity').strip().lower() not in ('','identity'):
+                    raise Stop('RPC_ENCODING_DENIED')
                 body = bytearray()
-                for chunk in response.iter_content(1024):
+                while True:
+                    if time.monotonic()>=deadline: raise Stop('RPC_LIMIT')
+                    # read(1024)/iter_content can wait for an entire chunk on a trickle stream.
+                    # Read raw bytes without transparent decoding so each byte checks wall time.
+                    chunk=response.raw.read(1,decode_content=False)
+                    if time.monotonic()>=deadline: raise Stop('RPC_LIMIT')
+                    if not chunk: break
                     body.extend(chunk)
-                    if len(body)>1024*1024 or time.monotonic()>deadline: raise Stop('RPC_LIMIT')
+                    if len(body)>1024*1024: raise Stop('RPC_LIMIT')
                 value = json.loads(body)
                 if not isinstance(value,dict) or value.get('jsonrpc')!='2.0' or type(value.get('id')) is not int or value['id']!=1:
                     raise Stop('RPC_PROTOCOL')

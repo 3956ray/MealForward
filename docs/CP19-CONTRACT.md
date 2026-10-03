@@ -40,3 +40,5 @@ plan仅初次创建，重复调用返回同一计划；已有run marker但journa
 预算预留覆盖所有未执行步骤。当前固定gas分配：supporter .07MON（最坏fund费.06+本金.001+余量.009），operator .18（最坏issue/lock/report费.16+余量.02），owner .05（最坏settle费.04+余量.01）。admin在第一笔前保留自己完整未执行最坏费用和.30内转本金，最低1.9926MON；5MON只是领水目标。若仅收到少量但实际估算足额，需独审具体更紧计划后下调预留，不自动改变已审方案。外部意外入账会使最终余额对账暂停，不能忽略差额冒称PASS。
 
 部署前尚不存在的业务状态不伪造真实estimate；每一步在已确认前置状态上重新estimate/call，签名记录保存estimate和实际gas。最终result-public.json只包含白名单账/费/地址/hash，不含raw/key。源码SHA、planHash、真实部署与逐步证据另报Leader；本地最终余额验证会识别Anvil gasUsed收费差异，不能记Monad实网费用PASS。
+
+RPC慢流接收回归：`.venv/bin/python -m unittest tests.test_testnet_rpc -v`。请求Accept-Encoding identity；拒绝压缩响应，原始body逐字节读且每次读取前后检查10秒预算，避免凑1024字节或解压器缓冲后才检查。单次阻塞读取仍受5秒空闲超时约束；不宣称强制取消DNS/底层socket，任何发送错误仍按原hash UNKNOWN恢复，绝无自动重试。
