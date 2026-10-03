@@ -12,9 +12,15 @@
     "chain:test": "forge test",
     "chain:e2e": "node scripts/chain-e2e.mjs",
     "dev:wallet": "vite --config wallet-harness/vite.config.ts",
-    "test:wallet": "node --experimental-strip-types --test tests/wallet/*.test.ts"
+    "test:wallet": "node --experimental-strip-types --test tests/wallet/*.test.ts",
+    "dev:dynamic": "vite --config dynamic-harness/vite.config.ts",
+    "build:dynamic": "tsc --noEmit && vite build --config dynamic-harness/vite.config.ts"
   },
   "dependencies": {
+    "@dynamic-labs-sdk/client": "1.38.0",
+    "@dynamic-labs-sdk/evm": "1.38.0",
+    "@dynamic-labs-sdk/react-hooks": "1.38.0",
+    "@tanstack/react-query": "5.104.1",
     "qrcode.react": "4.2.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

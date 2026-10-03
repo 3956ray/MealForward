@@ -1,5 +1,14 @@
 # mealforward 项目规则
 
+## CP17 当前 BUILD（覆盖旧阶段冲突条款）
+
+- Leader 已核对 Dev–PM Q1–Q12 并放行 C0。精确边界见 `docs/CP17-CONTRACT.md`；主开发先交付合同，再由 Leader 派 JWT 与前端模块，主开发不另派、不双写。
+- 新独立入口 15207 使用 Dynamic Sandbox email/access token 与本地可信角色映射；领取者免注册且不加载 SDK。真实声明 profile 未核实则交换失败，不放宽 aud/issuer/environment 检查。
+- JWT 模块只拥有 `server/dynamic_jwt.py`、`tests/test_dynamic_jwt.py`；前端模块只拥有 `src/dynamic/client.ts`、`src/dynamic/auth.ts`、`src/dynamic/Login.tsx`、`tests/dynamic/`。其余共享文件由主开发整合。
+- 使用 CP17 cookie 命名空间、schema/backup v4 隔离恢复；旧部署保留密码模式。完整 session/mapping/dispatch/restore 与运行接线在 C0 后完成，stub 不得认证成功。
+- 只允许本机 Anvil 31337 交易；不自动钱包连接/签名/创建，不做真实网络交易、push、云部署。保留 5173、5186、15197 与 Envio18646 既有服务及数据。
+- 模型配置保持原样，Leader 负责独立审查与验收。C0 编译通过不等于完整 CP17 验收。
+
 ## 项目定位
 
 - 本仓库当前实现留膳的 CP8 本机虚构数据演示；对外英文名始终为小写 `mealforward`。

@@ -16,3 +16,4 @@ cache/
 wallet-harness/dist/
 .venv/
 .localbackend/
+dist-dynamic/
