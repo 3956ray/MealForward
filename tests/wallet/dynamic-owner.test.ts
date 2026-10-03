@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { keccak256, type Hex } from 'viem'
 import { adaptDynamicWalletProvider } from '../../src/dynamic/client.ts'
 import { OwnerWalletController, type OwnerApi } from '../../src/wallet/owner-controller.ts'
+import { releaseOwnerController } from '../../dynamic-harness/owner-lifecycle.ts'
 
 test('Dynamic adapter attaches to owner controller, invalidates proof and rejects non31337', async () => {
   const events = new EventEmitter(), methods: string[] = [], invalidations: string[] = []
@@ -20,7 +21,8 @@ test('Dynamic adapter attaches to owner controller, invalidates proof and reject
       throw new Error('Unexpected signing or wallet action')
     },
   }, () => true, reason => invalidations.push(reason))
-  const api: OwnerApi = { async request<T>(path: string): Promise<T> { assert.equal(path, '/work/wallet/logout'); return undefined as T } }
+  let revocations = 0
+  const api: OwnerApi = { async request<T>(path: string): Promise<T> { assert.equal(path, '/work/wallet/logout'); revocations++; return undefined as T } }
   const controller = new OwnerWalletController({ deployment, provider: adapter.provider, api, store: { getItem: () => null, setItem: () => {} }, origin: 'http://127.0.0.1:15207', actorId: 'fixture-owner' })
   controller.attach()
   assert.deepEqual(methods, [])
@@ -30,6 +32,14 @@ test('Dynamic adapter attaches to owner controller, invalidates proof and reject
   assert.deepEqual(invalidations, ['chain-changed'])
   await assert.rejects(controller.connect(), /Bound account, local chain or contract changed/)
   assert.equal(methods.includes('personal_sign'), false); assert.equal(methods.includes('eth_sendTransaction'), false)
-  controller.detach(); adapter.dispose()
+  releaseOwnerController(controller)
+  await new Promise(resolve => setImmediate(resolve))
+  const revoked = revocations
+  events.emit('accountsChanged', { addresses: [] })
+  events.emit('networkChanged', { networkId: '10143' })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(revocations, revoked) // Released controller no longer reacts; global SDK invalidation remains.
+  assert.deepEqual(invalidations.slice(-2), ['account-changed', 'chain-changed'])
+  adapter.dispose()
   assert.equal(events.listenerCount('networkChanged'), 0)
 })

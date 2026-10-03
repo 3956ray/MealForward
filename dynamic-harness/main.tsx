@@ -8,6 +8,7 @@ import { OwnerWalletController, type OwnerDeployment } from '../src/wallet/owner
 import { WalletOwner } from '../src/components/WalletOwner.tsx'
 import { WorkPanel } from '../src/components/OwnerWorkApp.tsx'
 import './style.css'
+import { releaseOwnerController } from './owner-lifecycle.ts'
 
 function IdentityEntry({ role }: { role: LoginRole }) {
   const [client] = useState(createDynamicAuthClient)
@@ -21,12 +22,18 @@ function IdentityEntry({ role }: { role: LoginRole }) {
   const [selected, setSelected] = useState(''), [error, setError] = useState('')
   const invalidate = useCallback((_reason: InvalidationReason) => {
     generation.current++
-    controllerRef.current?.invalidate()
+    const previous = controllerRef.current
     controllerRef.current = undefined
+    releaseOwnerController(previous)
     setController(undefined); setSession(undefined); setSelected(''); setDiagnostic(undefined)
   }, [])
   const [api] = useState(() => createAuthApi({ client, onInvalidate: invalidate }))
-  useEffect(() => () => { generation.current++; controllerRef.current?.invalidate(); controllerRef.current?.detach() }, [])
+  useEffect(() => () => {
+    generation.current++
+    const previous = controllerRef.current
+    controllerRef.current = undefined
+    releaseOwnerController(previous)
+  }, [])
   async function profileCheck() {
     const token = client.getAccessToken(), version = generation.current
     if (!token || busy) return
