@@ -1,5 +1,11 @@
 # mealforward 项目规则
 
+## CP19 当前 BUILD（覆盖旧阶段冲突条款）
+
+- Leader已放行独立10143合约与受控runner，合同`docs/CP19-CONTRACT.md`；主开发唯一writer。完整实现固定SHA独审及Leader核部署计划前不广播交易。
+- 仅全新专用测试身份/测试MON，一券本金.001、全片gas≤2MON/最多13笔；owner由独立测试客户端直签，业务后台不读取其key。未知只查原hash，禁止自动重部署/重复付款/换nonce。
+- 不改旧31337合约/ChainRpc/default Foundry，根依赖锁不动；保留15207登录、15217只读页和全部旧服务/数据。测试网脚本闭环不代表真人钱包/产品全业务UI验收。
+
 ## CP18 当前 BUILD（覆盖旧阶段冲突条款）
 
 - Leader已完成Dev–PM五问与READINESS回核并放行；按`docs/CP18-CONTRACT.md`实现独立Alchemy只读测试网入口15217/API18985，严格10143。仅允许固定chainId/最新区块读取，不交易、不部署、不加载钱包或业务Backend。

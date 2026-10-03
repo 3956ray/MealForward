@@ -1,5 +1,7 @@
 # 留膳 / mealforward — 本地模拟 MVP
 
+CP19独立测试网合约及持久脚本的运行/恢复边界见 [docs/CP19-CONTRACT.md](docs/CP19-CONTRACT.md)。只使用专用测试身份；部署须先完成固定实现及计划审查，旧服务不切换。
+
 CP18独立只读测试网入口见 [docs/CP18-CONTRACT.md](docs/CP18-CONTRACT.md)。UI `http://127.0.0.1:15217/`，API18985；手动检查Monad Testnet 10143及最新区块，无登录/钱包/交易。启动与定向测试命令见合同；旧入口保持。
 
 CP17 独立 Dynamic 入口的共享合同见 [docs/CP17-CONTRACT.md](docs/CP17-CONTRACT.md)。`npm run dev:dynamic` 使用独立15207并代理专用18975；`npm run build:dynamic` 检查真实SDK构建。后台用 `.venv/bin/python -m server.local web --directory .localbackend/cp17-dynamic --port 18975 --dynamic-auth`，必须先有独立fixture。未审核的真实profile仍拒绝工作身份交换；邮箱本人登录与只诊断的配置核对已接线，浏览器/OTP尚未验收。`.venv/bin/python -m unittest tests.test_dynamic_jwt tests.test_dynamic_auth tests.test_dynamic_profile tests.test_dynamic_contracts -v` 为受控身份测试，`tests.test_backend_chain_dynamic` 为隔离本地链撤销/恢复测试；原有入口保持不变。
