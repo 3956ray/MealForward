@@ -5,7 +5,7 @@ import { WalletOwner } from './WalletOwner.tsx'
 
 type Redemption = { id: string; status: string; handoff?: { id: string } | null }
 type Journal = { redemptionId?: string; pending?: { kind: 'lock' | 'handoff' | 'report'; key: string } }
-function WorkPanel({ controller, onPayable }: { controller: OwnerWalletController; onPayable: (id: string) => void }) {
+export function WorkPanel({ controller, onPayable }: { controller: OwnerWalletController; onPayable: (id: string) => void }) {
   const key = controller.storageKey + '.work.v1'
   const [journal, setJournal] = useState<Journal>({})
   const [redemption, setRedemption] = useState<Redemption>()

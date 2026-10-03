@@ -59,6 +59,7 @@ class Backend:
                 db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
                 db.execute('UPDATE owner_wallet_sessions SET revoked=1')
                 db.execute('UPDATE owner_wallet_challenges SET consumed=1')
+                db.execute("UPDATE dynamic_identity_mappings SET enabled=0,authority_source_version='',revision=revision+1")
             else:
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_state','ACTIVE')")
                 db.execute("INSERT OR IGNORE INTO metadata VALUES('recovery_reason','')")

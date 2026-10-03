@@ -1,6 +1,6 @@
 # 留膳 / mealforward — 本地模拟 MVP
 
-CP17 独立 Dynamic 入口的共享合同见 [docs/CP17-CONTRACT.md](docs/CP17-CONTRACT.md)。当前 C0 仅提供接口与失败关闭的入口，尚不能登录：`npm run dev:dynamic` 使用独立 15207；`npm run build:dynamic` 检查独立构建；`.venv/bin/python -m unittest tests.test_dynamic_contracts -v` 检查未核实 profile 拒绝与 cookie 命名空间。完整身份与角色工作流接线、真实 SDK 浏览器验证待后续整合；原有入口保持不变。
+CP17 独立 Dynamic 入口的共享合同见 [docs/CP17-CONTRACT.md](docs/CP17-CONTRACT.md)。`npm run dev:dynamic` 使用独立15207并代理专用18975；`npm run build:dynamic` 检查真实SDK构建。后台用 `.venv/bin/python -m server.local web --directory .localbackend/cp17-dynamic --port 18975 --dynamic-auth`，必须先有独立fixture。未审核的真实profile仍拒绝工作身份交换；邮箱本人登录与只诊断的配置核对已接线，浏览器/OTP尚未验收。`.venv/bin/python -m unittest tests.test_dynamic_jwt tests.test_dynamic_auth tests.test_dynamic_profile tests.test_dynamic_contracts -v` 为受控身份测试，`tests.test_backend_chain_dynamic` 为隔离本地链撤销/恢复测试；原有入口保持不变。
 
 本仓库当前是 **CP8 虚构状态链 + CP10 安全导航 + CP11 多张单份券与逐券部分完成**：支持者、机构、无账号持券者和门店/结算角色可在同一台电脑上走通餐券状态链。所有店、机构、领取关联、DU 金额、付款、交付、申报与结算都是假的。它不连接钱包、Monad 链、真实支付、通讯平台或真实个人资料，也不证明指定自然人收到或吃完。
 

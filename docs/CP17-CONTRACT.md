@@ -65,4 +65,18 @@ Backup format mealforward-cp17-quarantined-backup-v4; schemaVersion4. Restore ac
 
 ## Independent entry / checks
 
-`npm run dev:dynamic` reserves loopback15207 with strictPort and no old API proxy. In C0 all /api/ requests return503 DYNAMIC_PROFILE_UNVERIFIED; no wallet/provider/SDK mount. Main replaces this gate with dedicated backend only after auth integration. `npm run build:dynamic` typechecks shared frontend plus harness and emits ignored dist-dynamic. `npm run build` checks original build. `.venv/bin/python -m unittest tests.test_dynamic_contracts -v` checks unverified profile denial without network and cookie namespace. No existing service restart or real DB migration is needed for C0.
+`npm run dev:dynamic` reserves loopback15207 with strictPort. After C0 it proxies only dedicated18975, preserving the original15207 Host for auth checks. `server.local web --dynamic-auth` selects the new auth service; no authority file means unverified profile and denied exchange. SDK loads only in explicit identity entry, not recipient route. `npm run build:dynamic` typechecks shared frontend plus harness and emits ignored dist-dynamic. `npm run build` checks original build. `.venv/bin/python -m unittest tests.test_dynamic_contracts -v` checks unverified profile denial without network and cookie namespace.
+
+### Profile calibration (diagnostic, never work authorization)
+
+After user-entered OTP, the user explicitly chooses "检查本次身份配置". `/api/v1/auth/dynamic/profile-check` requires matching15207 Host/Origin, empty JSON, Bearer and 5/minute admission limit. It checks fixed JWKS/RS256, strict times, environment and complete scope, then returns candidate claim profile with verified=false, captureId and short expiry. Candidate audience/issuer are signed observations, not approved policy; this path cannot create sessions/mappings or enable exchange. Wrong environment is rejected; absent environment requires the documented exact environment-bound issuer for diagnostic capture. No JWT/OTP/sub is returned.
+
+Only verified env/issuer/sub plus claim shape and expiry are saved under the runtime's ignored `profile-captures/`, directory0700/file0600, max20 live captures. Lifetime is min(10min, token expiry). Reads reject expired captures; expired files are cleaned on capture/read, not by a background scheduler. JWT/OTP/raw sid never persist. Reviewer/operator supplies an explicitly reviewed profile JSON (exact sampled fields plus verified=true) and existing enabled actor through the local maintenance CLI:
+
+```sh
+.venv/bin/python -m server.dynamic_profile --directory .localbackend/cp17-dynamic/profile-captures --capture-id CAPTURE_ID --actor EXISTING_ACTOR --database .localbackend/cp17-dynamic/backend.sqlite3 --reviewed-profile REVIEWED_PRIVATE_PROFILE_JSON --output NEW_PRIVATE_AUTHORITY_JSON
+```
+
+This writes a new0600 file, consumes the capture, does not activate it, and never prints subject or credentials. Explicit backend restart with `--dynamic-authority-file` applies the full mapping set. Web callers cannot select roles or activate captures. Do not copy raw JWT to chat/files or inspect hidden SDK token state through CUA.
+
+Post-C0 dependency mitigation: narrowly override wallet core1.1.24's axios to1.20.0, deduped with existing1.20.0. npm ls confirms no1.16.0. Audit now16 affected nodes (5high/11moderate), root advisories uuid/http-cache-semantics; axios root removed. Actual SDK bundle build passes and uses Ably modular chunk. Browser initialization/OTP/axios runtime compatibility remain NOT_RUN while Mac is locked; embedded/mobile flows remain outside this test scope. Do not report full compatibility from a build alone.

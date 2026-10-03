@@ -84,6 +84,8 @@ def main():
     parser.add_argument('--rpc-url',default='http://127.0.0.1:18645')
     parser.add_argument('--origin',default='http://127.0.0.1:8875')
     parser.add_argument('--port',type=int,default=8875)
+    parser.add_argument('--dynamic-auth',action='store_true',help='Use CP17 token authentication; no password fallback')
+    parser.add_argument('--dynamic-authority-file',help='Explicit trusted mapping/profile JSON outside any backup bundle')
     args=parser.parse_args()
     root=Path(args.directory)
     if args.command=='restore':
@@ -106,7 +108,27 @@ def main():
     backend=load_backend(config)
     if args.command=='web':
         from server.web import create_app
-        create_app(backend,origin=config['origin']).run(host='127.0.0.1',port=args.port,debug=False,use_reloader=False)
+        dynamic_config=None
+        if args.dynamic_auth:
+            from server.dynamic_contracts import ClaimProfile, ENVIRONMENT_ID
+            from server.dynamic_jwt import FixedJwksCache
+            from server.dynamic_mapping import activate_mappings
+            profile=ClaimProfile(ENVIRONMENT_ID,'')
+            if args.dynamic_authority_file:
+                authority=json.loads(Path(args.dynamic_authority_file).read_text())
+                if set(authority)!={'sourceVersion','mappings','claimProfile'}: raise ValueError('Invalid trusted authority file')
+                profile_data=dict(authority['claimProfile'])
+                if 'audiences' in profile_data: profile_data['audiences']=tuple(profile_data['audiences'])
+                profile=ClaimProfile(**profile_data)
+                if profile.environment_id!=ENVIRONMENT_ID: raise ValueError('Sandbox environment required')
+                if any(entry.get('environment_id')!=profile.environment_id or entry.get('issuer')!=profile.issuer for entry in authority['mappings']):
+                    raise ValueError('Mapping/profile environment or issuer mismatch')
+                activate_mappings(backend.store,authority['mappings'],source_version=authority['sourceVersion'])
+            dynamic_config={'profile':profile,'jwks':FixedJwksCache(clock=backend.clock),
+                            'capture_directory':root/'profile-captures'}
+        elif args.dynamic_authority_file:
+            raise ValueError('Explicit --dynamic-auth required')
+        create_app(backend,origin=config['origin'],dynamic_auth_config=dynamic_config).run(host='127.0.0.1',port=args.port,debug=False,use_reloader=False)
     else:
         from server.outbox import Worker
         worker=Worker(backend,load_worker_keys(config))

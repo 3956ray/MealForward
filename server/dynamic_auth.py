@@ -135,10 +135,27 @@ class DynamicAuthService(AuthService):
         return response
 
 
-def register_dynamic_auth(app, store, *, profile, jwks, clock, verifier=None):
+def register_dynamic_auth(app, store, *, profile, jwks, clock, verifier=None, capture_directory=None):
     service = DynamicAuthService(store, profile=profile, jwks=jwks, clock=clock, verifier=verifier)
     app.add_url_rule('/api/v1/auth/dynamic/exchange', 'dynamic_exchange', service.exchange, methods=['POST'])
     app.add_url_rule('/api/v1/auth/login', 'work_auth_login', service.login, methods=['POST'])
     app.add_url_rule('/api/v1/auth/session', 'work_auth_session', service.session, methods=['GET'])
     app.add_url_rule('/api/v1/auth/logout', 'work_auth_logout', service.logout, methods=['POST'])
+    if capture_directory is not None:
+        from server.dynamic_profile import ProfileCapture
+        capture=ProfileCapture(capture_directory,clock=clock,jwks=jwks)
+        @app.post('/api/v1/auth/dynamic/profile-check')
+        def profile_check():
+            service._origin()
+            if not request.is_json or request.get_json(silent=True)!={}:
+                raise ApiError(400,'INVALID_REQUEST','Empty JSON object required')
+            key='profile-check:'+(request.remote_addr or 'unknown');now=int(clock())
+            with store.transaction() as db:
+                count=db.execute('SELECT count(*) FROM auth_failures WHERE key=? AND occurred_at>?',(key,now-60)).fetchone()[0]
+                if count>=5: raise ApiError(429,'RATE_LIMITED','Try later')
+                db.execute('INSERT INTO auth_failures VALUES(?,?)',(key,now))
+            bearer=request.headers.get('Authorization','')
+            if not bearer.startswith('Bearer ') or len(bearer)>16400:
+                raise ApiError(401,'DYNAMIC_TOKEN_REJECTED','Current access token required')
+            return jsonify(capture.inspect(bearer[7:]))
     return service
