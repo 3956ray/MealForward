@@ -73,6 +73,56 @@ class ReadTests(unittest.TestCase):
         self.sync.close();new=Synchronizer(self.store,lambda:self.rpc)
         try:new.run();self.assertEqual(new.view()['sync']['state'],'HALTED')
         finally:new.close()
+    def test_budget_before_snapshot_is_stale_and_does_not_change_success_time(self):
+        self.sync.run();old=self.sync.view()['source'];self.rpc.height+=100
+        original=self.rpc.call
+        def limited(method,params):
+            if method=='eth_call' and self.rpc.functions[params[0]['data'][:10]]['name']=='getBatch':
+                raise ReadError('SYNC_BUDGET')
+            return original(method,params)
+        self.rpc.call=limited;self.sync.run();view=self.sync.view()
+        self.assertEqual(view['sync']['state'],'STALE');self.assertEqual(view['sync']['accountingState'],'STALE')
+        self.assertEqual(view['source'],old)
+    def test_budget_before_first_snapshot_is_unavailable(self):
+        self.rpc.fail='SYNC_BUDGET';self.sync.run();view=self.sync.view()
+        self.assertEqual(view['sync']['state'],'UNAVAILABLE');self.assertEqual(view['sync']['accountingState'],'UNAVAILABLE')
+        self.assertIsNone(view['source'])
+    def test_budget_after_snapshot_keeps_only_current_accounting_verified(self):
+        self.sync.run();old=self.sync.view()['source'];self.rpc.height+=100
+        original=self.rpc.call
+        def limited(method,params):
+            if method=='eth_getLogs':raise ReadError('SYNC_BUDGET')
+            return original(method,params)
+        self.rpc.call=limited;self.sync.run();view=self.sync.view()
+        self.assertEqual(view['sync']['state'],'HISTORY_SYNCING');self.assertEqual(view['sync']['accountingState'],'VERIFIED')
+        self.assertEqual(view['source']['blockNumber'],self.rpc.height);self.assertNotEqual(view['source'],old)
+        self.sync.close();new=Synchronizer(self.store,lambda:self.rpc)
+        try:self.assertEqual(new.view()['sync']['accountingState'],'STALE')
+        finally:new.close()
+    def test_missing_known_logs_halts_without_advancing_page_and_survives_restart(self):
+        original=self.rpc.call
+        self.rpc.call=lambda method,params: [] if method=='eth_getLogs' else original(method,params)
+        self.sync.run()
+        self.assertEqual(len(self.store.events()),5)
+        self.assertEqual(self.store.state()['cursor'],START-1)
+        self.assertEqual(self.store.state()['halted'],'SCAN_CONFLICT')
+        self.assertEqual(self.sync.view()['sync']['eventsState'],'HALTED')
+        self.sync.close();new=Synchronizer(self.store,lambda:self.rpc)
+        try:
+            before=len(self.rpc.calls);new.run();self.assertEqual(len(self.rpc.calls),before)
+            self.assertEqual(new.view()['sync']['state'],'HALTED')
+        finally:new.close()
+    def test_missing_second_page_keeps_first_page_cursor_and_conflicting_page_rolls_back(self):
+        original=self.rpc.call
+        def missing(method,params):
+            if method=='eth_getLogs' and int(params[0]['fromBlock'],16)==START+10:return []
+            return original(method,params)
+        self.rpc.call=missing;self.sync.run()
+        self.assertEqual(self.store.state()['cursor'],START+9);self.assertEqual(self.store.state()['halted'],'SCAN_CONFLICT')
+        known=self.store.events()[1];changed={**known,'blockHash':'0x'+'a'*64}
+        with self.assertRaises(ReadError) as error:self.store.save_events([changed],START+19,'0x'+'b'*64)
+        self.assertEqual(error.exception.code,'SCAN_CONFLICT');self.assertEqual(self.store.state()['cursor'],START+9)
+        self.assertEqual(self.store.events()[1],known)
     def test_wrong_chain_and_receipt_conflict_fail_closed(self):
         self.rpc.wrong=True;self.sync.run();self.assertEqual(self.store.state()['halted'],'WRONG_CHAIN')
         self.assertNotIn('eth_getLogs',[m for m,p in self.rpc.calls])

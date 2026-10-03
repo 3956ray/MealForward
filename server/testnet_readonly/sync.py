@@ -15,6 +15,7 @@ class Synchronizer:
     def __init__(self, store, rpc_factory=ReadRpc, clock=time.monotonic):
         self.store,self.rpc_factory,self.clock=store,rpc_factory,clock
         self.mutex=threading.Lock(); self.active=False; self.ready=False
+        self.snapshot_committed=False
         self.started=deque(); self.last_started=None
         self.lease=open(str(store.path)+'.read.lock','a'); self.lease.flush()
         import os
@@ -84,6 +85,8 @@ class Synchronizer:
     def run(self):
         rpc=None
         if self.store.state()['halted']: return
+        # A budget failure may only preserve VERIFIED after this round commits a snapshot.
+        self.snapshot_committed=False
         self.store.attempt(utc())
         try:
             rpc=self.rpc_factory()
@@ -112,6 +115,7 @@ class Synchronizer:
             self.store.snapshot(dict(amounts={k:str(v) for k,v in zip('FARHS',amounts[:5])},
                 contractBalanceWei=str(balance),liabilityWei=str(liability),
                 source=dict(chainId=10143,contract=ADDRESS,blockNumber=height,blockHash=bhash,finality='finalized',checkedAt=utc())))
+            self.snapshot_committed=True
             self.ready=True
             receipts={}; blocks={height:bhash}
             # Seed only candidate locations from public manifest; independently verify every receipt and log.
@@ -148,7 +152,7 @@ class Synchronizer:
         state=self.store.state(); snapshot=json.loads(state['snapshot']) if state['snapshot'] else None
         verified=snapshot['source']['blockNumber'] if snapshot else None
         scan=state['cursor']; halted=bool(state['halted'])
-        budget=state['error'] in ('SYNC_BUDGET',)
+        budget=state['error']=='SYNC_BUDGET' and self.snapshot_committed
         if halted: status='HALTED'
         elif self.active: status='SYNCING'
         elif not self.ready: status='STALE' if snapshot else 'UNAVAILABLE'

@@ -37,7 +37,7 @@ npm run dev:dynamic
 
 **2026-10-03实测Alchemy免费层getLogs拒绝256块页：HTTP400/-32600，分类FREE_TIER_10_BLOCK_RANGE；Leader已确认缩页。实际单页10块、最多8页/作业（≤80块），不提高RPC/时间预算。** 在快速出块网络上，按此预算连续扫描不能保证追齐；页面必须保留落后提示。五已知历史交易由公开manifest提供定位，均重新读取receipt、解码事件、核固定批次/券、canonical block与finalized上界；这不把连续cursor推进到事件块。全局VERIFIED只有连续范围扫描至本次资金核验块才可给出。CP19报告仅预期/定位，不是API账数据源。
 
-资金getBatch/liability/balance在同一明确finalized块读取、守恒检查并复核block hash后原子存快照。每已核事件页与连续cursor原子提交；以tx/log唯一键去重。事件未齐允许显示带来源的金额，状态HISTORY_SYNCING；失败保留旧快照/原成功时间并标STALE，首次无数据503/占位；HALTED隐去当前金额、不清原证据。finalized不可用/倒退不降级latest。
+资金getBatch/liability/balance在同一明确finalized块读取、守恒检查并复核block hash后原子存快照。每已核事件页与连续cursor原子提交；提交事务内核对范围中已由receipt确认的事件，遗漏或内容矛盾持久SCAN_CONFLICT并回滚该页/游标；以tx/log唯一键去重。事件未齐允许显示带来源的金额，状态HISTORY_SYNCING；失败保留旧快照/原成功时间并标STALE，首次无数据503/占位；HALTED隐去当前金额、不清原证据。finalized不可用/倒退不降级latest。SYNC_BUDGET仅在本轮新资金快照已成功提交后，才允许资金保持VERIFIED而历史继续同步；提交前预算耗尽为STALE/UNAVAILABLE，原成功时间不变。重启不继承这一本轮标记。
 
 ## 重启、恢复与回滚
 

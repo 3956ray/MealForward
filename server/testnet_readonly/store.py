@@ -47,6 +47,14 @@ class ReadStore:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             try:
+                if cursor is not None:
+                    low=db.execute('SELECT cursor FROM state WHERE id=1').fetchone()[0]+1
+                    observed={(e['transactionHash'],e['logIndex']):e for e in events}
+                    known=db.execute('SELECT tx,log_index,data FROM events WHERE block>=? AND block<=?',(low,cursor)).fetchall()
+                    # Receipt-verified evidence must also be present in the contiguous scan.
+                    # Check inside the page/cursor transaction so failure commits neither.
+                    if any(observed.get((row['tx'],row['log_index']))!=json.loads(row['data']) for row in known):
+                        raise ReadError('SCAN_CONFLICT',True)
                 for e in events:
                     payload=json.dumps(e,sort_keys=True)
                     old=db.execute('SELECT data FROM events WHERE tx=? AND log_index=?',(e['transactionHash'],e['logIndex'])).fetchone()
