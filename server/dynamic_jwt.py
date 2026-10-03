@@ -76,7 +76,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 def _fetch():
     # No caller URL and no redirect traversal, including same-origin redirects.
     opener = urllib.request.build_opener(_NoRedirect())
-    request = urllib.request.Request(JWKS_URL, headers={'Accept': 'application/json'})
+    request = urllib.request.Request(JWKS_URL, headers={
+        'Accept': 'application/json',
+        'User-Agent': 'mealforward/0.1 (+local-jwks-verifier)',
+    })
     with opener.open(request, timeout=3) as response:
         if response.status != 200 or response.geturl() != JWKS_URL:
             raise ValueError('Unexpected JWKS response')

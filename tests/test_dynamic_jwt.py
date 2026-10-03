@@ -194,6 +194,9 @@ class JwtTests(unittest.TestCase):
             self.assertEqual(_fetch(), self.body)
             args, kwargs = factory.return_value.open.call_args
             self.assertEqual(args[0].full_url, JWKS_URL)
+            self.assertEqual(args[0].get_header('Accept'), 'application/json')
+            self.assertEqual(args[0].get_header('User-agent'),
+                             'mealforward/0.1 (+local-jwks-verifier)')
             self.assertEqual(kwargs, {'timeout': 3})
             response.read.assert_called_once_with(1048577)
             response.geturl.return_value = 'https://evil.invalid'
