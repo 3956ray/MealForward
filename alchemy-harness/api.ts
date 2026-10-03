@@ -3,7 +3,7 @@ export interface TestnetStatus {
   network: 'Monad Testnet'
   latestBlock: string
   checkedAt: string
-  contractDeployed: false
+  contractConnected: false
 }
 
 export class CheckFailure extends Error {}
@@ -24,11 +24,11 @@ export async function checkTestnet(signal: AbortSignal): Promise<TestnetStatus> 
   })
   const data = await response.json()
   if (!response.ok) throw new CheckFailure(messages[data?.error?.code] ?? '本次测试网读取失败，请稍后主动重试。')
-  if (data?.chainId !== 10143 || data.network !== 'Monad Testnet' || data.contractDeployed !== false
+  if (data?.chainId !== 10143 || data.network !== 'Monad Testnet' || data.contractConnected !== false
       || typeof data.latestBlock !== 'string' || !/^(0|[1-9][0-9]*)$/.test(data.latestBlock)
       || typeof data.checkedAt !== 'string' || !data.checkedAt.endsWith('Z') || !Number.isFinite(Date.parse(data.checkedAt))) {
     throw new CheckFailure('本次测试网返回的数据无效，请稍后主动重试。')
   }
   return { chainId: 10143, network: 'Monad Testnet', latestBlock: data.latestBlock,
-    checkedAt: data.checkedAt, contractDeployed: false }
+    checkedAt: data.checkedAt, contractConnected: false }
 }

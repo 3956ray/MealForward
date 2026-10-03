@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkTestnet, CheckFailure } from '../../alchemy-harness/api.ts'
 
-const valid = { chainId: 10143, network: 'Monad Testnet', latestBlock: '1234567890123456789012345', checkedAt: '2026-10-03T00:00:00Z', contractDeployed: false }
+const valid = { chainId: 10143, network: 'Monad Testnet', latestBlock: '1234567890123456789012345', checkedAt: '2026-10-03T00:00:00Z', contractConnected: false }
 test('request is exact read-only same-origin body with no credentials and whitelisted response', async () => {
   const original = globalThis.fetch
   const signal = new AbortController().signal
@@ -18,7 +18,7 @@ test('request is exact read-only same-origin body with no credentials and whitel
 test('malformed/wrong-chain success and raw upstream error never become successful UI data', async () => {
   const original = globalThis.fetch
   try {
-    for (const body of [{...valid, chainId: 143}, {...valid, latestBlock: 1}, {...valid, checkedAt: 'yesterday'}, null]) {
+    for (const body of [{...valid, chainId: 143}, {...valid, latestBlock: 1}, {...valid, checkedAt: 'yesterday'}, {...valid, contractConnected: true}, {...valid, contractConnected: undefined, contractDeployed: false}, null]) {
       globalThis.fetch = async () => new Response(JSON.stringify(body))
       await assert.rejects(checkTestnet(new AbortController().signal), CheckFailure)
     }

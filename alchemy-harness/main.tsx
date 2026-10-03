@@ -52,7 +52,7 @@ function App() {
       <button disabled={busy} onClick={() => void check()}>{busy ? '正在检查…' : attempted ? '重新检查' : '检查测试网连接'}<span aria-hidden="true">↗</span></button>
       <p className="hint">每分钟最多 5 次。检查只代表本次读取结果，不代表网络持续可用或区块已最终确认。</p>
     </section>
-    <aside><strong>本项目尚未部署测试网合约</strong><p>本页只检查网络连接，不展示餐账或资金流水。无需登录或连接钱包，也不会发送交易。</p></aside>
+    <aside><strong>本页仅检查网络连接；项目测试网合约已部署，业务入口尚未接入本页</strong><p>本页只检查网络连接，不展示餐账或资金流水。无需登录或连接钱包，也不会发送交易。</p></aside>
     <footer>mealforward · 测试网观察</footer>
   </main>
 }

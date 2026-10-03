@@ -146,7 +146,7 @@ class Checker:
                     self.remaining(deadline)
                 outcome['data'] = {'chainId': 10143, 'network': 'Monad Testnet',
                                    'latestBlock': str(block), 'checkedAt': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                                   'contractDeployed': False}
+                                   'contractConnected': False}
             except CheckError as error:
                 outcome['error'] = error.code
             except Exception:
