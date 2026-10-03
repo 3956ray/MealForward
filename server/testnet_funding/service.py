@@ -20,6 +20,8 @@ class FundingService:
             if hasattr(rpc,'close'): rpc.close()
     def view(self,r):
         return {'operation':{'id':r['config']['campaignId'],'intentId':r['intentId'],'batchId':r['batchId'],'payer':r['config']['payer'],
+                    'budgetViolation':r.get('budgetViolation',False),'finalizedReceipt':r.get('finalizedReceipt'),
+                    'receiptConflict':r.get('receiptConflict'),
                     **{k:r[k] for k in ('status','txHash','errorCode','submitted','receiptBlock','receiptBlockHash','finalizedBlock','gasFeeWei','scanThrough')}},
                 'intent':dict(chainId=10143,to=ADDRESS,data=r['data'],valueWei=str(PRICE),quantity=1,ruleVersion=RULE,
                               gasLimitCap=250000,maxFeePerGasCapWei=str(MAX_FEE)),
@@ -97,10 +99,12 @@ class FundingService:
     def reconcile(self,token):
         with self.store.lock():
             r=self.store.load();self.store.require_cap(r,token,self.clock())
-            if not r['submitted'] or r['status']=='HALTED': return self.view(r)
+            if not r['submitted'] or (r['status']=='HALTED' and r['errorCode']!='BUDGET_EXCEEDED'): return self.view(r)
+            if r['status']=='HALTED':
+                r['budgetViolation']=True;r['status']='BROADCAST'  # legacy budget-only halt may still be observed
             try:
                 with self.rpc() as rpc: self.observe(rpc,r)
-                r['errorCode']=None
+                r['errorCode']='BUDGET_EXCEEDED' if r.get('budgetViolation') else None
             except FundingError as error:
                 r['errorCode']=error.code
                 if error.status!=503:
@@ -134,11 +138,20 @@ class FundingService:
                 if r['txHash']: break
             if not r['txHash']: return
         tx=rpc.call('eth_getTransactionByHash',[r['txHash']])
-        if tx is None: return
-        verify_transaction(tx,r['transaction'])
+        if tx is None:
+            if r.get('finalizedReceipt'): raise FundingError('TRANSACTION_UNAVAILABLE',503)
+            return
+        # Identity must match before a budget violation can be tracked as this intent.
+        verify_transaction(tx,r['transaction'],check_budget=False)
         if tx.get('hash','').lower()!=r['txHash']: raise FundingError('TRANSACTION_CONFLICT')
+        observed={key:rpc_number(tx[key]) for key in ('gas','maxFeePerGas','maxPriorityFeePerGas')}
+        if any(value>rpc_number(r['transaction'][key]) for key,value in observed.items()):
+            r['budgetViolation']=True
+            r['budgetEvidence']={key:str(value) for key,value in observed.items()}
         receipt=rpc.call('eth_getTransactionReceipt',[r['txHash']])
-        if receipt is None: return
+        if receipt is None:
+            if r.get('finalizedReceipt'): raise FundingError('RECEIPT_UNAVAILABLE',503)
+            return
         if receipt.get('transactionHash','').lower()!=r['txHash']: raise FundingError('RECEIPT_CONFLICT')
         n=rpc_number(receipt.get('blockNumber'));h=receipt.get('blockHash');hex_data(h,32)
         if block(rpc,n)['hash'].lower()!=h.lower(): raise FundingError('CANONICAL_CONFLICT')
@@ -146,13 +159,18 @@ class FundingService:
         status=rpc_number(receipt.get('status'))
         if status not in (0,1): raise FundingError('RECEIPT_CONFLICT')
         gas=rpc_number(receipt.get('gasUsed'));fee=rpc_number(receipt.get('effectiveGasPrice'))
-        if gas>rpc_number(r['transaction']['gas']) or fee>rpc_number(r['transaction']['maxFeePerGas']): raise FundingError('BUDGET_EXCEEDED')
+        if gas>observed['gas'] or fee>observed['maxFeePerGas']: raise FundingError('RECEIPT_CONFLICT')
+        fact={'status':status,'blockNumber':n,'blockHash':h.lower(),'gasFeeWei':str(gas*fee)}
+        previous=r.get('finalizedReceipt')
+        if previous is not None and previous!=fact:
+            r['receiptConflict']=fact
+            raise FundingError('FINALITY_CONFLICT')
         if status:
             matched=[l for l in receipt.get('logs',[]) if funded_log(l,r['intentId'],r['config']['payer'],r['batchId'])]
             if len(matched)!=1 or matched[0].get('transactionHash','').lower()!=r['txHash'] or matched[0].get('blockHash','').lower()!=h.lower() or rpc_number(matched[0].get('blockNumber'))!=n: raise FundingError('EVENT_CONFLICT')
         r.update(receiptBlock=n,receiptBlockHash=h.lower(),gasFeeWei=str(gas*fee),status='INCLUDED_SUCCESS' if status else 'INCLUDED_REVERT')
         if height<n: return
-        r.update(finalizedBlock=height,status='FINALIZED_SUCCESS' if status else 'FINALIZED_REVERT')
+        r.update(finalizedBlock=height,finalizedReceipt=fact,status='FINALIZED_SUCCESS' if status else 'FINALIZED_REVERT')
         self.store.save(r)  # accounting unavailability must not erase proven finality
         if not status: return
         values=contract_read(rpc,'getBatch',[r['batchId']],height)

@@ -7,7 +7,7 @@ import { selectMetaMask, type Provider } from '../../src/testnet-funding/wallet.
 const payer='0x'+'12'.repeat(20), other='0x'+'34'.repeat(20), intent='0x'+'56'.repeat(32), txHash='0x'+'78'.repeat(32)
 const now=1000000
 const config:Config={chainId:10143,contract:CONTRACT,ruleVersion:RULE,priceWei:PRICE,testOnly:true,configured:true}
-function fixture(): View { return {operation:{id:'original',intentId:intent,batchId:'0x'+'ab'.repeat(32),payer,status:'PREPARED',txHash:null,errorCode:null,submitted:false,receiptBlock:null,receiptBlockHash:null,finalizedBlock:null,gasFeeWei:null,scanThrough:null},intent:{chainId:10143,to:CONTRACT,data:fundData(intent),valueWei:PRICE,quantity:1,ruleVersion:RULE,gasLimitCap:250000,maxFeePerGasCapWei:'200000000000'},review:null,accounting:null} }
+function fixture(): View { return {operation:{budgetViolation:false,finalizedReceipt:null,receiptConflict:null,id:'original',intentId:intent,batchId:'0x'+'ab'.repeat(32),payer,status:'PREPARED',txHash:null,errorCode:null,submitted:false,receiptBlock:null,receiptBlockHash:null,finalizedBlock:null,gasFeeWei:null,scanThrough:null},intent:{chainId:10143,to:CONTRACT,data:fundData(intent),valueWei:PRICE,quantity:1,ruleVersion:RULE,gasLimitCap:250000,maxFeePerGasCapWei:'200000000000'},review:null,accounting:null} }
 function transaction() { return {from:payer,to:CONTRACT,chainId:CHAIN_HEX as '0x279f',nonce:'0x1',data:fundData(intent),value:'0x38d7ea4c68000',gas:'0x30d40',maxFeePerGas:'0x2e90edd000',maxPriorityFeePerGas:'0x77359400',type:'0x2' as const} }
 class Wallet implements Provider {
   isMetaMask=true; account=payer; chain=CHAIN_HEX; calls:string[]=[]; listeners=new Map<string,Set<(...args:unknown[])=>void>>(); send:()=>Promise<unknown>=async()=>txHash
@@ -46,3 +46,27 @@ test('unmount while marker is in flight prevents wallet send',async()=>{const s=
 test('wallet changing after broadcast still attaches hash to original payer',async()=>{const s=setup();s.wallet.send=async()=>{s.wallet.account=other;s.wallet.emit('accountsChanged');return txHash};await reviewed(s);await s.controller.submit();assert.equal(s.controller.state.view?.operation.txHash,txHash);assert.equal(s.controller.state.view?.operation.payer,payer)})
 
 test('wallet timeout leaves original operation queryable with no second send',async()=>{const s=setup();s.wallet.send=()=>new Promise(()=>{});const controller=new FundingController(s.api,()=>s.wallet,()=>now,1);await controller.load();await controller.connect();await controller.review();await controller.submit();assert.equal(controller.state.busy,false);assert.equal(controller.state.error,'SUBMISSION_UNKNOWN');await controller.submit();await controller.reconcile();assert.equal(s.wallet.calls.filter(x=>x==='eth_sendTransaction').length,1);assert.equal(controller.state.consumed,true)})
+
+test('HTTP200 cached DTO reports stale and visible error until completed refresh',async()=>{
+  const view=fixture();view.operation.submitted=true;view.operation.status='FINALIZED_SUCCESS';view.operation.txHash=txHash;view.operation.receiptBlock=1;view.operation.receiptBlockHash=txHash;view.operation.finalizedBlock=1
+  view.operation.finalizedReceipt={status:1,blockNumber:1,blockHash:txHash,gasFeeWei:'10'}
+  const api={config:async()=>config,operation:async()=>structuredClone(view),reconcile:async()=>structuredClone(view)} as FundingApi
+  const c=new FundingController(api,()=>undefined);await c.load();assert.equal(c.state.stale,false)
+  for(const code of ['RPC_UNAVAILABLE','RPC_TIMEOUT','SYNC_BUDGET','RECEIPT_UNAVAILABLE']){
+    view.operation.errorCode=code;await c.reconcile();assert.equal(c.state.stale,true);assert.equal(c.state.error,code);assert.equal(c.state.view?.operation.finalizedReceipt?.status,1)
+  }
+  view.operation.errorCode=null;await c.reconcile();assert.equal(c.state.stale,false);assert.equal(c.state.error,null);assert.equal(c.state.consumed,true)
+})
+test('budget violation remains prominent alongside finalized execution result',async()=>{
+  const view=fixture();view.operation.submitted=true;view.operation.status='FINALIZED_REVERT';view.operation.budgetViolation=true;view.operation.errorCode='BUDGET_EXCEEDED';view.operation.txHash=txHash
+  view.operation.finalizedReceipt={status:0,blockNumber:1,blockHash:txHash,gasFeeWei:'20'}
+  const c=new FundingController({config:async()=>config,operation:async()=>view,reconcile:async()=>view} as FundingApi,()=>undefined)
+  await c.load();assert.equal(c.state.stale,false);assert.match(statusText(c.state),/预算违规/);assert.match(statusText(c.state),/执行失败/);assert.equal(c.state.consumed,true)
+  await c.reconcile();assert.match(statusText(c.state),/永久禁止再次签名/)
+})
+test('conflicting finalized receipt retains historical fact and reports stale',async()=>{
+  const view=fixture();view.operation.submitted=true;view.operation.status='HALTED';view.operation.errorCode='FINALITY_CONFLICT'
+  view.operation.finalizedReceipt={status:1,blockNumber:1,blockHash:txHash,gasFeeWei:'20'};view.operation.receiptConflict={...view.operation.finalizedReceipt,status:0}
+  const c=new FundingController({config:async()=>config,operation:async()=>view} as FundingApi,()=>undefined);await c.load()
+  assert.equal(c.state.stale,true);assert.equal(c.state.view?.operation.finalizedReceipt?.status,1);assert.equal(c.state.view?.operation.receiptConflict?.status,0);assert.match(statusText(c.state),/停止/)
+})

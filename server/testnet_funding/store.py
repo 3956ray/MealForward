@@ -69,7 +69,8 @@ class FundingStore:
                     'data':encode_call('fund',[intent,1,RULE]),'phase':'PREPARED','capHash':None,'capExpires':None,
                     'status':'PREPARED','submitted':False,'txHash':None,'review':None,'transaction':None,
                     'errorCode':None,'scanStart':None,'scanThrough':None,'scanHash':None,
-                    'receiptBlock':None,'receiptBlockHash':None,'finalizedBlock':None,'gasFeeWei':None,'accounting':None}
+                    'receiptBlock':None,'receiptBlockHash':None,'finalizedBlock':None,'gasFeeWei':None,'accounting':None,
+                    'budgetViolation':False,'budgetEvidence':None,'finalizedReceipt':None,'receiptConflict':None}
             self.write_anchor(record,'PREPARED')  # a missing DB after a crash is quarantined
             fd=os.open(self.path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
             with sqlite3.connect(self.path) as db:
@@ -89,6 +90,15 @@ class FundingStore:
             expected={'planHash':record['planHash'],'intentId':record['intentId'],'phase':record['phase'],'capHash':record['capHash']}
             if anchor!=expected or digest(canonical(record['config']))!=record['planHash']: raise ValueError()
             if record['submitted']!=(record['phase']=='CONSUMED'): raise ValueError()
+            # Preserve already-finalized facts when reading the earlier CP21 schema.
+            if 'finalizedReceipt' not in record:
+                record['finalizedReceipt']=None
+                if record['finalizedBlock'] is not None:
+                    if record['status'] not in ('ACCOUNTING_VERIFIED','FINALIZED_SUCCESS','FINALIZED_REVERT'): raise ValueError()
+                    record['finalizedReceipt']={'status':0 if record['status']=='FINALIZED_REVERT' else 1,
+                        'blockNumber':record['receiptBlock'],'blockHash':record['receiptBlockHash'],'gasFeeWei':record['gasFeeWei']}
+            record.setdefault('budgetViolation',record['errorCode']=='BUDGET_EXCEEDED')
+            record.setdefault('budgetEvidence',None);record.setdefault('receiptConflict',None)
             return record
         except Exception: raise FundingError('RESTORE_QUARANTINE',503) from None
     def write_anchor(self,record,phase):

@@ -34,6 +34,11 @@ export const errorText: Record<string,string> = {
   CONNECTION_UNAVAILABLE:'读取未完成；已显示数据仅为上次已核结果',
   WALLET_REQUEST_REJECTED:'钱包请求未完成，请确认后再主动操作',
   SUBMISSION_UNKNOWN:'付款结果待核，请查询原操作',
+  BUDGET_EXCEEDED:'原交易费用已越过本轮预算，永久禁止再次签名；继续只读跟踪原交易',
+  FINALITY_CONFLICT:'最终确认回执出现矛盾，核验已停止；保留原已核事实供复核',
+  RPC_UNAVAILABLE:'本次链上读取未完成，已显示数据仅为上次已核结果',
+  RPC_TIMEOUT:'本次链上读取超时，已显示数据仅为上次已核结果',
+  SYNC_BUDGET:'本次核验读取额度已用尽，已显示数据仅为上次已核结果',
 }
 export function displayError(code: string) { return errorText[code] ?? `操作未完成（${code}），请联系本次测试负责人；不要再次付款` }
 export class FundingController {
@@ -53,7 +58,7 @@ export class FundingController {
   private code(error: unknown) { return error instanceof FundingError ? error.message : 'WALLET_REQUEST_REJECTED' }
   private changed = () => { this.revision++; this.update({account:null,chain:null,review:null,error:this.state.consumed?'SUBMISSION_UNKNOWN':'WALLET_CHANGED'}) }
   dispose() { this.disposed=true; this.revision++; for(const event of ['accountsChanged','chainChanged','disconnect']) this.provider?.removeListener?.(event,this.changed); this.listeners.clear() }
-  private accept(raw: View): View { const next=parseView(raw) as View; if(this.state.view) assertOriginal(this.state.view,next); if(this.state.consumed && !next.operation.submitted) throw new FundingError('SUBMISSION_UNKNOWN'); this.update({view:next,consumed:this.state.consumed||next.operation.submitted,stale:false}); return next }
+  private accept(raw: View): View { const next=parseView(raw) as View; if(this.state.view) assertOriginal(this.state.view,next); if(this.state.consumed && !next.operation.submitted) throw new FundingError('SUBMISSION_UNKNOWN'); this.update({view:next,consumed:this.state.consumed||next.operation.submitted,stale:next.operation.errorCode!==null && next.operation.errorCode!=='BUDGET_EXCEEDED',error:next.operation.errorCode}); return next }
   private async run(action: ()=>Promise<void>, reading=false) { if(this.state.busy || this.disposed) return; this.update({busy:true,error:null}); try { await action() } catch(error) { this.update({error:this.state.consumed && !reading?'SUBMISSION_UNKNOWN':this.code(error),review:null,...(reading?{stale:true}:{})}) } finally { this.update({busy:false,waitingWallet:false}) } }
   async load() { await this.run(async()=>{this.update({config:parseConfig(await this.api.config())}); if(this.state.config?.configured) this.accept(await this.api.operation())},true) }
   async start() { await this.run(async()=>{if(!this.state.config?.configured || this.state.view || this.state.consumed) return; this.accept(await this.api.session())}) }
@@ -111,7 +116,7 @@ export class FundingController {
   }) }
   async reconcile() { await this.run(async()=>{this.update({review:null}); this.accept(await this.api.reconcile())},true) }
 }
-export function statusText(state: FundingState) {
+function operationStatusText(state: FundingState) {
   if(state.waitingWallet) return '等待钱包处理'
   if(state.consumed && (!state.view?.operation.submitted || state.error==='SUBMISSION_UNKNOWN')) return '付款结果待核，请查询原操作'
   switch(state.view?.operation.status) {
@@ -126,4 +131,9 @@ export function statusText(state: FundingState) {
     case 'RESTORE_QUARANTINE': return '原记录处于恢复隔离，仅可查询；请勿再次付款'
     default: return state.config?.configured?'请访问本轮原付款操作':'本轮测试入款尚未配置'
   }
+}
+
+export function statusText(state: FundingState) {
+  const text=operationStatusText(state)
+  return state.view?.operation.budgetViolation ? '预算违规已记录，永久禁止再次签名；'+text : text
 }

@@ -9,7 +9,8 @@ export const statuses = ['PREPARED','SUBMISSION_UNKNOWN','BROADCAST','INCLUDED_S
 export type Status = typeof statuses[number]
 export interface Config { chainId: 10143; contract: string; ruleVersion: string; priceWei: string; testOnly: true; configured: boolean }
 export interface WalletTransaction { from: string; to: string; chainId: '0x279f'; nonce: string; data: string; value: string; gas: string; maxFeePerGas: string; maxPriorityFeePerGas: string; type: '0x2' }
-export interface Operation { id: string; intentId: string; batchId: string; payer: string; status: Status; txHash: string|null; errorCode: string|null; submitted: boolean; receiptBlock: number|null; receiptBlockHash: string|null; finalizedBlock: number|null; gasFeeWei: string|null; scanThrough: number|null }
+export interface ReceiptFact { status: 0|1; blockNumber: number; blockHash: string; gasFeeWei: string }
+export interface Operation { budgetViolation: boolean; finalizedReceipt: ReceiptFact|null; receiptConflict: ReceiptFact|null; id: string; intentId: string; batchId: string; payer: string; status: Status; txHash: string|null; errorCode: string|null; submitted: boolean; receiptBlock: number|null; receiptBlockHash: string|null; finalizedBlock: number|null; gasFeeWei: string|null; scanThrough: number|null }
 export interface Intent { chainId: 10143; to: string; data: string; valueWei: string; quantity: 1; ruleVersion: string; gasLimitCap: 250000; maxFeePerGasCapWei: string }
 export interface Review { id: string; expiresAt: number; transaction: WalletTransaction }
 export interface Accounting { F: string; A: string; R: string; H: string; S: string; liabilityWei: string; contractBalanceWei: string; totalFundedWei: string; blockNumber: number; blockHash: string }
@@ -42,9 +43,11 @@ export function parseTransaction(value: unknown, view: View): WalletTransaction 
 }
 export function parseView(value: unknown, submitted=false): View|SubmittedView {
   const v=record(value,'operation intent review accounting'+(submitted?' transaction':''))
-  const o=record(v.operation,'id intentId batchId payer status txHash errorCode submitted receiptBlock receiptBlockHash finalizedBlock gasFeeWei scanThrough')
+  const o=record(v.operation,'id intentId batchId payer status txHash errorCode submitted receiptBlock receiptBlockHash finalizedBlock gasFeeWei scanThrough budgetViolation finalizedReceipt receiptConflict')
   check(str(o.id) && hash(o.intentId) && hash(o.batchId) && address(o.payer) && statuses.includes(o.status as Status) && typeof o.submitted==='boolean')
   check(nullable(o.txHash,hash) && nullable(o.errorCode,x=>typeof x==='string' && /^[A-Z0-9_]{1,80}$/.test(x)) && nullable(o.receiptBlock,number) && nullable(o.receiptBlockHash,hash) && nullable(o.finalizedBlock,number) && nullable(o.gasFeeWei,decimal) && nullable(o.scanThrough,number))
+  check(typeof o.budgetViolation==='boolean')
+  for(const key of ['finalizedReceipt','receiptConflict']) if(o[key]!==null) { const f=record(o[key],'status blockNumber blockHash gasFeeWei'); check((f.status===0 || f.status===1) && number(f.blockNumber) && hash(f.blockHash) && decimal(f.gasFeeWei)) }
   check(o.status!=='PREPARED' || o.submitted===false)
   check(!['SUBMISSION_UNKNOWN','BROADCAST','INCLUDED_SUCCESS','INCLUDED_REVERT','FINALIZED_SUCCESS','FINALIZED_REVERT','ACCOUNTING_VERIFIED'].includes(o.status as string) || o.submitted===true)
   const i=record(v.intent,'chainId to data valueWei quantity ruleVersion gasLimitCap maxFeePerGasCapWei')

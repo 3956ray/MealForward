@@ -201,7 +201,8 @@ class FundingTests(unittest.TestCase):
         self.store.save(original);self.rpc.funded(original)
         self.rpc.tx['maxFeePerGas']=hex(MAX_FEE+1)
         result=self.service.reconcile(self.token)
-        self.assertEqual('BUDGET_EXCEEDED',result['operation']['errorCode']);self.assertIsNone(result['accounting'])
+        self.assertEqual('BUDGET_EXCEEDED',result['operation']['errorCode']);self.assertTrue(result['operation']['budgetViolation'])
+        self.assertEqual('ACCOUNTING_VERIFIED',result['operation']['status'])
     def test_accounting_conflict_keeps_original_finality_evidence(self):
         self.submit();self.rpc.funded(self.store.load());self.service.attach(self.token,{'txHash':HASH})
         self.rpc.batch=(PRICE,0,PRICE,0,0,0,0)
@@ -225,6 +226,60 @@ class FundingTests(unittest.TestCase):
         q=self.review()['review'];self.rpc.base+=10**9
         result=self.service.submit(self.token,{'reviewId':q['id']})
         self.assertEqual(q['transaction'],result['transaction'])
+
+    def assert_finalized_status_conflict(self,original_status):
+        self.submit();self.rpc.funded(self.store.load(),status=original_status);self.service.attach(self.token,{'txHash':HASH})
+        before=self.service.reconcile(self.token)
+        self.rpc.funded(self.store.load(),status=1-original_status)
+        after=self.service.reconcile(self.token)
+        self.assertEqual('HALTED',after['operation']['status']);self.assertEqual('FINALITY_CONFLICT',after['operation']['errorCode'])
+        self.assertEqual(before['operation']['finalizedReceipt'],after['operation']['finalizedReceipt'])
+        self.assertEqual(1-original_status,after['operation']['receiptConflict']['status'])
+        self.assertEqual(before['accounting'],after['accounting'])
+        self.rpc.funded(self.store.load(),status=original_status)
+        restarted=FundingService(FundingStore(self.directory),lambda:self.rpc,lambda:self.now)
+        self.assertEqual(after,restarted.reconcile(self.token))
+        self.assertCode('READ_ORIGINAL_ONLY',self.review)
+    def test_finalized_success_to_revert_is_persistent_conflict(self):
+        self.assert_finalized_status_conflict(1)
+    def test_finalized_revert_to_success_is_persistent_conflict(self):
+        self.assert_finalized_status_conflict(0)
+    def test_legacy_finalized_record_retains_status_on_schema_read(self):
+        self.submit();self.rpc.funded(self.store.load());self.service.attach(self.token,{'txHash':HASH})
+        before=self.service.reconcile(self.token);record=self.store.load();del record['finalizedReceipt'];self.store.save(record)
+        self.rpc.funded(record,status=0)
+        after=self.service.reconcile(self.token)
+        self.assertEqual('FINALITY_CONFLICT',after['operation']['errorCode'])
+        self.assertEqual(before['operation']['finalizedReceipt'],after['operation']['finalizedReceipt'])
+    def test_overbudget_revert_continues_readonly_after_restart(self):
+        self.submit();self.rpc.funded(self.store.load(),status=0);self.service.attach(self.token,{'txHash':HASH})
+        self.rpc.tx['maxFeePerGas']=hex(MAX_FEE+1)
+        receipt=self.rpc.receipt;receipt['effectiveGasPrice']=hex(MAX_FEE+1);self.rpc.receipt=None
+        pending=self.service.reconcile(self.token);self.assertTrue(pending['operation']['budgetViolation'])
+        self.assertIsNone(pending['operation']['gasFeeWei']);self.assertEqual('BUDGET_EXCEEDED',pending['operation']['errorCode'])
+        self.rpc.receipt=receipt
+        restarted=FundingService(FundingStore(self.directory),lambda:self.rpc,lambda:self.now)
+        result=restarted.reconcile(self.token)
+        self.assertEqual('FINALIZED_REVERT',result['operation']['status']);self.assertEqual(str(180000*(MAX_FEE+1)),result['operation']['gasFeeWei'])
+        self.assertTrue(result['operation']['budgetViolation']);self.assertIsNone(result['accounting'])
+        count=len(self.rpc.calls);again=restarted.reconcile(self.token)
+        self.assertGreater(len(self.rpc.calls),count);self.assertEqual(result,again);self.assertCode('READ_ORIGINAL_ONLY',self.review)
+    def test_overbudget_success_warning_survives_rpc_failure_and_recovery(self):
+        self.submit();self.rpc.funded(self.store.load());self.service.attach(self.token,{'txHash':HASH})
+        self.rpc.tx['maxFeePerGas']=hex(MAX_FEE+1);self.rpc.receipt['effectiveGasPrice']=hex(MAX_FEE+1)
+        before=self.service.reconcile(self.token);self.assertEqual('ACCOUNTING_VERIFIED',before['operation']['status'])
+        self.rpc.fail=lambda m,p:True
+        stale=self.service.reconcile(self.token);self.assertEqual('RPC_UNAVAILABLE',stale['operation']['errorCode'])
+        self.assertTrue(stale['operation']['budgetViolation']);self.assertEqual(before['accounting'],stale['accounting'])
+        self.rpc.fail=None;fresh=self.service.reconcile(self.token)
+        self.assertEqual('BUDGET_EXCEEDED',fresh['operation']['errorCode']);self.assertTrue(fresh['operation']['budgetViolation'])
+        self.assertEqual(before['operation']['gasFeeWei'],fresh['operation']['gasFeeWei'])
+    def test_finalized_missing_receipt_is_stale_not_fresh(self):
+        self.submit();self.rpc.funded(self.store.load());self.service.attach(self.token,{'txHash':HASH})
+        before=self.service.reconcile(self.token);receipt=self.rpc.receipt;self.rpc.receipt=None
+        stale=self.service.reconcile(self.token)
+        self.assertEqual('RECEIPT_UNAVAILABLE',stale['operation']['errorCode']);self.assertEqual(before['accounting'],stale['accounting'])
+        self.rpc.receipt=receipt;self.assertIsNone(self.service.reconcile(self.token)['operation']['errorCode'])
 
     def test_read_only_method_admission(self):
         self.assertNotIn('eth_sendRawTransaction',METHODS);self.assertNotIn('eth_sendTransaction',METHODS)

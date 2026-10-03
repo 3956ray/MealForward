@@ -67,7 +67,7 @@ def guard(rpc,height=None):
     for name,value in expected.items():
         if contract_read(rpc,name,[],tag)[0]!=value: raise FundingError('IDENTITY_CONFLICT')
 
-def verify_transaction(tx,expected):
+def verify_transaction(tx,expected,*,check_budget=True):
     if not isinstance(tx,dict): raise FundingError('TRANSACTION_UNAVAILABLE',503)
     for key in ('from','to'):
         if str(tx.get(key,'')).lower()!=expected[key].lower(): raise FundingError('TRANSACTION_CONFLICT')
@@ -77,7 +77,8 @@ def verify_transaction(tx,expected):
         if rpc_number(tx.get(key))!=wanted: raise FundingError('TRANSACTION_CONFLICT')
     for key in ('gas','maxFeePerGas','maxPriorityFeePerGas'):
         limit=rpc_number(expected[key]) if isinstance(expected[key],str) else expected[key]
-        if rpc_number(tx.get(key))>limit: raise FundingError('BUDGET_EXCEEDED')
+        actual=rpc_number(tx.get(key))
+        if check_budget and actual>limit: raise FundingError('BUDGET_EXCEEDED')
     if rpc_number(tx.get('type'))!=2: raise FundingError('TRANSACTION_CONFLICT')
 
 
