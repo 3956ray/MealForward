@@ -86,7 +86,9 @@ def main():
     parser.add_argument('--port',type=int,default=8875)
     parser.add_argument('--dynamic-auth',action='store_true',help='Use CP17 token authentication; no password fallback')
     parser.add_argument('--dynamic-authority-file',help='Explicit trusted mapping/profile JSON outside any backup bundle')
+    parser.add_argument('--testnet-scope-file',help='CP20 explicit private read scope; requires Dynamic auth')
     args=parser.parse_args()
+    if args.testnet_scope_file and (args.command!='web' or not args.dynamic_auth): parser.error('Testnet read scope requires Dynamic web mode')
     root=Path(args.directory)
     if args.command=='restore':
         if not args.backup: parser.error('restore requires --backup and a new --directory')
@@ -128,7 +130,7 @@ def main():
                             'capture_directory':root/'profile-captures'}
         elif args.dynamic_authority_file:
             raise ValueError('Explicit --dynamic-auth required')
-        create_app(backend,origin=config['origin'],dynamic_auth_config=dynamic_config).run(host='127.0.0.1',port=args.port,debug=False,use_reloader=False)
+        create_app(backend,origin=config['origin'],dynamic_auth_config=dynamic_config,testnet_scope_file=args.testnet_scope_file).run(host='127.0.0.1',port=args.port,debug=False,use_reloader=False)
     else:
         from server.outbox import Worker
         worker=Worker(backend,load_worker_keys(config))

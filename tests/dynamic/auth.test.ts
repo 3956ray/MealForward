@@ -112,3 +112,12 @@ test('204 logout confirms server revocation without a JSON body', async () => {
   assert.deepEqual(await f.api.logout(), { serverRevoked: true })
   await assert.rejects(f.api.request('/owner/work'), /AUTH_REQUIRED/)
 })
+
+test('deployment read scope denial clears no work identity but other denials invalidate', async () => {
+  const f = fixture(async url => String(url).endsWith('/exchange') ? response() : response({code:'TESTNET_SCOPE_DENIED'},403))
+  await f.api.exchange();const before=f.invalidated.length
+  await assert.rejects(f.api.request('/work/testnet-context'),/TESTNET_SCOPE_DENIED/)
+  assert.equal(f.invalidated.length,before)
+  await assert.rejects(f.api.request('/owner/work'),/TESTNET_SCOPE_DENIED/)
+  assert.equal(f.invalidated.length,before+1)
+})

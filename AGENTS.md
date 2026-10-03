@@ -1,5 +1,11 @@
 # mealforward 项目规则
 
+## CP20 当前 BUILD（覆盖旧阶段冲突条款）
+
+- Leader已完成Dev–PM闭环并放行固定CP19虚构批次的10143持久只读账；合同`docs/CP20-CONTRACT.md`。15207同入口，独立18995读服务/DB；18975既有Dynamic鉴权后检查显式partner只读scope，owner未映射。
+- 首段0广播/0新本金/0gas，不加载signer/runner发送模块，不改31337守卫、旧DB/CP19journal/Envio卷。仅BUILD一次受控入口切换，aud不变；未做OTP如实NOT_RUN。
+- 每页getLogs实际10块（供应商限制），两水位分别展示，不冒称全区间已同步。CP8隐私P2仍开放，未来批次不自动公开。主开发唯一源码writer；Leader安排Astra Medium独审及最终验收。
+
 ## CP19 当前 BUILD（覆盖旧阶段冲突条款）
 
 - Leader已放行独立10143合约与受控runner，合同`docs/CP19-CONTRACT.md`；主开发唯一writer。完整实现固定SHA独审及Leader核部署计划前不广播交易。

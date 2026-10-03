@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '127.0.0.1', port: 15207, strictPort: true,
-    proxy: { '/api': { target: 'http://127.0.0.1:18975', changeOrigin: false } },
+    proxy: { '^/api/v1/testnet(?:/|$)': { target: 'http://127.0.0.1:18995', changeOrigin: false }, '/api': { target: 'http://127.0.0.1:18975', changeOrigin: false } },
     fs: { allow: [fileURLToPath(new URL('../', import.meta.url))], deny: ['**/.localbackend/**', '**/.localchain/**', '**/data/**', '**/.venv/**', '**/.git/**', '**/.env*', '**/*.sqlite*', '**/*.key'] },
   },
   build: { outDir: '../dist-dynamic', emptyOutDir: true },

@@ -1,5 +1,7 @@
 # 留膳 / mealforward — 本地模拟 MVP
 
+CP20 同入口的固定测试网只读餐账见 [docs/CP20-CONTRACT.md](docs/CP20-CONTRACT.md)：15207公账与工作入口、18995独立读服务/DB、18975显式partner只读scope。只读0交易；现有模拟与31337数据保留。
+
 CP19独立测试网合约及持久脚本的运行/恢复边界见 [docs/CP19-CONTRACT.md](docs/CP19-CONTRACT.md)。只使用专用测试身份；部署须先完成固定实现及计划审查，旧服务不切换。
 
 CP18独立只读测试网入口见 [docs/CP18-CONTRACT.md](docs/CP18-CONTRACT.md)。UI `http://127.0.0.1:15217/`，API18985；手动检查Monad Testnet 10143及最新区块，无登录/钱包/交易。启动与定向测试命令见合同；旧入口保持。

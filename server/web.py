@@ -10,7 +10,7 @@ from server.chain.client import ChainConflict, hx
 from server.projection import Projector
 
 
-def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_auth_config=None):
+def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_auth_config=None, testnet_scope_file=None):
     from server.auth import register_auth
     app=Flask(__name__)
     app.config['MAX_CONTENT_LENGTH']=16*1024
@@ -21,6 +21,9 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_a
         service=register_dynamic_auth(app,backend.store,clock=clock or backend.clock,**dynamic_auth_config)
     else:
         service=register_auth(app,backend.store,origin=origin,clock=clock or backend.clock,secure_cookie=False)
+    if dynamic_auth_config is not None and testnet_scope_file is not None:
+        from server.testnet_scope import register
+        register(app,service,backend.store,testnet_scope_file)
     projector=Projector(backend)
     recipient=redemption=None
     if importlib.util.find_spec('server.recipient'):

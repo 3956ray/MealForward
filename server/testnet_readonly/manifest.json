@@ -1,0 +1,37 @@
+{
+  "chainId": 10143,
+  "genesisHash": "0x298034669ee44327d2da9744b9b2782848e2f2a6959756b7b0471b09a404f5c9",
+  "contractAddress": "0x724EaB33ff67B06716913Ceb1c03581f4bBA9721",
+  "runtimeCodeHash": "0x0471d3d3d1f81aa0727d821f87a0d12f19c08abdb611b53ed93a841c86b33873",
+  "ruleVersion": "0x5281a766c67b94209702620ff559de451e9c0389a4b79ad543c30d7787c13c06",
+  "priceWei": "1000000000000000",
+  "fundingCapWei": "10000000000000000",
+  "maxQuantity": 3,
+  "batchId": "0xd1ee3460e4a128a2ab297da62c9c3ee2878f55c4801a163afd06aab42529d1e5",
+  "voucherId": "0x52193e80f311ea6762338e9f7f1fc5580afdc3552494781f31ed5bff29cb1321",
+  "merchant": "0x25E9c5a3FBEBa88b7DD38689489D7EdfC4afb12F",
+  "deploymentBlock": 67797294,
+  "abiSha256": "8d6cfb908170bd1b1b77e9fdbaf3bdd59e7b665cacb0919ad411491cec11ea77",
+  "history": [
+    {
+      "kind": "Funded",
+      "transactionHash": "0x13fbba42239c2f26f7a75abc6149025960fcde1081141faad6b03e02dc104696"
+    },
+    {
+      "kind": "Issued",
+      "transactionHash": "0xe3adc707d7f3616c32c359da923a752c8ee62074fa47a2d9a477172d2545fd15"
+    },
+    {
+      "kind": "Locked",
+      "transactionHash": "0xdccb18efbf4e124ad6f55f180e8e68d7090c5865afed4345f2efcd8a6eb31454"
+    },
+    {
+      "kind": "Reported",
+      "transactionHash": "0xab22e4a27f83071b2ddfd20141a0412d75fef7cd8f8c6754fd4adea5cf10b773"
+    },
+    {
+      "kind": "Settled",
+      "transactionHash": "0xceda9383c6819648c499cb1a908057e8295b602b441ededee193b6a3ed3789f6"
+    }
+  ]
+}
