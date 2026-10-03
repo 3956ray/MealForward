@@ -42,8 +42,9 @@ export function TestnetLedger({ id }: {id:string}) {
       <p className="fineprint">本测试合约不支持退款；本页未接入链下预算预留。链上未分配餐款不是当前账号的可发额度。</p>
       {data?.source && <p>已核验至区块 {data.source.blockNumber} · 最近核验时间（系统查询）：{data.source.checkedAt}</p>}
       <details><summary>链上来源与同步进度</summary><p>链上直接核验；Envio尚未接入</p>
-        <dl><dt>网络</dt><dd>Monad Testnet · 10143</dd><dt>合约</dt><dd>{contractAddress}</dd><dt>固定测试商户</dt><dd>{merchant}</dd><dt>部署块</dt><dd>67797294</dd><dt>规则</dt><dd>mealforward-cp19-testnet-v1 · 每份0.001测试MON</dd><dt>批次</dt><dd>{batchId}</dd><dt>已核区块hash</dt><dd>{data?.source?.blockHash ?? '尚未取得'}</dd><dt>合约余额（测试MON）</dt><dd>{mon(data?.contractBalanceWei)}</dd><dt>合约负债 liability（测试MON）</dt><dd>{mon(data?.liabilityWei)}</dd><dt>连续RPC事件扫描至</dt><dd>{data?.sync.scannedThrough ?? '尚未取得'}</dd><dt>事件状态</dt><dd>{data?.sync.eventsState==='COMPLETE'?'已扫描至本次核验块':'历史记录同步中；不代表全部事件已同步'}</dd><dt>最近尝试</dt><dd>{data?.sync.lastAttemptAt ?? '尚未取得'}</dd><dt>核验提示</dt><dd>{data?.sync.lastErrorCode ?? '无'}</dd></dl>
+        <dl><dt>网络</dt><dd>Monad Testnet · 10143</dd><dt>合约</dt><dd>{contractAddress}</dd><dt>固定测试商户</dt><dd>{merchant}</dd><dt>部署块</dt><dd>67797294</dd><dt>规则</dt><dd>mealforward-cp19-testnet-v1 · 每份0.001测试MON</dd><dt>批次</dt><dd>{batchId}</dd><dt>已核区块hash</dt><dd>{data?.source?.blockHash ?? '尚未取得'}</dd><dt>连续RPC事件扫描至</dt><dd>{data?.sync.scannedThrough ?? '尚未取得'}</dd><dt>事件状态</dt><dd>{data?.sync.eventsState==='COMPLETE'?'已扫描至本次核验块':'历史记录同步中；不代表全部事件已同步'}</dd><dt>最近尝试</dt><dd>{data?.sync.lastAttemptAt ?? '尚未取得'}</dd><dt>核验提示</dt><dd>{data?.sync.lastErrorCode ?? '无'}</dd></dl>
       </details>
+        <details><summary>整个合约</summary><p>可能包含其他测试批次，不属于本批次金额。公开链上的地址、金额与交易时间可以被观察和关联；私有操作页不使链上付款变私密。</p><dl><dt>合约全部批次总负债（测试MON）</dt><dd>{mon(data?.liabilityWei)}</dd><dt>合约全部批次余额（测试MON）</dt><dd>{mon(data?.contractBalanceWei)}</dd></dl></details>
     </section>
     <section><h2>受控测试客户端记录</h2><p>以下按链序展示五类业务记录，不表示真人交餐。不提供逐券或持有人轨迹。</p>
       {!rows.length && <p>历史记录尚未取得；不能据此判断没有餐款。</p>}

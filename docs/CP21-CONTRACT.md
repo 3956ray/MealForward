@@ -1,0 +1,48 @@
+# CP21 BUILD C0 contract
+
+Authority: Leader ALIGNMENT and Dev READINESS / PM READINESS-RECHECK at `/Users/mili/Documents/Leader/projects/monad-consumer-payments/research/cp21/`. Full semantics there govern. Isolated worktree only; never hot-update running15207. No broadcasts during BUILD. Root integrates shared files; frontend worker owns only src/testnet-funding/*, src/components/TestnetFunding.tsx, tests/testnet-funding/*; admin worker owns scripts/testnet_funding_admin/* and tests/test_testnet_funding_admin.py. No old scripts/testnet changes. No private file reading by agents.
+
+## Fixed HTTP contract
+Base /api/v1/testnet-funding. JSON errors `{code:string}`; frontend use code only not raw exceptions. Mutation header `X-CP21-Request: 1`, Content-Type application/json, exact same origin. Cookie credentials same-origin.
+GET /config: `{chainId:10143,contract:string,ruleVersion:string,priceWei:"1000000000000000",testOnly:true,configured:boolean}`. No payer or private operation in public config.
+POST /session `{}`: establish initial HttpOnly cap once only, response operation view. Existing valid cap returns same operation; if campaign already bound and no valid cap,403 ORIGINAL_ACCESS_REQUIRED; expired likewise no new intent.
+GET /operation: original view (401 if no/expired cap).
+POST /review `{account:string,chainId:10143}`: same operation + review on success; fixedpayer required, quote120sec; returns only after live guard/role/nonce/budget.
+POST /submit-start `{reviewId:string}`: consume unique submit permission atomically; returns same operation + transaction. Browser must call eth_sendTransaction once ONLY if this invocation succeeds and payload validated. Response loss no resubmission. After marker any wallet rejection including4001 remainsUNKNOWN.
+POST /transaction `{txHash:string}`: attach original tx candidate (same hash idempotent, conflict409), readonly verification via reconcile; never declares success from client.
+POST /reconcile `{}`: bounded read original and return view (UNKNOWN if no proof).
+
+View = `{operation:{id:string,intentId:string,batchId:string,payer:string,status:string,txHash:string|null,errorCode:string|null,submitted:boolean,receiptBlock:number|null,receiptBlockHash:string|null,finalizedBlock:number|null,gasFeeWei:string|null,scanThrough:number|null}, intent:{chainId:10143,to:string,data:string,valueWei:string,quantity:1,ruleVersion:string,gasLimitCap:250000,maxFeePerGasCapWei:string}, review:null|{id:string,expiresAt:number,transaction:WalletTransaction}, accounting:null|{F:string,A:string,R:string,H:string,S:string,liabilityWei:string,contractBalanceWei:string,totalFundedWei:string,blockNumber:number,blockHash:string}}`.
+WalletTransaction = `{from:string,to:string,chainId:"0x279f",nonce:hex,data:hex,value:hex,gas:hex,maxFeePerGas:hex,maxPriorityFeePerGas:hex,type:"0x2"}`. review.expiresAt epoch milliseconds. submit-start response additionally `{transaction:WalletTransaction}`. REVIEW validates exact caps, payer, immutable input. Browser validates review and again submit response, then current wallet account/chain before request. If change after submit-start, never send and preserveUNKNOWN. Clear in-memory review on accountsChanged/chainChanged/disconnect, no automatic wallet connection/signing. Terminal success ACCOUNTING_VERIFIED; FINALIZED_SUCCESS means receiptfinal but awaiting accounting. No retry/newintent after submitted.
+
+## Backend shared primitives for admin worker
+server/testnet_funding/chain.py exports FundingError(code), ADDRESS, ADMIN, RULE (0x hex), SUPPORTER (0x keccak), PRICE=10**15, MAX_FEE=200*10**9, TIP=2*10**9, rpc_number, encode_call(name,args), contract_read(rpc,name,args,block='latest'), guard(rpc,height=None), block(rpc,tag), verify_transaction(tx,expected) (raises conflict). ABIs encoded locally for fund/grantRole/hasRole/fundedBatch/getBatch/etc; immutable deployment from CP20 manifest. FundingRpc in rpc.py read-only supports eth_estimateGas/getTransactionCount/getTransactionByHash plus CP20 7; no sends. Admin must use own admitted transport for one raw-send (or existing CP19 Rpc), never expose signer to web. Mock RPC tests deterministic. No live network for tests.
+
+## Current bounds
+One payer/campaign/intent; fund .001MON quantity1 gas≤250000 maxFee≤200gwei priority≤2gwei; optional grant gas≤120000. Each signer onlyoneattempt, unknown preserved. Unconfigured startup read/config only; no automatic payer discovery or approval. Runtime approval file and admin plan are separately Leader-approved after fixedSHA review. Grant finalization required beforefund estimate. Cap24h absolute HttpOnly Strict Path=/api/v1/testnet-funding, token hashesonly; missing cookie cannot rebind. No walletidentity proof claimed. restore quarantine ratherthanresign.
+
+## Implemented operational contract
+
+The runtime is deliberately unconfigured during BUILD. After independent fixed-SHA review and separate Leader payer/budget approval, an approved0600 JSON file may contain exactly `version:1`, `campaignId` (unique32-byte0x identifier), `payer` (frozen address), `nonce` (nonnegative integer), `approved:true`, and `sourceCommit` (reviewed40-hex SHA). It contains no key, token, SDK identity or private recipient data. `sourceCommit` records the reviewed source; it does not cryptographically attest the running process. Leader must deploy/check that SHA. Do not initialize with guessed runtime values.
+
+Initialization: `.venv/bin/python -m server.testnet_funding init --approved-config <approved-local-file>`. Web: `.venv/bin/python -m server.testnet_funding web` (127.0.0.1:19005). Check port vacancy first. Init cannot overwrite an existing directory, DB or external anchor. Unconfigured web serves config and refuses private writes; it does not auto-create a campaign or query RPC. Root location is the checkout where the code runs; BUILD worktree has no copied private runtime or signing files.
+
+Campaign DB `.localbackend/cp21-funding/funding.sqlite3` and directory are0600/0700. External `.localbackend/cp21-funding.anchor.json` precedes cap-binding and submission DB writes. Missing/inconsistent anchor/DB quarantines rather than restoring eligibility. Restoring a DB backup while preserving this independent anchor cannot unconsume an intent. Restoring all evidence together or malicious local filesystem edits are outside this recovery guarantee. Never delete state to retry. A successful initial session is bound once; a lost session response/cookie/expired24h cap may require controlled original-access recovery. No self-service recovery CLI is provided by this slice, and manual recovery cannot grant another signature.
+
+Actual API is in server/testnet_funding/web.py. Exact Host15207/19005, Origin15207, strictJSON/customheader for POST, noCORS; private absolute24h HttpOnly/SameSiteStrict cookie, Path base. LoopbackHTTP does not claim Secure. HTTP120/min; costly review/submit-start/reconcile share2/min, so querying immediately after review+submit can return429 Retry-After60 while GET original remains available. Page does not automatically retry. Every live RPC window40calls/30sec,6sec perrequest,1MiB,8pages max10blocks. Wallet prompt timeout60sec becomesUNKNOWN. No-signing qualification is consumed before wallet request even for4001, nohash, response loss, changed account or unmount.
+
+Preflight checks latest and finalized SUPPORTER_ROLE, exact deployment and fixedaccount/nonce, capacity/paused/EOA/balance, actualestimate and eth_call. Quote120sec, estimate+7.5% margin with250000 cap; maxFee min bounded by200gwei and computed25% basefee margin+2gwei. Submit repeats checks using quoted parameters: small basefee changes within the reviewed cap remain allowed, insufficient fee/gas stops before marker. All signatures use original exact reviewed transaction. Admin grant has120000 gascap and200gwei fee cap, separate transaction/journal/loader; see scripts/testnet_funding_admin/README.md. No Web import of admin signer; CP20 method admission unchanged.
+
+Only actual verified receipt+tx+event+canonical/finalized permits FINALIZED_SUCCESS; ACCOUNTING_VERIFIED additionally needs direct same-finalized-block exact batchF=A=.001 andR/H/S=0, globalinvariants, blockhashrecheck. RPC error may leave proven finality with accounting pending. Reorg/identity/content/budget contradictions HALT, no signature retry. Chain fee overrides beyond caps are reported and halt future actions; backend cannot undo wallet broadcast. No-hash recovery scans original persisted start/cursor only, zero mapping/emptylogs never releaseintent. It can take many requests to catch up.
+
+CP20 public whitelist is unchanged. Global liability/balance remain exposed with a separate collapsed “整个合约” scope and public-chain association warning. New batch is capability-private in product, not anonymous on chain. CP8 privacyP2 remainsopen.
+
+## Verification commands
+
+```
+.venv/bin/python -m unittest tests.test_testnet_funding tests.test_testnet_funding_admin tests.test_testnet_readonly tests.test_testnet_readonly_auth tests.test_dynamic_auth tests.test_dynamic_contracts -q
+node --experimental-strip-types --test tests/testnet-funding/*.test.ts tests/testnet/*.test.ts tests/dynamic/*.test.ts
+npm run build:dynamic
+```
+
+All added tests use isolated temporary stores and fake RPC/provider/signers, not real funds or credentials. Leader owns real Chrome/MetaMask verification, OTP, desktop/narrow layout, runtime integration, source review and separately authorized plan broadcast. Those are NOT_RUN in BUILD and are not replaced by test success. Current15207 is untouched until a separately scheduled integration window; immutable CP19 source/journal evidence must remain unchanged.

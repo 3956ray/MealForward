@@ -1,5 +1,12 @@
 # mealforward 项目规则
 
+## CP21 当前 BUILD
+
+- Leader正式放行独立funding观察服务/单campaign及提交anchor、同15207 MetaMask支持页、独立admin单用途grant客户端。合同`docs/CP21-CONTRACT.md`及Leader项目READINESS；实网广播仍0，payer/计划/预算经固定SHA独审后另Gate。
+- BUILD在隔离worktree完成，不热更新/重启15207当前OTP窗口。主开发唯一共享writer；有界frontend/admin代理只写分配文件，禁止双写。Leader独占Chrome。
+- 不改旧scripts/testnet源码、CP19产物/journal、旧DB或31337守卫。业务Web无signer；专用admin程序可内部加载原key，agent不得读取或输出秘密。
+
+
 ## CP20 当前 BUILD（覆盖旧阶段冲突条款）
 
 - Leader已完成Dev–PM闭环并放行固定CP19虚构批次的10143持久只读账；合同`docs/CP20-CONTRACT.md`。15207同入口，独立18995读服务/DB；18975既有Dynamic鉴权后检查显式partner只读scope，owner未映射。
