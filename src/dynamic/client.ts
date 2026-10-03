@@ -1,9 +1,68 @@
 import type { DynamicClient, DynamicCoreConfig } from '@dynamic-labs-sdk/client'
 import { dynamicEnvironmentId, type DynamicAuthClient, type IdentityView, type InvalidationReason } from './contracts.ts'
+import type { EvmWalletProvider } from '@dynamic-labs-sdk/evm'
 import type { Provider } from '../wallet/controller.ts'
 
 type Sdk = typeof import('@dynamic-labs-sdk/client')
 const failure = (code: string) => Object.assign(new Error(code), { code })
+
+// A single bridge per SDK provider preserves global invalidation independently of UI listeners.
+export function adaptDynamicWalletProvider(
+  selected: Pick<EvmWalletProvider, 'events'> & { request?: (args: { method: string; params: unknown[] }) => Promise<unknown> },
+  canRequest: () => boolean,
+  invalidate: (reason: InvalidationReason) => void,
+): { provider: Provider; dispose: () => void } {
+  const events = selected.events
+  if (!selected.request || !events) throw failure('WALLET_EVENTS_UNAVAILABLE')
+  let disposed = false
+  const callbacks = new Map<string, Set<(...args: unknown[]) => void>>()
+  const emit = (event: string, ...args: unknown[]) => {
+    for (const callback of [...(callbacks.get(event) ?? [])]) callback(...args)
+  }
+  const accountsChanged = ({ addresses }: { addresses: string[] }) => {
+    invalidate('account-changed')
+    emit('accountsChanged', addresses)
+  }
+  const networkChanged = ({ networkId }: { networkId: string }) => {
+    invalidate('chain-changed')
+    const chainId = /^(?:[0-9]+|0x[0-9a-f]+)$/i.test(networkId) ? `0x${BigInt(networkId).toString(16)}` : networkId
+    emit('chainChanged', chainId)
+  }
+  const disconnected = () => {
+    invalidate('account-changed')
+    emit('disconnect', { code: 4900, message: 'Wallet disconnected' })
+  }
+  events.on('accountsChanged', accountsChanged)
+  events.on('networkChanged', networkChanged)
+  events.on('disconnected', disconnected)
+  return {
+    provider: {
+      request: args => {
+        if (disposed || !canRequest()) return Promise.reject(failure('AUTH_REQUIRED'))
+        return selected.request!({ ...args, params: args.params ?? [] })
+      },
+      on: (event, callback) => {
+        if (disposed || !['accountsChanged', 'chainChanged', 'disconnect'].includes(event)) return
+        let listeners = callbacks.get(event)
+        if (!listeners) { listeners = new Set(); callbacks.set(event, listeners) }
+        listeners.add(callback)
+      },
+      removeListener: (event, callback) => {
+        const listeners = callbacks.get(event)
+        listeners?.delete(callback)
+        if (!listeners?.size) callbacks.delete(event)
+      },
+    },
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      events.off('accountsChanged', accountsChanged)
+      events.off('networkChanged', networkChanged)
+      events.off('disconnected', disconnected)
+      callbacks.clear()
+    },
+  }
+}
 
 export function createDynamicAuthClient(): DynamicAuthClient {
   let sdk: Sdk | undefined
@@ -19,7 +78,8 @@ export function createDynamicAuthClient(): DynamicAuthClient {
   let previousToken: string | null = null
   let previousSubject: string | undefined
   let removeDiscovery: (() => void) | undefined
-  const providerCache = new WeakMap<object, Provider>()
+  let providerCache = new WeakMap<object, Provider>()
+  const disposeProviders = new Set<() => void>()
   const memory = new Map<string, string>()
   const listeners = new Set<() => void>()
   const invalidators = new Set<(reason: InvalidationReason) => void>()
@@ -127,6 +187,8 @@ export function createDynamicAuthClient(): DynamicAuthClient {
       generation++
       otp = undefined
       memory.clear()
+      disposeProviders.forEach(dispose => dispose()); disposeProviders.clear()
+      providerCache = new WeakMap()
       invalidate('logout')
       publish({ status: 'signed-out' })
       try { if (sdk && raw) await sdk.logout(raw) } catch { throw failure('SDK_LOGOUT_UNCONFIRMED') }
@@ -144,13 +206,8 @@ export function createDynamicAuthClient(): DynamicAuthClient {
       if (!selected) return null
       const cached = providerCache.get(selected)
       if (cached) return cached
-      selected.events?.on('accountsChanged', () => invalidate('account-changed'))
-      selected.events?.on('networkChanged', () => invalidate('chain-changed'))
-      selected.events?.on('disconnected', () => invalidate('account-changed'))
-      const provider: Provider = { request: args => {
-        if (disabled || !allowToken || !complete()) return Promise.reject(failure('AUTH_REQUIRED'))
-        return selected.request({ ...args, params: args.params ?? [] })
-      } }
+      const { provider, dispose } = adaptDynamicWalletProvider(selected, () => !disabled && allowToken && complete(), invalidate)
+      disposeProviders.add(dispose)
       providerCache.set(selected, provider)
       return provider
     },
