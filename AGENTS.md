@@ -1,5 +1,11 @@
 # mealforward 项目规则
 
+## CP18 当前 BUILD（覆盖旧阶段冲突条款）
+
+- Leader已完成Dev–PM五问与READINESS回核并放行；按`docs/CP18-CONTRACT.md`实现独立Alchemy只读测试网入口15217/API18985，严格10143。仅允许固定chainId/最新区块读取，不交易、不部署、不加载钱包或业务Backend。
+- 主开发单一writer，Leader安排固定SHA独审。私有配置仅后端读取且不得回显；不改根package/lock/tsconfig、旧入口/31337守卫/数据，不刷新15207现有Dynamic内存登录。
+- CP17未验收业务保持原状态，Alchemy连通不代表完整业务或bounty验收。
+
 ## CP17 当前 BUILD（覆盖旧阶段冲突条款）
 
 - Leader 已核对 Dev–PM Q1–Q12 并放行 C0。精确边界见 `docs/CP17-CONTRACT.md`；主开发先交付合同，再由 Leader 派 JWT 与前端模块，主开发不另派、不双写。
