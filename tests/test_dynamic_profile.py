@@ -2,6 +2,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import io
+import time
 
 from flask import Flask, jsonify
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -11,7 +14,7 @@ from server.contracts import ApiError
 from server.dynamic_auth import register_dynamic_auth
 from server.dynamic_contracts import ClaimProfile, ENVIRONMENT_ID
 from server.dynamic_jwt import FixedJwksCache
-from server.dynamic_profile import ProfileCapture
+from server.dynamic_profile import ProfileCapture, main
 from server.storage import Store
 
 
@@ -70,3 +73,26 @@ class ProfileCaptureTests(unittest.TestCase):
         self.assertEqual((exchange.status_code,exchange.json['code']),(503,'DYNAMIC_PROFILE_UNVERIFIED'))
         self.assertEqual(store.one('SELECT count(*) n FROM work_sessions')['n'],0)
         self.assertEqual(store.one('SELECT count(*) n FROM dynamic_identity_mappings')['n'],0)
+
+    def test_maintenance_cli_requires_review_and_actor_then_writes_without_activation(self):
+        self.now=int(time.time());self.claims.update(iat=self.now-10,exp=self.now+900)
+        result=self.capture.inspect(self.token())
+        dbpath=Path(self.tmp.name)/'maintenance.sqlite3';store=Store(dbpath)
+        store.create_user('partner','partner','unused','partner','partner-a','shop-local')
+        reviewed=Path(self.tmp.name)/'reviewed.json';output=Path(self.tmp.name)/'authority.json'
+        reviewed.write_text(json.dumps(result['candidateProfile']))
+        args=['profile','--directory',str(self.directory),'--capture-id',result['captureId'],'--actor','partner',
+              '--database',str(dbpath),'--reviewed-profile',str(reviewed),'--output',str(output)]
+        with patch('sys.argv',args), self.assertRaises(ValueError):main()
+        self.assertFalse(output.exists())
+        reviewed.write_text(json.dumps({**result['candidateProfile'],'verified':True}))
+        bad=args.copy();bad[bad.index('--actor')+1]='unknown'
+        with patch('sys.argv',bad),self.assertRaises(ValueError):main()
+        self.assertFalse(output.exists())
+        with patch('sys.argv',args),patch('sys.stdout',new_callable=io.StringIO) as printed:
+            main()
+            self.assertNotIn('private-subject',printed.getvalue())
+        self.assertEqual(output.stat().st_mode & 0o777,0o600)
+        self.assertEqual(json.loads(output.read_text())['mappings'][0]['actor_id'],'partner')
+        self.assertEqual(store.one('SELECT count(*) n FROM dynamic_identity_mappings')['n'],0)
+        self.assertFalse((self.directory/(result['captureId']+'.json')).exists())
