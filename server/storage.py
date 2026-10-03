@@ -22,7 +22,11 @@ class Store:
             if version == 2:
                 schema=(Path(__file__).parent/'migrations/003_owner_wallet.sql').read_text()
                 db.executescript('BEGIN IMMEDIATE;\n'+schema+'\nPRAGMA user_version=3;\nCOMMIT;')
-            elif version != 3:
+                version=3
+            if version == 3:
+                schema=(Path(__file__).parent/'migrations/004_dynamic_auth.sql').read_text()
+                db.executescript('BEGIN IMMEDIATE;\n'+schema+'\nPRAGMA user_version=4;\nCOMMIT;')
+            elif version != 4:
                 raise RuntimeError('Unsupported backend schema')
         self.path.chmod(0o600)
     def connect(self):

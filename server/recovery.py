@@ -8,6 +8,7 @@ import time
 import uuid
 from contextlib import closing
 from server.storage import Store
+from server.dynamic_contracts import BACKUP_FORMAT, SCHEMA_VERSION
 
 FILES=('backend.sqlite3','encryption.key','issuer.key','config.json')
 SIGNER_FILES={'operator':'operator.key','settler':'settler.key'}
@@ -23,6 +24,9 @@ def relocated_config(config, root):
             'secretKeyFile':str(root/'encryption.key'),'issuerKeyFile':str(root/'issuer.key')}
     for role,name in SIGNER_FILES.items():
         if role in config.get('workSigners',{}): result[role+'KeyFile']=str(root/name)
+    # Current Dynamic authority is an explicit out-of-bundle input, never restored.
+    for key in ('dynamicAuthority', 'dynamicAuthorityFile', 'dynamicMappings', 'dynamicClaimProfile'):
+        result.pop(key, None)
     return result
 
 def quarantine(store, reason, *, bind_path=False):
@@ -38,6 +42,7 @@ def quarantine(store, reason, *, bind_path=False):
         db.execute('UPDATE presentation_codes SET active=0,code_cipher=NULL')
         db.execute('UPDATE owner_wallet_sessions SET revoked=1')
         db.execute('UPDATE owner_wallet_challenges SET consumed=1')
+        db.execute("UPDATE dynamic_identity_mappings SET enabled=0,authority_source_version='',revision=revision+1")
 
 def write_private(path, data):
     path.write_bytes(data);path.chmod(0o600)
@@ -59,8 +64,8 @@ def backup_bundle(config, destination):
             write_private(root/name,Path(config[role+'KeyFile']).read_bytes());files.append(name)
     saved=relocated_config(config,root)
     write_private(root/'config.json',(json.dumps(saved,indent=2)+'\n').encode())
-    manifest={'format':'mealforward-cp16-quarantined-backup-v3',
-              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':3,
+    manifest={'format':BACKUP_FORMAT,
+              'backupId':uuid.uuid4().hex,'createdAt':int(time.time()),'schemaVersion':SCHEMA_VERSION,
               'deploymentId':backend.deployment['deploymentId'],
               'sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in files}}
     # Last file is the completion marker; interrupted bundles cannot be restored.
@@ -71,7 +76,7 @@ def restore_bundle(backup, destination):
     root=Path(backup).resolve()
     manifest=json.loads((root/'backup.json').read_text())
     versions={'mealforward-cp15-quarantined-backup-v1':1,'mealforward-cp16-quarantined-backup-v2':2,
-              'mealforward-cp16-quarantined-backup-v3':3}
+              'mealforward-cp16-quarantined-backup-v3':3, BACKUP_FORMAT:SCHEMA_VERSION}
     version=versions.get(manifest.get('format'));files=set(manifest.get('sha256',{}))
     if not version or not set(FILES)<=files or files-set(FILES)-set(SIGNER_FILES.values()):
         raise ValueError('Unsupported or incomplete backup bundle')

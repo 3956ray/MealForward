@@ -4,17 +4,23 @@ import importlib.util
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 from web3 import Web3
-from server.contracts import ApiError, SUPPORT_COOKIE, SUPPORT_TTL, RECIPIENT_COOKIE
+from server.contracts import ApiError, SUPPORT_TTL
+from server.dynamic_contracts import CookieNames, CP17_COOKIES
 from server.chain.client import ChainConflict, hx
 from server.projection import Projector
 
 
-def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
+def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_auth_config=None):
     from server.auth import register_auth
     app=Flask(__name__)
     app.config['MAX_CONTENT_LENGTH']=16*1024
     app.logger.disabled=True
-    service=register_auth(app,backend.store,origin=origin,clock=clock or backend.clock,secure_cookie=False)
+    cookies=CP17_COOKIES if dynamic_auth_config is not None else CookieNames()
+    if dynamic_auth_config is not None:
+        from server.dynamic_auth import register_dynamic_auth
+        service=register_dynamic_auth(app,backend.store,clock=clock or backend.clock,**dynamic_auth_config)
+    else:
+        service=register_auth(app,backend.store,origin=origin,clock=clock or backend.clock,secure_cookie=False)
     projector=Projector(backend)
     recipient=redemption=None
     if importlib.util.find_spec('server.recipient'):
@@ -27,8 +33,10 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
     app.extensions['recipient']=recipient;app.extensions['redemption']=redemption
     @app.before_request
     def origin_and_json():
+        if dynamic_auth_config is not None: service.host()
         if request.method=='POST':
-            if request.headers.get('Origin')!=origin: raise ApiError(403,'ORIGIN_REJECTED','Origin rejected')
+            if dynamic_auth_config is not None: service._origin()
+            elif request.headers.get('Origin')!=origin: raise ApiError(403,'ORIGIN_REJECTED','Origin rejected')
             if not request.is_json: raise ApiError(415,'JSON_REQUIRED','JSON body required')
     @app.after_request
     def headers(response):
@@ -66,14 +74,14 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
         throttle='support-ip:'+str(request.remote_addr)
         if backend.store.auth_failure_count(throttle,backend.now(),60)>=30: raise ApiError(429,'RATE_LIMITED','Try later')
         backend.store.record_auth_failure(throttle,backend.now())
-        token,cap=backend.support_session(request.cookies.get(SUPPORT_COOKIE),payload.get('startNew',False))
+        token,cap=backend.support_session(request.cookies.get(cookies.support),payload.get('startNew',False))
         response=jsonify(operationId=cap['operation_id'],expiresAt=cap['expires_at'])
-        response.set_cookie(SUPPORT_COOKIE,token,httponly=True,samesite='Lax',secure=False,path='/api/v1',max_age=max(0,cap['expires_at']-backend.now()))
+        response.set_cookie(cookies.support,token,httponly=True,samesite='Lax',secure=False,path='/api/v1',max_age=max(0,cap['expires_at']-backend.now()))
         return response
     @app.post('/api/v1/support-intents')
-    def prepare(): return jsonify(backend.create_support(request.cookies.get(SUPPORT_COOKIE),body())),201
+    def prepare(): return jsonify(backend.create_support(request.cookies.get(cookies.support),body())),201
     @app.get('/api/v1/support-intents/<op_id>')
-    def support_operation(op_id): return jsonify(backend.get_support(request.cookies.get(SUPPORT_COOKIE),op_id))
+    def support_operation(op_id): return jsonify(backend.get_support(request.cookies.get(cookies.support),op_id))
     @app.post('/api/v1/work/issuances')
     def issue():
         actor=service.require('partner',csrf=True)
@@ -92,9 +100,9 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
             return jsonify(redemption.operation(actor,op_id=op_id))
         return jsonify(backend.get_issue(actor,op_id=op_id))
     @app.post('/api/v1/work/wallet/challenge')
-    def owner_challenge(): return jsonify(backend.owner_wallet.challenge(service.require('owner',csrf=True),body(),origin))
+    def owner_challenge(): return jsonify(backend.owner_wallet.challenge(service.require('owner',csrf=True),body(),request.headers.get('Origin') if dynamic_auth_config is not None else origin))
     @app.post('/api/v1/work/wallet/verify')
-    def owner_verify(): return jsonify(backend.owner_wallet.verify(service.require('owner',csrf=True),body(),origin))
+    def owner_verify(): return jsonify(backend.owner_wallet.verify(service.require('owner',csrf=True),body(),request.headers.get('Origin') if dynamic_auth_config is not None else origin))
     @app.get('/api/v1/work/wallet/session')
     def owner_session(): return jsonify(backend.owner_wallet.session(service.require('owner')))
     @app.post('/api/v1/work/wallet/logout')
@@ -129,22 +137,24 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None):
         @app.post('/api/v1/recipient/session')
         def recipient_exchange():
             projector.sync()
-            dto,token=recipient.exchange(body(),str(request.remote_addr),request.cookies.get(RECIPIENT_COOKIE))
+            dto,token=recipient.exchange(body(),str(request.remote_addr),request.cookies.get(cookies.recipient))
             response=jsonify(dto)
-            response.set_cookie(RECIPIENT_COOKIE,token,httponly=True,samesite='Lax',secure=False,path='/api/v1/recipient',
+            response.set_cookie(cookies.recipient,token,httponly=True,samesite='Lax',secure=False,path='/api/v1' if dynamic_auth_config is not None else '/api/v1/recipient',
                                 max_age=max(0,dto['expiresAt']-backend.now()))
             return response
         @app.get('/api/v1/recipient/voucher')
-        def recipient_voucher(): return jsonify(recipient.voucher(request.cookies.get(RECIPIENT_COOKIE)))
+        def recipient_voucher(): return jsonify(recipient.voucher(request.cookies.get(cookies.recipient)))
         @app.post('/api/v1/recipient/presentations')
         def presentation():
             projector.sync()
-            return jsonify(recipient.present(request.cookies.get(RECIPIENT_COOKIE),request.headers.get('X-CSRF-Token'),body(),str(request.remote_addr)))
+            return jsonify(recipient.present(request.cookies.get(cookies.recipient),request.headers.get('X-CSRF-Token'),body(),str(request.remote_addr)))
         @app.post('/api/v1/recipient/logout')
         def recipient_logout():
             if body(): raise ApiError(422,'INVALID_INPUT','Empty object required')
-            recipient.logout(request.cookies.get(RECIPIENT_COOKIE),request.headers.get('X-CSRF-Token'))
-            return '',204
+            recipient.logout(request.cookies.get(cookies.recipient),request.headers.get('X-CSRF-Token'))
+            response=app.make_response(('',204))
+            response.delete_cookie(cookies.recipient,path='/api/v1' if dynamic_auth_config is not None else '/api/v1/recipient',httponly=True,samesite='Lax')
+            return response
     if redemption:
         @app.post('/api/v1/work/prechecks')
         def precheck():

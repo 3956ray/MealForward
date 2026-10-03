@@ -24,12 +24,22 @@ class ApiError(Exception):
         self.status, self.code, self.message = status, code, message
 
 @dataclass(frozen=True)
+class DynamicAuthorization:
+    mapping_id: str
+    mapping_revision: int
+    environment_id: str
+    issuer: str
+    subject_hash: str
+    access_expires_at: int
+
+@dataclass(frozen=True)
 class AuthContext:
     actor_id: str
     role: str
     partner_id: str | None
     shop_id: str | None
     session_id: str  # hash identifier, never the browser cookie value
+    dynamic: DynamicAuthorization | None = None
 
 class AuthStore(Protocol):
     def create_user(self, user_id: str, username: str, password_hash: str, role: str,

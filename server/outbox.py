@@ -94,9 +94,14 @@ class Worker:
                 db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
                            (job['operation_id'],'SIGNING_STARTED',self.b.now()))
             self.fault('signing_started')
-            signed=self.account.sign_transaction(tx)
-            raw=hx(signed.raw_transaction); tx_hash=hx(signed.hash)
             with self.store.transaction() as db:
+                # Linearize mapping/user revocation with the first actual signature.
+                # No RPC here: BEGIN IMMEDIATE holds the write lock through raw persistence.
+                if not self.b.work.dispatch_authorized(db,op):
+                    db.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN',error_code='AUTH_SCOPE_CHANGED' WHERE id=?",(job['operation_id'],))
+                    return
+                signed=self.account.sign_transaction(tx)
+                raw=hx(signed.raw_transaction); tx_hash=hx(signed.hash)
                 db.execute("UPDATE outbox SET raw_cipher=?,tx_hash=?,state='SIGNED',signing_stage='RAW_SAVED' WHERE operation_id=?",(self.b.encrypt(raw),tx_hash,job['operation_id']))
                 db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',
                            (job['operation_id'],'RAW_SAVED',self.b.now()))

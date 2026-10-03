@@ -5,6 +5,7 @@ import sqlite3
 from server.actions import ACTIONS, action_transaction
 from server.backend import canonical, digest, random_id, require_id
 from server.contracts import ApiError, LOCAL_SHOP_ID, RECIPIENT_IDLE_TTL
+from server.dynamic_mapping import require_current_actor, bind_operation, operation_authorized
 
 class WorkCore:
     def __init__(self, backend, secret_key):
@@ -20,6 +21,7 @@ class WorkCore:
         self.b._writable_in_transaction(db)
         return self.b.owner_wallet.require(db,actor)
     def require_actor(self, db, actor, role=None):
+        require_current_actor(db,actor,self.b.now())
         row=db.execute('SELECT * FROM users WHERE id=?',(actor.actor_id,)).fetchone()
         if not row or not row['enabled']: raise ApiError(401,'AUTH_REQUIRED','Current work account required')
         if (row['role']!=actor.role or row['partner_id']!=actor.partner_id or row['shop_id']!=actor.shop_id
@@ -98,12 +100,14 @@ class WorkCore:
                         snapshot,digest(snapshot),target,now,now))
         except sqlite3.IntegrityError:
             raise ApiError(409,'OPERATION_PENDING','Original action remains pending') from None
+        bind_operation(db,actor,op_id,now)
         tx=action_transaction(self.b.rpc.contract,kind,op_id,payload)
         db.execute('''INSERT INTO outbox(operation_id,signer,tx_json,state,signing_stage)
                       VALUES(?,?,?,'QUEUED','NEVER_SIGNED')''',(op_id,signer,canonical(tx)))
         db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(op_id,'ACCEPTED_NEVER_SIGNED',now))
         return dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone())
     def dispatch_authorized(self, db, op):
+        if not operation_authorized(db,op['id']): return False
         spec=ACTIONS.get(op['kind'])
         user=db.execute('SELECT * FROM users WHERE id=?',(op['actor_id'],)).fetchone()
         if not spec or not user or not user['enabled'] or user['role']!=self.actor_role(op['kind']): return False

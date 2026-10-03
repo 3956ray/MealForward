@@ -121,6 +121,7 @@ class OwnerWalletService:
                 op_id=row['id']
             return self.view(*self.scoped(db,actor,op_id))
     def prepare(self, actor, redemption_id, body):
+        from server.dynamic_mapping import bind_operation
         if set(body)!={'intentKey'}: raise ApiError(422,'INVALID_INPUT','Intent key required')
         key=require_id(body['intentKey']);self.chain_permission()
         snapshot={'intentKey':key,'redemptionId':redemption_id}
@@ -148,6 +149,7 @@ class OwnerWalletService:
                               payload_hash,status,target,created_at,updated_at) VALUES(?,'settle',?,?,?,?,?,?,'PREPARED',?,?,?)''',
                            (op_id,actor.actor_id,actor.shop_id,redemption_id,key,canonical(snapshot),digest(canonical(snapshot)),r['voucher_id'],now,now))
             except sqlite3.IntegrityError: raise ApiError(409,'OPERATION_PENDING','Original action remains pending') from None
+            bind_operation(db,actor,op_id,now)
             db.execute('INSERT INTO owner_settlements VALUES(?,?,?,?,?,?,?,NULL)',
                        (op_id,binding['address'],31337,tx['to'],tx['data'],0,now+OWNER_REVIEW_TTL))
             db.execute("UPDATE redemptions SET state='SETTLE_PENDING' WHERE id=?",(redemption_id,))

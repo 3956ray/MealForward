@@ -157,6 +157,7 @@ class Backend:
         if cap['operation_id']!=op_id: raise ApiError(403,'FORBIDDEN','Not this support intent')
         with self.store.transaction() as db: return self.support_view_db(db,op_id)
     def issue(self, actor, body):
+        from server.dynamic_mapping import bind_operation
         if actor.role!='partner' or not actor.partner_id: raise ApiError(403,'FORBIDDEN','Partner required')
         if set(body)!={'intentKey','recipientRef','batchId','quantity','quotePriceWei','ruleVersion'}: raise ApiError(422,'INVALID_INPUT','Invalid issuance request')
         key=require_id(body['intentKey']); ref=require_id(body['recipientRef']); batch_id=require_id(body['batchId'])
@@ -165,6 +166,7 @@ class Backend:
         snapshot=canonical(body)
         with self.store.transaction() as db:
             self._writable_in_transaction(db)
+            self.work.require_actor(db,actor,'partner')
             old=db.execute("SELECT * FROM operations WHERE actor_id=? AND kind='issue' AND intent_key=?",(actor.actor_id,key)).fetchone()
             if old:
                 if old['partner_id']!=actor.partner_id:
@@ -182,6 +184,7 @@ class Backend:
             op_id=random_id(); now=self.now(); voucher_ids=[random_id() for _ in range(n)]
             db.execute('INSERT INTO operations(id,kind,actor_id,partner_id,intent_key,request_json,payload_hash,status,target,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                 (op_id,'issue',actor.actor_id,actor.partner_id,key,snapshot,digest(snapshot),'QUEUED',batch_id,now,now))
+            bind_operation(db,actor,op_id,now)
             for v in voucher_ids:
                 secret=secrets.token_urlsafe(32)
                 db.execute('INSERT INTO private_vouchers VALUES(?,?,?,?,?,0)',(v,op_id,batch_id,digest(secret),self.encrypt(secret)))

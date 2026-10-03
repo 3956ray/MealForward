@@ -2,6 +2,8 @@
 
 Status: BUILD authorized by Leader after Q1–Q12/PM alignment. C0 freezes module boundaries, dependencies and the independent entry. Full backend integration follows C0; C0 is not a working authentication release. Do not relax verification to unblock the unknown real claim profile.
 
+Post-C0 shared backend: migration4, bounded session/CSRF, explicit activate_mappings authority, operation sidecars and locked first-sign check are implemented. Restore writes use the existing 503 RESTORE_QUARANTINED code (state QUARANTINED). `create_app(..., dynamic_auth_config=...)` selects this policy explicitly; absence keeps legacy password mode. Entry/runtime wiring and real profile remain separate integration work. Controlled checks: `tests.test_dynamic_auth`, `tests.test_backend_chain_dynamic`; no real user token is used by those tests.
+
 ## Ownership and integration
 
 | Owner | Exclusive write scope | Output / checks |

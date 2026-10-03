@@ -117,7 +117,7 @@ class OwnerC0Tests(unittest.TestCase):
     def test_backup_has_no_owner_key_and_restore_revokes_proofs(self):
         self.prove();bundle=backup_bundle(self.h.config,Path(self.h.tmp.name)/'owner-backup')
         manifest=json.loads((bundle/'backup.json').read_text())
-        self.assertEqual(manifest['schemaVersion'],3)
+        self.assertEqual(manifest['schemaVersion'],4)
         self.assertNotIn('settler.key',manifest['sha256'])
         self.assertNotIn(self.wallet.key.hex(),(bundle/'config.json').read_text())
         restored=load_backend(restore_bundle(bundle,Path(self.h.tmp.name)/'owner-restore'))
@@ -163,7 +163,7 @@ class OwnerC0Tests(unittest.TestCase):
         (root/'backup.json').write_text(json.dumps(manifest))
         restored=load_backend(restore_bundle(root,Path(self.h.tmp.name)/'v2-restored'))
         self.assertTrue(restored.quarantined());self.assertFalse(restored.owner_mode)
-        self.assertEqual(restored.store.one('PRAGMA user_version')['user_version'],3)
+        self.assertEqual(restored.store.one('PRAGMA user_version')['user_version'],4)
         self.assertEqual(restored.store.one('SELECT count(*) AS n FROM owner_wallet_bindings')['n'],0)
 
 if __name__=='__main__': unittest.main()
