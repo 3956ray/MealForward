@@ -62,7 +62,7 @@ class IssuanceStore:
             yield
         finally: os.close(fd)
     def configured(self): return self.path.exists() or self.anchor.exists()
-    def initialize(self,config):
+    def initialize(self,config,height=None):
         validate_config(config)
         with self.lock():
             if self.configured() or self.directory.exists():
@@ -70,6 +70,7 @@ class IssuanceStore:
                 record=self.load()
                 if canonical(record['config'])!=canonical(config): raise IssuanceError('INTENT_CONFLICT',409)
                 return record
+            if type(height) is not int or height<0: raise IssuanceError('ISSUANCE_INVALID')
             self.directory.mkdir(mode=0o700)
             operation_id,voucher_id=derive(config['issuanceId'])
             record={'config':config,'planHash':digest(canonical(config)),
@@ -77,10 +78,13 @@ class IssuanceStore:
                     'data':issue_data(operation_id,BATCH,voucher_id),
                     'expectedPayloadHash':payload_hash(BATCH,[voucher_id]),
                     'phase':'PREPARED','status':'PREPARED','txHash':None,'errorCode':None,
-                    'scanStart':None,'scanThrough':None,'scanHash':None,
+                    'scanStart':height,'scanThrough':height-1,'scanHash':None,
                     'receiptBlock':None,'receiptBlockHash':None,'finalizedBlock':None,'gasFeeWei':None,
                     'accounting':None,'budgetViolation':False,'budgetEvidence':None,
                     'finalizedReceipt':None,'receiptConflict':None}
+            # The watermark is part of this first atomic anchor+DB write: a crash before it
+            # leaves no record at all; a persisted record without a watermark is quarantined
+            # by load() rather than silently repaired.
             self.write_anchor(record,'PREPARED')  # a missing DB after a crash is quarantined
             fd=os.open(self.path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
             with sqlite3.connect(self.path) as db:
@@ -107,6 +111,9 @@ class IssuanceStore:
                 record['expectedPayloadHash']!=payload_hash(BATCH,[voucher_id])): raise ValueError()
             record.setdefault('budgetViolation',False);record.setdefault('budgetEvidence',None)
             record.setdefault('finalizedReceipt',None);record.setdefault('receiptConflict',None)
+            # A persisted record without a valid watermark is a half-initialized leftover:
+            # quarantine (never observe, never silently repair; CP21 consistency semantics).
+            if type(record['scanStart']) is not int or record['scanStart']<0 or type(record['scanThrough']) is not int or record['scanThrough']<record['scanStart']-1: raise ValueError()
             return record
         except IssuanceError: raise
         except Exception: raise IssuanceError('RESTORE_QUARANTINE',503) from None

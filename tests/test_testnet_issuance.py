@@ -132,13 +132,34 @@ class IssuanceTests(unittest.TestCase):
     def test_anchor_first_and_quarantine_on_mismatch(self):
         other=Path(self.tmp.name)/'other';store=IssuanceStore(other)
         with patch('server.testnet_issuance.store.sqlite3.connect',side_effect=OSError('disk fault')):
-            with self.assertRaises(OSError): store.initialize(self.config)
+            with self.assertRaises(OSError): store.initialize(self.config,100)
         self.assertTrue(store.anchor.exists())
         self.assertCode('RESTORE_QUARANTINE',store.load)
-        self.assertCode('RESTORE_QUARANTINE',lambda:store.initialize(self.config))
+        self.assertCode('RESTORE_QUARANTINE',lambda:store.initialize(self.config,100))
         record=self.store.load();record['operationId']='0x'+'99'*32
         self.store.save(record);self.assertCode('RESTORE_QUARANTINE',self.store.load)
         self.store.path.unlink();self.assertCode('RESTORE_QUARANTINE',self.store.load)
+    def test_init_interrupted_between_store_and_watermark_recovers(self):
+        """P1-2 regression: a persisted record without a watermark (crash inside the old
+        init window) must quarantine fail-closed on read and on re-init, never TypeError
+        into a permanent ISSUANCE_UNAVAILABLE loop nor silently 'succeed' unfixed."""
+        record=self.store.load()
+        record['scanStart']=None;record['scanThrough']=None;record['scanHash']=None
+        self.store.save(record)  # exact shape the pre-fix first write left behind
+        self.assertCode('RESTORE_QUARANTINE',self.store.load)
+        self.assertCode('RESTORE_QUARANTINE',lambda:self.service.operation())
+        self.assertCode('RESTORE_QUARANTINE',lambda:self.service.initialize(self.config))
+        app=create_app(self.service);client=app.test_client();base='http://127.0.0.1:15207'
+        response=client.get(BASE+'/operation',base_url=base)
+        self.assertEqual(503,response.status_code);self.assertEqual('RESTORE_QUARANTINE',response.json['code'])
+        cached=client.get(BASE+'/operation?cached=1',base_url=base)
+        self.assertEqual(503,cached.status_code);self.assertEqual('RESTORE_QUARANTINE',cached.json['code'])
+        # fresh init is atomic: the very first persisted record already carries the watermark
+        fresh=IssuanceStore(Path(self.tmp.name)/'atomic');service=IssuanceService(fresh,lambda:FakeRpc(),lambda:self.now)
+        created=service.initialize(self.config)
+        self.assertEqual(100,created['scanStart']);self.assertEqual(99,created['scanThrough'])
+        loaded=fresh.load()
+        self.assertEqual(loaded['scanStart'],created['scanStart']);self.assertEqual(loaded['scanThrough'],created['scanThrough'])
     def test_scan_matches_issued_and_filters_wrong_batch_or_operation(self):
         self.rpc.issued(self.record)
         self.rpc.logs.extend([
@@ -192,6 +213,49 @@ class IssuanceTests(unittest.TestCase):
         result=self.service.operation()  # halted records stay isolated, never re-verified silently
         self.assertEqual('ACCOUNTING_CONFLICT',result['operation']['errorCode']);self.assertIsNone(result['accounting'])
         self.assertEqual('HALTED',result['operation']['status'])
+    def test_overbudget_broadcast_keeps_observing_and_verifying(self):
+        """P2-2 regression: an over-budget broadcast keeps being observed read-only;
+        budgetViolation persists across restart and ACCOUNTING_VERIFIED is not swallowed."""
+        self.rpc.issued(self.record)
+        self.rpc.tx['gas']=hex(GAS_CAP+1)  # identity-matched but beyond the approved cap
+        result=self.service.operation()
+        self.assertEqual('ACCOUNTING_VERIFIED',result['operation']['status'])
+        self.assertTrue(result['operation']['budgetViolation'])
+        self.assertEqual('BUDGET_EXCEEDED',result['operation']['errorCode'])
+        self.assertEqual(str(PRICE),result['accounting']['F'])
+        self.assertTrue(result['operation']['gasFeeWei'])
+        persisted=self.store.load()
+        self.assertTrue(persisted['budgetViolation'])
+        self.assertEqual({'gas':str(GAS_CAP+1),'maxFeePerGas':str(102*10**9),'maxPriorityFeePerGas':str(TIP)},persisted['budgetEvidence'])
+        restarted=IssuanceService(IssuanceStore(self.directory),lambda:self.rpc,lambda:self.now)
+        again=restarted.operation()
+        self.assertEqual('ACCOUNTING_VERIFIED',again['operation']['status'])
+        self.assertTrue(again['operation']['budgetViolation'])
+        self.assertEqual('BUDGET_EXCEEDED',again['operation']['errorCode'])
+    def test_cross_layer_dto_matches_frontend_contract(self):
+        """P1-1 regression: the real service view must satisfy the frontend parser exactly
+        (key sets mirrored from src/testnet-issuance/contracts.ts record() requirements);
+        the committed TS fixture must be byte-identical to live real-service output.
+        Regenerate the fixture with:
+          .venv/bin/python -m tests.test_testnet_issuance IssuanceTests.regenerate_cross_layer_fixture"""
+        self.rpc.issued(self.record)
+        result=self.service.operation()
+        ts_intent={'chainId','to','data','valueWei','quantity','ruleVersion','gasLimitCap','maxFeePerGasCapWei'}
+        ts_operation={'issuanceId','operationId','batchId','voucherId','partnerLabel','recipientRef','status','txHash',
+                      'errorCode','receiptBlock','receiptBlockHash','finalizedBlock','gasFeeWei','scanThrough',
+                      'budgetViolation','finalizedReceipt','receiptConflict'}
+        self.assertEqual(ts_intent,set(result['intent']))
+        self.assertEqual(RULE,result['intent']['ruleVersion'])
+        self.assertEqual(str(MAX_FEE),result['intent']['maxFeePerGasCapWei'])
+        self.assertEqual(ts_operation,set(result['operation']))
+        fixture=(Path(__file__).parent/'testnet-issuance'/'service-dto.fixture.json').read_text().strip()
+        self.assertEqual(json.dumps({'config':self.service.config(),'view':result},sort_keys=True,separators=(',',':')),fixture)
+    def regenerate_cross_layer_fixture(self):
+        """Not a test: refreshes the committed fixture from live real-service output."""
+        self.rpc.issued(self.record)
+        result=self.service.operation()
+        payload=json.dumps({'config':self.service.config(),'view':result},sort_keys=True,separators=(',',':'))
+        (Path(__file__).parent/'testnet-issuance'/'service-dto.fixture.json').write_text(payload+'\n')
     def test_revert_is_terminal_no_second_attempt(self):
         # a reverted issue leaves no event and no mapping: the observer honestly stays PREPARED
         self.rpc.issued(self.record,status=0)

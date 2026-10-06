@@ -18,6 +18,7 @@ export const statusTexts: Record<Status,string> = {
 }
 export const errorText: Record<string,string> = {
   RATE_LIMITED:'查询过于频繁，请稍后手动重查',
+  RESTORE_QUARANTINE:'发行记录处于恢复隔离，请联系测试负责人',
   NOT_CONFIGURED:'本轮测试发券尚未配置，请联系测试负责人',
   INVALID_RESPONSE:'服务响应未通过核验，已停止展示新数据',
   CONNECTION_UNAVAILABLE:'读取未完成；已显示数据仅为上次已核结果',

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { BATCH, CONTRACT, OPERATOR, PRICE, GAS_CAP, IssuanceError, issueData, parseConfig, parseView, statuses, type View, type Config } from '../../src/testnet-issuance/contracts.ts'
 import { ATTRIBUTION, IssuanceController, STALE_NOTICE, TEST_BANNER, VOUCHER_NOTE, displayError, statusText, statusTexts } from '../../src/testnet-issuance/controller.ts'
@@ -182,4 +183,21 @@ test('budget violation stays prominent in read-only status text',async()=>{
   await s.controller.refresh()
   assert.match(statusText(s.controller.state),/预算/)
   assert.equal(s.controller.state.stale,false)
+})
+// service-dto.fixture.json is emitted by the real Python IssuanceService (fake RPC) via
+//   .venv/bin/python -m tests.test_testnet_issuance IssuanceTests.regenerate_cross_layer_fixture
+// and tests/test_testnet_issuance.py::test_cross_layer_dto_matches_frontend_contract pins it
+// byte-identical to live service output, so parsing it here exercises the strict frontend
+// contract against real server DTOs instead of hand-written fixture fields.
+test('real-service DTO fixture parses through the strict frontend contract',()=>{
+  const payload=JSON.parse(readFileSync(new URL('./service-dto.fixture.json',import.meta.url),'utf8'))
+  const config=parseConfig(payload.config)
+  assert.equal(config.configured,true)
+  assert.equal(config.ruleVersion,ruleVersion)
+  const view=parseView(payload.view)
+  assert.equal(view.operation.status,'ACCOUNTING_VERIFIED')
+  assert.equal(view.operation.txHash,'0x'+'34'.repeat(32))
+  assert.equal((view.intent as {ruleVersion:string}).ruleVersion,ruleVersion)
+  assert.equal(view.accounting?.F,PRICE)
+  assert.equal(view.accounting?.totalFundedWei,'2000000000000000')
 })

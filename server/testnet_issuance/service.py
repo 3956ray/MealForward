@@ -25,11 +25,15 @@ class IssuanceService:
                     'budgetViolation':r.get('budgetViolation',False),'finalizedReceipt':r.get('finalizedReceipt'),
                     'receiptConflict':r.get('receiptConflict'),
                     **{k:r[k] for k in ('status','txHash','errorCode','receiptBlock','receiptBlockHash','finalizedBlock','gasFeeWei','scanThrough')}},
-                'intent':dict(chainId=10143,to=ADDRESS,data=r['data'],valueWei='0',quantity=1,
+                'intent':dict(chainId=10143,to=ADDRESS,data=r['data'],valueWei='0',quantity=1,ruleVersion=RULE,
                               gasLimitCap=GAS_CAP,maxFeePerGasCapWei=str(MAX_FEE)),
                 'accounting':r['accounting']}
     def initialize(self,config):
-        """Fresh init requires an on-chain payloadHash==0 preflight; identical re-init is idempotent."""
+        """Fresh init requires an on-chain payloadHash==0 preflight; identical re-init is idempotent.
+
+        The scan watermark is captured in the same RPC round as the preflight and persisted
+        inside store.initialize's first record, so no half-initialized (watermark-less)
+        record can ever be observable."""
         if not self.store.configured() and not self.store.directory.exists():
             validate_config(config)
             operation_id,_=derive(config['issuanceId'])
@@ -37,11 +41,8 @@ class IssuanceService:
                 guard(rpc)
                 payload,_=contract_read(rpc,'getOperation',[1,operation_id])
                 if payload!=hex_data(ZERO): raise IssuanceError('ISSUED_BEFORE_INIT')
-            record=self.store.initialize(config)
-            with self.rpc() as rpc:
-                guard(rpc);height=rpc_number(block(rpc,'latest')['number'])
-            record['scanStart']=height;record['scanThrough']=height-1;record['scanHash']=None
-            self.store.save(record);return record
+                height=rpc_number(block(rpc,'latest')['number'])
+            return self.store.initialize(config,height)
         return self.store.initialize(config)
     def operation(self,cached=False):
         with self.store.lock():
