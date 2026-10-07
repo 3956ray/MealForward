@@ -1,3 +1,7 @@
+## CP28：Dynamic身份与候选钱包准备
+
+现有15287准备入口新增 `/#/identity`：本人Dynamic邮箱登录与管理员/老板同一候选地址确认。SDK登录、服务端身份、候选声明和业务权限分开；未配新入口已审核claim profile时明确关闭服务端验证和候选确认。recipient免登录。运行、边界与测试见[CP28身份接线](docs/CP28-IDENTITY.md)；本次不签名、不广播，业务仍BLOCKED。
+
 ## CP27：历史合约与角色只读核验
 
 运行 `.venv/bin/python -m server.wallet_readiness --online`，使用新输出入口。CP19仅历史参考，新业务目标未配置；五链角色不等现实身份或可付款。原artifact、预算、同块观察、失败边界和测试见[CP27说明](docs/CP27-READINESS.md)。旧入口保持。

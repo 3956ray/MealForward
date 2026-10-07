@@ -1,12 +1,13 @@
-import {useEffect, useRef, useState} from 'react'
+import {lazy, Suspense, useEffect, useRef, useState} from 'react'
 import {QRCodeSVG} from 'qrcode.react'
 import {Wallet, type Provider, type Review} from './wallet'
 import {Scanner} from './Scanner'
 import './style.css'
 
 type Status = {status: string; missing: string[]; runId: string; sourceSha: string; runtimeAuthorized: boolean; identityConfigured: boolean; message: string}
-type Role = 'support'|'partner'|'recipient'|'owner'|'ledger'
-const labels: Record<Role, string> = {support: '支持一餐', partner: '机构发券', recipient: '领取餐券', owner: '餐馆工作台', ledger: '公开餐账'}
+type Role = 'identity'|'support'|'partner'|'recipient'|'owner'|'ledger'
+const IdentityPanel = lazy(()=>import('./IdentityPanel'))
+const labels: Record<Role, string> = {identity:'身份与钱包准备', support: '支持一餐', partner: '机构发券', recipient: '领取餐券', owner: '餐馆工作台', ledger: '公开餐账'}
 const steps = ['支持者确认餐款', '机构发行与私密链接', '领取者展示到店码', '老板核验并确认交餐', '老板钱包逐笔结算']
 
 export default function App() {
@@ -98,6 +99,7 @@ export default function App() {
     <ol className="steps">{steps.map((step, i) => <li key={step}><span>{i+1}</span>{step}</li>)}</ol>
     <nav aria-label="业务角色">{(Object.keys(labels) as Role[]).map(r => <button key={r} disabled={busy} aria-current={role === r ? 'page' : undefined} onClick={() => {setRole(r); setResult(null); setReview(null); history.replaceState(null, '', '/#/'+r)}}>{labels[r]}</button>)}</nav>
     <section className="panel"><h2>{labels[role]}</h2>
+      {role === 'identity' && <Suspense fallback={<p>正在打开身份准备…</p>}><IdentityPanel/></Suspense>}
       {(role === 'partner' || role === 'owner') && <div className="login"><p>使用已配置的可信工作身份登录。钱包地址本身不代表工作身份。</p>
         <label>工作身份<input value={login} onChange={e => setLogin(e.target.value)} autoComplete="username"/></label>
         <label>登录凭证<input type="password" value={credential} onChange={e => setCredential(e.target.value)} autoComplete="current-password"/></label>
@@ -142,7 +144,7 @@ export default function App() {
         <div className="balances">{[['F', '累计支持'], ['A', '可发行'], ['R', '已发行'], ['H', '待结算'], ['S', '已结算']].map(([k, label]) => <div key={k}><span>{label}</span><strong>{ledger?.batch ? (Number(ledger.batch[k])/1e18).toFixed(3) : '—'}</strong><small>测试 MON</small></div>)}</div>{button('刷新公开餐账', refresh, false)}</>}
       {review && <div className="review"><h3>原交易审核</h3><dl><dt>动作</dt><dd>{review.kind}</dd><dt>付款地址</dt><dd>{review.transaction?.from}</dd><dt>目标合约</dt><dd>{review.transaction?.to}</dd><dt>本金 / 最坏 Gas（wei）</dt><dd>{review.transaction?.value} / {review.transaction && (BigInt(review.transaction.gas)*BigInt(review.transaction.maxFeePerGas)).toString()}</dd></dl>
         {button('已核对，打开本人钱包确认', async () => {const hash = await getWallet().send(review); setReview(null); return {txHash: hash, state: '等待核验'}})}</div>}
-      {role !== 'recipient' && role !== 'ledger' && <div className="original"><label>原操作 ID<input value={op} onChange={e => setOp(e.target.value)}/></label>
+      {role !== 'identity' && role !== 'recipient' && role !== 'ledger' && <div className="original"><label>原操作 ID<input value={op} onChange={e => setOp(e.target.value)}/></label>
         {(role === 'partner' || role === 'owner') && button('明确请求后台执行原发行 / 锁定 / 申报', () => api(`operations/${op}/dispatch`, {}))}
         {button('只查询原操作', () => api(`operations/${op}`), false)}{button('核验原交易（至少间隔 5 秒）', () => api(`operations/${op}/observe`, {}), false)}</div>}
       {error && <p className="error" role="alert">{error}</p>}{busy && <p role="status">正在处理原请求…</p>}

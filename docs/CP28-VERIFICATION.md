@@ -1,5 +1,7 @@
 # CP28 safe-build candidate
 
+Selected Dynamic identity continuation and its separate non-authorizing validation are described in [CP28-IDENTITY.md](CP28-IDENTITY.md). The business runtime boundaries below remain unchanged.
+
 The complete domain flow is executable with the CP28 service/runtime/HTTP composition in an isolated **Anvil31337** fixture, and separately with the production **TestnetRpc + MANUAL_POLICY10143** over an offline synthetic JSON-RPC transport. Neither is real Monad or human-wallet acceptance. The persistent user entry deliberately remains **BLOCKED** until identity choice, public participant mapping, verified new deployment, operator-controlled signer and exact Runtime authority are configured and independently accepted.
 
 ## Implementation

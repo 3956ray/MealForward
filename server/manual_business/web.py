@@ -12,12 +12,16 @@ from .observer import Observer
 from .identity import PRICE, CHAIN_ID
 
 
-def create_app(config, backend=None, *, authentication=None, dispatch=None):
+def create_app(config, backend=None, *, authentication=None, dispatch=None, identity_preparation=None):
     app = Flask(__name__); app.config['MAX_CONTENT_LENGTH'] = 16384; app.logger.disabled = True
     b = backend; gate = threading.RLock(); origin = config['origin']
     service = BusinessService(b) if b else None
     creds = Credentials(b) if b else None
     red = LocalRedemption(b) if b else None
+    if identity_preparation is not None:
+        if b is not None: raise ValueError('Identity preparation cannot enable business runtime')
+        if identity_preparation.origin != origin: raise ValueError('Identity preparation origin mismatch')
+        identity_preparation.register(app)
 
     def body():
         value = request.get_json(silent=True)
@@ -86,8 +90,8 @@ def create_app(config, backend=None, *, authentication=None, dispatch=None):
     @app.get('/api/cp28/status')
     def status():
         missing = []
-        if authentication is None: missing.append('可信登录方式及机构/老板身份映射待配置')
-        if not b: missing.extend(['管理员与老板钱包分工待确认', '新部署及链上角色尚未核验', '后台签名服务待配置', '具体交易笔数、本金与 Gas 预算尚未批准'])
+        if authentication is None: missing.append('Dynamic已选；业务机构/老板可信身份映射待配置' if identity_preparation else '可信登录方式及机构/老板身份映射待配置')
+        if not b: missing.extend(['管理员与老板共用钱包；公开候选地址待本人确认' if identity_preparation else '管理员与老板钱包分工待确认', '新部署及链上角色尚未核验', '后台签名服务待配置', '具体交易笔数、本金与 Gas 预算尚未批准'])
         else:
             if dispatch is None: missing.append('后台签名服务待配置')
             try:
