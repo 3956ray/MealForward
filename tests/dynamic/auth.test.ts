@@ -118,6 +118,8 @@ test('deployment read scope denial clears no work identity but other denials inv
   await f.api.exchange();const before=f.invalidated.length
   await assert.rejects(f.api.request('/work/testnet-context'),/TESTNET_SCOPE_DENIED/)
   assert.equal(f.invalidated.length,before)
+  await assert.rejects(f.api.request('/work/testnet-voucher/invite', {action:'create'}),/TESTNET_SCOPE_DENIED/)
+  assert.equal(f.invalidated.length,before)
   await assert.rejects(f.api.request('/owner/work'),/TESTNET_SCOPE_DENIED/)
   assert.equal(f.invalidated.length,before+1)
 })
