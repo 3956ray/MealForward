@@ -93,7 +93,11 @@ def create_app(b, config):
         if role not in auth: raise ApiError(404,'NOT_FOUND','入口不存在')
         username=body().get('username')
         if username!=('partner-a' if role=='partner' else 'owner-a'): raise ApiError(403,'FORBIDDEN','请使用该角色的专用虚构账号')
-        return auth[role].login()
+        with gate,b.store.transaction() as db:
+            response=auth[role].login()
+            db.execute('INSERT INTO cp24_audit(redemption_id,actor,event,created) VALUES(?,?,?,?)',
+                       ('auth',username,'AUTH_SESSION_ROTATED',b.now()))
+            return response
     @app.get('/api/cp24/<role>/session')
     def session(role):
         if role=='recipient':
@@ -110,10 +114,12 @@ def create_app(b, config):
                 db.execute('DELETE FROM cp24_display WHERE session_hash=?',(row['hash'],))
             response=jsonify(ok=True);response.delete_cookie('cp24_recipient',path='/api/cp24/recipient');return response
         if role not in auth: raise ApiError(404,'NOT_FOUND','入口不存在')
-        with gate,b.store.transaction():
+        with gate,b.store.transaction() as db:
             a=actor(role)
             if role=='owner': b.owner_wallet.logout(a,{})
             response=auth[role].logout()
+            db.execute('INSERT INTO cp24_audit(redemption_id,actor,event,created) VALUES(?,?,?,?)',
+                       ('auth',a.actor_id,'AUTH_LOGOUT',b.now()))
         return response
     @app.get('/api/cp24/support/state')
     def support_state():

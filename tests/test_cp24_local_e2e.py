@@ -200,7 +200,7 @@ class CP24LocalTests(unittest.TestCase):
         self.ok(self.post(other,'owner/note',{'text':'请核对原交餐声明'}))
         self.assertEqual(self.post(other,'owner/report',{'intentKey':random_id()}).status_code,422)
         self.assertEqual(self.b.store.one("SELECT count(*) n FROM operations WHERE kind='report'")['n'],0)
-        self.assertEqual(self.b.store.one('SELECT count(*) n FROM cp24_audit')['n'],2)
+        self.assertEqual(self.b.store.one("SELECT count(*) n FROM cp24_audit WHERE event IN ('LOCK','TAKEOVER')")['n'],2)
         self.vector(0,PRICE,0,0)
 
     def test_guess_limit_preserves_authenticated_original_recovery(self):
@@ -269,7 +269,10 @@ class CP24LocalTests(unittest.TestCase):
         csrf = self.owner.cp24_csrf; self.owner.cp24_csrf = None
         self.assertEqual(self.post(self.owner,'owner/handoff',{'intentKey':random_id()}).status_code,403)
         self.owner.cp24_csrf = csrf
+        old_anchor = self.b.store.anchor.read_text()
         self.assertEqual(self.post(self.owner,'owner/logout').status_code,204)
+        self.assertNotEqual(self.b.store.anchor.read_text(),old_anchor)
+        self.assertEqual(self.b.store.one("SELECT count(*) n FROM cp24_audit WHERE event='AUTH_LOGOUT'")['n'],1)
         self.assertEqual(self.post(self.owner,'owner/handoff',{'intentKey':random_id()}).status_code,401)
         self.assertEqual(self.b.store.one('SELECT count(*) n FROM voucher_claims')['n'],1)
         self.assertEqual(self.b.store.one('SELECT revoked FROM owner_wallet_sessions')['revoked'],1)
