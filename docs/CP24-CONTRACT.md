@@ -26,7 +26,7 @@ Resume reuses saved ports, deployment and operations. Missing/inconsistent stop 
 
 1. 支持者 → 审阅本地钱包支持 → explicitly confirm 0.001 local coin plus separate local gas. Wait for local finality.
 2. 机构伙伴 → `partner-a` / `local-only-password` → issue the one voucher → generate and privately copy/open the link. First-open prevents rotation; unopened links can explicitly rotate.
-3. 领取者 → original link → 查看我的餐券 → 到店生成展示码. No account/wallet. Save its short-lived QR image or use its six digits.
+3. 领取者 → original link → 查看我的餐券 → 到店生成展示码. No account/wallet. Request a download of its short-lived QR image or use its six digits. The page cannot confirm that the browser saved a file: check the download list. In the Codex in-app browser, if no file is available, bring the complete QR and its white margin into view, save a visible-area screenshot, then choose that image on the owner page. Avoid full-page long screenshots; the image remains subject to the original 120-second expiry.
 4. 餐馆老板 → `owner-a` / `local-only-password` → explicitly review/confirm local wallet identity challenge → decode QR image or input six digits → precheck → explicitly acquire processing responsibility. Wait for finalized lock before declaring handoff.
 5. Declare handoff → separately confirm the original statement and report → wait until H → review/confirm local settlement. Public ledger ends F=S=P, A=R=H=0.
 
