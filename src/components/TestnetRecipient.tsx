@@ -1,0 +1,20 @@
+import {useEffect,useLayoutEffect,useMemo,useState} from 'react'
+import {QRCodeSVG} from 'qrcode.react'
+import {createVoucherDisplay,exchangeVoucher,logoutVoucher,resumeVoucher} from '../testnet-voucher/api.ts'
+import type {VoucherDisplay,VoucherSession} from '../testnet-voucher/contracts.ts'
+import {mon} from '../testnet/api.ts'
+const errors:Record<string,string>={INVITE_REJECTED:'这条领取链接无效或已经被换新。请回到机构伙伴发来的原消息。',INVITE_EXPIRED:'这条私密领取链接已过期，请联系机构伙伴。',VOUCHER_SESSION_REQUIRED:'当前券会话已失效，请从机构伙伴发来的私密链接重新打开。',ISSUANCE_NOT_READY:'这张测试券的链上发行状态尚未核验完成。',ISSUANCE_EVIDENCE_INVALID:'链上发行证据暂不可用，本页没有生成新的展示码。',ISSUANCE_BINDING_CONFLICT:'发行证据已变化，当前测试券被冻结。',RESTORE_QUARANTINE:'领取状态处于恢复隔离，请联系测试负责人。',RATE_LIMITED:'操作过于频繁，请稍后再试。',CSRF_DENIED:'当前页面凭证已经变化，请从原私密链接重新打开。'}
+const when=(ts:number)=>new Date(ts*1000).toLocaleString('zh-CN',{hour12:false})
+export function TestnetRecipient({secret}:{secret:string|null}){
+  const [pendingSecret,setPendingSecret]=useState(secret),[session,setSession]=useState<VoucherSession>(),[display,setDisplay]=useState<VoucherDisplay>(),[error,setError]=useState(''),[busy,setBusy]=useState(false),[now,setNow]=useState(()=>Date.now())
+  useLayoutEffect(()=>{if(secret)history.replaceState(null,'',location.pathname+location.search+'#/recipient')},[secret])
+  useEffect(()=>{let alive=true;if(!pendingSecret)void resumeVoucher().then(v=>{if(alive)setSession(v)}).catch(()=>{});return()=>{alive=false}},[])
+  useEffect(()=>{if(!display)return;const id=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(id)},[display])
+  const remaining=useMemo(()=>display?Math.max(0,display.expiresAt*1000-now):0,[display,now]);useEffect(()=>{if(display&&remaining===0)setDisplay(undefined)},[display,remaining])
+  async function open(){if(!pendingSecret||busy)return;setBusy(true);setError('');try{const value=await exchangeVoucher(pendingSecret);setSession(value);setPendingSecret(null)}catch(f){setError(errors[(f as Error).message]??'餐券暂时无法打开，请保留原链接并联系机构伙伴。')}finally{setBusy(false)}}
+  async function show(){if(!session||busy)return;setBusy(true);setError('');try{setDisplay(await createVoucherDisplay(session.csrfToken));setNow(Date.now())}catch(f){setError(errors[(f as Error).message]??'短时展示码未生成，请保留当前餐券状态。')}finally{setBusy(false)}}
+  async function leave(){setDisplay(undefined);setSession(undefined);setPendingSecret(null);await logoutVoucher()}
+  if(!session)return <section aria-labelledby="voucher-entry"><p className="eyebrow">领取者 · 无需注册 / 无需钱包</p><h1 id="voucher-entry">查看我的一份餐券</h1><p>私密链接只是进入这张券的凭证。打开页面本身不会核销、不会扣款，也不会证明指定自然人已经收到餐。</p>{error&&<p role="alert">{error}</p>}{pendingSecret?<button disabled={busy} onClick={()=>void open()}>查看餐券</button>:<p role="status">请从机构伙伴一对一发送的原私密链接进入；本页不会从公开餐账恢复领取秘密。</p>}<p><a href="#/">返回公开入口</a></p></section>
+  const v=session.voucher
+  return <section aria-labelledby="voucher-title" className="recipient-voucher"><p className="eyebrow">Monad 测试网 · 虚构领取者 · 测试 MON</p><h1 id="voucher-title">{v.mealLabel}</h1><p><strong>可展示</strong> · 这是一张已发行的测试餐券。到店后再生成短时二维码给餐馆老板核验。</p>{error&&<p role="alert">{error}</p>}<dl><dt>餐券额度</dt><dd>{mon(v.valueWei)} 测试 MON</dd><dt>机构伙伴</dt><dd>{v.partnerLabel}</dd><dt>私密链接有效至</dt><dd>{when(v.inviteExpiresAt)}</dd><dt>本次页面会话有效至</dt><dd>{when(v.sessionExpiresAt)}</dd></dl>{display?<div className="voucher-display" aria-live="polite"><p><strong>到店短时核销码</strong> · {Math.ceil(remaining/1000)} 秒后失效</p><div className="voucher-qr"><QRCodeSVG value={display.qrPayload} size={232} title="MealForward短时测试核销二维码"/></div><p className="short-code" aria-label={'手输码 '+display.code}>{display.code}</p><p>二维码与手输码是同一张券的短时展示；刷新不会生成第二张餐券。</p><button disabled={busy} onClick={()=>void show()}>刷新短时展示码</button></div>:<button disabled={busy} onClick={()=>void show()}>生成到店二维码 / 手输码</button>}<details><summary>链上来源</summary><dl><dt>券ID</dt><dd><code>{v.voucherId}</code></dd><dt>批次</dt><dd><code>{v.batchId}</code></dd><dt>发行操作</dt><dd><code>{v.operationId}</code></dd></dl></details><p className="fineprint">短时码只用于后续餐馆核验。本阶段没有完成餐馆处理权、交餐申报或结算；看到二维码不等于已经吃到餐。</p><button className="secondary" onClick={()=>void leave()}>退出这张餐券</button></section>
+}

@@ -2,6 +2,10 @@
 
 CP21实现位于独立`server/testnet_funding`、MetaMask支持页`#/support`及单用途`scripts/testnet_funding_admin`。运行与验证见[CP21合同](docs/CP21-CONTRACT.md)。默认未配置、不广播；一个Leader冻结payer/intent、.001测试MON、本片不发券。服务只读观察、不持密钥；提交后拒签/无hash仍只查询原操作。管理员授权和用户MetaMask付款需固定SHA独审及另行广播Gate。当前15207真实OTP窗口在BUILD期间保持原版本，集成由Leader安排。
 
+## CP23 私密线上餐券领取 BUILD
+
+CP23 选择**链接优先、二维码仅作到店短时展示**：机构伙伴对一发送私密领取链接；领取者无需注册、邮箱或钱包，显式打开后取得受限 HttpOnly 券会话；到店时再生成 2 分钟动态二维码 + 6 位手输码。长期领取 secret 不进入二维码、公账或链上。CP23 不新增链上交易，也不做餐馆 lock/report/settle；只接受 CP22 已 `ACCOUNTING_VERIFIED` 的固定测试券作为上游证据。详细边界见 [docs/CP23-CONTRACT.md](docs/CP23-CONTRACT.md)。
+
 # 留膳 / mealforward — 本地模拟 MVP
 
 CP20 同入口的固定测试网只读餐账见 [docs/CP20-CONTRACT.md](docs/CP20-CONTRACT.md)：15207公账与工作入口、18995独立读服务/DB、18975显式partner只读scope。只读0交易；现有模拟与31337数据保留。

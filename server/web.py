@@ -10,7 +10,8 @@ from server.chain.client import ChainConflict, hx
 from server.projection import Projector
 
 
-def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_auth_config=None, testnet_scope_file=None):
+def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_auth_config=None, testnet_scope_file=None,
+               testnet_voucher_directory=None, testnet_issuance_directory=None):
     from server.auth import register_auth
     app=Flask(__name__)
     app.config['MAX_CONTENT_LENGTH']=16*1024
@@ -24,6 +25,16 @@ def create_app(backend, *, origin='http://127.0.0.1:8875', clock=None, dynamic_a
     if dynamic_auth_config is not None and testnet_scope_file is not None:
         from server.testnet_scope import register
         register(app,service,backend.store,testnet_scope_file)
+    if (testnet_voucher_directory is None) != (testnet_issuance_directory is None):
+        raise ValueError('CP23 voucher and CP22 issuance directories must be configured together')
+    if testnet_voucher_directory is not None:
+        if dynamic_auth_config is None or testnet_scope_file is None:
+            raise ValueError('CP23 private delivery requires Dynamic auth and the CP20 testnet scope')
+        from server.testnet_voucher import VoucherService, VoucherStore
+        from server.testnet_voucher.web import register as register_testnet_voucher
+        voucher_service=VoucherService(VoucherStore(testnet_voucher_directory),testnet_issuance_directory,clock=clock or backend.clock)
+        register_testnet_voucher(app,service,backend.store,testnet_scope_file,voucher_service)
+        app.extensions['testnet_voucher']=voucher_service
     projector=Projector(backend)
     recipient=redemption=None
     if importlib.util.find_spec('server.recipient'):

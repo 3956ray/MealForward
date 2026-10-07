@@ -1,3 +1,11 @@
+## CP23 当前 BUILD（覆盖旧阶段“领取未接入”条款）
+
+- 用户本轮授权继续开发线上餐券分发；产品选择为**私密链接为长期领取凭证，二维码仅为领取者到店后生成的2分钟短时展示凭证**。领取者继续免注册、免钱包、不得加载 Dynamic SDK。
+- CP23 只消费 CP22 `ACCOUNTING_VERIFIED` 的固定测试券证据；不查询 RPC、不加载 signer、不广播任何新交易，不提前实现 CP24 餐馆 lock/report/settle。
+- 机构伙伴生成链接必须经过现有 Dynamic `partner` 身份 + CP20 显式 testnet scope + CP22 partnerLabel 三重绑定；数据库只存 secret hash。未打开链接可显式 rotate，一旦任何设备成功 exchange 即禁止静默换新。
+- recipient secret 只放 URL fragment 并在页面加载后立刻从地址栏清除；recipient DTO 不含 recipientRef。短时 QR/6位码不含长期 secret/voucherId，刷新即淘汰旧展示码。
+- 私有 CP23 DB + 外部 anchor 独立于旧业务 DB；恢复冲突 fail closed。完整合同见 `docs/CP23-CONTRACT.md`。
+
 # mealforward 项目规则
 
 ## CP21 当前 BUILD

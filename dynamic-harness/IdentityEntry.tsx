@@ -7,6 +7,7 @@ import { OwnerWalletController, type OwnerDeployment } from '../src/wallet/owner
 import { WalletOwner } from '../src/components/WalletOwner.tsx'
 import { WorkPanel } from '../src/components/OwnerWorkApp.tsx'
 import { TestnetWork } from '../src/components/TestnetWork.tsx'
+import { TestnetDelivery } from '../src/components/TestnetDelivery.tsx'
 import { merchant } from '../src/testnet/contracts.ts'
 import { releaseOwnerController } from './owner-lifecycle.ts'
 
@@ -71,7 +72,7 @@ export default function IdentityEntry({ role }: { role: LoginRole }) {
     {identity.status === 'authenticated' && <section><h2>本地身份配置核对</h2><p>仅检查签名与必要配置，不授予工作权限。验证码和登录凭据不会显示或保存。</p><button disabled={busy} onClick={() => void profileCheck()}>检查本次身份配置</button>{diagnostic !== undefined && <pre>{JSON.stringify(diagnostic, null, 2)}</pre>}</section>}
     {session && <section><h2>已核验工作身份</h2><p>{session.role === 'owner' ? '餐馆老板' : '机构伙伴'} · {session.actorId}</p>
       {session.role === 'owner' && !controller && <button disabled={busy} onClick={() => void wallet()}>准备本地测试钱包</button>}
-      {session.role === 'partner' && <TestnetWork api={api} />}
+      {session.role === 'partner' && <><TestnetWork api={api} /><TestnetDelivery api={api} /></>}
     </section>}
     {error && <p role="alert">{error}</p>}
     {role === 'owner' && <section><h2>测试网商户绑定</h2><p>本部署使用专用测试商户钱包。当前工作账号尚未绑定该商户；测试网结算未开放。</p><code>{merchant}</code></section>}

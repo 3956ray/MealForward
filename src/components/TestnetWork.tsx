@@ -17,5 +17,5 @@ export function TestnetWork({api}:{api:AuthApi}) {
     } finally {if(version===epoch.current)setBusy(false)}
   }
   useEffect(()=>{void refresh();return()=>{epoch.current++}},[api])
-  return <section><h2>测试网工作概况 · 只读</h2>{error&&<p role="alert">{error}</p>}{data&&<><p>机构伙伴 · {data.partnerId} · 本部署测试账只读</p><p>链上未分配餐款：{mon(data.ledger.amounts?.A)} 测试MON</p><p>核验状态：{data.ledger.sync.state}</p><p>受控测试客户端记录，不代表当前账号执行历史发行。</p></>}<p>尚未开放测试网发券。只读授权不授予发行或商户权限。</p><button disabled={busy} onClick={()=>void refresh()}>核验只读权限</button><a href={ledgerRoute}>查看公开餐账</a><a href="#/work/testnet-issuance">测试网发券状态 →</a></section>
+  return <section><h2>测试网工作概况 · 只读</h2>{error&&<p role="alert">{error}</p>}{data&&<><p>机构伙伴 · {data.partnerId} · 本部署测试账只读</p><p>链上未分配餐款：{mon(data.ledger.amounts?.A)} 测试MON</p><p>核验状态：{data.ledger.sync.state}</p><p>受控测试客户端记录，不代表当前账号执行历史发行。</p></>}<p>测试网发券由独立受控流程核验；浏览器工作身份不签链上发行交易。已核账测试券可在下方生成一对一私密领取链接。</p><button disabled={busy} onClick={()=>void refresh()}>核验只读权限</button><a href={ledgerRoute}>查看公开餐账</a><a href="#/work/testnet-issuance">测试网发券状态 →</a></section>
 }

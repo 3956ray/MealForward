@@ -37,7 +37,8 @@ export function createAuthApi({ client, onInvalidate, fetch: transport = globalT
     if (!response.ok) {
       const candidate = (data as { error?: { code?: unknown }; code?: unknown })?.error?.code ?? (data as { code?: unknown })?.code
       const code = typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(candidate) ? candidate : 'AUTH_REQUEST_FAILED'
-      if (response.status === 401 || (response.status === 403 && !(path === '/work/testnet-context' && code === 'TESTNET_SCOPE_DENIED'))) invalidate('session-rejected')
+      const scopedTestnetDenial = response.status === 403 && code === 'TESTNET_SCOPE_DENIED' && (path === '/work/testnet-context' || path.startsWith('/work/testnet-voucher'))
+      if (response.status === 401 || (response.status === 403 && !scopedTestnetDenial)) invalidate('session-rejected')
       throw error(code)
     }
     return data as T
