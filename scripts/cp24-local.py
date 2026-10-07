@@ -43,6 +43,8 @@ def main():
             except OSError: raise SystemExit(f'Port {port} occupied; no process was stopped')
     root.mkdir(exist_ok=True);root.chmod(0o700)
     if a.resume: (root/'clean-stop.json').unlink()
+    else: (root/'node-launch.json').write_text(json.dumps({'genesisTimestamp':int(time.time())})+'\n')
+    genesis=json.loads((root/'node-launch.json').read_text())['genesisTimestamp']
     children=[];stopping=False
     def stop_signal(*_):
         nonlocal stopping
@@ -62,7 +64,8 @@ def main():
         if not binary.is_file(): raise RuntimeError('Pinned native Anvil executable missing')
         node=start('anvil',[str(binary),'--host','127.0.0.1','--port',str(a.node_port),
                             '--chain-id','31337','--silent','--block-time','1','--slots-in-an-epoch','1',
-                            '--state',str(root/'anvil.json'),'--preserve-historical-states'],{**os.environ,'RUST_LOG':'error'})
+                            '--timestamp',str(genesis),'--dump-state',str(root/'anvil.next.json'),'--preserve-historical-states',
+                            *(['--load-state',str(root/'anvil.json')] if a.resume else [])],{**os.environ,'RUST_LOG':'error'})
         probe=requests.Session();probe.trust_env=False
         for _ in range(100):
             if node.poll() is not None: raise RuntimeError('Owned Anvil failed; see anvil.log')
@@ -108,7 +111,8 @@ def main():
             conn=sqlite3.connect(db)
             try: conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
             finally: conn.close()
-            names=['anvil.json','business/backend.sqlite3','business.cp24-anchor.json','business/config.json']
+            os.replace(root/'anvil.next.json',root/'anvil.json')
+            names=['node-launch.json','anvil.json','business/backend.sqlite3','business.cp24-anchor.json','business/config.json']
             record={'ports':ports,'files':{name:fingerprint(root/name) for name in names}}
             (root/'clean-stop.json').write_text(json.dumps(record,indent=2)+'\n')
             print('Normal stop saved. Resume with the same command plus --resume.',flush=True)

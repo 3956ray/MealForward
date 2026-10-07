@@ -14,7 +14,7 @@ From the CP24 checkout:
 
 Default URL: http://127.0.0.1:15247. API19115, Anvil19145, wallet simulator19146. All bind loopback; an occupied port is an error, never a reason to kill another process. Override the four `--*-port` options together for a separate instance. New mode refuses an existing directory. Data and logs remain private under that directory. Never serve that directory as static content.
 
-Ctrl-C (or TERM to the recorded **supervisor**, not its children) stops new requests, finishes current service/worker work, then saves the native Anvil state. On normal stop it records the DB/anchor/config/chain hashes. Resume:
+Ctrl-C (or TERM to the recorded **supervisor**, not its children) stops new requests, finishes current service/worker work, then saves the native Anvil state. Genesis timestamp is pinned per instance; loading a dump must not introduce a second genesis identity. Anvil writes a separate next snapshot, promoted only on normal stop. On normal stop the launcher records node-launch/DB/anchor/config/chain hashes; failed resume does not overwrite the original saved chain snapshot. Resume:
 
 ```sh
 .venv/bin/python scripts/cp24-local.py --directory .localbackend/my-new-cp24 --resume
