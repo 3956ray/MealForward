@@ -20,18 +20,20 @@ export default function App() {
   const [login, setLogin] = useState(''), [credential, setCredential] = useState('')
   const [review, setReview] = useState<Review|null>(null), [op, setOp] = useState(''), [qr, setQr] = useState<any>(null)
   const [link, setLink] = useState(''), [owner, setOwner] = useState<any>(null), [challenge, setChallenge] = useState<any>(null)
+  const [recipientReady, setRecipientReady] = useState(false), [recipientMessage, setRecipientMessage] = useState('')
   const csrf = useRef<Record<string,string>>({}), terminal = useRef(''), activeRole = useRef(role)
   const keys = useRef<Record<string,string>>({})
   const wallet = useRef<Wallet|null>(null)
   const key = (kind: string) => keys.current[kind] ||= crypto.randomUUID()
   activeRole.current = role
   async function api(path: string, data?: unknown) {
+    const requestRole = activeRole.current
     const response = await fetch('/api/cp28/'+path, {method: data === undefined ? 'GET' : 'POST', credentials: 'same-origin',
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf.current[activeRole.current] || '', 'X-Terminal-Cap': terminal.current},
       ...(data === undefined ? {} : {body: JSON.stringify(data)})})
     const value = await response.json()
-    if (!response.ok) throw new Error(value.message || '原操作暂不可用')
-    if (value.csrfToken) csrf.current[activeRole.current] = value.csrfToken
+    if (!response.ok) throw Object.assign(new Error(value.message || '原操作暂不可用'), {status: response.status})
+    if (value.csrfToken) csrf.current[requestRole] = value.csrfToken
     if (value.terminalCap) terminal.current = value.terminalCap
     return value
   }
@@ -43,6 +45,20 @@ export default function App() {
     void refresh().catch(e => setError(String(e.message)))
     return () => wallet.current?.dispose()
   }, [])
+  async function recipientSession() {
+    const value = await api('recipient/session')
+    setRecipientReady(true); setRecipientMessage('已恢复餐券会话，可以生成新的到店码。')
+    return value
+  }
+  useEffect(() => {
+    setQr(null)
+    if (role !== 'recipient') return
+    setRecipientReady(false)
+    void recipientSession().catch(() => {
+      setRecipientReady(false)
+      setRecipientMessage(secret.current ? '请点击查看我的餐券，打开本次私密链接。' : '餐券会话不可用，请从机构交付的原私密链接重新进入。')
+    })
+  }, [role])
   useEffect(() => {
     if (!qr) return
     const timer = window.setTimeout(() => setQr(null), Math.max(0, qr.expiresAt*1000-Date.now()))
@@ -96,10 +112,17 @@ export default function App() {
         {button('生成私密领取链接', async () => {const v = await api('partner/invite', {rotate: false}); setLink(v.url); return {expiresAt: v.expiresAt}})}
         {link && <label>仅向领取者私下交付<input readOnly value={link}/></label>}</>}
       {role === 'recipient' && <><p>领取者无需注册、邮箱或钱包。请从机构私下交付的原链接进入。</p>
-        {button('查看我的餐券', () => api('recipient/exchange', {secret: secret.current}))}
-        {button('生成到店二维码 / 手输码', async () => {const v = await api('recipient/display', {}); setQr(v); return {expiresAt: v.expiresAt}})}
+        <p role="status">{recipientMessage}</p>
+        {button('查看我的餐券', async () => {
+          try { return await recipientSession() }
+          catch (e) { if (![401, 403, 404].includes((e as {status?: number}).status || 0)) throw e }
+          if (!secret.current) throw new Error('餐券会话已失效，请从机构交付的原私密链接重新进入。')
+          const value = await api('recipient/exchange', {secret: secret.current})
+          secret.current = ''; setRecipientReady(true); setRecipientMessage('已打开餐券，可以生成到店码。'); return value
+        })}
+        <button disabled={busy || !enabled || !recipientReady} onClick={() => void run(async () => {const v = await api('recipient/display', {}); setQr(v); return {expiresAt: v.expiresAt}})}>生成到店二维码 / 手输码</button>
         {qr && <div className="qr"><QRCodeSVG value={qr.qrPayload} size={180}/><strong>{qr.manualCode}</strong><p>120 秒有效，更新后旧码失效。请在餐馆当面展示。</p></div>}
-        {button('退出餐券', async () => {const v = await api('recipient/logout', {}); setQr(null); return v})}</>}
+        {button('退出餐券', async () => {const v = await api('recipient/logout', {}); setQr(null); setRecipientReady(false); delete csrf.current.recipient; setRecipientMessage('已退出餐券，请从原私密链接重新进入。'); return v})}</>}
       {role === 'owner' && <><p>后台服务代发锁定和申报；最后结算由绑定的老板钱包本人确认。</p>
         {button('准备老板钱包证明', async () => {const v = await api('owner/proof/prepare', {}); setChallenge(v); return v})}
         {challenge && <div className="review"><pre>{challenge.message}</pre>{button('核对后签署身份证明', async () => {await getWallet().prove(challenge); setChallenge(null); return {verified: true}})}</div>}
@@ -111,7 +134,12 @@ export default function App() {
         {button('确认交餐声明并申报', () => accepted('owner/report', {intentKey: key('report'), confirmStatement: true}))}
         {button('准备老板钱包结算', async () => {const v = await accepted('owner/settle', {intentKey: key('settle')}); await prepareWallet(v.operation.id); return v})}
         {owner?.terminalVersion > 0 && button('确认原终端已停止，接管原处理', () => api('owner/takeover', {confirmed: true, expectedVersion: owner.terminalVersion}))}</>}
-      {role === 'ledger' && <><p>仅显示已核验金额，不公开领取关联和私密链接。</p><div className="balances">{[['F', '累计支持'], ['A', '可发行'], ['R', '已发行'], ['H', '待结算'], ['S', '已结算']].map(([k, label]) => <div key={k}><span>{label}</span><strong>{ledger?.batch ? (Number(ledger.batch[k])/1e18).toFixed(3) : '—'}</strong><small>测试 MON</small></div>)}</div>{button('刷新公开餐账', refresh, false)}</>}
+      {role === 'ledger' && <><p>仅显示已核验金额，不公开领取关联和私密链接。刷新页面不会自动核验链上新交易。</p>
+        <p role="status">{ledger?.sync?.state === 'HALTED' ? '链上证据存在冲突，已暂停；下列历史快照不代表当前到账。' : ledger?.sync?.state === 'WAITING_VERIFICATION' ? (ledger?.observation ? '原交易结果仍待核验；金额保留上次已核验快照，不代表待核交易已到账。' : '原交易结果仍待核验；尚无已核验金额快照，暂不显示金额。') : ledger?.observation ? '以下为指定区块的已核验快照，不代表最新链上状态。' : '尚无与金额对应的已核验观察记录，暂不显示金额。'}</p>
+        <dl><dt>本轮合约</dt><dd>{ledger?.contract || '尚未配置'}</dd><dt>部署标识</dt><dd>{ledger?.observation?.deploymentId || '尚无已核验部署观察'}</dd><dt>批次</dt><dd>{ledger?.batch?.id || '尚无已核验批次'}</dd>
+          {ledger?.observation && <><dt>金额观察区块 / 区块哈希</dt><dd>{ledger.observation.blockNumber}<br/>{ledger.observation.blockHash}</dd>
+            <dt>核验完成时间（非页面刷新时间）</dt><dd>{new Date(ledger.observation.observedAt*1000).toLocaleString()} · {ledger.sync?.snapshotAgeSeconds} 秒前</dd><dt>观察来源</dt><dd>{ledger.observation.source}</dd></>}</dl>
+        <div className="balances">{[['F', '累计支持'], ['A', '可发行'], ['R', '已发行'], ['H', '待结算'], ['S', '已结算']].map(([k, label]) => <div key={k}><span>{label}</span><strong>{ledger?.batch ? (Number(ledger.batch[k])/1e18).toFixed(3) : '—'}</strong><small>测试 MON</small></div>)}</div>{button('刷新公开餐账', refresh, false)}</>}
       {review && <div className="review"><h3>原交易审核</h3><dl><dt>动作</dt><dd>{review.kind}</dd><dt>付款地址</dt><dd>{review.transaction?.from}</dd><dt>目标合约</dt><dd>{review.transaction?.to}</dd><dt>本金 / 最坏 Gas（wei）</dt><dd>{review.transaction?.value} / {review.transaction && (BigInt(review.transaction.gas)*BigInt(review.transaction.maxFeePerGas)).toString()}</dd></dl>
         {button('已核对，打开本人钱包确认', async () => {const hash = await getWallet().send(review); setReview(null); return {txHash: hash, state: '等待核验'}})}</div>}
       {role !== 'recipient' && role !== 'ledger' && <div className="original"><label>原操作 ID<input value={op} onChange={e => setOp(e.target.value)}/></label>

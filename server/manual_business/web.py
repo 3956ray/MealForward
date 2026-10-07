@@ -102,11 +102,25 @@ def create_app(config, backend=None, *, authentication=None, dispatch=None):
 
     @app.get('/api/cp28/public')
     def public():
-        if not b: return jsonify(batch=None, operations=[], priceWei=str(PRICE), ruleVersion=None)
+        if not b: return jsonify(batch=None, operations=[], priceWei=str(PRICE), ruleVersion=None,
+                                contract=None, observation=None, sync={'state': 'NOT_CONFIGURED', 'pendingCount': 0})
         with b.store.transaction() as db:
             batch = db.execute('SELECT * FROM batches LIMIT 1').fetchone()
-            return jsonify(batch={k: str(batch[k]) for k in ('id', 'F', 'A', 'R', 'H', 'S', 'X')} if batch else None,
+            values = {k: str(batch[k]) for k in ('id', 'F', 'A', 'R', 'H', 'S', 'X')} if batch else None
+            saved = db.execute("SELECT value FROM metadata WHERE key='cp28_public_snapshot'").fetchone()
+            snapshot = json.loads(saved['value']) if saved else None
+            valid = bool(snapshot and snapshot.get('batch') == values and
+                         snapshot.get('deploymentId') == b.deployment['deploymentId'] and
+                         snapshot.get('chainId') == b.policy.chain_id and snapshot.get('contract', '').lower() == b.deployment['contractAddress'].lower())
+            pending = db.execute("SELECT count(*) FROM cp28_signing WHERE kind!='proof' AND state NOT IN ('FINALIZED_SUCCESS','FINALIZED_REVERT')").fetchone()[0]
+            state = 'WAITING_VERIFICATION' if pending else 'SNAPSHOT_ONLY' if valid else 'MISSING_OBSERVATION'
+            halted = db.execute('SELECT halted FROM cp28_identity WHERE id=1').fetchone()['halted']
+            if halted: state = 'HALTED'
+            return jsonify(batch=values if valid else None,
                            priceWei=str(PRICE), ruleVersion=b.policy.rule, contract=b.deployment['contractAddress'],
+                           observation={k: v for k, v in snapshot.items() if k != 'batch'} if valid else None,
+                           sync={'state': state, 'pendingCount': pending, 'amountsVerified': valid,
+                                 'snapshotAgeSeconds': max(0, b.now()-snapshot['observedAt']) if valid else None},
                            operations=[{'action': r['kind'], 'status': r['status']} for r in db.execute('SELECT kind,status FROM operations ORDER BY created_at')])
 
     @app.post('/api/cp28/<role>/login')

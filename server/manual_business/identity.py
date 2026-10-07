@@ -1,6 +1,7 @@
 """Pure new-deployment identity validation against the unchanged reviewed artifact."""
 import hashlib
 import json
+import re
 from pathlib import Path
 import rlp
 from eth_abi import encode
@@ -52,6 +53,20 @@ def deployment_plan(run_id, admin, merchant, nonce):
 def verify_deployment(plan, tx, receipt, block, runtime, finalized_height):
     expected = deployment_plan(plan['runId'], plan['admin'], plan['merchant'], plan['nonce'])
     if plan != expected: raise ChainConflict('Deployment plan changed')
+    # A finalized height alone cannot bind mixed-provider transaction/receipt data.
+    for value in (tx, receipt, block):
+        fields = ('number',) if value is block else ('blockNumber', 'transactionIndex')
+        if any(type(value.get(k)) is not int or value[k] < 0 for k in fields):
+            raise ChainConflict('Missing or invalid deployment position')
+        hashes = ('hash',) if value is block else ('hash', 'blockHash') if value is tx else ('transactionHash', 'blockHash')
+        if any(not isinstance(value.get(k), str) or not re.fullmatch(r'0x[0-9a-fA-F]{64}', value[k]) for k in hashes):
+            raise ChainConflict('Missing or invalid deployment hash')
+    position = tx['transactionIndex']
+    transactions = block.get('transactions')
+    if (tx['blockNumber'] != receipt['blockNumber'] or tx['blockHash'] != receipt['blockHash'] or
+            position != receipt['transactionIndex'] or not isinstance(transactions, list) or
+            position >= len(transactions) or transactions[position] != tx['hash']):
+        raise ChainConflict('Original deployment position conflict')
     if (tx['from'].lower() != plan['sender'].lower() or tx.get('to') not in (None, '', '0x') or
             tx['nonce'] != plan['nonce'] or tx['chainId'] != CHAIN_ID or tx['value'] != 0 or
             tx['input'].lower() != plan['creationInput'].lower()):

@@ -33,7 +33,8 @@ def register_deployment(plan, original_hash, transport, clock=time.monotonic):
     code = call('eth_getCode', [receipt['contractAddress'], hex(final_height)])
     if call('eth_getBlockByNumber', [hex(final_height), False])['hash'] != final['hash']:
         raise ChainConflict('Finalized deployment observation changed')
-    normalized_tx = {**tx, **{k: number(tx[k]) for k in ('nonce', 'chainId', 'value')}}
-    normalized_receipt = {**receipt, 'status': number(receipt['status']), 'blockNumber': height}
+    normalized_tx = {**tx, **{k: number(tx.get(k)) for k in ('nonce', 'chainId', 'value', 'blockNumber', 'transactionIndex')}}
+    normalized_receipt = {**receipt, 'status': number(receipt['status']), 'blockNumber': height,
+                          'transactionIndex': number(receipt.get('transactionIndex'))}
     normalized_block = {**block, 'number': number(block['number'])}
     return verify_deployment(plan, normalized_tx, normalized_receipt, normalized_block, code, final_height)

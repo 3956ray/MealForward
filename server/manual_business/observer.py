@@ -95,7 +95,7 @@ class Observer:
                         raise ChainConflict('Settlement merchant mismatch')
                 paused = self.rpc.read('paused', [], final['number'])
                 batch_id = support['batch_id'] if support else op['target'] if row['kind'] == 'issue' else private['batch_id']
-                accounting = self.rpc.read('getBatch', [batch_id], final['number']) if event else None
+                accounting = self.rpc.read('getBatch', [batch_id], final['number'])
                 liability = self.rpc.read('liability', [], final['number'])
                 total_funded = self.rpc.read('totalFunded', [], final['number'])
                 contract_balance = self.rpc.balance(self.rpc.contract.address)
@@ -121,6 +121,14 @@ class Observer:
                     totals = db.execute('SELECT coalesce(sum(F),0) AS funded,coalesce(sum(A+R+H),0) AS liability FROM batches').fetchone()
                     if totals['funded'] != total_funded or totals['liability'] != liability or contract_balance < liability:
                         raise ChainConflict('Same-block global accounting mismatch')
+                    batch = db.execute('SELECT * FROM batches WHERE id=?', (batch_id,)).fetchone()
+                    if batch and tuple(batch[k] for k in ('F', 'A', 'R', 'H', 'S', 'X', 'L')) != tuple(accounting):
+                        raise ChainConflict('Public snapshot batch accounting mismatch')
+                    snapshot = {'deploymentId': self.b.deployment['deploymentId'], 'chainId': self.b.policy.chain_id,
+                                'contract': self.rpc.contract.address, 'blockNumber': final['number'], 'blockHash': final['hash'],
+                                'observedAt': self.b.now(), 'source': 'Monad finalized' if self.b.policy.chain_id == 10143 else 'isolated Anvil test finality',
+                                'batch': {k: str(batch[k]) for k in ('id', 'F', 'A', 'R', 'H', 'S', 'X')} if batch else None}
+                    db.execute("INSERT OR REPLACE INTO metadata VALUES('cp28_public_snapshot',?)", (canonical(snapshot),))
                     db.execute('UPDATE cp28_signing SET tx_hash=? WHERE operation_id=?', (row['tx_hash'], operation_id))
                     db.execute("UPDATE metadata SET value=? WHERE key='paused'", (str(int(paused)),))
                     return {'state': 'FINALIZED_SUCCESS' if event else 'FINALIZED_REVERT', 'txHash': row['tx_hash']}

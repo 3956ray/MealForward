@@ -16,11 +16,12 @@ from server.manual_business.deployment import register_deployment
 
 def identity():
     p = deployment_plan('new-run', '0x'+'11'*20, '0x'+'22'*20, 4)
-    block = {'number': 10, 'hash': '0x'+'33'*32}
+    block = {'number': 10, 'hash': '0x'+'33'*32, 'transactions': ['0x'+'44'*32]}
     tx = {'hash': '0x'+'44'*32, 'from': p['sender'], 'to': None, 'nonce': 4,
-          'chainId': 10143, 'value': 0, 'input': p['creationInput']}
+          'chainId': 10143, 'value': 0, 'input': p['creationInput'],
+          'blockNumber': 10, 'blockHash': block['hash'], 'transactionIndex': 0}
     receipt = {'status': 1, 'blockHash': block['hash'], 'blockNumber': 10,
-               'transactionHash': tx['hash'], 'contractAddress': p['predictedAddress']}
+               'transactionHash': tx['hash'], 'contractAddress': p['predictedAddress'], 'transactionIndex': 0}
     return p, tx, receipt, block
 
 
@@ -98,17 +99,38 @@ class RpcTests(unittest.TestCase):
             if method == 'eth_chainId': result = hex(10143)
             elif method == 'eth_getBlockByNumber':
                 result = {'number': '0x0' if p['params'][0] == '0x0' else '0xa',
-                          'hash': GENESIS if p['params'][0] == '0x0' else self.block['hash']}
+                          'hash': GENESIS if p['params'][0] == '0x0' else self.block['hash'], 'transactions': self.block['transactions']}
             elif method == 'eth_getTransactionByHash':
-                result = {**self.tx, **{k: hex(self.tx[k]) for k in ('nonce', 'chainId', 'value')}}
+                result = {**self.tx, **{k: hex(self.tx[k]) for k in ('nonce', 'chainId', 'value', 'blockNumber', 'transactionIndex')}}
             elif method == 'eth_getTransactionReceipt':
-                result = {**self.receipt, 'status': '0x1', 'blockNumber': '0xa'}
+                result = {**self.receipt, 'status': '0x1', 'blockNumber': '0xa', 'transactionIndex': '0x0'}
             elif method == 'eth_getCode': result = self.code
             else: self.fail('unapproved registration RPC')
             return {'jsonrpc': '2.0', 'id': p['id'], 'result': result}
         self.assertEqual(register_deployment(self.plan, self.tx['hash'], transport), self.deployment)
         self.assertEqual(len(calls), 8)
         self.assertTrue(all(not p['method'].startswith('eth_send') for p in calls))
+        mutations = [('tx', 'blockHash', '0x'+'99'*32), ('tx', 'blockNumber', '0xb'),
+                     ('tx', 'transactionIndex', '0x9'), ('receipt', 'transactionIndex', '0x1'),
+                     ('block', 'transactions', ['0x'+'99'*32]), ('block', 'transactions', None),
+                     ('block', 'transactions', []), ('block', 'transactions', 'missing'), ('block', 'number', '0xb')]
+        for target in ('tx', 'receipt'):
+            for field in ('blockHash', 'blockNumber', 'transactionIndex'):
+                for invalid in (None, 'missing', '', '0x00'):
+                    mutations.append((target, field, invalid))
+        for target, field, value in mutations:
+            def conflicting(p, timeout):
+                response = transport(p, timeout)
+                method = p['method']
+                match = (target == 'tx' and method == 'eth_getTransactionByHash' or
+                         target == 'receipt' and method == 'eth_getTransactionReceipt' or
+                         target == 'block' and method == 'eth_getBlockByNumber' and p['params'][0] == '0xa')
+                if match:
+                    if value == 'missing': response['result'].pop(field, None)
+                    else: response['result'][field] = value
+                return response
+            with self.subTest(target=target, field=field, value=value), self.assertRaises((ChainConflict, ChainUnavailable)):
+                register_deployment(self.plan, self.tx['hash'], conflicting)
 
     def test_streaming_transport_has_total_timeout_not_only_chunk_timeout(self):
         class Response:

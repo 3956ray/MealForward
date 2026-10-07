@@ -8,11 +8,12 @@ import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from cryptography.fernet import Fernet
 from server.local import fixture, load_worker_keys
-from server.chain.client import ChainRpc, hx, plain
+from server.chain.client import ChainRpc, ChainUnavailable, hx, plain
 from server.backend import canonical, digest, random_id
 from server.business_policy import LOCAL_POLICY
 from server.manual_business.store import ManualStore
@@ -114,12 +115,34 @@ class LocalFlowTests(unittest.TestCase):
         self.post(role, 'operations/'+op+'/hash', {'txHash': tx_hash})
         result = self.post(role, 'operations/'+op+'/observe')
         self.assertEqual(result['state'], 'FINALIZED_SUCCESS')
+        self.assert_snapshot()
 
     def service_transaction(self, role, op):
         result = self.post(role, 'operations/'+op+'/dispatch')
         self.assertIsNotNone(result.get('txHash'), result)
         self.post(role, 'operations/'+op+'/dispatch')
         self.assertEqual(self.post(role, 'operations/'+op+'/observe')['state'], 'FINALIZED_SUCCESS')
+        self.assert_snapshot()
+
+    def public(self):
+        response = self.clients['support'].get('/api/cp28/public', base_url=self.origin)
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()
+
+    def assert_snapshot(self):
+        value = self.public(); observed = value['observation']
+        self.assertEqual(value['sync']['state'], 'SNAPSHOT_ONLY')
+        self.assertEqual(observed['contract'], self.config['contractAddress'])
+        self.assertEqual(observed['deploymentId'], self.config['deploymentId'])
+        self.assertEqual(observed['observedAt'], self.now)
+        self.assertEqual(observed['blockHash'], self.rpc.block(observed['blockNumber'])['hash'])
+        amounts = self.rpc.read('getBatch', [value['batch']['id']], observed['blockNumber'])
+        self.assertEqual(tuple(int(value['batch'][k]) for k in ('F', 'A', 'R', 'H', 'S', 'X')), tuple(amounts[:6]))
+        self.now += 10
+        refreshed = self.public()
+        self.assertEqual(refreshed['observation'], observed)
+        self.assertEqual(refreshed['batch'], value['batch'])
+        self.assertEqual(refreshed['sync']['snapshotAgeSeconds'], 10)
 
     def test_complete_actual_local_business_with_manual_gate_and_service(self):
         support = self.post('support', 'support/prepare', {'clientRequestId': random_id(), 'account': self.config['participants']['supporter'],
@@ -207,6 +230,39 @@ class LocalFlowTests(unittest.TestCase):
         review['transaction']['nonce'] += 1
         with self.assertRaises(ChainConflict): service.start(review, service=True)
         self.assertIsNone(self.store.one('SELECT * FROM cp28_signing WHERE operation_id=?', (op,)))
+
+    def test_pending_and_failed_observation_keep_previous_amount_snapshot(self):
+        op = self.prepare_issue()
+        previous = self.public()
+        self.post('partner', 'operations/'+op+'/dispatch')
+        pending = self.public()
+        self.assertEqual(pending['sync']['state'], 'WAITING_VERIFICATION')
+        self.assertEqual(pending['observation'], previous['observation'])
+        self.assertEqual(pending['batch'], previous['batch'])
+        read = self.rpc.read
+        def fail_accounting(name, args, height):
+            if name == 'getBatch': raise ChainUnavailable('synthetic observation failure')
+            return read(name, args, height)
+        with patch.object(self.rpc, 'read', side_effect=fail_accounting):
+            self.post('partner', 'operations/'+op+'/observe', expected=503)
+        self.now += 60
+        failed = self.public()
+        self.assertEqual(failed['observation'], previous['observation'])
+        self.assertEqual(failed['batch'], previous['batch'])
+        self.assertEqual(failed['sync']['state'], 'WAITING_VERIFICATION')
+        self.assertGreaterEqual(failed['sync']['snapshotAgeSeconds'], 60)
+        self.post('partner', 'operations/'+op+'/observe')
+        self.assert_snapshot()
+
+    def test_no_observation_or_missing_snapshot_never_invents_amount_context(self):
+        value = self.public()
+        self.assertEqual(value['sync']['state'], 'MISSING_OBSERVATION')
+        self.assertIsNone(value['batch']); self.assertIsNone(value['observation'])
+        self.prepare_issue()
+        self.store.execute("DELETE FROM metadata WHERE key='cp28_public_snapshot'")
+        value = self.public()
+        self.assertEqual(value['sync']['state'], 'MISSING_OBSERVATION')
+        self.assertIsNone(value['batch']); self.assertIsNone(value['observation'])
 
 
 if __name__ == '__main__': unittest.main()

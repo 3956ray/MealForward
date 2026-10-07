@@ -1,6 +1,6 @@
 # CP28 safe-build candidate
 
-The complete domain flow is executable with the CP28 service/runtime/HTTP composition in an isolated **Anvil31337** fixture. It is not a real Monad or human-wallet acceptance. The persistent user entry deliberately remains **BLOCKED** until identity choice, public participant mapping, verified new deployment, operator-controlled signer and exact Runtime authority are configured and independently accepted.
+The complete domain flow is executable with the CP28 service/runtime/HTTP composition in an isolated **Anvil31337** fixture, and separately with the production **TestnetRpc + MANUAL_POLICY10143** over an offline synthetic JSON-RPC transport. Neither is real Monad or human-wallet acceptance. The persistent user entry deliberately remains **BLOCKED** until identity choice, public participant mapping, verified new deployment, operator-controlled signer and exact Runtime authority are configured and independently accepted.
 
 ## Implementation
 
@@ -18,7 +18,7 @@ From this project root:
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
 npm run chain:test
-.venv/bin/python -m unittest tests.test_cp28_runtime tests.test_cp28_rpc tests.test_cp28_ipc tests.test_cp28_local_flow -q
+.venv/bin/python -m unittest tests.test_cp28_runtime tests.test_cp28_rpc tests.test_cp28_ipc tests.test_cp28_local_flow tests.test_cp28_fake_flow -q
 .venv/bin/python -m unittest tests.test_cp24_local_e2e tests.test_backend_chain_contracts tests.test_backend_chain_owner tests.test_auth tests.test_cp27_readiness tests.test_cp26_readiness tests.test_cp26_startup -q
 node --experimental-strip-types --test tests/wallet/cp28.test.ts tests/wallet-readiness/*.test.ts
 node_modules/.bin/tsc --noEmit -p manual-business-harness/tsconfig.json
@@ -30,11 +30,17 @@ The Python environment is the project's existing locked Python3.12 environment. 
 
 The actual local flow checks: support → issue → invite → exchange → short code → one-use owner proof → lock → handoff → report → owner settlement; F=S=10^15 and A=R=H=0, exactly three service signatures, duplicate dispatch query-only, consumed code rejected, public ledger excludes recipient reference. Additional failures cover missing/expired authority, altered review, revoked mapping, same operation concurrency, nonce reservation, timeout/restart UNKNOWN, actual fee/transaction mismatch, data/anchor rollback and all security tables.
 
-Protocol-only10143 tests cover exact genesis/chain/runtime, original deployment creation/nonce/receipt/finality, eight-call registration, unauthorized selectors/hashes/IDs, call/page/size limits and a dribbling response under absolute timeout. These do not prove real Monad finality, RPC availability or fees.
+Offline10143 tests cover exact genesis/chain/runtime, original deployment creation/nonce/receipt/finality, eight-call registration, unauthorized selectors/hashes/IDs, call/page/size limits and a dribbling response under absolute timeout. `test_cp28_fake_flow` runs actual ManualBackend → BusinessService/Signer → TestnetRpc → Observer through fund/issue/lock/report/settle, including real ephemeral synthetic EIP1559 service signing and ABI-encoded JSON-RPC responses. It tests hashless original-event recovery, lagging finality, excess service roles, and transaction/event/amount/final-block conflicts with atomic projection rollback. These do not prove real Monad finality, RPC availability or fees. The offline full flow found the inherited owner-settlement table's 31337 constraint; only fresh CP28 databases now pin that table to their configured10143 network. The original local schema remains31337, the immutable-intent trigger remains present, and resume refuses a mismatched schema without migrating/resetting existing data.
+
+Deployment registration requires matching transaction/receipt block number, hash and transaction index plus the original hash at that index in the canonical block's transaction list. Missing, null, pending, malformed or conflicting locations cannot register a deployment. Public amounts and observation metadata are saved atomically after same-block accounting verifies. Refresh does not observe chain state or advance `observedAt`; pending/failed observations retain the prior amount snapshot. Missing/mismatched metadata hides amounts. The UI displays contract/deployment/batch, block/hash, verification time/age and pending/halted/as-of status; verification time is not chain block timestamp or page refresh time.
+
+Recipient entry/return restores HttpOnly cookie session and CSRF via GET session. Exchange is used only with the in-memory fragment after a missing session; successful exchange clears that memory. Reload never exchanges an empty secret. Expired sessions explicitly require the original private link; no secret is written to browser storage.
 
 Unix socket tests run on the actual local OS: mode0700 parent/0600 socket, OS peer UID (macOS getpeereid through libc), second writer refused, oversized message and wrong UID rejected before dispatch, capability file symlinks/public modes refused. Same-UID compromise is outside this boundary; it is not an HSM or OS-account sandbox.
 
 Browser fixture: `node scripts/cp28-browser-fixture.mjs 15288`; use Codex in-app browser on its printed URL and click Run. It imports the actual Wallet controller and uses browser native fetch against bounded synthetic HTTP: success, runtime denial, 4001, no hash, lost start response, account change. No real provider or RPC. `/mobile` is an explicit 390px iframe of the built app with synthetic BLOCKED status; desktop browser viewport override was ineffective, so this is labeled responsive-layout evidence, not a physical phone test.
+
+Revision browser fixture (run separately on15288): `.venv/bin/python -m tests.cp28_browser_server`, then `/test-fixture`. Actual built App + native fetch + actual CP28 HTTP use the offline10143 test composition. Verify private-link exchange → display → reload → restored session/CSRF → new display; role return and expired-session behavior; then pending/missing ledger states. `/test-mobile` is a390px iframe. Test-only control routes and same-origin frame permission exist solely in that module; preparation/production never import it. Stop with Ctrl-C; temporary database/anchor and ephemeral keys are discarded. Request evidence stores only endpoint/status and presence booleans, never secret/cookie/CSRF values.
 
 ## Preparation and recovery
 

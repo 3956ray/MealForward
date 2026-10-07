@@ -36,6 +36,16 @@ class ManualStore(LocalStore):
         super().__init__(path)
         if create:
             with self.transaction() as db:
+                if config['chainId'] == 10143:
+                    # Only the brand-new CP28 database has a different network.
+                    # Do not relax the shared local schema or migrate persisted intents.
+                    schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='owner_settlements'").fetchone()['sql']
+                    trigger = db.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='owner_settlement_intent_immutable'").fetchone()['sql']
+                    if schema.count('CHECK(chain_id=31337)') != 1 or db.execute('SELECT 1 FROM owner_settlements').fetchone():
+                        raise ValueError('Unexpected fresh owner settlement schema')
+                    db.execute('DROP TABLE owner_settlements')
+                    db.execute(schema.replace('CHECK(chain_id=31337)', 'CHECK(chain_id=10143)'))
+                    db.execute(trigger)
                 for statement in SCHEMA.split(';'):
                     if statement.strip(): db.execute(statement)
                 db.execute('INSERT INTO cp28_identity(id,run_id,config_digest) VALUES(1,?,?)',
@@ -44,6 +54,9 @@ class ManualStore(LocalStore):
             row = db.execute('SELECT * FROM cp28_identity WHERE id=1').fetchone()
             if not row or row['run_id'] != config['runId'] or row['config_digest'] != digest(canonical(config)):
                 raise ValueError('Run/config identity mismatch; preserve original state')
+            schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='owner_settlements'").fetchone()['sql']
+            if f"CHECK(chain_id={config['chainId']})" not in schema:
+                raise ValueError('Owner settlement network mismatch; preserve original database')
 
     def fingerprint(self, db):
         names = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
