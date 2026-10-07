@@ -15,3 +15,14 @@ test('new check clears old result immediately; failed response leaves none',asyn
 test('wallet context read timeout and changed account without event fail closed',async()=>{const p=provider();const c=new Readiness(()=>p,response,()=>1000000,{connect:10,read:5,http:20});await c.connect();p.request=()=>new Promise(()=>{});await c.check();assert.equal(c.state.error,'WALLET_TIMEOUT');assert.equal(c.state.result,undefined);c.dispose();const q=provider();const d=new Readiness(()=>q,response,()=>1000000);await d.connect();q.request=async({method})=>method==='eth_chainId'?'0x279f':['0x'+'2'.repeat(40)];await d.check();assert.equal(d.state.account,undefined);assert.equal(d.state.result,undefined)})
 test('expired or mismatched response is refused, HTTP failure is sanitized',async()=>{for(const data of [{...result(),address:'0x'+'2'.repeat(40)},{...result(),expiresAt:999},{...result(),deployment:{status:'PASS'}}]){const p=provider();const c=new Readiness(()=>p,async()=>new Response(JSON.stringify(data)),()=>1000000);await c.connect();await c.check();assert.equal(c.state.error,'RESULT_INVALID');assert.equal(c.state.result,undefined)}})
 test('disposing while connection is pending never updates state',async()=>{const p=provider();let done:(v:any)=>void=()=>{};p.request=()=>new Promise(r=>{done=r});const c=new Readiness(()=>p);const pending=c.connect();c.dispose();done([address]);await pending;assert.equal(c.state.account,undefined)})
+test('transport is called without a controller receiver, like native browser fetch requires',async()=>{
+ const p=provider();let calls=0
+ const receiverSensitive:typeof fetch=async function(this:unknown,...args:Parameters<typeof fetch>){
+  assert.equal(this,undefined,'transport must not receive the Readiness instance as this')
+  calls++;assert.equal(args[0],'/api/cp26/check');assert.equal(args[1]?.method,'POST')
+  return response()
+ }
+ const c=new Readiness(()=>p,receiverSensitive,()=>1000000)
+ await c.connect();await c.check()
+ assert.equal(calls,1);assert.equal(c.state.error,undefined);assert.equal(c.state.result?.network.status,'PASS');c.dispose()
+})

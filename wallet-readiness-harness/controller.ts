@@ -48,7 +48,8 @@ export class Readiness {
       if(current.toLowerCase()!==account.toLowerCase()||actual!==chain)throw Error('ACCOUNT_CHANGED')
       if(actual!=='0x279f')throw Error('WRONG_CHAIN')
       timer=setTimeout(()=>abort.abort(),this.timing.http)
-      const response=await this.transport('/api/cp26/check',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'omit',cache:'no-store',body:JSON.stringify({address:account}),signal:abort.signal})
+      const transport=this.transport
+      const response=await transport('/api/cp26/check',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'omit',cache:'no-store',body:JSON.stringify({address:account}),signal:abort.signal})
       const data=await response.json()
       if(!response.ok)throw Error(['RPC_NOT_CONFIGURED','RATE_LIMIT'].includes(data.code)?data.code:'CHECK_UNAVAILABLE')
       if(!data||data.address?.toLowerCase()!==account.toLowerCase()||data.targetChainId!==10143||!Number.isFinite(data.expiresAt)||data.expiresAt*1000<=this.now()||data.expiresAt-data.startedAt!==60||!['PASS','FAIL','NOT_CHECKED'].includes(data.network?.status)||!['PASS','FAIL','NOT_CHECKED'].includes(data.account?.status)||data.deployment?.status!=='NOT_CONFIGURED'||data.roles?.status!=='NOT_CHECKED')throw Error('RESULT_INVALID')
