@@ -1,4 +1,4 @@
-"""Foreground local CP26 UI/API; no wallet, key or business data is loaded."""
+"""Foreground local CP27 UI/API; no wallet, key or business data is loaded."""
 import argparse
 import os
 from pathlib import Path
@@ -41,7 +41,7 @@ def main():
                 except (requests.RequestException,ValueError):pass
                 if stopped.wait(.1):raise RuntimeError('Startup cancelled')
             else:raise RuntimeError('UI readiness timeout')
-        print(f'CP26 read-only page: {origin}\nApproved public RPC enabled: {a.online}\nSupervisor: {os.getpid()} | API loopback port: {api.server_port}\nCtrl-C stops this page only. No business state is created.',flush=True)
+        print(f'CP27 read-only page: {origin}\nApproved public RPC enabled: {a.online}\nSupervisor: {os.getpid()} | API loopback port: {api.server_port}\nCtrl-C stops this page only. No business state is created.',flush=True)
         while not stopped.wait(.25):
             if proc.poll() is not None:raise RuntimeError('Owned UI stopped')
     finally:

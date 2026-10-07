@@ -42,7 +42,7 @@ class StartupTests(unittest.TestCase):
         try:
             with patch('sys.argv',['cp26']),patch.object(launch,'make_server',side_effect=server),patch.object(launch.subprocess,'Popen',side_effect=spawn),contextlib.redirect_stdout(output):
                 with self.assertRaisesRegex(RuntimeError,'instance mismatch'):launch.main()
-            self.assertNotIn('CP26 read-only page:',output.getvalue())
+            self.assertNotIn('CP27 read-only page:',output.getvalue())
             self.assertTrue(children);self.assertIsNotNone(children[0].poll())
             self.assert_closed(apis[0].server_port)
             with requests.Session() as session:
@@ -63,11 +63,11 @@ class StartupTests(unittest.TestCase):
                 deadline=time.monotonic()+15
                 while time.monotonic()<deadline:
                     log.seek(0);output=log.read()
-                    if 'CP26 read-only page:' in output:break
+                    if 'CP27 read-only page:' in output:break
                     if proc.poll() is not None:self.fail(output)
                     time.sleep(.1)
                 else:self.fail('No ready URL: '+output)
-                origin=output.split('CP26 read-only page: ')[1].splitlines()[0]
+                origin=output.split('CP27 read-only page: ')[1].splitlines()[0]
                 api_port=int(output.split('API loopback port: ')[1].splitlines()[0])
                 with requests.Session() as session:
                     session.trust_env=False

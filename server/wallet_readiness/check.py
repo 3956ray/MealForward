@@ -21,11 +21,14 @@ def block(value):
     return {'number':number(value.get('number')),'hash':value['hash'],'timestamp':number(value.get('timestamp'))}
 
 class ReadRpc:
+    methods=METHODS
+    max_calls=12
     def __init__(self,session,clock=time.monotonic):
         self.session=session;self.clock=clock;self.deadline=clock()+20;self.calls=0
     async def call(self,method,params):
-        if method not in METHODS: raise CheckError('METHOD_DENIED')
-        if self.calls>=12 or self.clock()>=self.deadline: raise CheckError('RPC_BUDGET')
+        if method not in self.methods: raise CheckError('METHOD_DENIED')
+        self.validate(method,params)
+        if self.calls>=self.max_calls or self.clock()>=self.deadline: raise CheckError('RPC_BUDGET')
         self.calls+=1
         try:
             async with asyncio.timeout(min(3,self.deadline-self.clock())):
@@ -42,6 +45,7 @@ class ReadRpc:
         except CheckError: raise
         except TimeoutError: raise CheckError('RPC_TIMEOUT') from None
         except Exception: raise CheckError('RPC_UNAVAILABLE') from None
+    def validate(self,method,params):pass
 
 def item(status,reason,**fields):return {'status':status,'reason':reason,**fields}
 
@@ -75,6 +79,7 @@ async def inspect(rpc,address,now=time.time):
     return result
 
 async def check(address):
+    from .contract_check import ContractRpc,inspect_contract
     async with aiohttp.ClientSession(trust_env=False,auto_decompress=False,timeout=aiohttp.ClientTimeout(total=3)) as session:
-        rpc=ReadRpc(session)
-        return await inspect(rpc,address)
+        rpc=ContractRpc(session)
+        return await inspect_contract(rpc,address)

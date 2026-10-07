@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "purpose": "HISTORICAL_REFERENCE_ONLY",
+  "newBusinessTarget": null,
+  "chainId": 10143,
+  "genesisHash": "0x298034669ee44327d2da9744b9b2782848e2f2a6959756b7b0471b09a404f5c9",
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "contractAddress": "0x724EaB33ff67B06716913Ceb1c03581f4bBA9721",
+  "expectedRuntimeKeccak": "0x0471d3d3d1f81aa0727d821f87a0d12f19c08abdb611b53ed93a841c86b33873",
+  "expectedMerchant": "0x25E9c5a3FBEBa88b7DD38689489D7EdfC4afb12F",
+  "expectedRuleVersion": "0x5281a766c67b94209702620ff559de451e9c0389a4b79ad543c30d7787c13c06",
+  "sourceCommit": "701b756009bfa8fb92d3cdba8b6e0762ac659b29",
+  "sourceDigest": "708f7c6b93951bec1056b72b215fedc7562f2a45b19ef267122a3671f1acd7c2",
+  "artifactDigest": "dccf18799eb256e60dd77da8a0f3a91c55f5c650769079a88a1d70690dbc1207",
+  "planHash": "aed7093e980e826e71233310c1608a82b4264e54fea6ca22a0210040f377aca4",
+  "deployment": {
+    "blockHash": "0xf9e153ad54ea77fdd31ba8a3d42c55cebfd7e780b0f766cce5e096cf53a17f01",
+    "blockNumber": 67797294,
+    "effectiveGasPrice": "102000000000",
+    "feeWei": "158263506000000000",
+    "gasLimit": 1551603,
+    "gasUsed": "1551603",
+    "status": 1,
+    "transactionHash": "0x0fb0315b8bfe34526593dc10558d5b77dc2b35d7ab91100cf6305174213ba93a"
+  },
+  "allowedMethods": [
+    "eth_chainId",
+    "eth_getBlockByNumber",
+    "eth_getBalance",
+    "eth_getCode",
+    "eth_call"
+  ],
+  "allowedSelectors": [
+    {
+      "signature": "hasRole(bytes32,address)",
+      "selector": "0x91d14854"
+    },
+    {
+      "signature": "merchant()",
+      "selector": "0xa5ff7651"
+    },
+    {
+      "signature": "paused()",
+      "selector": "0x5c975abb"
+    },
+    {
+      "signature": "ruleVersion()",
+      "selector": "0x7593a0eb"
+    }
+  ],
+  "roleIds": {
+    "DEFAULT_ADMIN_ROLE": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "SUPPORTER_ROLE": "0x187399b899496afba10f21a372d4657799301e59023cc725309380021d5131e1",
+    "ISSUER_ROLE": "0x114e74f6ea3bd819998f78687bfcb11b140da08e9b7d222fa9c1f1ba1f2aa122",
+    "OPERATOR_ROLE": "0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929",
+    "SETTLER_ROLE": "0x6666bf5bfee463d10a7fc50448047f8a53b7762d7e28fbc5c643182785f3fd3f"
+  },
+  "ethCallObjectKeys": [
+    "to",
+    "data",
+    "gas"
+  ],
+  "ethCallGas": "0x186a0",
+  "maxRpcCalls": 18,
+  "totalDeadlineSeconds": 20,
+  "requestTimeoutSeconds": 3,
+  "responseBytesMax": 1048576,
+  "ttlSeconds": 60,
+  "normalRequestCount": 17,
+  "blockPolicy": "ONE_FINALIZED_HEIGHT_WITH_BASE_AND_FINAL_CANONICAL_RECHECK",
+  "note": "Only backend encoding for approved selectors/role IDs and current user-authorized address; no arbitrary targets or calldata. No wallet signature/send/chain switch/deployment/grant. Full manifest canonical digest must be pinned in reviewed implementation before final acceptance.",
+  "manifestId": "cp19-historical-reference-v1",
+  "queryPolicyVersion": 1,
+  "compiler": {
+    "version": "0.8.28",
+    "optimizerRuns": 200,
+    "evmVersion": "cancun"
+  },
+  "artifactFile": "public/MealForwardTestnet.json",
+  "artifactFileSha256": "05147baaee71b2d4e34cf5a32a390bd0ae63361e2e98a579d98a1e867e24f59b"
+}

@@ -1,3 +1,7 @@
+## CP27：历史合约与角色只读核验
+
+运行 `.venv/bin/python -m server.wallet_readiness --online`，使用新输出入口。CP19仅历史参考，新业务目标未配置；五链角色不等现实身份或可付款。原artifact、预算、同块观察、失败边界和测试见[CP27说明](docs/CP27-READINESS.md)。旧入口保持。
+
 ## CP26：真实钱包只读准备页
 
 运行 `.venv/bin/python -m server.wallet_readiness --online`，打开输出URL。仅MetaMask主动连接与Monad10143基础读取，无签名/切链/交易；[操作与边界](docs/CP26-READINESS.md)。与本地Anvil演练独立。

@@ -4,6 +4,8 @@ import time
 import uuid
 from flask import Flask,jsonify,request
 from .check import ADDRESS,PROFILE,check
+from .check import CheckError
+from .manifest import load_manifest,context
 
 def create_app(origin,online=False,checker=check,clock=time.monotonic,*,instance_id=None):
     instance_id=instance_id or uuid.uuid4().hex
@@ -21,7 +23,11 @@ def create_app(origin,online=False,checker=check,clock=time.monotonic,*,instance
     @app.errorhandler(400)
     def invalid(_):return jsonify(code='INVALID_REQUEST'),400
     @app.get('/api/cp26/config')
-    def config():return jsonify(online=online,instanceId=instance_id,profileId=PROFILE['profileId'],targetChainId=10143,sourceLabel=PROFILE['sourceLabel'],deploymentManifest=None)
+    def config():
+        manifest=None;reason=None
+        try:manifest=context(load_manifest())
+        except CheckError as e:reason=str(e)
+        return jsonify(online=online,instanceId=instance_id,profileId=PROFILE['profileId'],targetChainId=10143,sourceLabel=PROFILE['sourceLabel'],deploymentManifest=manifest,manifestError=reason,newBusinessTarget=None)
     @app.post('/api/cp26/check')
     def inspect():
         body=request.get_json()

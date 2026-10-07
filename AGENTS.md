@@ -1,3 +1,10 @@
+## CP27 当前 BUILD（覆盖CP26只含四方法限制）
+
+- 基线630269d；Leader冻结CP27 ALIGNMENT/APPROVED-TARGET。唯一CP19历史参考，不是新业务目标；新业务目标未配置。
+- 仅固定manifest与完整digest pin；四selector、五角色共8 eth_call，同finalized块，to/data/gas100000；17正常/18最大、20秒总/3秒单次/1MiB，末尾冲突撤同块全部结果。
+- 单一主开发写者；隔离checkout/新端口，保留50388/58341。无签名/广播/部署grant/业务迁移/私钥读取，不代查真人地址。
+- 固定SHA、独审、PM与Leader Gate后接受。公开artifact副本可追溯，真实浏览器native-fetch合成与公共RPC合成证据分列。
+
 ## CP26 当前 BUILD
 
 - 基线e4ca239。独立MetaMask只读准备页；Leader核准公开Monad测试网RPC及固定genesis，配置server/wallet_readiness/network-profile.json。
