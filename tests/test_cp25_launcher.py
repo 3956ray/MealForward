@@ -9,6 +9,10 @@ import socket
 import signal
 import subprocess
 import tempfile
+import os
+import sys
+import time
+import requests
 import unittest
 from unittest.mock import patch
 
@@ -103,6 +107,48 @@ class LauncherTests(unittest.TestCase):
         finally:
             rival.close()
             for sig,handler in old_handlers.items():signal.signal(sig,handler)
+
+    def test_new_node_bind_race_never_initializes_foreign_chain(self):
+        real_popen=subprocess.Popen
+        rival=None;root=None;rpc=None
+        session=requests.Session();session.trust_env=False
+        old_handlers={sig:signal.getsignal(sig) for sig in (signal.SIGINT,signal.SIGTERM)}
+        def call(method,params):
+            return session.post(rpc,json={'jsonrpc':'2.0','id':1,'method':method,'params':params},timeout=1).json()['result']
+        def launch(args,**kwargs):
+            nonlocal rival,root,rpc
+            if Path(str(args[0])).name=='anvil':
+                port=args[args.index('--port')+1];rpc='http://127.0.0.1:'+port
+                root=Path(args[args.index('--dump-state')+1]).parent
+                rival=real_popen([args[0],'--host','127.0.0.1','--port',port,'--chain-id','31337','--silent'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+                for _ in range(100):
+                    try:
+                        if call('eth_chainId',[])=='0x7a69':break
+                    except requests.RequestException:pass
+                    time.sleep(.05)
+                else:raise RuntimeError('Competing test node failed to start')
+                return real_popen([sys.executable,'-c','import os,sys,time;time.sleep(4);os.execv(sys.argv[1],sys.argv[1:])',*args],**kwargs)
+            return real_popen(args,**kwargs)
+        output=io.StringIO()
+        try:
+            with patch('sys.argv',['launcher','--new']),patch.object(launcher.subprocess,'Popen',side_effect=launch),contextlib.redirect_stdout(output),self.assertRaisesRegex(RuntimeError,'Owned Anvil failed'):
+                launcher.main()
+            self.assertIsNone(rival.poll())
+            self.assertEqual(call('eth_blockNumber',[]),'0x0')
+            self.assertTrue(all(call('eth_getTransactionCount',[a,'latest'])=='0x0' for a in call('eth_accounts',[])))
+            self.assertFalse((root/'business').exists())
+            self.assertFalse((root/'runtime.json').exists())
+            self.assertFalse((root/'clean-stop.json').exists())
+            self.assertNotIn('Local rehearsal READY',output.getvalue())
+        finally:
+            if rival and rival.poll() is None:
+                os.killpg(rival.pid,signal.SIGTERM);rival.wait(timeout=10)
+            session.close()
+            for sig,handler in old_handlers.items():signal.signal(sig,handler)
+
+    def test_missing_ownership_tool_fails_before_start(self):
+        with patch('sys.argv',['launcher','--new']),patch.object(launcher.shutil,'which',return_value=None),self.assertRaisesRegex(SystemExit,'no instance started'):
+            launcher.main()
 
     def test_resume_command_quotes_directory(self):
         root=Path("/tmp/rehearsal with spaces/'literal$")

@@ -7,6 +7,7 @@ import os
 import platform
 from pathlib import Path
 import shlex
+import shutil
 import uuid
 import signal
 import socket
@@ -68,8 +69,22 @@ def resume_record(root):
 def resume_command(root):
     return shlex.join([str(ROOT/'.venv/bin/python'),str(ROOT/'scripts/cp24-local.py'),'--directory',str(root),'--resume'])
 
+def owns_rpc_listener(node,port,lsof):
+    """Kernel socket ownership, not a response from whichever node won the port."""
+    if node.poll() is not None: return False
+    try:
+        result=subprocess.run([lsof,'-nP','-a','-p',str(node.pid),'-iTCP:'+str(port),
+                               '-sTCP:LISTEN','-Fpn'],capture_output=True,text=True,timeout=2)
+    except (OSError,subprocess.TimeoutExpired) as e:
+        raise RuntimeError('Cannot verify owned Anvil listener; no setup is permitted') from e
+    lines=result.stdout.splitlines()
+    return (result.returncode==0 and 'p'+str(node.pid) in lines
+            and 'n127.0.0.1:'+str(port) in lines and node.poll() is None)
+
 def main():
     a=arguments()
+    lsof=shutil.which('lsof')
+    if not lsof: raise SystemExit('lsof is required to verify owned Anvil sockets; no instance started')
     root=(ROOT/'.localbackend'/('rehearsal-'+time.strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex)) if a.new else Path(a.directory).resolve()
     if a.resume: ports=resume_record(root)['ports']
     else:
@@ -115,10 +130,14 @@ def main():
         probe=requests.Session();probe.trust_env=False
         for _ in range(100):
             if node.poll() is not None: raise RuntimeError('Owned Anvil failed; see anvil.log')
+            if not owns_rpc_listener(node,a.node_port,lsof):
+                time.sleep(.1);continue
             try:
                 if probe.post(rpc,json={'jsonrpc':'2.0','id':1,'method':'eth_chainId','params':[]},timeout=.2).json().get('result')=='0x7a69': break
             except requests.RequestException: time.sleep(.1)
-        else: raise RuntimeError('Owned Anvil startup timeout')
+        else: raise RuntimeError('Owned Anvil listener verification timeout; no setup performed')
+        if not owns_rpc_listener(node,a.node_port,lsof):
+            raise RuntimeError('Owned Anvil listener lost before setup; refusing initialization')
         if not a.resume:
             subprocess.run([sys.executable,'-m','server.local_e2e','setup','--directory',str(business),'--rpc-url',rpc,
                             '--origin',origin,'--bridge-origin',bridge],cwd=ROOT,check=True)
@@ -134,6 +153,8 @@ def main():
             start(name,args)
         env={**os.environ,'CP24_BACKEND_ORIGIN':f'http://127.0.0.1:{a.api_port}'}
         start('ui',[str(ROOT/'node_modules/.bin/vite'),'--config','local-e2e-harness/vite.config.ts','--port',str(a.ui_port)],env)
+        if not owns_rpc_listener(node,a.node_port,lsof):
+            raise RuntimeError('Owned Anvil listener lost; refusing READY')
         instance=json.loads((business/'config.json').read_text())['deployment']['deploymentId']
         # Do not advertise a ready URL until the actual UI proxy reaches this instance.
         for _ in range(100):

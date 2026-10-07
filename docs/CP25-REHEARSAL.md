@@ -7,6 +7,8 @@ From this checkout, after the locked CP24 dependencies and contract build descri
 .venv/bin/python scripts/cp24-local.py --new
 ```
 
+The host must provide `lsof` (macOS system tool; install the operating-system package on Linux if absent). The launcher fails closed without it. Before any setup or resume RPC, the kernel LISTEN socket must belong to this exact live Anvil child PID on its assigned loopback port; chainId alone is not ownership evidence. The check is repeated immediately before setup and before READY.
+
 Each command starts one foreground rehearsal with a unique private directory under
 `.localbackend/rehearsal-*` and four automatically selected loopback ports. Keep that
 terminal running and open the printed **URL**. `READY` is printed only after its UI
