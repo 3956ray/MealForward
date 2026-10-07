@@ -1,10 +1,12 @@
 import asyncio
 import threading
 import time
+import uuid
 from flask import Flask,jsonify,request
 from .check import ADDRESS,PROFILE,check
 
-def create_app(origin,online=False,checker=check,clock=time.monotonic):
+def create_app(origin,online=False,checker=check,clock=time.monotonic,*,instance_id=None):
+    instance_id=instance_id or uuid.uuid4().hex
     app=Flask(__name__);app.config['MAX_CONTENT_LENGTH']=4096
     lock=threading.Lock();history={};busy=set()
     @app.before_request
@@ -19,7 +21,7 @@ def create_app(origin,online=False,checker=check,clock=time.monotonic):
     @app.errorhandler(400)
     def invalid(_):return jsonify(code='INVALID_REQUEST'),400
     @app.get('/api/cp26/config')
-    def config():return jsonify(online=online,profileId=PROFILE['profileId'],targetChainId=10143,sourceLabel=PROFILE['sourceLabel'],deploymentManifest=None)
+    def config():return jsonify(online=online,instanceId=instance_id,profileId=PROFILE['profileId'],targetChainId=10143,sourceLabel=PROFILE['sourceLabel'],deploymentManifest=None)
     @app.post('/api/cp26/check')
     def inspect():
         body=request.get_json()

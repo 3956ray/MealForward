@@ -7,6 +7,7 @@ import socket
 import subprocess
 import threading
 import time
+import uuid
 import requests
 from werkzeug.serving import make_server,WSGIRequestHandler
 from .web import create_app
@@ -18,7 +19,8 @@ def main():
     reservation=socket.socket();reservation.bind(('127.0.0.1',a.ui_port));reservation.listen(1);port=reservation.getsockname()[1];origin=f'http://127.0.0.1:{port}'
     class Quiet(WSGIRequestHandler):
         def log(self,*args,**kwargs):pass
-    api=make_server('127.0.0.1',0,create_app(origin,a.online),threaded=True,request_handler=Quiet)
+    instance_id=uuid.uuid4().hex
+    api=make_server('127.0.0.1',0,create_app(origin,a.online,instance_id=instance_id),threaded=True,request_handler=Quiet)
     thread=threading.Thread(target=api.serve_forever,daemon=True);thread.start()
     stopped=threading.Event()
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stopped.set())
@@ -32,7 +34,10 @@ def main():
                 if proc.poll() is not None:raise RuntimeError('Owned UI failed, possibly port competition')
                 try:
                     r=probe.get(origin+'/api/cp26/config',timeout=.2)
-                    if r.status_code==200 and r.json().get('online')==a.online:break
+                    if r.status_code==200:
+                        config=r.json()
+                        if config.get('instanceId')!=instance_id:raise RuntimeError('UI proxy instance mismatch, possibly port competition')
+                        if config.get('online')==a.online:break
                 except (requests.RequestException,ValueError):pass
                 if stopped.wait(.1):raise RuntimeError('Startup cancelled')
             else:raise RuntimeError('UI readiness timeout')

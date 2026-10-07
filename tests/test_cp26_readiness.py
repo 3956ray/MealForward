@@ -46,6 +46,24 @@ class ReadinessTests(unittest.TestCase):
             with self.subTest(reason=reason):
                 r=self.run_check(Rpc(changes));self.assertEqual(r['network']['reason'],reason);self.assertIsNone(r['checkedAt']);self.assertEqual(r['account']['status'],'NOT_CHECKED')
         r=self.run_check(Rpc({('eth_getCode',str([ADDRESS,'0x64'])):'0x1234'}));self.assertEqual(r['account']['status'],'FAIL')
+    def test_same_height_head_identity(self):
+        for latest in ({**BLOCK,'hash':'0x'+'2'*64},{**BLOCK,'timestamp':hex(NOW-1)}):
+            with self.subTest(latest=latest):
+                rpc=Rpc({('eth_getBlockByNumber',str(['latest',False])):latest})
+                r=self.run_check(rpc)
+                self.assertEqual(r['network'],{'status':'FAIL','reason':'BLOCK_CONFLICT'})
+                self.assertEqual(r['account']['status'],'NOT_CHECKED')
+                self.assertIsNone(r['checkedAt']);self.assertEqual(len(rpc.calls),4)
+        r=self.run_check(Rpc())
+        self.assertEqual(r['latestBlock'],r['block'])
+        self.assertEqual(r['network']['status'],'PASS');self.assertEqual(r['account']['status'],'PASS')
+    def test_config_identifies_api_instance(self):
+        origin='http://127.0.0.1:15847'
+        apps=[create_app(origin),create_app(origin)]
+        ids=[app.test_client().get('/api/cp26/config',base_url=origin).json['instanceId'] for app in apps]
+        self.assertNotEqual(*ids)
+        self.assertEqual(len(ids[0]),32)
+        self.assertEqual(apps[0].test_client().get('/api/cp26/config',base_url=origin).json['instanceId'],ids[0])
     def test_rpc_whitelist_budget_and_request_options(self):
         s=Session(Response());rpc=ReadRpc(s)
         for method in ('eth_call','eth_sendTransaction','eth_sendRawTransaction','personal_sign','anvil_mine'):

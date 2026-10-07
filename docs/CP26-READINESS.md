@@ -17,6 +17,9 @@ Open the printed URL in a browser with MetaMask. The UI and API bind only 127.0.
 Without `--online`, the page works but remote checks are disabled. `--ui-port PORT`
 optionally selects a port; the default selects a free port. Ctrl-C stops this page's
 UI/API only; it creates no business database, key, transaction or wallet history.
+Before printing the URL, the launcher checks that the UI proxy returns this launch's
+random API instance ID. A competing listener with generic configuration is rejected;
+failure cleans up only the owned UI/API and never stops the competing listener.
 
 1. Click **连接 MetaMask** and confirm account access yourself in the wallet.
 2. Check the displayed account and wallet network. If wrong, switch manually inside
@@ -44,6 +47,8 @@ One explicit check uses at most 12 RPC calls, 20 seconds overall, 3 seconds per 
 1 MiB per response, no redirects/retries. Basic successful checks use 7 calls: chain,
 genesis, latest/finalized blocks, balance/code at the finalized height, then canonical
 block recheck. Old latest blocks (>120 seconds) and conflicting observations fail.
+At the same height, latest and finalized must have the same hash and timestamp;
+conflict stops before reading the account balance/code.
 These are conservative observation policies, not protocol-finality guarantees.
 
 HTTP checks enforce exact loopback Host/Origin, JSON ≤4 KiB, 10 checks/minute per direct
@@ -64,7 +69,7 @@ are explicitly outside this stage. No global "ready to transact" status.
 ## Validation
 
 ```sh
-.venv/bin/python -m unittest tests.test_cp26_readiness -v
+.venv/bin/python -m unittest tests.test_cp26_readiness tests.test_cp26_startup -v
 node --experimental-strip-types --test tests/wallet-readiness/*.test.ts
 node_modules/.bin/tsc --noEmit -p wallet-readiness-harness/tsconfig.json
 node_modules/.bin/vite build --config wallet-readiness-harness/vite.config.ts

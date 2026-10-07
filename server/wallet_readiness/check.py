@@ -59,6 +59,7 @@ async def inspect(rpc,address,now=time.time):
         finalized=block(await rpc.call('eth_getBlockByNumber',['finalized',False]))
         current=now()
         if latest['timestamp']>current+30 or current-latest['timestamp']>120 or finalized['timestamp']>latest['timestamp'] or finalized['number']>latest['number']:raise CheckError('BLOCK_STALE_OR_CONFLICT')
+        if latest['number']==finalized['number'] and (latest['hash'].lower()!=finalized['hash'].lower() or latest['timestamp']!=finalized['timestamp']):raise CheckError('BLOCK_CONFLICT')
         tag=hex(finalized['number'])
         balance=number(await rpc.call('eth_getBalance',[address,tag]))
         code=await rpc.call('eth_getCode',[address,tag])
