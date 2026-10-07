@@ -99,14 +99,15 @@ export class IdentityController {
     catch(e) {await this.invalidate(); throw e}
   }
   async logout() {
-    this.clear(); this.detach(); await this.pending
-    let revoked = false
-    try {await this.call('logout',{},false); revoked = true}
-    finally {this.csrf=''; await this.client.logout()}
-    return revoked
+    this.clear(); this.detach()
+    const sdkLogout = this.client.logout()
+    const revoke = (async()=>{await this.pending; try {await this.call('logout',{},false)} finally {this.csrf=''}})()
+    await Promise.all([sdkLogout,revoke])
+    return true
   }
   dispose() {
     this.disposed=true; this.unsubscribe(); this.detach(); clearTimeout(this.timer)
-    return this.invalidate().finally(()=>this.client.logout()).catch(()=>{})
+    const sdkLogout = this.client.logout()
+    return Promise.allSettled([sdkLogout,this.invalidate()])
   }
 }

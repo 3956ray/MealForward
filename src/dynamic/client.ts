@@ -75,6 +75,7 @@ export function createDynamicAuthClient(): DynamicAuthClient {
   let allowToken = false
   let generation = 0
   let busy = false
+  let pendingLogout: Promise<void> = Promise.resolve()
   let previousToken: string | null = null
   let previousSubject: string | undefined
   let removeDiscovery: (() => void) | undefined
@@ -134,14 +135,19 @@ export function createDynamicAuthClient(): DynamicAuthClient {
       initializing = undefined
       raw = undefined
       memory.clear()
-      publish({ status: 'error', errorCode: 'SDK_INITIALIZATION_FAILED' })
+      if (!disabled) publish({ status: 'error', errorCode: 'SDK_INITIALIZATION_FAILED' })
       throw failure('SDK_INITIALIZATION_FAILED')
     }
   })()
   const run = async (action: () => Promise<void>) => {
     if (busy) throw failure('AUTH_BUSY')
     busy = true
-    try { await action() } finally { busy = false }
+    const version = generation
+    try {
+      await pendingLogout
+      if (version !== generation) throw failure('AUTH_CHANGED')
+      await action()
+    } finally { busy = false }
   }
   return {
     getSnapshot: () => snapshot,
@@ -151,11 +157,12 @@ export function createDynamicAuthClient(): DynamicAuthClient {
     getAccessToken: () => disabled || !allowToken || !complete() ? null : raw?.token ?? null,
     startEmail: email => run(async () => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw failure('INVALID_EMAIL')
+      const version = ++generation
       await initialize()
+      if (version !== generation) throw failure('AUTH_CHANGED')
       assertMemoryAuth()
       disabled = false
       allowToken = false
-      const version = ++generation
       otp = undefined
       invalidate('subject-changed')
       try {
@@ -191,8 +198,11 @@ export function createDynamicAuthClient(): DynamicAuthClient {
       providerCache = new WeakMap()
       invalidate('logout')
       publish({ status: 'signed-out' })
-      try { if (sdk && raw) await sdk.logout(raw) } catch { throw failure('SDK_LOGOUT_UNCONFIRMED') }
-      finally { memory.clear() }
+      pendingLogout = pendingLogout.catch(() => {}).then(async () => {
+        try { if (sdk && raw) await sdk.logout(raw) } catch { throw failure('SDK_LOGOUT_UNCONFIRMED') }
+        finally { memory.clear() }
+      })
+      await pendingLogout
     },
     async getWalletProvider() {
       await initialize()

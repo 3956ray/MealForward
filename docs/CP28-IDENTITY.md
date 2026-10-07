@@ -20,6 +20,8 @@ Formal historical document `research/cp17/developer/PROFILE-CALIBRATION.md` reco
 
 ## Validation
 
+Lifecycle regression: the real shared Dynamic client captures its generation before waiting for SDK initialization. Leaving the card or logging out cancels that generation immediately, independently of HTTP cleanup. Late initialization/send/verify results cannot revive the old state; new login waits for SDK logout completion. Panel completion messages are also bound to the mounted controller. `tests/dynamic/client.test.ts` replaces only the vendor module with deferred offline operations and covers normal login, departure during initialization, late initialization failure, pending send/verify, re-entry and logout competition. It sends no email. The browser fixture below remains a separate UI smoke test and is not the proof of the real-client initialization race.
+
 ```sh
 .venv/bin/python -m unittest tests.test_cp28_identity tests.test_dynamic_jwt tests.test_dynamic_auth tests.test_dynamic_profile tests.test_dynamic_contracts tests.test_cp28_runtime tests.test_cp28_rpc tests.test_cp28_ipc tests.test_cp28_local_flow tests.test_cp28_fake_flow -v
 node --experimental-strip-types --test tests/wallet/cp28-identity.test.ts tests/wallet/cp28.test.ts tests/dynamic/*.test.ts

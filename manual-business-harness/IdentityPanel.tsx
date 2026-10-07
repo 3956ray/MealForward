@@ -21,26 +21,28 @@ export default function IdentityPanel() {
   const controller = useRef<IdentityController|null>(null)
   useEffect(()=>{
     let alive=true
-    const c = new IdentityController(client,(s,a,m)=>{setSession(s);setAccount(a);if(m)setMessage(m)})
+    const c = new IdentityController(client,(s,a,m)=>{if(alive){setSession(s);setAccount(a);if(m)setMessage(m)}})
     controller.current=c
     void cleanup.then(()=>{if(alive)return c.bootstrap()}).then(value=>{if(alive && value)setConfig(value)}).catch(()=>{if(alive)setMessage('身份准备服务暂不可用。')})
     return ()=>{alive=false;controller.current=null;cleanup=c.dispose()}
   },[])
-  async function run(action:()=>Promise<unknown>) {
+  async function run(action:()=>Promise<unknown>, success?:string) {
     if(busy)return;setBusy(true);setMessage('')
-    try {await action()} catch(e) {const code=(e as {code?:string})?.code;setMessage(code && errors[code] || (e instanceof Error ? e.message : '操作未确认，请主动重试。'))}
-    finally {setBusy(false)}
+    const current=controller.current
+    try {await action();if(current===controller.current && success)setMessage(success)}
+    catch(e) {if(current===controller.current){const code=(e as {code?:string})?.code;setMessage(code && errors[code] || (e instanceof Error ? e.message : '操作未确认，请主动重试。'))}}
+    finally {if(current===controller.current)setBusy(false)}
   }
   return <section aria-label="身份与候选钱包准备">
     <h2>Dynamic邮箱登录与管理员 / 老板地址确认</h2>
     <p>已确定使用Dynamic；管理员与餐馆老板为同一人、同一钱包。此处只准备身份和候选地址，尚无业务权限。</p>
     <p>领取者不需要登录。请本人在本页输入邮箱验证码，不要将验证码或令牌发到聊天。</p>
     <p role="status">{config ? config.serverVerificationConfigured ? '服务端身份校验已配置，等待本人登录核验。' : '服务端身份校验未配置；可完成SDK邮箱登录，不能确认可信身份或钱包候选记录。' : '正在读取身份准备配置…'}</p>
-    <form onSubmit={e=>{e.preventDefault();void run(async()=>{setOtp('');await client.startEmail(email.trim());setMessage('验证码已发送，请本人查看邮箱并输入。')})}}>
+    <form onSubmit={e=>{e.preventDefault();void run(async()=>{setOtp('');await client.startEmail(email.trim())},'验证码已发送，请本人查看邮箱并输入。')}}>
       <label>本人邮箱<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} disabled={busy}/></label>
       <button disabled={busy || !config} type="submit">发送邮箱验证码</button>
     </form>
-    {identity.status==='email-pending' && <form onSubmit={e=>{e.preventDefault();void run(async()=>{const code=otp;setOtp('');await client.verifyOtp(code);setMessage('SDK邮箱登录已完成；服务端身份需要单独核验。')})}}>
+    {identity.status==='email-pending' && <form onSubmit={e=>{e.preventDefault();void run(async()=>{const code=otp;setOtp('');await client.verifyOtp(code)},'SDK邮箱登录已完成；服务端身份需要单独核验。')}}>
       <label>邮箱验证码<input inputMode="numeric" autoComplete="off" required maxLength={10} value={otp} onChange={e=>setOtp(e.target.value)} disabled={busy}/></label>
       <button disabled={busy} type="submit">验证邮箱验证码</button>
     </form>}
@@ -57,8 +59,10 @@ export default function IdentityPanel() {
     {session?.candidate && <p role="status">候选地址已确认，控制权 / 链权限未验证。后台服务身份待单独配置；支持者钱包尚未指定。</p>}
     <p>本页不请求签名、不切链、不广播交易。身份与候选声明只在本次会话有效；刷新、退出、会话过期或账户 / 网络变化后需要重新核验。</p>
     <button disabled={busy || !config} onClick={()=>void run(async()=>{
-      setOtp('');setEmail('');await controller.current!.logout();setConfig(await controller.current!.bootstrap());setMessage('已退出身份准备会话。')
-    })}>退出身份准备</button>
+      const current=controller.current!;setOtp('');setEmail('');await current.logout()
+      if(controller.current!==current)return
+      const next=await current.bootstrap();if(controller.current===current)setConfig(next)
+    },'已退出身份准备会话。')}>退出身份准备</button>
     {message && <p role="status">{message}</p>}
   </section>
 }
