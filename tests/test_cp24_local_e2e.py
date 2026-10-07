@@ -16,7 +16,7 @@ from server.local import load_worker_keys
 from server.local_e2e.__main__ import setup, load
 from server.local_e2e.web import create_app
 from server.local_e2e.bridge import create_bridge
-from server.outbox import Worker
+from server.local_e2e.worker import LocalWorker as Worker
 import tests.test_backend_chain as chain_tests
 
 
@@ -338,6 +338,23 @@ class CP24LocalTests(unittest.TestCase):
         self.assertEqual(self.b.store.one('SELECT count(*) n FROM voucher_claims')['n'],0)
         self.assertTrue(self.ok(self.post(self.owner,'owner/precheck',{'code':current['manualCode']}))['valid'])
         self.vector(0,PRICE,0,0)
+
+    def test_finality_advancing_after_projection_does_not_create_false_event_gap(self):
+        sync = self.worker.projector.sync
+        def advance_after_projection():
+            result = sync()
+            self.b.rpc.w3.provider.make_request('anvil_mine',['0x80'])
+            return result
+        self.worker.projector.sync = advance_after_projection
+        self.locked()
+        self.ok(self.post(self.owner,'owner/handoff',{'intentKey':random_id()}))
+        self.ok(self.post(self.owner,'owner/report',{'intentKey':random_id(),'confirmStatement':True}))
+        self.finalize()
+        prepared=self.ok(self.post(self.owner,'owner/settle'))
+        self.ok(self.post(self.owner,'wallet/confirm',{'ticket':prepared['ticket']}))
+        self.finalize()
+        self.assertEqual(self.b.store.one("SELECT value FROM metadata WHERE key='halted'")['value'],'')
+        self.vector(0,0,0,PRICE)
 
 
 if __name__ == '__main__': unittest.main()

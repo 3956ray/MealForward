@@ -64,7 +64,7 @@ def main():
         from server.local_e2e.web import create_app
         serve(create_app(b,c),a.port)
     else:
-        from server.outbox import Worker
+        from server.local_e2e.worker import LocalWorker as Worker
         worker=Worker(b,load_worker_keys(c))
         stopping=threading.Event()
         signal.signal(signal.SIGTERM,lambda *_:stopping.set());signal.signal(signal.SIGINT,lambda *_:stopping.set())

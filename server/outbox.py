@@ -12,8 +12,9 @@ from server.chain.client import ChainConflict, ZERO, hx
 from server.projection import Projector
 
 class Worker:
-    def __init__(self, backend, issuer_key, fault=None):
+    def __init__(self, backend, issuer_key, fault=None, *, finality_source=None):
         self.b,self.rpc,self.store=backend,backend.rpc,backend.store
+        self.finality_source=finality_source or (lambda: self.rpc.w3.eth.get_block('finalized')['number'])
         keys=issuer_key if isinstance(issuer_key,dict) else {'issuer':issuer_key}
         self.accounts={}
         for role,key in keys.items():
@@ -224,7 +225,7 @@ class Worker:
         canonical_block=self.rpc.w3.eth.get_block(receipt['blockNumber'])
         if hx(canonical_block['hash'])!=hx(receipt['blockHash']):
             self.store.execute("UPDATE operations SET status='SUBMISSION_UNKNOWN' WHERE id=?",(job['operation_id'],)); return
-        final=self.rpc.w3.eth.get_block('finalized')['number']
+        final=self.finality_source()
         success=receipt['status']==1
         if success and final>=receipt['blockNumber']:
             # Projector must have found and validated its Issued event, not merely a successful receipt.

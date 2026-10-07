@@ -36,7 +36,7 @@ All identities and wallet accounts are fictional. These dedicated passwords are 
 
 ## Composition and persistence
 
-`server/local_e2e` composes existing Backend, WorkCore, RedemptionService, OwnerWalletService, Worker and Projector. It does not register the older eight-digit recipient API or testnet endpoints. Only `AuthService` gains optional cookie name/path arguments; defaults stay unchanged.
+`server/local_e2e` composes existing Backend, WorkCore, RedemptionService, OwnerWalletService, Worker and Projector. It does not register the older eight-digit recipient API or testnet endpoints. Shared changes are optional AuthService cookie name/path and Worker/OwnerWalletService receipt-finality sources; all defaults stay unchanged. CP24 uses one conservative finalized watermark per worker pass and makes the worker the only live projector writer. A node advancing after projection waits for the next pass instead of triggering a false missing-event halt.
 
 CP24 credentials and business records use the **same SQLite acceptance transaction** via LocalStore. Invite72h/session8h/display120s. QR is `mealforward:local:v1:` plus an opaque random token; six digits represent the same current display. Only digests are saved. Exchange, rotation, display refresh, logout and lock serialize against each other. The external anchor is written before commit; a crash between them fails closed, rather than silently restoring an older secret or signing permission. The independent anchor covers business/signing/credential records, not merely the deployment name.
 

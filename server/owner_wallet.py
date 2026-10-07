@@ -18,7 +18,9 @@ from server.chain.client import PRICE, ChainConflict, ChainUnavailable, hx
 _VERIFY_LOCK=threading.RLock()
 
 class OwnerWalletService:
-    def __init__(self, backend): self.b,self.store,self.rpc=backend,backend.store,backend.rpc
+    def __init__(self, backend, *, finality_source=None):
+        self.b,self.store,self.rpc=backend,backend.store,backend.rpc
+        self.finality_source=finality_source or (lambda: self.rpc.w3.eth.get_block('finalized')['number'])
     def binding(self, db, actor):
         if not self.b.owner_mode: raise ApiError(503,'OWNER_UNCONFIGURED','Owner wallet mode unavailable')
         self.b.work.require_actor(db,actor,'owner')
@@ -219,7 +221,7 @@ class OwnerWalletService:
             self.observation_unknown(op,'OWNER_RECEIPT_MISSING');return
         if hx(self.rpc.w3.eth.get_block(receipt['blockNumber'])['hash'])!=hx(receipt['blockHash']):
             self.observation_unknown(op,'OWNER_RECEIPT_NONCANONICAL');return
-        final=self.rpc.w3.eth.get_block('finalized')['number'];success=receipt['status']==1
+        final=self.finality_source();success=receipt['status']==1
         if success and final>=receipt['blockNumber']:
             raise ChainConflict('Finalized owner event missing from projection')
         state='INCLUDED_SUCCESS' if success else ('FINALIZED_REVERT' if final>=receipt['blockNumber'] else 'INCLUDED_REVERT')

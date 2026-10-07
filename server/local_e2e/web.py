@@ -8,7 +8,6 @@ from server.auth import AuthService
 from server.backend import canonical, digest, random_id
 from server.contracts import ApiError
 from server.chain.client import RULE, PRICE
-from server.projection import Projector
 from server.local_e2e.credentials import Credentials, LocalRedemption
 
 
@@ -22,7 +21,7 @@ def create_app(b, config):
         if not isinstance(value,dict): raise ApiError(422,'INVALID_INPUT','需要有效请求')
         return value
     def actor(role,write=True): return auth[role].require(role,csrf=write)
-    def sync(): Projector(b).sync()
+    def sync(): b.rpc.guard()  # Only the CP24 worker advances projection; UI reads its confirmed state.
     def anchor_ok():
         with b.store.connect() as db: return b.store.valid_anchor(db)
     def terminal(db,a,*,required=True):
@@ -80,6 +79,12 @@ def create_app(b, config):
         from server.chain.client import ChainConflict
         if isinstance(e,ChainConflict): b.halt('CP24_CHAIN_CONFLICT')
         return jsonify(code='STATE_UNAVAILABLE',message='状态暂不可用，请查询原操作；请勿再次提交'),503
+    def local_recovery():
+        value=b.recovery_view()
+        if not anchor_ok(): return {**value,'state':'RESTORE_QUARANTINE','writeAvailable':False}
+        halted=b.store.one("SELECT value FROM metadata WHERE key='halted'")
+        if halted and halted['value']: return {**value,'state':'CHAIN_HALTED','writeAvailable':False}
+        return value
     @app.get('/api/cp24/public')
     def public():
         checkpoint=b.store.one('SELECT * FROM checkpoints ORDER BY block_number DESC LIMIT 1');observed=b.store.one("SELECT value FROM metadata WHERE key='observed_at'")
@@ -87,7 +92,7 @@ def create_app(b, config):
         return jsonify(instanceId=b.deployment['deploymentId'],chainId=31337,priceWei=str(PRICE),contract=b.deployment['contractAddress'],
                        merchant=b.deployment['merchant'],supporter=b.deployment['supporter'],source={'kind':'Anvil finalized projector','blockNumber':checkpoint['block_number'] if checkpoint else None,'observedAt':int(observed['value']) if observed else None},
                        batch={k:str(batch[k]) for k in ('id','F','A','R','H','S')} if batch else None,
-                       recovery=({**b.recovery_view(),'state':'RESTORE_QUARANTINE','writeAvailable':False} if not anchor_ok() else b.recovery_view()),supportStatus=support['status'] if support else None)
+                       recovery=local_recovery(),supportStatus=support['status'] if support else None)
     @app.post('/api/cp24/<role>/login')
     def login(role):
         if role not in auth: raise ApiError(404,'NOT_FOUND','入口不存在')
