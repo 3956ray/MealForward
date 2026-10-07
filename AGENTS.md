@@ -1,3 +1,9 @@
+## CP24 当前 BUILD（覆盖旧阶段限制）
+
+- Leader已放行新隔离本地四角色E2E；合同 `docs/CP24-CONTRACT.md`。仅新Anvil31337、合成账号、新DB/anchor/钱包桥；零Monad广播，不读旧生产signer或重置旧数据。
+- 主开发整合共享代码；有界Astra Medium代理仅独占文件。固定提交后由Leader安排独审和浏览器验收，不自标ACCEPTED。
+- 运行 `scripts/cp24-local.py`，新轮新目录；正常停启仅自己的supervisor。UNKNOWN仅查原操作，禁止重签/补券/自动释放锁。
+
 ## CP23 当前 BUILD（覆盖旧阶段“领取未接入”条款）
 
 - 用户本轮授权继续开发线上餐券分发；产品选择为**私密链接为长期领取凭证，二维码仅为领取者到店后生成的2分钟短时展示凭证**。领取者继续免注册、免钱包、不得加载 Dynamic SDK。

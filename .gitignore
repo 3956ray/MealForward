@@ -17,3 +17,7 @@ wallet-harness/dist/
 .venv/
 .localbackend/
 dist-dynamic/
+
+# CP24 isolated harness build/runtime helpers
+.venv
+local-e2e-harness/dist/

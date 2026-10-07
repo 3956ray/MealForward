@@ -1,3 +1,7 @@
+## CP24：完整隔离本地流程
+
+新四角色 Anvil 演练、启动/正常停止/恢复及测试说明见 [CP24-CONTRACT](docs/CP24-CONTRACT.md)。旧入口与测试网权限保持独立。
+
 ## CP21 测试网付款 BUILD
 
 CP21实现位于独立`server/testnet_funding`、MetaMask支持页`#/support`及单用途`scripts/testnet_funding_admin`。运行与验证见[CP21合同](docs/CP21-CONTRACT.md)。默认未配置、不广播；一个Leader冻结payer/intent、.001测试MON、本片不发券。服务只读观察、不持密钥；提交后拒签/无hash仍只查询原操作。管理员授权和用户MetaMask付款需固定SHA独审及另行广播Gate。当前15207真实OTP窗口在BUILD期间保持原版本，集成由Leader安排。

@@ -34,7 +34,8 @@ def _csrf(token: str) -> str:
 
 
 class AuthService:
-    def __init__(self, store: AuthStore, *, origin, clock, secure_cookie):
+    def __init__(self, store: AuthStore, *, origin, clock, secure_cookie, cookie_name=WORK_COOKIE, cookie_path="/api/v1"):
+        self.cookie_name, self.cookie_path = cookie_name, cookie_path
         self.store = store
         self.origin = origin
         self.clock = clock
@@ -47,7 +48,7 @@ class AuthService:
             raise ApiError(403, 'ORIGIN_DENIED', 'Request origin is not allowed')
 
     def _authenticate(self, role=None, *, csrf=False):
-        token = request.cookies.get(WORK_COOKIE, '')
+        token = request.cookies.get(self.cookie_name, '')
         if not token or len(token) > 256:
             raise ApiError(401, 'UNAUTHENTICATED', 'Work authentication required')
         session_id = _digest(token)
@@ -114,13 +115,13 @@ class AuthService:
             session_id = _digest(token)
             expires_at = now + AUTH_ABSOLUTE_TTL
             self.store.create_session(session_id, user['id'], _digest(_csrf(token)), now, expires_at)
-            old_token = request.cookies.get(WORK_COOKIE)
+            old_token = request.cookies.get(self.cookie_name)
             if old_token:
                 self.store.revoke_session(_digest(old_token))
         context = AuthContext(user['id'], user['role'], user['partner_id'], user['shop_id'], session_id)
         response = self._response(context, expires_at, token)
-        response.set_cookie(WORK_COOKIE, token, max_age=AUTH_ABSOLUTE_TTL, httponly=True,
-                            secure=self.secure_cookie, samesite='Lax', path='/api/v1')
+        response.set_cookie(self.cookie_name, token, max_age=AUTH_ABSOLUTE_TTL, httponly=True,
+                            secure=self.secure_cookie, samesite='Lax', path=self.cookie_path)
         return response
 
     def session(self):
@@ -132,7 +133,7 @@ class AuthService:
         self.store.revoke_session(context.session_id)
         response = make_response('', 204)
         response.headers['Cache-Control'] = 'no-store'
-        response.delete_cookie(WORK_COOKIE, path='/api/v1', secure=self.secure_cookie,
+        response.delete_cookie(self.cookie_name, path=self.cookie_path, secure=self.secure_cookie,
                                httponly=True, samesite='Lax')
         return response
 
