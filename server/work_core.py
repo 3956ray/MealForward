@@ -2,7 +2,7 @@
 import hashlib
 import hmac
 import sqlite3
-from server.actions import ACTIONS, action_transaction
+from server.actions import ACTIONS
 from server.backend import canonical, digest, random_id, require_id
 from server.contracts import ApiError, LOCAL_SHOP_ID, RECIPIENT_IDLE_TTL
 from server.dynamic_mapping import require_current_actor, bind_operation, operation_authorized
@@ -101,7 +101,7 @@ class WorkCore:
         except sqlite3.IntegrityError:
             raise ApiError(409,'OPERATION_PENDING','Original action remains pending') from None
         bind_operation(db,actor,op_id,now)
-        tx=action_transaction(self.b.rpc.contract,kind,op_id,payload)
+        tx=self.b.action_transaction(kind,op_id,payload)
         db.execute('''INSERT INTO outbox(operation_id,signer,tx_json,state,signing_stage)
                       VALUES(?,?,?,'QUEUED','NEVER_SIGNED')''',(op_id,signer,canonical(tx)))
         db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(op_id,'ACCEPTED_NEVER_SIGNED',now))

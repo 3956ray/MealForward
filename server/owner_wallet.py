@@ -10,7 +10,6 @@ from web3.exceptions import TransactionNotFound
 from web3.exceptions import BlockNotFound, ProviderConnectionError, RequestTimedOut
 from requests.exceptions import ConnectionError, Timeout
 from server.backend import canonical, digest, random_id, require_id
-from server.actions import action_transaction
 from server.contracts import (ApiError, LOCAL_SHOP_ID, AUTH_IDLE_TTL, OWNER_CHALLENGE_TTL,
                               OWNER_PROOF_TTL, OWNER_REVIEW_TTL)
 from server.chain.client import PRICE, ChainConflict, ChainUnavailable, hx
@@ -49,7 +48,7 @@ class OwnerWalletService:
                 raise ApiError(429,'RATE_LIMITED','Try later')
             challenge_id=random_id();expires=now+OWNER_CHALLENGE_TTL
             message='Mealforward owner identity only; no transaction or settlement authorization.\n'+canonical({
-                'origin':origin,'chainId':31337,'deploymentId':self.b.deployment['deploymentId'],
+                'origin':origin,'chainId':self.b.policy.chain_id,'deploymentId':self.b.deployment['deploymentId'],
                 'contract':self.b.deployment['contractAddress'],'shopId':binding['shop_id'],
                 'actorId':actor.actor_id,'sessionId':actor.session_id,'address':binding['address'],
                 'challengeId':challenge_id,'expiresAt':expires})
@@ -145,7 +144,7 @@ class OwnerWalletService:
             report=db.execute("SELECT 1 FROM operations WHERE redemption_id=? AND kind='report' AND status='FINALIZED_SUCCESS'",(redemption_id,)).fetchone()
             if voucher['chain_status']!=3 or not lock or lock['status']!='FINALIZED_SUCCESS' or not statement or statement['actor_id']!=actor.actor_id or not report:
                 raise ApiError(409,'NOT_PAYABLE','Original finalized report and handoff required')
-            op_id=random_id();now=self.b.now();tx=action_transaction(self.rpc.contract,'settle',op_id,{'voucherId':r['voucher_id']})
+            op_id=random_id();now=self.b.now();tx=self.b.action_transaction('settle',op_id,{'voucherId':r['voucher_id']})
             try:
                 db.execute('''INSERT INTO operations(id,kind,actor_id,shop_id,redemption_id,intent_key,request_json,
                               payload_hash,status,target,created_at,updated_at) VALUES(?,'settle',?,?,?,?,?,?,'PREPARED',?,?,?)''',
@@ -153,7 +152,7 @@ class OwnerWalletService:
             except sqlite3.IntegrityError: raise ApiError(409,'OPERATION_PENDING','Original action remains pending') from None
             bind_operation(db,actor,op_id,now)
             db.execute('INSERT INTO owner_settlements VALUES(?,?,?,?,?,?,?,NULL)',
-                       (op_id,binding['address'],31337,tx['to'],tx['data'],0,now+OWNER_REVIEW_TTL))
+                       (op_id,binding['address'],self.b.policy.chain_id,tx['to'],tx['data'],0,now+OWNER_REVIEW_TTL))
             db.execute("UPDATE redemptions SET state='SETTLE_PENDING' WHERE id=?",(redemption_id,))
             return self.view(*self.scoped(db,actor,op_id))
     def start(self, actor, op_id, body):

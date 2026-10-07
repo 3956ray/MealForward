@@ -116,3 +116,10 @@
 - 选择A：后台operator明确代发锁/report；settle由可信绑定收款钱包的老板本人逐笔直接链签，后端不持老板私钥、不代签settle。钱包地址字符串不构成授权；现有合约不强制验码/交餐声明，不改合约或引入额外授权合约。
 - Leader授权先修正模拟P06入口及必要模拟API兼容，和真实本地链改动分提交。保留既有数据、5173服务，不重置/停止现有预览。模拟必须明确无真实钱包接入。
 - 前端范围src/App.tsx、src/styles.css、必要src/api.ts由Leader另派owner；主开发不双写，负责server/app.py、模拟测试及链共享C0。角色相关链实现先与PM定向冻结新接口；ROLE-CORRECTION.md及最新用户决定覆盖旧角色文档。
+## CP28 当前安全 BUILD
+
+- Leader CP28 ALIGNMENT 已放行无秘密实现；唯一产品 writer。合同先冻结于 docs/CP28-CONTRACT.md。
+- 新 manual_business composition、10143 adapter、本人口令证明及 fund/settle、受限 issuer/operator IPC、持久预算与恢复；沿用原 MealForwardTestnet artifact。
+- 真实身份和钱包分工待配置，缺配置关闭；不得预选认证模式。允许独立 Anvil31337 合成交易，10143 仅 fake 协议测试。
+- 本 BUILD 不访问实网、不读取真人密钥、不执行真人签名/广播/部署/grant。原 31337 与历史参考入口守卫保留。
+- 固定候选 SHA、分层证据、健康持久入口、恢复说明交 Leader；不得自验收或把 BLOCKED 页称为完整 E2E。

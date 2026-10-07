@@ -108,3 +108,6 @@ CP11 实测范围与限制见 [docs/CP11-VERIFICATION.md](docs/CP11-VERIFICATION
 已验证命令：`.venv/bin/python -m unittest tests.test_backend_chain_owner -q`，使用自有随机端口 Anvil 与临时库。测试覆盖钱包身份挑战、外部签名/原交易恢复、finality、提交争用、实际 revert 与 v2/v3 备份边界。C0 锁/report 测试使用共享 helper；另以 `.venv/bin/python -m unittest tests.test_redemption tests.test_backend_chain_redemption -q` 验证完整 redemption HTTP/真实链集成。
 
 P06 现提供独立本地链经营入口，默认 `http://127.0.0.1:15197`，需另行启动专用服务；原模拟页面不连接钱包。独立工作台用同一 owner controller 完成验码、锁定、交付声明、申报、选择应付款及逐笔钱包结算。受控 EIP1193 浏览器与真实 Anvil 完整 HTTP 流程已验证；真实钱包扩展和人类确认仍 NOT_RUN，不代表 CP16 整体验收。启动、测试命令及证据边界见 [经营工作台说明](owner-wallet-harness/README.md)。
+## CP28：新业务安全接入（BUILD，未验收）
+
+持久准备入口不连接真实 RPC、不签名。先执行 `node_modules/.bin/tsc --noEmit -p manual-business-harness/tsconfig.json` 与 `node_modules/.bin/vite build --config manual-business-harness/vite.config.ts`，然后 `.venv/bin/python -m server.manual_business prepare --directory .localbackend/cp28-preparation --port 15287`。恢复同一准备入口用 `resume` 替代 `prepare`；缺文件拒绝恢复，不自动新建。身份、新部署、签名服务与具体 Runtime 预算缺失时显示 BLOCKED，不能作为完整业务 E2E 成功证据。安全合同见 [CP28-CONTRACT](docs/CP28-CONTRACT.md)。

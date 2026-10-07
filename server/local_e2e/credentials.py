@@ -12,6 +12,7 @@ def unavailable():
     raise ApiError(404,'CODE_UNAVAILABLE','餐券展示凭证不可用，请重新展示并检查')
 
 class LocalWork(WorkCore):
+    presentation_prefix = PREFIX
     def writable(self,db,*,allow_paused=False):
         # At the outer transaction start the anchor covers the committed state.
         if not getattr(self.b.store.local,'anchor_valid',False): raise ApiError(503,'RESTORE_QUARANTINE','独立恢复记录缺失或不一致；仅查询原操作')
@@ -19,7 +20,7 @@ class LocalWork(WorkCore):
     def validate_code(self, db, actor, code, now=None):
         self.require_actor(db,actor,'owner');self.require_owner(db,actor)
         now=self.b.now() if now is None else now
-        if not isinstance(code,str) or not (re.fullmatch(r'[0-9]{6}',code) or re.fullmatch(re.escape(PREFIX)+r'[A-Za-z0-9_-]{32}',code)):
+        if not isinstance(code,str) or not (re.fullmatch(r'[0-9]{6}',code) or re.fullmatch(re.escape(self.presentation_prefix)+r'[A-Za-z0-9_-]{32}',code)):
             unavailable()
         row=db.execute('''SELECT d.id,i.voucher_id FROM cp24_display d JOIN cp24_session s ON s.hash=d.session_hash
                          JOIN cp24_invite i ON i.version=s.version WHERE d.consumed IS NULL AND d.expires>?
@@ -86,6 +87,6 @@ class Credentials:
             self.b.work.writable(db)
             row=self.session(db,token,csrf or '')
             if not self.payload(db,row,token)['canDisplay']: raise ApiError(409,'READ_ONLY','餐券已在处理中，只能查看原状态')
-            qr=PREFIX+secrets.token_urlsafe(24);code=f'{secrets.randbelow(1000000):06d}';expires=self.b.now()+120
+            qr=self.b.work.presentation_prefix+secrets.token_urlsafe(24);code=f'{secrets.randbelow(1000000):06d}';expires=self.b.now()+120
             db.execute('INSERT OR REPLACE INTO cp24_display VALUES(1,?,?,?,?,NULL)',(row['hash'],self.b.work.code_hash(qr),self.b.work.code_hash(code),expires))
             return {'qrPayload':qr,'manualCode':code,'expiresAt':expires}

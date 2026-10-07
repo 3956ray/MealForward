@@ -8,6 +8,7 @@ from eth_abi import encode
 from web3 import Web3
 from server.contracts import ApiError, SUPPORT_TTL
 from server.chain.client import PRICE, RULE, hx
+from server.business_policy import LOCAL_POLICY, validate_policy
 
 TERMINAL = ('FINALIZED_SUCCESS','FINALIZED_REVERT','NOT_SUBMITTED')
 def digest(value): return hashlib.sha256(value.encode()).hexdigest()
@@ -22,7 +23,9 @@ def quantity(value):
     return value
 
 class Backend:
-    def __init__(self, store, rpc, secret_key, signer, clock=time.time, *, signers=None, owner_mode=False):
+    def __init__(self, store, rpc, secret_key, signer, clock=time.time, *, signers=None, owner_mode=False, policy=LOCAL_POLICY):
+        validate_policy(policy, rpc.deployment)
+        self.policy=policy
         self.store,self.rpc,self.box,self.signer,self.clock=store,rpc,Fernet(secret_key),signer,clock
         self.deployment=rpc.deployment
         self.owner_mode=owner_mode
@@ -33,7 +36,7 @@ class Backend:
         if owner_mode and 'settler' in self.signers: raise ValueError('Owner settlement cannot use a backend signer')
         if owner_mode and self.deployment['merchant'].lower() in {address.lower() for address in self.signers.values()}:
             raise ValueError('Owner wallet cannot be a backend signer')
-        if len({a.lower() for a in self.signers.values()})!=len(self.signers): raise ValueError('Signers must be distinct')
+        if not policy.shared_service_signer and len({a.lower() for a in self.signers.values()})!=len(self.signers): raise ValueError('Signers must be distinct')
         public_identity={k:v for k,v in self.deployment.items() if k!='rpcUrl'}
         binding=canonical(public_identity)
         with store.transaction() as db:
@@ -77,6 +80,10 @@ class Backend:
         from server.owner_wallet import OwnerWalletService
         self.owner_wallet=OwnerWalletService(self)
     def now(self): return int(self.clock())
+    def action_transaction(self, kind, operation_id, payload):
+        from server.actions import action_transaction
+        tx=action_transaction(self.rpc.contract,kind,operation_id,payload)
+        return {**tx,'chainId':self.policy.chain_id}
     def encrypt(self, value): return self.box.encrypt(value.encode()).decode()
     def decrypt(self, value): return self.box.decrypt(value.encode()).decode()
     def halt(self, reason): self.store.execute("UPDATE metadata SET value=? WHERE key='halted'",(reason,))
@@ -118,10 +125,11 @@ class Backend:
         with self.store.transaction() as db: self._writable_in_transaction(db)
         cap=self.cap(token)
         expected={'clientRequestId','account','chainId','quantity','ruleVersion','walletKind'}
-        if set(body)!=expected or body['chainId']!=31337 or body['ruleVersion']!=RULE or body['walletKind'] not in ('local-test','dynamic','mera'):
+        if set(body)!=expected or body['chainId']!=self.policy.chain_id or body['ruleVersion']!=self.policy.rule or body['walletKind'] not in self.policy.wallet_kinds:
             raise ApiError(422,'INVALID_INPUT','Invalid support request')
         # Configured SDK names are not claims of authentication or SDK availability.
         key=require_id(body['clientRequestId'],'clientRequestId'); n=quantity(body['quantity'])
+        if n>self.policy.max_quantity: raise ApiError(422,'INVALID_INPUT','Quantity exceeds deployment policy')
         if not Web3.is_address(body['account']): raise ApiError(422,'INVALID_INPUT','Invalid account')
         body={**body,'account':Web3.to_checksum_address(body['account'])}
         snapshot=canonical(body); now=self.now()
@@ -133,8 +141,8 @@ class Backend:
                 if old['intent_key']!=key or old['request_json']!=snapshot: raise ApiError(409,'INTENT_CONFLICT','Original intent remains bound')
                 return self.support_view_db(db,old['id'])
             op_id=random_id(); intent=random_id()
-            batch=hx(Web3.keccak(encode(['uint256','address','address','bytes32'],[31337,self.rpc.contract.address,body['account'],bytes.fromhex(intent[2:])])))
-            data=self.rpc.contract.encode_abi('fund',args=[intent,n,RULE])
+            batch=hx(Web3.keccak(encode(['uint256','address','address','bytes32'],[self.policy.chain_id,self.rpc.contract.address,body['account'],bytes.fromhex(intent[2:])])))
+            data=self.rpc.contract.encode_abi('fund',args=[intent,n,self.policy.rule])
             db.execute('INSERT INTO operations(id,kind,actor_id,intent_key,request_json,payload_hash,status,target,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (op_id,'support',cap['id'],key,snapshot,digest(snapshot),'PREPARED',batch,now,now))
             db.execute('INSERT INTO support_intents VALUES(?,?,?,?,?,?,?,?)',(op_id,intent,body['account'],n,n*PRICE,batch,data,(now+120)*1000))
@@ -150,9 +158,9 @@ class Backend:
         op=dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone())
         intent=dict(db.execute('SELECT * FROM support_intents WHERE operation_id=?',(op_id,)).fetchone())
         return {'operation':self.operation_view(op),'intent':{'operationId':op_id,'intentId':intent['intent_id'],
-                'batchId':intent['batch_id'],'account':intent['payer'],'chainId':31337,'to':self.rpc.contract.address,
+                'batchId':intent['batch_id'],'account':intent['payer'],'chainId':self.policy.chain_id,'to':self.rpc.contract.address,
                 'data':intent['data'],'valueWei':str(intent['value_wei']),'quantity':intent['quantity'],
-                'ruleVersion':RULE,'quoteExpiresAt':intent['quote_expires_at']}}
+                'ruleVersion':self.policy.rule,'quoteExpiresAt':intent['quote_expires_at']}}
     def get_support(self, token, op_id):
         cap=self.cap(token)
         if cap['operation_id']!=op_id: raise ApiError(403,'FORBIDDEN','Not this support intent')
@@ -163,7 +171,8 @@ class Backend:
         if set(body)!={'intentKey','recipientRef','batchId','quantity','quotePriceWei','ruleVersion'}: raise ApiError(422,'INVALID_INPUT','Invalid issuance request')
         key=require_id(body['intentKey']); ref=require_id(body['recipientRef']); batch_id=require_id(body['batchId'])
         n=quantity(body['quantity'])
-        if body['quotePriceWei']!=str(PRICE) or body['ruleVersion']!=RULE: raise ApiError(409,'QUOTE_CHANGED','Review quote')
+        if n>self.policy.max_quantity: raise ApiError(422,'INVALID_INPUT','Quantity exceeds deployment policy')
+        if body['quotePriceWei']!=str(PRICE) or body['ruleVersion']!=self.policy.rule: raise ApiError(409,'QUOTE_CHANGED','Review quote')
         snapshot=canonical(body)
         with self.store.transaction() as db:
             self._writable_in_transaction(db)
@@ -191,7 +200,7 @@ class Backend:
                 db.execute('INSERT INTO private_vouchers VALUES(?,?,?,?,?,0)',(v,op_id,batch_id,digest(secret),self.encrypt(secret)))
             db.execute('UPDATE qualifications SET reserved=reserved+? WHERE partner_id=? AND recipient_ref=?',(n,actor.partner_id,ref))
             db.execute("INSERT INTO reservations VALUES(?,?,?,?,?,?,'PENDING')",(op_id,actor.partner_id,ref,batch_id,n,n*PRICE))
-            tx={'to':self.rpc.contract.address,'data':self.rpc.contract.encode_abi('issue',args=[op_id,batch_id,voucher_ids]),'value':0,'chainId':31337}
+            tx=self.action_transaction('issue',op_id,{'batchId':batch_id,'voucherIds':voucher_ids})
             db.execute("INSERT INTO outbox(operation_id,signer,tx_json,state,signing_stage) VALUES(?,?,?,'QUEUED','NEVER_SIGNED')",(op_id,self.signer,canonical(tx)))
             db.execute('INSERT INTO work_audit(operation_id,event,created_at) VALUES(?,?,?)',(op_id,'ACCEPTED_NEVER_SIGNED',now))
             return self.issuance_view_db(db,dict(db.execute('SELECT * FROM operations WHERE id=?',(op_id,)).fetchone()))
