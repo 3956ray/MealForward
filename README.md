@@ -1,3 +1,7 @@
+## CP26：真实钱包只读准备页
+
+运行 `.venv/bin/python -m server.wallet_readiness --online`，打开输出URL。仅MetaMask主动连接与Monad10143基础读取，无签名/切链/交易；[操作与边界](docs/CP26-READINESS.md)。与本地Anvil演练独立。
+
 ## CP25：一条命令开启独立本地演练
 
 运行 `.venv/bin/python scripts/cp24-local.py --new`，按输出URL进入。新轮、正常停止/恢复、四角色操作和测试说明见 [CP25-REHEARSAL](docs/CP25-REHEARSAL.md)。旧轮保留，不覆盖或自动清理。

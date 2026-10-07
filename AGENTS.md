@@ -1,3 +1,9 @@
+## CP26 当前 BUILD
+
+- 基线e4ca239。独立MetaMask只读准备页；Leader核准公开Monad测试网RPC及固定genesis，配置server/wallet_readiness/network-profile.json。
+- 只准chainId/getBlockByNumber/getBalance/getCode；无manifest/eth_call、签名、切链、交易构造或广播，不读旧私有RPC/key，不改旧轮。
+- 单一主开发写入；合成地址真实RPC证据与真人provider证据分列。固定SHA独审、PM、Leader Gate后接受。合同docs/CP26-READINESS.md。
+
 ## CP25 当前 BUILD
 
 - 基线CP24已接受29b79eb；仅增强既有CLI简化新轮、运行输出和交付说明，不建Web进程管理服务。合同docs/CP25-REHEARSAL.md及Leader CP25 brief。

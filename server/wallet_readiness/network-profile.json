@@ -1,0 +1,15 @@
+{
+  "profileId": "monad-testnet-readonly-cp26-v1",
+  "chainId": 10143,
+  "genesisHash": "0x298034669ee44327d2da9744b9b2782848e2f2a6959756b7b0471b09a404f5c9",
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "sourceLabel": "Monad public testnet RPC",
+  "deploymentManifest": null,
+  "allowedMethods": ["eth_chainId", "eth_getBlockByNumber", "eth_getBalance", "eth_getCode"],
+  "maxRpcCallsPerCheck": 12,
+  "deadlineSeconds": 20,
+  "requestTimeoutSeconds": 3,
+  "responseBytesMax": 1048576,
+  "observedOn": "2026-10-07",
+  "note": "Leader chainId/genesis direct read verified against historical CP19 public genesis. Read-only approval; no sign, transaction construction or broadcast. No deployment manifest or eth_call authorization."
+}
