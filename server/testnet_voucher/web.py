@@ -58,5 +58,5 @@ def register(app, auth, work_store, scope_file, vouchers, clock=time.monotonic):
     def logout():
         if request.headers.get("X-MealForward-Voucher") != "1" or request.get_json(silent=True) != {}:
             raise VoucherError("INVALID_REQUEST", 400)
-        vouchers.logout(request.cookies.get(COOKIE, "")); response = make_response("", 204)
+        vouchers.logout(request.cookies.get(COOKIE, ""), request.headers.get("X-CSRF-Token", "")); response = make_response("", 204)
         response.delete_cookie(COOKIE, path=BASE, httponly=True, samesite="Strict"); return response

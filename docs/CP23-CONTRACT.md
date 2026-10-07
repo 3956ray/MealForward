@@ -27,6 +27,7 @@ CP23 uses an isolated SQLite store plus external fsynced anchor. Database/anchor
 - before first open, an explicit partner rotate invalidates the old link and all sessions/displays
 - after first open, silent rotation is forbidden
 - reopening the same valid link is recovery: it atomically revokes the previous recipient session/display, so only one live bearer session exists
+- display refresh and logout share the same credential lock; a confirmed logout cannot race with a display refresh that recreates an active code
 
 ## Partner authorization
 
@@ -44,7 +45,7 @@ Base /api/v1/testnet-voucher:
 - POST /exchange
 - GET /session
 - POST /display
-- POST /logout
+- POST /logout (session CSRF required; server-confirmed revoke)
 
 Recipient DTOs never contain recipientRef, qualification or delivery-channel data. No merchant lock/report/settle endpoint exists in CP23; consuming the active QR/code belongs to CP24 after separate design review.
 

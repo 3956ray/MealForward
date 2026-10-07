@@ -44,7 +44,9 @@ class VoucherTests(unittest.TestCase):
         self.clock.add(121);self.assertFalse(self.service.store.display_matches(second['code'],self.clock.value))
     def test_recipient_payload_hides_recipient_ref_and_logout_revokes(self):
         link=self.service.create_invite('partner-a','http://127.0.0.1:15207');token,session=self.service.exchange(self.secret(link))
-        self.assertNotIn('recipientRef',json.dumps(session));display=self.service.create_display(token,session['csrfToken'])['display'];self.service.logout(token)
+        self.assertNotIn('recipientRef',json.dumps(session));display=self.service.create_display(token,session['csrfToken'])['display']
+        with self.assertRaisesRegex(VoucherError,'CSRF_DENIED'):self.service.logout(token,'bad-csrf')
+        self.service.logout(token,session['csrfToken'])
         with self.assertRaisesRegex(VoucherError,'VOUCHER_SESSION_REQUIRED'):self.service.session(token)
         self.assertFalse(self.service.store.display_matches(display['qrPayload'],self.clock.value))
     def test_wrong_partner_and_immutable_binding_change_fail_closed(self):

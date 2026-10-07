@@ -329,5 +329,13 @@ class VoucherService:
             nonce = self.store.replace_display(session_hash=session_hash, token_hash=digest(display), code_hash=digest(code), now=now, expires_at=expires)
         return {"display": {"qrPayload": "mealforward:testnet:v1:" + display, "code": code, "expiresAt": expires, "nonce": nonce}}
 
-    def logout(self, token: str) -> None:
-        if token and len(token) <= 256: self.store.revoke(digest(token))
+    def logout(self, token: str, csrf: str) -> None:
+        if not token or len(token) > 256 or not csrf:
+            raise VoucherError("VOUCHER_SESSION_REQUIRED", 401)
+        token_hash = digest(token)
+        with self.store.lock():
+            self.state()
+            row = self.store.session(token_hash, self.now())
+            if not hmac.compare_digest(row["session"]["csrf_hash"], digest(csrf)):
+                raise VoucherError("CSRF_DENIED", 403)
+            self.store.revoke(token_hash)
