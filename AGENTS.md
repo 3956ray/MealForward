@@ -1,3 +1,9 @@
+## CP25 当前 BUILD
+
+- 基线CP24已接受29b79eb；仅增强既有CLI简化新轮、运行输出和交付说明，不建Web进程管理服务。合同docs/CP25-REHEARSAL.md及Leader CP25 brief。
+- 每轮独立目录/端口/Anvil/DB/anchor，旧轮不重置；UNKNOWN只查原记录。零Monad广播，不读生产key。
+- 主开发唯一源码写者；固定SHA独审、PM回核、Leader验收后由Leader接受。
+
 ## CP24 当前 BUILD（覆盖旧阶段限制）
 
 - Leader已放行新隔离本地四角色E2E；合同 `docs/CP24-CONTRACT.md`。仅新Anvil31337、合成账号、新DB/anchor/钱包桥；零Monad广播，不读旧生产signer或重置旧数据。

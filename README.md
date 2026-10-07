@@ -1,3 +1,7 @@
+## CP25：一条命令开启独立本地演练
+
+运行 `.venv/bin/python scripts/cp24-local.py --new`，按输出URL进入。新轮、正常停止/恢复、四角色操作和测试说明见 [CP25-REHEARSAL](docs/CP25-REHEARSAL.md)。旧轮保留，不覆盖或自动清理。
+
 ## CP24：完整隔离本地流程
 
 新四角色 Anvil 演练、启动/正常停止/恢复及测试说明见 [CP24-CONTRACT](docs/CP24-CONTRACT.md)。旧入口与测试网权限保持独立。
