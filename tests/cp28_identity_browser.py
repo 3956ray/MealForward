@@ -1,5 +1,6 @@
 """Isolated actual HTTP/JWT UI fixture. Alias SDK and injected provider are synthetic."""
 import json
+import argparse
 import time
 from pathlib import Path
 from flask import request, jsonify, send_from_directory
@@ -13,11 +14,14 @@ from server.manual_business.web import create_app
 
 
 def main():
-    origin='http://127.0.0.1:15288'; now=[int(time.time())]
+    parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=15288)
+    parser.add_argument('--calibration',action='store_true');args=parser.parse_args()
+    server=make_server('127.0.0.1',args.port,lambda environ,start_response: [])
+    origin=f'http://127.0.0.1:{server.server_port}'; now=[int(time.time())]
     key=rsa.generate_private_key(public_exponent=65537,key_size=2048)
     public=json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()));public.update(kid='offline',alg='RS256',use='sig')
     profile=ClaimProfile(ENVIRONMENT_ID,'app.dynamicauth.com/'+ENVIRONMENT_ID,(origin,),verified=True)
-    service=IdentityPreparation(origin,profile=profile,clock=lambda:now[0],
+    service=IdentityPreparation(origin,profile=None if args.calibration else profile,clock=lambda:int(time.time()),development_calibration=args.calibration,
         jwks=FixedJwksCache(clock=lambda:now[0],transport=lambda:json.dumps({'keys':[public]}).encode()))
     app=create_app({'origin':origin,'runId':'identity-offline-synthetic'},identity_preparation=service)
     root=Path('dist/cp28-identity-fixture'); records=[]; assets=[]
@@ -36,10 +40,15 @@ document.querySelector('#profile-missing').onclick=async()=>{await fetch('/test-
     app.view_functions['asset']=lambda name:send_from_directory(root.resolve()/'assets',name)
     @app.get('/test-token')
     def token():
-        return jsonify(token=jwt.encode({'iss':profile.issuer,'aud':origin,'environment_id':ENVIRONMENT_ID,
+        return jsonify(token=jwt.encode({'iss':profile.issuer,'aud':origin if not bad_audience[0] else 'http://127.0.0.1:15207','environment_id':ENVIRONMENT_ID,
             'sub':'synthetic-person','sid':'synthetic-session','iat':now[0]-1,'exp':now[0]+600,'scope':'user:basic'},key,algorithm='RS256',headers={'kid':'offline'}))
     @app.post('/test-profile-missing')
     def missing():service.profile=None;service.sessions.clear();return jsonify(changed=True)
+    bad_audience=[False]
+    if args.calibration:
+        controls=controls.replace('<pre id="provider-log">','<button id="bad-audience" onclick="fetch(\'/test-bad-audience\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:\'{}\'})">模拟旧入口aud（仅合成）</button><pre id="provider-log">')
+        @app.post('/test-bad-audience')
+        def bad():bad_audience[0]=True;return jsonify(changed=True)
     @app.get('/test-mobile')
     def mobile():return '<h1>390px身份准备合成布局（非实体手机）</h1><iframe title="390px identity" src="/#/identity" width="390" height="2100"></iframe>'
     @app.after_request
@@ -49,14 +58,16 @@ document.querySelector('#profile-missing').onclick=async()=>{await fetch('/test-
             data=response.get_json(silent=True) or {}
             records.append({'method':request.method,'path':request.path,'status':response.status_code,
                 'hasBearer':bool(request.headers.get('Authorization')),'hasCsrf':bool(request.headers.get('X-CSRF-Token')),
-                'identityVerified':data.get('serverIdentityVerified'),'candidateConfirmed':bool(data.get('candidate'))})
-        Path('evidence/cp28/identity-browser-http.json').write_text(json.dumps({'kind':'synthetic-SDK-provider-actual-HTTP-JWT','requests':records,'assets':assets},indent=2))
+                'identityVerified':data.get('serverIdentityVerified'),'candidateConfirmed':bool(data.get('candidate')),
+                'calibrationStatus':data.get('status')})
+        Path('evidence/cp28/'+('p3-browser-http.json' if args.calibration else 'identity-browser-http.json')).write_text(json.dumps({'kind':'synthetic-SDK-provider-actual-HTTP-JWT','requests':records,'assets':assets},indent=2))
         return response
     @app.after_request
     def test_frame(response):response.headers['X-Frame-Options']='SAMEORIGIN';return response
     app.after_request_funcs[None].insert(0,app.after_request_funcs[None].pop())
     print(origin+'/#/recipient',flush=True)
-    with make_server('127.0.0.1',15288,app) as server:server.serve_forever()
+    server.app=app
+    with server:server.serve_forever()
 
 
 if __name__=='__main__':main()

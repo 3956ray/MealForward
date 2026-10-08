@@ -145,8 +145,14 @@ def _profile_ready(profile):
 
 
 def verify_access_token(raw: str, *, profile: ClaimProfile, clock: Clock,
-                        jwks: JwksProvider) -> VerifiedIdentity:
+                        jwks: JwksProvider, calibration_origin: str | None = None) -> VerifiedIdentity:
     if not _profile_ready(profile):
+        raise unavailable()
+    # Optional, stricter diagnostic policy. No claims-derived profile or change to CP17.
+    if calibration_origin is not None and (
+            profile.issuer != 'app.dynamicauth.com/'+ENVIRONMENT_ID or
+            profile.audiences != (calibration_origin,) or any((profile.allow_absent_audience,
+                profile.allow_absent_environment_id, profile.allow_absent_sid))):
         raise unavailable()
     try:
         if not isinstance(raw, str) or len(raw) > _MAX_TOKEN:
@@ -181,6 +187,8 @@ def verify_access_token(raw: str, *, profile: ClaimProfile, clock: Clock,
         claims = _json(base64.urlsafe_b64decode(parts[1] + '=' * (-len(parts[1]) % 4)))
         if not isinstance(claims, dict) or claims.get('iss') != profile.issuer:
             raise ValueError('Invalid issuer')
+        if calibration_origin is not None and claims.get('aud') != calibration_origin:
+            raise ValueError('Calibration requires a single exact-origin audience string')
         if 'environment_id' in claims:
             if claims['environment_id'] != profile.environment_id:
                 raise ValueError('Invalid environment')
@@ -204,6 +212,8 @@ def verify_access_token(raw: str, *, profile: ClaimProfile, clock: Clock,
         if 'nbf' in claims and (type(claims['nbf']) is not int or claims['nbf'] > now + 30
                                 or claims['nbf'] >= exp):
             raise ValueError('Invalid not-before')
+        if calibration_origin is not None and (iat > now or ('nbf' in claims and claims['nbf'] > now)):
+            raise ValueError('Calibration token times have no future allowance')
         if not _identifier(claims.get('sub'), 1024):
             raise ValueError('Invalid subject')
         if not isinstance(claims.get('scope'), str):
@@ -211,6 +221,8 @@ def verify_access_token(raw: str, *, profile: ClaimProfile, clock: Clock,
         scopes = frozenset(claims['scope'].split())
         if 'user:basic' not in scopes:
             raise ValueError('Incomplete authentication')
+        if calibration_origin is not None and scopes != frozenset({'user:basic'}):
+            raise ValueError('Unknown calibration scopes require confirmation')
         sid_hash = None
         if 'sid' in claims:
             if not _identifier(claims['sid']):

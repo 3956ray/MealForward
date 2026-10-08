@@ -18,7 +18,9 @@ def main():
     parser.add_argument('--directory', required=True)
     parser.add_argument('--port', type=int, default=15287)
     parser.add_argument('--identity-profile', help='Explicit operator-reviewed exact-origin claim profile; never a token or wallet key')
+    parser.add_argument('--development-identity-calibration', action='store_true', help='Explicit local development-only diagnostic; no profile creation or identity grant')
     args = parser.parse_args()
+    if args.development_identity_calibration and args.identity_profile: parser.error('Calibration cannot be combined with an identity profile')
     if not 1024 <= args.port <= 65535: raise ValueError('Unprivileged loopback port required')
     directory = Path(args.directory).resolve()
     if args.command == 'prepare':
@@ -43,10 +45,12 @@ def main():
     if not (ROOT/'manual-business-harness/dist/index.html').is_file(): raise ValueError('Build manual-business-harness before serving')
     from .identity_preparation import IdentityPreparation, load_profile
     profile, check = load_profile(args.identity_profile, config['origin'])
-    identity = IdentityPreparation(config['origin'], profile=profile, source_check=check)
+    identity = IdentityPreparation(config['origin'], profile=profile, source_check=check,
+                                   development_calibration=args.development_identity_calibration)
     print(canonical({'url': config['origin'], 'runId': config['runId'], 'sourceSha': config['sourceSha'],
                      'state': 'BLOCKED', 'directory': str(directory), 'pid': os.getpid(), 'realWallet': 'NOT_RUN',
-                     'identityProfileConfigured': profile is not None}), flush=True)
+                     'identityProfileConfigured': profile is not None,
+                     'developmentCalibrationEnabled': args.development_identity_calibration}), flush=True)
     serve(create_app(config, identity_preparation=identity), args.port)
 
 

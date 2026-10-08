@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState, useSyncExternalStore} from 'react'
 import {createDynamicAuthClient} from '../src/dynamic/client'
-import {IdentityController, type IdentityConfig, type IdentitySession} from './identity'
+import {IdentityController, type IdentityConfig, type IdentitySession, type Calibration} from './identity'
 import type {Provider} from './wallet'
 
 // The module is lazy-loaded only for this explicit preparation page, never recipient.
@@ -18,10 +18,11 @@ export default function IdentityPanel() {
   const [config,setConfig] = useState<IdentityConfig|null>(null), [session,setSession] = useState<IdentitySession|null>(null)
   const [email,setEmail] = useState(''), [otp,setOtp] = useState(''), [account,setAccount] = useState('')
   const [message,setMessage] = useState(''), [busy,setBusy] = useState(false)
+  const [calibration,setCalibration]=useState<Calibration|undefined>()
   const controller = useRef<IdentityController|null>(null)
   useEffect(()=>{
     let alive=true
-    const c = new IdentityController(client,(s,a,m)=>{if(alive){setSession(s);setAccount(a);if(m)setMessage(m)}})
+    const c = new IdentityController(client,(s,a,m,d)=>{if(alive){setSession(s);setAccount(a);setCalibration(d);if(m)setMessage(m)}})
     controller.current=c
     void cleanup.then(()=>{if(alive)return c.bootstrap()}).then(value=>{if(alive && value)setConfig(value)}).catch(()=>{if(alive)setMessage('身份准备服务暂不可用。')})
     return ()=>{alive=false;controller.current=null;cleanup=c.dispose()}
@@ -47,6 +48,18 @@ export default function IdentityPanel() {
       <button disabled={busy} type="submit">验证邮箱验证码</button>
     </form>}
     <p>SDK登录状态：{identity.status==='authenticated' ? '已登录' : identity.status==='email-pending' ? '等待本人验证码' : '未登录'}</p>
+    {config?.developmentCalibrationEnabled && <section aria-label="本地开发身份校准">
+      <h3>本地开发校准（不授予权限）</h3>
+      <p>点击后，仅将当前SDK内存凭据同源发送给本机服务验证固定预期。不生成或保存profile，不开放钱包或业务权限；缺失或未知声明仍待确认。</p>
+      <button disabled={busy || identity.status!=='authenticated'} onClick={()=>void run(()=>controller.current!.calibrate())}>校准当前登录（不授权）</button>
+      {calibration && <div role="status">
+        <p>校准诊断通过，待审核配置；服务端身份与钱包候选仍未开放。</p>
+        <p className="address">aud：{calibration.audience}</p><p className="address">issuer：{calibration.issuer}</p><p className="address">environment：{calibration.environmentId}</p>
+        <p>sid：存在，字符串；scope：{calibration.scopes.join(' ')}；校准时JWT剩余有效期：{calibration.remainingTokenSeconds}秒。</p>
+        <p>JWT到期：{new Date(calibration.tokenExpiresAt*1000).toLocaleString()}；本页诊断最晚失效：{new Date(calibration.validUntil*1000).toLocaleString()}。</p>
+        <p>退出、登录变化或到期后此结论失效。profile创建与服务重启需要另行批准。</p>
+      </div>}
+    </section>}
     <button disabled={busy || identity.status!=='authenticated' || !config?.serverVerificationConfigured} onClick={()=>void run(()=>controller.current!.verify())}>核验服务端身份</button>
     <p role="status">{session ? '身份已验证，工作权限未配置。' : '服务端身份尚未验证。'}</p>
     <button disabled={busy || !session} onClick={()=>void run(async()=>{

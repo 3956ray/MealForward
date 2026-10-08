@@ -1,5 +1,7 @@
 # CP28 Dynamic identity preparation
 
+P3 adds an explicitly enabled, default-off diagnostic only; see [CP28-P3-CALIBRATION.md](CP28-P3-CALIBRATION.md). It does not create a profile, grant identity permissions or authorize restarting the current entry.
+
 Continuation of the accepted a9df7ca safe build. User selected Dynamic email login and one person / one wallet for administrator and merchant. This entry does not grant business authority or activate a chain runtime.
 
 ## Entry and state

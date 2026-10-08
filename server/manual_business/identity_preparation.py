@@ -4,6 +4,7 @@ Sessions and candidate declarations live only in bounded process memory. Restart
 revokes them; the existing preparation identity and anchor are never rewritten.
 """
 import hashlib
+import ipaddress
 import hmac
 import json
 import re
@@ -44,7 +45,12 @@ def load_profile(path, origin):
 
 
 class IdentityPreparation:
-    def __init__(self, origin, *, profile=None, jwks=None, clock=time.time, source_check=None, service_addresses=()):
+    def __init__(self, origin, *, profile=None, jwks=None, clock=time.time, source_check=None, service_addresses=(), development_calibration=False):
+        if type(development_calibration) is not bool: raise ValueError('Explicit development calibration flag required')
+        if development_calibration and (profile is not None or not re.fullmatch(r'http://127\.0\.0\.1:[0-9]{4,5}', origin)):
+            raise ValueError('Calibration requires isolated loopback preparation without an approved profile')
+        self.development_calibration = development_calibration
+        self.calibration_attempts = deque()
         self.origin, self.profile, self.clock, self.source_check = origin, profile, clock, source_check
         self.jwks = jwks if jwks is not None else FixedJwksCache(clock=clock)
         self.service_addresses = {a.lower() for a in service_addresses}
@@ -54,6 +60,7 @@ class IdentityPreparation:
         return {'environmentId': ENVIRONMENT_ID, 'serverVerificationConfigured': self.profile is not None,
                 'authMode': 'dynamic-email', 'adminEqualsMerchant': True, 'businessAuthorized': False,
                 'walletProof': False, 'addressPersistence': 'SESSION_ONLY',
+                'developmentCalibrationEnabled': self.development_calibration,
                 'originConfiguration': 'NOT_VERIFIED'}
 
     def row(self, *, csrf=False):
@@ -95,8 +102,49 @@ class IdentityPreparation:
     def register(self, app):
         @app.before_request
         def origin():
+            if request.path == PREFIX+'/calibrate':
+                if not self.development_calibration:
+                    raise ApiError(404, 'CALIBRATION_DISABLED', '开发校准未启用')
+                try: local = ipaddress.ip_address(request.remote_addr or '').is_loopback
+                except ValueError: local = False
+                if (not local or request.host_url.rstrip('/') != self.origin or request.headers.get('Origin') != self.origin
+                        or any(k.lower() == 'forwarded' or k.lower().startswith('x-forwarded-') or k.lower() == 'x-real-ip' for k in request.headers.keys())):
+                    raise ApiError(403, 'CALIBRATION_ORIGIN_DENIED', '仅允许当前本机入口直接校准')
+                if (request.method != 'POST' or request.content_length is None or request.content_length > 256
+                        or len(request.headers.get('Authorization', '')) > 16400
+                        or len(request.headers.get('X-CSRF-Token', '')) > 256):
+                    raise ApiError(422, 'CALIBRATION_INPUT_REJECTED', '校准请求不符合限制')
             if request.path.startswith(PREFIX+'/') and request.headers.get('Origin') not in (None, self.origin):
                 raise ApiError(403, 'ORIGIN_DENIED', '身份准备来源不符')
+
+        @app.post(PREFIX+'/calibrate', endpoint='identity_calibrate')
+        def calibrate():
+            if request.get_json(silent=True) != {}:
+                raise ApiError(422, 'CALIBRATION_INPUT_REJECTED', '校准仅接受空请求')
+            with self.lock:
+                row = self.row(csrf=True); now = self.clock()
+                while self.calibration_attempts and self.calibration_attempts[0] <= now-60: self.calibration_attempts.popleft()
+                if len(self.calibration_attempts) >= 5: raise ApiError(429, 'RATE_LIMITED', '校准次数已达限制，请稍后主动重试')
+                self.calibration_attempts.append(now)
+                auth = request.headers.get('Authorization', '')
+                if not auth.startswith('Bearer '): raise ApiError(401, 'CALIBRATION_PENDING', '未通过固定预期验证；声明及配置仍待确认')
+                # This object enables the pure verifier only; never assign it to self.profile,
+                # persist it, or derive expectations from unverified JWT payloads.
+                expected = ClaimProfile(ENVIRONMENT_ID, 'app.dynamicauth.com/'+ENVIRONMENT_ID, (self.origin,), verified=True)
+                try:
+                    identity = verify_access_token(auth[7:], profile=expected, clock=self.clock, jwks=self.jwks,
+                                                   calibration_origin=self.origin)
+                except ApiError as error:
+                    if error.code == 'DYNAMIC_JWKS_UNAVAILABLE':
+                        raise ApiError(503, 'CALIBRATION_KEYS_UNAVAILABLE', '验证公钥暂不可用；校准仍待确认') from None
+                    raise ApiError(401, 'CALIBRATION_PENDING', '未通过固定预期验证；声明及配置仍待确认') from None
+                expires = min(identity.expires_at, int(row['until']))
+                if expires <= self.clock():
+                    raise ApiError(401, 'CALIBRATION_PENDING', '会话或凭据已过期；校准仍待确认')
+                return jsonify(status='VERIFIED_EXPECTATIONS_ONLY', audience=self.origin, issuer=expected.issuer,
+                    environmentId=ENVIRONMENT_ID, sid={'present': True, 'type': 'string'}, scopes=['user:basic'],
+                    tokenExpiresAt=identity.expires_at, remainingTokenSeconds=max(0, int(identity.expires_at-self.clock())), validUntil=expires,
+                    serverIdentityVerified=False, businessAuthorized=False, profileCreated=False)
 
         @app.get(PREFIX+'/config', endpoint='identity_config')
         def config(): return jsonify(self.config())

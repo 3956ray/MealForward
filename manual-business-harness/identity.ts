@@ -4,7 +4,10 @@ import type {Provider} from './wallet.ts'
 export type IdentitySession = {serverIdentityVerified: boolean; expiresAt: number; candidate: null|{
   adminAddress: string; merchantAddress: string; chainId: number; controlVerified: false; chainPermissionsVerified: false; serviceIsolation: string
 }}
-export type IdentityConfig = {environmentId: string; serverVerificationConfigured: boolean}
+export type IdentityConfig = {environmentId: string; serverVerificationConfigured: boolean; developmentCalibrationEnabled?: boolean}
+export type Calibration = {status:'VERIFIED_EXPECTATIONS_ONLY'; audience:string; issuer:string; environmentId:string;
+  sid:{present:true;type:'string'}; scopes:string[]; tokenExpiresAt:number; remainingTokenSeconds:number; validUntil:number;
+  serverIdentityVerified:false; businessAuthorized:false; profileCreated:false}
 export class IdentityController {
   private csrf = ''
   private epoch = 0
@@ -14,11 +17,12 @@ export class IdentityController {
   private unsubscribe: () => void
   private pending: Promise<unknown> = Promise.resolve()
   private timer?: ReturnType<typeof setTimeout>
+  private calibrationTimer?: ReturnType<typeof setTimeout>
   private disposed = false
   private client: DynamicAuthClient
-  private changed: (session: IdentitySession|null, account: string, message?: string) => void
+  private changed: (session: IdentitySession|null, account: string, message?: string, calibration?:Calibration) => void
   private transport: typeof fetch
-  constructor(client: DynamicAuthClient, changed: (session: IdentitySession|null, account: string, message?: string) => void,
+  constructor(client: DynamicAuthClient, changed: (session: IdentitySession|null, account: string, message?: string, calibration?:Calibration) => void,
     transport: typeof fetch = fetch) {
     this.client=client; this.changed=changed; this.transport=transport
     this.unsubscribe = client.onInvalidate(() => {void this.invalidate('登录状态已变化，请重新核验身份与地址。')})
@@ -39,6 +43,7 @@ export class IdentityController {
   async bootstrap(): Promise<IdentityConfig> {return this.call('bootstrap', undefined, false)}
   private clear(message?: string) {
     this.epoch++; this.session = null; this.account = ''; clearTimeout(this.timer)
+    clearTimeout(this.calibrationTimer)
     this.changed(null, '', message)
   }
   invalidate(message?: string) {
@@ -62,6 +67,21 @@ export class IdentityController {
     const epoch = this.epoch
     try {return this.accept(await this.call('exchange', {}), epoch)}
     catch (e) {this.clear(); throw e}
+  }
+  async calibrate() {
+    const epoch = this.epoch
+    await this.pending
+    if(this.disposed || epoch!==this.epoch)throw new Error('登录状态已变化，请重新校准。')
+    clearTimeout(this.calibrationTimer);this.changed(this.session,this.account)
+    const token=this.client.getAccessToken()
+    const result:Calibration=await this.call('calibrate',{})
+    if(this.disposed || epoch!==this.epoch || token!==this.client.getAccessToken() ||
+        result.status!=='VERIFIED_EXPECTATIONS_ONLY' || result.validUntil*1000<=Date.now() ||
+        result.serverIdentityVerified!==false || result.businessAuthorized!==false || result.profileCreated!==false)
+      throw new Error('校准结果已失效，请本人重新校准。')
+    this.changed(this.session,this.account,undefined,result)
+    this.calibrationTimer=setTimeout(()=>this.clear('校准结果已过期，请本人重新校准。'),Math.min(2147483647,result.validUntil*1000-Date.now()))
+    return result
   }
   private walletChanged = () => {void this.invalidate('钱包账户或网络已变化，旧候选确认已失效。')}
   private detach() {
