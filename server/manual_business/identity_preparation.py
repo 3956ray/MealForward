@@ -45,12 +45,18 @@ def load_profile(path, origin):
 
 
 class IdentityPreparation:
-    def __init__(self, origin, *, profile=None, jwks=None, clock=time.time, source_check=None, service_addresses=(), development_calibration=False):
+    def __init__(self, origin, *, profile=None, jwks=None, clock=time.time, source_check=None, service_addresses=(), development_calibration=False, cp29_fingerprint_key=None, cp29_key_check=None):
         if type(development_calibration) is not bool: raise ValueError('Explicit development calibration flag required')
         if development_calibration and (profile is not None or not re.fullmatch(r'http://127\.0\.0\.1:[0-9]{4,5}', origin)):
             raise ValueError('Calibration requires isolated loopback preparation without an approved profile')
         self.development_calibration = development_calibration
         self.calibration_attempts = deque()
+        if cp29_fingerprint_key is not None and (profile is None or development_calibration or
+                type(cp29_fingerprint_key) is not bytes or len(cp29_fingerprint_key) != 32):
+            raise ValueError('CP29 identity fingerprint requires exact reviewed profile and separate 256-bit key')
+        self.cp29_fingerprint_key = cp29_fingerprint_key
+        self.cp29_key_check = cp29_key_check
+        self.cp29_attempts = deque()
         self.origin, self.profile, self.clock, self.source_check = origin, profile, clock, source_check
         self.jwks = jwks if jwks is not None else FixedJwksCache(clock=clock)
         self.service_addresses = {a.lower() for a in service_addresses}
@@ -61,6 +67,7 @@ class IdentityPreparation:
                 'authMode': 'dynamic-email', 'adminEqualsMerchant': True, 'businessAuthorized': False,
                 'walletProof': False, 'addressPersistence': 'SESSION_ONLY',
                 'developmentCalibrationEnabled': self.development_calibration,
+                'cp29EnrollmentAvailable': self.cp29_fingerprint_key is not None,
                 'originConfiguration': 'NOT_VERIFIED'}
 
     def row(self, *, csrf=False):
@@ -145,6 +152,43 @@ class IdentityPreparation:
                     environmentId=ENVIRONMENT_ID, sid={'present': True, 'type': 'string'}, scopes=['user:basic'],
                     tokenExpiresAt=identity.expires_at, remainingTokenSeconds=max(0, int(identity.expires_at-self.clock())), validUntil=expires,
                     serverIdentityVerified=False, businessAuthorized=False, profileCreated=False)
+
+        @app.post(PREFIX+'/fingerprint', endpoint='cp29_identity_fingerprint')
+        def cp29_identity_fingerprint():
+            # Optional operator-authorized pairing aid. Never accepts a role,
+            # stores a mapping, creates a business session, or enables Runtime.
+            if self.cp29_fingerprint_key is None:
+                raise ApiError(404, 'CP29_ENROLLMENT_DISABLED', 'CP29 identity pairing not enabled')
+            try:
+                local_peer = ipaddress.ip_address(request.remote_addr or '').is_loopback
+            except ValueError:
+                local_peer = False
+            forwarded = any(k.lower() == 'forwarded' or k.lower().startswith('x-forwarded-') or
+                            k.lower() == 'x-real-ip' for k in request.headers.keys())
+            if (not local_peer or forwarded or request.host_url.rstrip('/') != self.origin or
+                    request.headers.get('Origin') != self.origin or request.method != 'POST' or
+                    request.get_json(silent=True) != {} or request.content_length is None or
+                    request.content_length > 256 or len(request.headers.get('Authorization', '')) > 16400 or
+                    len(request.headers.get('X-CSRF-Token', '')) > 256):
+                raise ApiError(403, 'ORIGIN_DENIED', 'Local reviewed identity pairing only')
+            with self.lock:
+                row = self.authenticated(csrf=True)
+                now = self.clock()
+                while self.cp29_attempts and self.cp29_attempts[0] <= now - 60:
+                    self.cp29_attempts.popleft()
+                if len(self.cp29_attempts) >= 5:
+                    raise ApiError(429, 'RATE_LIMITED', 'Too many identity pairing requests')
+                self.cp29_attempts.append(now)
+                if self.cp29_key_check: self.cp29_key_check()
+                identity, token_hash = self.token_identity()
+                if (token_hash != row['token_hash'] or
+                        row['identity'] != (identity.environment_id, identity.issuer, digest(identity.subject), identity.sid_hash)):
+                    raise ApiError(401, 'IDENTITY_CHANGED', 'Current Dynamic identity changed')
+                from .cp29_identity import fingerprint
+                return jsonify(subjectFingerprint=fingerprint(self.cp29_fingerprint_key,
+                              identity.environment_id, identity.subject),
+                              expiresAt=min(identity.expires_at, int(row['until'])),
+                              actorMapped=False, businessAuthorized=False, profileCreated=False)
 
         @app.get(PREFIX+'/config', endpoint='identity_config')
         def config(): return jsonify(self.config())

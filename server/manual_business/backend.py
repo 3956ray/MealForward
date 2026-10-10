@@ -1,8 +1,8 @@
 """Reuse the accepted domain state machine through explicit composition-only policy."""
 import json
 from eth_utils import keccak
-from server.backend import Backend, canonical
-from server.contracts import ApiError
+from server.backend import Backend, canonical, digest
+from server.contracts import ApiError, AUTH_IDLE_TTL
 from server.local_e2e.credentials import LocalWork
 from server.owner_wallet import OwnerWalletService
 from .policy import MANUAL_POLICY
@@ -17,6 +17,16 @@ class ManualWork(LocalWork):
         user = super().require_actor(db, actor, role)
         mapping = db.execute('SELECT * FROM cp28_mapping WHERE actor_id=?', (actor.actor_id,)).fetchone()
         session = db.execute('SELECT * FROM cp28_sessions WHERE session_id=?', (actor.session_id,)).fetchone()
+        if 'cp29WorkActors' in self.b.runtime.config:
+            from .cp29_mode import validate_identity_mode
+            try: validate_identity_mode(self.b.runtime.config, self.b.now())
+            except ValueError:
+                raise ApiError(403, 'IDENTITY_MODE_INVALID', 'Current identity mode required') from None
+            live = db.execute('SELECT * FROM work_sessions WHERE token_hash=?', (actor.session_id,)).fetchone()
+            if (digest(canonical(self.b.runtime.config)) != self.b.runtime.config_digest or
+                    not live or live['revoked'] or live['user_id'] != actor.actor_id or
+                    live['expires_at'] <= self.b.now() or live['last_seen_at'] + AUTH_IDLE_TTL <= self.b.now()):
+                raise ApiError(401, 'AUTH_REQUIRED', 'Current work session required')
         scope = canonical({'role': actor.role, 'partnerId': actor.partner_id, 'shopId': actor.shop_id,
                            'deploymentId': self.b.deployment['deploymentId']})
         if (not mapping or not mapping['enabled'] or mapping['scope'] != scope or not session or

@@ -4,7 +4,7 @@ import type {Provider} from './wallet.ts'
 export type IdentitySession = {serverIdentityVerified: boolean; expiresAt: number; candidate: null|{
   adminAddress: string; merchantAddress: string; chainId: number; controlVerified: false; chainPermissionsVerified: false; serviceIsolation: string
 }}
-export type IdentityConfig = {environmentId: string; serverVerificationConfigured: boolean; developmentCalibrationEnabled?: boolean}
+export type IdentityConfig = {environmentId: string; serverVerificationConfigured: boolean; developmentCalibrationEnabled?: boolean; cp29EnrollmentAvailable?: boolean}
 export type Calibration = {status:'VERIFIED_EXPECTATIONS_ONLY'; audience:string; issuer:string; environmentId:string;
   sid:{present:true;type:'string'}; scopes:string[]; tokenExpiresAt:number; remainingTokenSeconds:number; validUntil:number;
   serverIdentityVerified:false; businessAuthorized:false; profileCreated:false}
@@ -67,6 +67,18 @@ export class IdentityController {
     const epoch = this.epoch
     try {return this.accept(await this.call('exchange', {}), epoch)}
     catch (e) {this.clear(); throw e}
+  }
+  async fingerprint(): Promise<string> {
+    await this.pending
+    if (this.disposed || !this.session) throw new Error('请先完成服务端身份验证。')
+    const epoch=this.epoch, token=this.client.getAccessToken()
+    const result=await this.call('fingerprint', {})
+    if (this.disposed || epoch!==this.epoch || token!==this.client.getAccessToken() ||
+      !Number.isFinite(result.expiresAt) || result.expiresAt*1000<=Date.now() ||
+      !/^cp29:[a-f0-9]{64}$/.test(result.subjectFingerprint) ||
+      result.actorMapped!==false || result.businessAuthorized!==false || result.profileCreated!==false)
+      throw new Error('身份指纹校验失效。')
+    return result.subjectFingerprint
   }
   async calibrate() {
     const epoch = this.epoch

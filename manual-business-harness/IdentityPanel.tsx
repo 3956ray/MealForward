@@ -19,10 +19,11 @@ export default function IdentityPanel() {
   const [email,setEmail] = useState(''), [otp,setOtp] = useState(''), [account,setAccount] = useState('')
   const [message,setMessage] = useState(''), [busy,setBusy] = useState(false)
   const [calibration,setCalibration]=useState<Calibration|undefined>()
+  const [fingerprint,setFingerprint]=useState('')
   const controller = useRef<IdentityController|null>(null)
   useEffect(()=>{
     let alive=true
-    const c = new IdentityController(client,(s,a,m,d)=>{if(alive){setSession(s);setAccount(a);setCalibration(d);if(m)setMessage(m)}})
+    const c = new IdentityController(client,(s,a,m,d)=>{if(alive){setSession(s);if(!s)setFingerprint('');setAccount(a);setCalibration(d);if(m)setMessage(m)}})
     controller.current=c
     void cleanup.then(()=>{if(alive)return c.bootstrap()}).then(value=>{if(alive && value)setConfig(value)}).catch(()=>{if(alive)setMessage('身份准备服务暂不可用。')})
     return ()=>{alive=false;controller.current=null;cleanup=c.dispose()}
@@ -62,6 +63,12 @@ export default function IdentityPanel() {
     </section>}
     <button disabled={busy || identity.status!=='authenticated' || !config?.serverVerificationConfigured} onClick={()=>void run(()=>controller.current!.verify())}>核验服务端身份</button>
     <p role="status">{session ? '身份已验证，工作权限未配置。' : '服务端身份尚未验证。'}</p>
+    {config?.cp29EnrollmentAvailable && <section aria-label="CP29 工作身份指纹">
+      <h3>CP29 已验证身份配对（不授予权限）</h3>
+      <p>配对数量以维护者批准的身份模式为准：默认模式使用两个独立身份；显式批准的单操作者测试模式使用同一身份。指纹仅供本机审核映射，不代表业务或链上权限。</p>
+      <button disabled={busy || !session} onClick={()=>void run(async()=>{setFingerprint(await controller.current!.fingerprint())})}>显示本次已验证邮箱的配对指纹</button>
+      {fingerprint && <p className="address">身份配对指纹：{fingerprint}</p>}
+    </section>}
     <button disabled={busy || !session} onClick={()=>void run(async()=>{
       const provider=(window as Window & {ethereum?:Provider}).ethereum
       if(!provider?.isMetaMask)throw new Error('请在支持MetaMask的浏览器由本人连接钱包。')

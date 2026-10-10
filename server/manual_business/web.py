@@ -90,6 +90,13 @@ def create_app(config, backend=None, *, authentication=None, dispatch=None, iden
     @app.get('/api/cp28/status')
     def status():
         missing = []
+        identity_info = {}
+        identity_ready = authentication is not None
+        if authentication is not None and hasattr(authentication, 'public_identity'):
+            try: identity_info = authentication.public_identity()
+            except Exception:
+                identity_ready = False
+                missing.append('工作身份配置已失效，请核对本轮授权')
         if authentication is None: missing.append('Dynamic已选；业务机构/老板可信身份映射待配置' if identity_preparation else '可信登录方式及机构/老板身份映射待配置')
         if not b: missing.extend(['管理员与老板共用钱包；公开候选地址待本人确认' if identity_preparation else '管理员与老板钱包分工待确认', '新部署及链上角色尚未核验', '后台签名服务待配置', '具体交易笔数、本金与 Gas 预算尚未批准'])
         else:
@@ -101,7 +108,7 @@ def create_app(config, backend=None, *, authentication=None, dispatch=None, iden
         return jsonify(status='BLOCKED' if missing else 'READY', missing=missing, runId=config['runId'],
                        sourceSha=config.get('sourceSha', 'uncommitted-build'), chainId=b.policy.chain_id if b else CHAIN_ID,
                        walletTesting='NOT_RUN', runtimeAuthorized=not missing,
-                       identityConfigured=authentication is not None,
+                       identityConfigured=identity_ready, **identity_info,
                        message='完整手动业务测试尚未就绪' if missing else '按批准计划逐步确认，每次只执行原操作')
 
     @app.get('/api/cp28/public')
@@ -145,14 +152,15 @@ def create_app(config, backend=None, *, authentication=None, dispatch=None, iden
 
     @app.post('/api/cp28/<role>/logout')
     def logout(role):
-        ready()
+        ready(False)
         if role == 'recipient':
+            ready()
             with gate, b.store.transaction() as db:
                 row = creds.session(db, request.cookies.get('cp28_recipient', ''), request.headers.get('X-CSRF-Token', ''))
                 db.execute('UPDATE cp24_session SET revoked=1 WHERE hash=?', (row['hash'],))
                 db.execute('DELETE FROM cp24_display WHERE session_hash=?', (row['hash'],))
             return jsonify(loggedOut=True)
-        actor(role)
+        if authentication is None: raise ApiError(503, 'IDENTITY_NOT_CONFIGURED', '可信登录尚未配置')
         return authentication.logout(role)
 
     @app.post('/api/cp28/support/prepare')

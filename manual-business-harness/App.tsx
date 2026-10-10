@@ -4,9 +4,10 @@ import {Wallet, type Provider, type Review} from './wallet'
 import {Scanner} from './Scanner'
 import './style.css'
 
-type Status = {status: string; missing: string[]; runId: string; sourceSha: string; runtimeAuthorized: boolean; identityConfigured: boolean; message: string}
+type Status = {identityMode?:string; identityNotice?:string; identityModeExpiresAt?:number; status: string; missing: string[]; runId: string; sourceSha: string; runtimeAuthorized: boolean; identityConfigured: boolean; message: string}
 type Role = 'identity'|'support'|'partner'|'recipient'|'owner'|'ledger'
 const IdentityPanel = lazy(()=>import('./IdentityPanel'))
+const WorkDynamicLogin = lazy(()=>import('./WorkDynamicLogin'))
 const labels: Record<Role, string> = {identity:'身份与钱包准备', support: '支持一餐', partner: '机构发券', recipient: '领取餐券', owner: '餐馆工作台', ledger: '公开餐账'}
 const steps = ['支持者确认餐款', '机构发行与私密链接', '领取者展示到店码', '老板核验并确认交餐', '老板钱包逐笔结算']
 
@@ -18,21 +19,23 @@ export default function App() {
   const [status, setStatus] = useState<Status|null>(null), [ledger, setLedger] = useState<any>(null)
   const [result, setResult] = useState<any>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [account, setAccount] = useState(''), [code, setCode] = useState(''), [ref, setRef] = useState('')
-  const [login, setLogin] = useState(''), [credential, setCredential] = useState('')
   const [review, setReview] = useState<Review|null>(null), [op, setOp] = useState(''), [qr, setQr] = useState<any>(null)
   const [link, setLink] = useState(''), [owner, setOwner] = useState<any>(null), [challenge, setChallenge] = useState<any>(null)
   const [recipientReady, setRecipientReady] = useState(false), [recipientMessage, setRecipientMessage] = useState('')
   const csrf = useRef<Record<string,string>>({}), terminal = useRef(''), activeRole = useRef(role)
+  const viewGeneration = useRef(0), workBlocked = useRef(false)
   const keys = useRef<Record<string,string>>({})
   const wallet = useRef<Wallet|null>(null)
   const key = (kind: string) => keys.current[kind] ||= crypto.randomUUID()
   activeRole.current = role
   async function api(path: string, data?: unknown) {
-    const requestRole = activeRole.current
+    const requestRole = activeRole.current, generation = viewGeneration.current
+    if(workBlocked.current && (requestRole==='partner'||requestRole==='owner') && path!=='status' && path!=='public')throw new Error('工作会话清理未确认，请维护者核对后重新打开。')
     const response = await fetch('/api/cp28/'+path, {method: data === undefined ? 'GET' : 'POST', credentials: 'same-origin',
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf.current[activeRole.current] || '', 'X-Terminal-Cap': terminal.current},
       ...(data === undefined ? {} : {body: JSON.stringify(data)})})
     const value = await response.json()
+    if (generation !== viewGeneration.current || requestRole !== activeRole.current) throw new Error('工作页面已变化，请查询原操作。')
     if (!response.ok) throw Object.assign(new Error(value.message || '原操作暂不可用'), {status: response.status})
     if (value.csrfToken) csrf.current[requestRole] = value.csrfToken
     if (value.terminalCap) terminal.current = value.terminalCap
@@ -66,9 +69,9 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [qr])
   async function run(action: () => Promise<unknown>) {
-    if (busy) return; setBusy(true); setError('')
-    try { const value = await action(); if (value !== undefined) setResult(value); await refresh() }
-    catch (e) { setError(e instanceof Error ? e.message : '状态不可用，请查询原操作') }
+    if (busy) return; const generation=viewGeneration.current; setBusy(true); setError('')
+    try { const value = await action(); if(generation!==viewGeneration.current)return; if (value !== undefined) setResult(value); await refresh() }
+    catch (e) { if(generation===viewGeneration.current)setError(e instanceof Error ? e.message : '状态不可用，请查询原操作') }
     finally { setBusy(false) }
   }
   function getWallet() {
@@ -82,7 +85,13 @@ export default function App() {
     }
     return wallet.current
   }
-  const enabled = status?.runtimeAuthorized === true
+  function clearWork() {
+    viewGeneration.current++
+    delete csrf.current.partner; delete csrf.current.owner; terminal.current=''
+    setOwner(null);setChallenge(null);setReview(null);setResult(null);setLink('');setCode('');setAccount('')
+    wallet.current?.dispose();wallet.current=null
+  }
+  const enabled = status?.runtimeAuthorized === true && !((role==='partner'||role==='owner')&&workBlocked.current)
   const button = (text: string, action: () => Promise<unknown>, requireReady = true) =>
     <button disabled={busy || (requireReady && !enabled)} onClick={() => void run(action)}>{text}</button>
   async function accepted(path: string, data: unknown) {
@@ -95,15 +104,19 @@ export default function App() {
     <section className={enabled ? 'notice ready' : 'notice'} aria-live="polite"><strong>{status?.message || '正在读取当前准备状态…'}</strong>
       {!enabled && <p>当前是准备入口，尚不能执行完整手动测试。真实钱包测试：未执行。</p>}
       {!!status?.missing.length && <ul>{status.missing.map(item => <li key={item}>{item}</li>)}</ul>}
+      {status?.identityMode==='single-operator-testnet' && <p role="note"><strong>{status.identityNotice}</strong>。同一人分别操作机构和老板；每次进入新角色将撤销旧工作授权。{status.identityModeExpiresAt && <>本轮身份授权截止：{new Date(status.identityModeExpiresAt*1000).toLocaleString()}</>}</p>}
       {button('刷新准备状态', refresh, false)}</section>
     <ol className="steps">{steps.map((step, i) => <li key={step}><span>{i+1}</span>{step}</li>)}</ol>
-    <nav aria-label="业务角色">{(Object.keys(labels) as Role[]).map(r => <button key={r} disabled={busy} aria-current={role === r ? 'page' : undefined} onClick={() => {setRole(r); setResult(null); setReview(null); history.replaceState(null, '', '/#/'+r)}}>{labels[r]}</button>)}</nav>
+    <nav aria-label="业务角色">{(Object.keys(labels) as Role[]).map(r => <button key={r} disabled={busy} aria-current={role === r ? 'page' : undefined} onClick={() => {if(r!==role){clearWork();activeRole.current=r;setRole(r);}  history.replaceState(null, '', '/#/'+r)}}>{labels[r]}</button>)}</nav>
     <section className="panel"><h2>{labels[role]}</h2>
       {role === 'identity' && <Suspense fallback={<p>正在打开身份准备…</p>}><IdentityPanel/></Suspense>}
-      {(role === 'partner' || role === 'owner') && <div className="login"><p>使用已配置的可信工作身份登录。钱包地址本身不代表工作身份。</p>
-        <label>工作身份<input value={login} onChange={e => setLogin(e.target.value)} autoComplete="username"/></label>
-        <label>登录凭证<input type="password" value={credential} onChange={e => setCredential(e.target.value)} autoComplete="current-password"/></label>
-        {button('登录工作身份', async () => {const v = await api(`${role}/login`, {username: login, credential}); setCredential(''); return v}, !status?.identityConfigured)}
+      {(role === 'partner' || role === 'owner') && <div className="login"><p>使用已配置的可信工作身份登录。{!status?.identityConfigured?'请等待当前身份模式确认。':status.identityMode==='single-operator-testnet'?'本轮为单操作者测试，不等于两个独立自然人交接。':'机构和老板必须用不同的已验证邮箱。'}地址本身不授予工作权限。</p>
+        {status?.identityConfigured && <Suspense fallback={<p>正在打开 Dynamic 登录…</p>}><WorkDynamicLogin key={role} role={role} singleOperator={status?.identityMode==='single-operator-testnet'}
+          onAuthenticated={v=>{if(activeRole.current!==role)return;csrf.current[role]=v.csrfToken;setResult({actorId:v.actorId,role:v.role,expiresAt:v.expiresAt})}}
+          onInvalidated={()=>{if(activeRole.current===role)clearWork()}}
+          onCleanupError={message=>{workBlocked.current=true;clearWork();setError(message)}}
+        /></Suspense>}
+        {!status?.identityConfigured && <p>正在确认本轮工作身份配置；配置有效后才可登录。</p>}
         {button('查看当前工作状态', async () => {await api(`${role}/session`); const v = await api(`${role}/state`); if (role === 'owner') setOwner(v); return v}, !status?.identityConfigured)}</div>}
       {role === 'support' && <><p>本轮候选为一餐 0.001 测试 MON；Gas 另计，以批准后的逐笔审核为准。</p>
         {button('恢复原支持记录', async () => {const v = await api('support/state'); if (v.operation?.id) setOp(v.operation.id); return v}, false)}
