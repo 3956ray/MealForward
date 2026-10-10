@@ -1618,7 +1618,7 @@ export default function App() {
               onChange={(e) => {
                 setChecked(e.target.value);
                 const found = M.voucherOf(s, e.target.value);
-                setPaste(found.code?.value ?? "");
+                setPaste(found?.code?.value ?? "");
               }}
             >
               <option value="">Choose a record</option>

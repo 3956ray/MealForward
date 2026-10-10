@@ -27,3 +27,7 @@ Use **Check original operation** for the existing intent. Never create a replace
 From `b2-demo-harness/`: `npm test`, `npm run typecheck`, `npm run build`; authorized isolated browser checks: `npm run test:browser` and `npm run test:ui04`. New evidence goes to `evidence/ui04/`; UI03 evidence is historical and is never presented as UI04 validation. Exact current run results are recorded in the separate UI04 developer TESTS report and JSON evidence.
 
 All photos are the existing locally generated illustrative assets documented in `ASSETS.md`; typography is local system fonts. No reference source/model, external font or public Sites configuration is imported. Real authentication, OTP, wallet ownership, gas, chain transactions, NFTs, physical delivery, concurrent production capacity, real-device/screen-reader validation and public Sites deployment are NOT_RUN.
+
+## Narrow owner-record correction
+
+The UI04 static review found a pre-existing empty-selection error in the owner's original-record chooser. Choosing **Choose a record** now clears the selected voucher view and pasted code without dereferencing a missing record. This changes only temporary UI state; original UNKNOWN operations and the business model remain intact. The correction is checked with31 state tests, typecheck, build and positive/negative pure-expression cases; new browser verification is NOT_RUN. The fixed revision and exact results are recorded in the UI04 Developer IMPLEMENTATION/TESTS reports.
