@@ -1,0 +1,91 @@
+{
+  "results": [
+    {
+      "name": "390 recipient reference fixture with no display code",
+      "status": "PASS"
+    },
+    {
+      "name": "1440 B2 first screen: imagery, tokens and single-store cart",
+      "status": "PASS"
+    },
+    {
+      "name": "1440 complete payment → order → claim → code → owner lock/report → settle → public ledger",
+      "status": "PASS"
+    },
+    {
+      "name": "390 complete payment → order → claim → code → owner lock/report → settle → public ledger",
+      "status": "PASS"
+    },
+    {
+      "name": "UNKNOWN payment survives refresh and resolves only original intent",
+      "status": "PASS"
+    },
+    {
+      "name": "72h global email gate, original recovery and 120s display expiry in UI",
+      "status": "PASS"
+    },
+    {
+      "name": "owner B2 fixtures and exact R→H→S transitions, records return focus",
+      "status": "PASS"
+    },
+    {
+      "name": "menu version edit/unlist and independent incident pause retain old price",
+      "status": "PASS"
+    },
+    {
+      "name": "rejected/insufficient/wrong-network/stale scenarios and original safe refund",
+      "status": "PASS"
+    },
+    {
+      "name": "schema incompatibility is blocked without silently replacing saved UNKNOWN data",
+      "status": "PASS"
+    },
+    {
+      "name": "responsive 320/390/768/1024/1440/1600, 200% text, focus and reduced motion",
+      "status": "PASS"
+    },
+    {
+      "name": "UNKNOWN report and settlement retain original responsibility across reload",
+      "status": "PASS"
+    },
+    {
+      "name": "long content and high prices reflow, skip link preserves route",
+      "status": "PASS"
+    },
+    {
+      "name": "accessible reset cancel/escape preserve UNKNOWN; confirmed reset changes only its namespace",
+      "status": "PASS"
+    },
+    {
+      "name": "pre-existing payment review cannot submit around UNKNOWN; corrupted restore stays blocked",
+      "status": "PASS"
+    },
+    {
+      "name": "All observed browser requests local; no console/page errors",
+      "status": "PASS",
+      "requests": 319
+    }
+  ],
+  "errors": [],
+  "external": [],
+  "requestCount": 319,
+  "observedRequests": [
+    "http://127.0.0.1:15603/",
+    "http://127.0.0.1:15603/@vite/client",
+    "http://127.0.0.1:15603/src/main.tsx?t=1791650213558",
+    "http://127.0.0.1:15603/@react-refresh",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react-dom_client.js?v=d89bad99",
+    "http://127.0.0.1:15603/src/App.tsx?t=1791650213558",
+    "http://127.0.0.1:15603/src/style.css?t=1791649520758",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/rolldown-runtime-DC62tzP2.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/lucide-react.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/qrcode__react.js?v=d89bad99",
+    "http://127.0.0.1:15603/src/model.ts?t=1791650213558",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react-dom.js?v=d89bad99",
+    "http://127.0.0.1:15603/assets/chicken.jpg",
+    "http://127.0.0.1:15603/assets/tofu.jpg"
+  ]
+}
