@@ -14,8 +14,14 @@ const results = [],
   external = [],
   requests = [];
 let lastPage;
-await mkdir("evidence", { recursive: true });
-async function fresh(width = 1440, height = 1024, state = M.initialState()) {
+const evidenceDir = process.env.UI04_EVIDENCE_DIR || "evidence/ui04";
+await mkdir(evidenceDir, { recursive: true });
+async function fresh(
+  width = 1440,
+  height = 1024,
+  state = M.initialState(),
+  catalog = false,
+) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 1,
@@ -44,8 +50,19 @@ async function fresh(width = 1440, height = 1024, state = M.initialState()) {
   );
   await page.goto("http://127.0.0.1:15603/");
   await page
-    .getByRole("heading", { name: "Choose a meal", exact: true })
+    .getByRole("heading", { name: "Choose a kitchen", exact: true })
     .waitFor();
+  if (!catalog)
+    await page
+      .getByRole("button", {
+        name: `View kitchen · ${state.stores[0].name}`,
+        exact: true,
+      })
+      .click();
+  if (!catalog)
+    await page
+      .getByRole("button", { name: "Increase Lunch quantity", exact: true })
+      .click();
   return { page, context };
 }
 const stateOf = (page) =>
@@ -58,11 +75,11 @@ async function check(name, fn) {
   } catch (e) {
     if (lastPage && !lastPage.isClosed()) {
       await lastPage.screenshot({
-        path: "evidence/browser-failure.png",
+        path: `${evidenceDir}/browser-failure.png`,
         fullPage: true,
       });
       await writeFile(
-        "evidence/browser-failure.txt",
+        `${evidenceDir}/browser-failure.txt`,
         await lastPage.locator("body").innerText(),
       );
     }
@@ -106,7 +123,7 @@ try {
         .getByRole("heading", { name: "My voucher", exact: true })
         .waitFor();
       await page.screenshot({
-        path: "evidence/recipient-390.png",
+        path: `${evidenceDir}/recipient-390.png`,
         fullPage: false,
       });
       assert.equal(
@@ -119,18 +136,16 @@ try {
     },
   );
   await check(
-    "1440 B2 first screen: imagery, tokens and single-store cart",
+    "1440 kitchen-first catalog, detail and explicit cart guard",
     async () => {
-      const { page, context } = await fresh();
+      const { page, context } = await fresh(1440, 1024, M.initialState(), true);
+      assert.equal(await page.locator(".kitchen-card").count(), 3);
+      await page
+        .locator(".kitchen-card img")
+        .evaluateAll((imgs) => Promise.all(imgs.map((i) => i.decode())));
       assert.equal(
         await page
-          .getByRole("heading", { name: "Choose a meal", exact: true })
-          .count(),
-        1,
-      );
-      assert.equal(
-        await page
-          .locator("img")
+          .locator(".kitchen-card img")
           .evaluateAll(
             (imgs) =>
               imgs.filter((i) => i.complete && i.naturalWidth > 0).length,
@@ -141,51 +156,75 @@ try {
         size: getComputedStyle(el).fontSize,
         spacing: getComputedStyle(el).letterSpacing,
       }));
-      assert.equal(css.size, "28px");
+      assert.equal(css.size, "32px");
       assert.ok(["0px", "normal"].includes(css.spacing));
       await noOverflow(page);
       await page.screenshot({
-        path: "evidence/supporter-1440.png",
+        path: `${evidenceDir}/catalog-1440.png`,
         fullPage: true,
       });
       await page
-        .getByRole("button", { name: /River Table 6 meals supported/ })
+        .getByRole("button", {
+          name: "View kitchen · Meadow Kitchen",
+          exact: true,
+        })
         .click();
-      await page.getByRole("button", { name: "Keep current cart" }).click();
+      await page
+        .getByRole("button", { name: "Increase Lunch quantity", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Back to kitchens", exact: true })
+        .click();
+      await page
+        .getByRole("button", {
+          name: "View kitchen · River Table",
+          exact: true,
+        })
+        .click();
       assert.equal(
-        await page
-          .getByRole("heading", { name: /Meadow Kitchen Simulated store/ })
-          .count(),
-        1,
+        await page.evaluate(() => document.activeElement.textContent.trim()),
+        "Keep current cart",
       );
       await page
-        .getByRole("button", { name: /River Table 6 meals supported/ })
+        .getByRole("button", { name: "Keep current cart", exact: true })
+        .click();
+      assert.ok(page.url().endsWith("#/meals"));
+      await page
+        .getByRole("button", {
+          name: "View kitchen · River Table",
+          exact: true,
+        })
         .click();
       await page
         .getByRole("button", { name: "Replace cart", exact: true })
         .click();
+      await page
+        .getByRole("heading", { name: "River Table", exact: true })
+        .waitFor();
       assert.match(await page.locator(".cart-total").innerText(), /0 meals/);
       await page
-        .getByRole("button", { name: "Public ledger", exact: true })
+        .getByRole("button", { name: "Meal ledger", exact: true })
         .click();
       await page
         .getByRole("heading", { name: "Public meal ledger", exact: true })
         .waitFor();
+      await page.getByRole("button", { name: "My meals", exact: true }).click();
       await page
-        .getByRole("button", { name: "My orders", exact: true })
-        .click();
-      await page
-        .getByRole("heading", { name: "My orders", exact: true })
+        .getByRole("heading", { name: "My meals", exact: true })
         .waitFor();
       await page
-        .getByRole("button", { name: "Claim a meal", exact: true })
+        .getByRole("button", { name: "Support orders", exact: true })
         .click();
+      await page
+        .getByRole("heading", { name: "Support orders", exact: true })
+        .waitFor();
+      await nav(page, "claim");
       await page
         .getByRole("heading", { name: "Claim a meal", exact: true })
         .waitFor();
-      await page.getByRole("button", { name: "Meals", exact: true }).click();
+      await page.getByRole("button", { name: "Kitchens", exact: true }).click();
       await page
-        .getByRole("heading", { name: "Choose a meal", exact: true })
+        .getByRole("heading", { name: "Choose a kitchen", exact: true })
         .waitFor();
       await context.close();
     },
@@ -199,7 +238,7 @@ try {
           width === 390 ? 844 : 1024,
         );
         await page
-          .getByRole("button", { name: "Review payment", exact: true })
+          .getByRole("button", { name: "Review support", exact: true })
           .click();
         await page
           .getByRole("button", { name: "Connect demo wallet", exact: true })
@@ -246,7 +285,7 @@ try {
           code,
         );
         await page.screenshot({
-          path: `evidence/voucher-code-${width}.png`,
+          path: `${evidenceDir}/voucher-code-${width}.png`,
           fullPage: true,
         });
         await nav(page, "owner");
@@ -296,7 +335,7 @@ try {
           ),
         );
         await page.screenshot({
-          path: `evidence/ledger-after-flow-${width}.png`,
+          path: `${evidenceDir}/ledger-after-flow-${width}.png`,
           fullPage: true,
         });
         await context.close();
@@ -308,7 +347,7 @@ try {
       const { page, context } = await fresh();
       await outcome(page, "unknown");
       await page
-        .getByRole("button", { name: "Review payment", exact: true })
+        .getByRole("button", { name: "Review support", exact: true })
         .click();
       await page
         .getByRole("button", { name: "Connect demo wallet", exact: true })
@@ -404,13 +443,13 @@ try {
         .getByRole("button", { name: "Confirm demo owner identity" })
         .click();
       await page.screenshot({
-        path: "evidence/owner-1440.png",
+        path: `${evidenceDir}/owner-1440.png`,
         fullPage: false,
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.reload();
       await page
-        .getByRole("heading", { name: "Workbench", exact: true })
+        .getByRole("heading", { name: "Kitchen workspace", exact: true })
         .waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
       await noOverflow(page);
@@ -422,7 +461,7 @@ try {
         "Mobile handoff action must fit first viewport",
       );
       await page.screenshot({
-        path: "evidence/owner-390.png",
+        path: `${evidenceDir}/owner-390.png`,
         fullPage: false,
       });
       await page
@@ -506,7 +545,7 @@ try {
       const { page, context } = await fresh();
       await outcome(page, "rejected");
       await page
-        .getByRole("button", { name: "Review payment", exact: true })
+        .getByRole("button", { name: "Review support", exact: true })
         .click();
       await page
         .getByRole("button", { name: "Connect demo wallet", exact: true })
@@ -587,20 +626,21 @@ try {
         await nav(page, "meals");
         await noOverflow(page);
         await page.screenshot({
-          path: `evidence/meals-${width}.png`,
+          path: `${evidenceDir}/meals-${width}.png`,
           fullPage: true,
         });
       }
+      await nav(page, "kitchen/meadow");
       await page.setViewportSize({ width: 390, height: 844 });
       await page.emulateMedia({ reducedMotion: "reduce" });
       assert.equal(
         await page
-          .getByRole("button", { name: "Review payment", exact: true })
+          .getByRole("button", { name: "Review support", exact: true })
           .evaluate((el) => getComputedStyle(el).transitionDuration),
         "0s",
       );
       await page
-        .getByRole("heading", { name: "Choose a meal", exact: true })
+        .getByRole("heading", { name: "Meadow Kitchen", exact: true })
         .focus();
       await page.keyboard.press("Tab");
       assert.ok(
@@ -616,7 +656,7 @@ try {
       });
       await noOverflow(page);
       await page.screenshot({
-        path: "evidence/text-200-percent-390.png",
+        path: `${evidenceDir}/text-200-percent-390.png`,
         fullPage: true,
       });
       await context.close();
@@ -686,12 +726,15 @@ try {
       const { page, context } = await fresh(320, 844, fixture);
       await noOverflow(page);
       await page.screenshot({
-        path: "evidence/long-content-320.png",
+        path: `${evidenceDir}/long-content-320.png`,
         fullPage: true,
       });
       await page.locator(".skip").focus();
       await page.keyboard.press("Enter");
-      assert.equal(await page.locator("h1").innerText(), "Choose a meal");
+      assert.equal(
+        await page.locator("h1").innerText(),
+        fixture.stores[0].name,
+      );
       assert.equal(
         await page.evaluate(() => document.activeElement.tagName),
         "H1",
@@ -747,7 +790,7 @@ try {
         .getByRole("button", { name: "Confirm demo-only reset", exact: true })
         .click();
       await page
-        .getByRole("heading", { name: "Choose a meal", exact: true })
+        .getByRole("heading", { name: "Choose a kitchen", exact: true })
         .waitFor();
       assert.equal(M.totals(await stateOf(page), "meadow").supported, 8);
       assert.ok(!(await stateOf(page)).ops.some((o) => o.id === id));
@@ -850,7 +893,7 @@ try {
   process.exitCode = 1;
 } finally {
   await writeFile(
-    "evidence/browser-results.json",
+    `${evidenceDir}/browser-results.json`,
     JSON.stringify(
       {
         results,

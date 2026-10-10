@@ -1,0 +1,9 @@
+# UI04 bounded render review
+
+2026-10-11. Status: PARTIAL_RENDER_REVIEW / FINAL_BROWSER_CHECK_PENDING. This is not live reference-Sites visual fidelity PASS, independent acceptance or a completed Product Design image comparison.
+
+Opened actual UI04 local screenshots with view_image: `catalog-1440.png`, `meals-390.png` and `owner-390.png`. Desktop shows three recognizable kitchen cards, local food imagery, forest-green actions, paper surfaces, direct kitchen actions and legible same-model counts. Mobile catalog reflows to one column; mobile owner puts the original voucher, expiry/window and explicit handoff/report first, with separate funds below. No visible clipped text, stretched image or horizontal overflow in those inspected renders. The executed regression also measured no horizontal overflow across320/390/768/1024/1440/1600, enlarged CSS text and long content on that earlier UI04 source.
+
+Known limits: only the stated images were visually inspected. The reference Sites were not opened/captured and no matched reference+prototype raster comparison was performed; the implementation follows the approved source-grounded Leader design contract, not a pixel clone. The same two pre-authorized illustrative photos are reused for three simulated kitchens. The mobile catalog requires normal scrolling to the other kitchens and details. Full new-route/loaded-image responsive screenshots are still pending in the added UI04 suite.
+
+After those captures, initial/reset cart was changed to empty to fix first-choice replacement prompts; this does not alter the catalog/owner visual rules but needs final browser validation. Existing screenshots are retained as actual earlier-run evidence, not claimed as proof of the later fix. Browser execution is paused pending Leader's temporary-browser authorization confirmation. UI03 `design-qa.md` is historical and is not promoted to UI04 PASS.

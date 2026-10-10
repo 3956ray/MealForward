@@ -10,7 +10,7 @@
   --paper: #f7f4ee;
   --surface: #fffefa;
   --secondary: #69655d;
-  --brand: #a3382d;
+  --brand: #234c3d;
   --divider: #ded8cc;
   --border: #8b8176;
 }
@@ -47,7 +47,7 @@ button {
   overflow-wrap: anywhere;
 }
 button:hover {
-  background: #f1e5df;
+  background: #e8eee8;
 }
 button:active {
   background: #e9e4dc;
@@ -70,8 +70,8 @@ h1:focus {
   outline: none;
 }
 h1 {
-  font-size: 28px;
-  line-height: 36px;
+  font-size: 32px;
+  line-height: 40px;
   font-weight: 650;
   margin: 0 0 8px;
 }
@@ -156,10 +156,10 @@ input[type="checkbox"] {
   min-height: 52px;
 }
 .primary:hover {
-  background: #8c2d24;
+  background: #173a2e;
 }
 .primary:active {
-  background: #79251e;
+  background: #173a2e;
 }
 .primary:disabled {
   border-color: var(--border);
@@ -1480,5 +1480,155 @@ dialog::backdrop {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* UI04: kitchen-first presentation, sharing the existing safe demo model. */
+.public-main {
+  max-width: 1344px;
+}
+.public-header {
+  min-height: 88px;
+}
+.kitchen-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.kitchen-card {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kitchen-card > img {
+  width: 100%;
+  height: 208px;
+  object-fit: cover;
+}
+.kitchen-card-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-items: stretch;
+}
+.kitchen-card-body h2 {
+  font-size: 24px;
+  line-height: 32px;
+}
+.kitchen-card .facts {
+  margin: 4px 0 24px;
+}
+.kitchen-card .facts > div {
+  grid-template-columns: 1fr 1fr;
+}
+.kitchen-card-body > .primary {
+  margin-top: auto;
+}
+.browse-grid {
+  grid-template-columns: minmax(0, 1fr) 352px;
+}
+.kitchen-facts .facts {
+  max-width: 600px;
+  margin: 8px 0 24px;
+}
+.receiving {
+  padding: 16px 0;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  margin: 0 0 32px;
+}
+.receiving p {
+  margin: 0;
+}
+.my-tabs {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 32px;
+  border-bottom: 1px solid var(--divider);
+}
+.my-tabs button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 0;
+}
+.my-tabs [aria-current="page"] {
+  color: var(--brand);
+  border-bottom: 3px solid var(--brand);
+}
+.voucher-list-item {
+  margin: 24px 0;
+}
+.voucher-list-item .status {
+  margin-bottom: 16px;
+}
+.workspace-totals {
+  margin: 0 0 24px;
+}
+.workspace-totals .metrics {
+  margin: 16px 0;
+}
+.owner-main h1 {
+  font-size: 26px;
+  line-height: 34px;
+}
+.accounting-details {
+  margin: 24px 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+.ledger-summary .facts {
+  max-width: 760px;
+}
+@media (max-width: 1100px) {
+  .kitchen-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .browse-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 767px) {
+  h1 {
+    font-size: 26px;
+    line-height: 34px;
+  }
+  .kitchen-list {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .kitchen-card > img {
+    height: 180px;
+  }
+  .kitchen-card-body {
+    padding: 16px;
+  }
+  .public-header .header-right {
+    max-width: 165px;
+  }
+  .public-header .header-right button {
+    padding: 0;
+  }
+  .recent {
+    margin-top: 24px;
+  }
+  .receiving {
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+}
+@media (max-width: 360px) {
+  .public-header .header-right {
+    max-width: 136px;
+  }
+  .kitchen-card .facts > div {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,0 +1,43 @@
+{
+  "results": [
+    {
+      "name": "Direct store URLs refresh into the requested kitchen with unchanged paid terms",
+      "status": "PASS"
+    },
+    {
+      "name": "Cart survives catalog, public-store selection and claim-store selection; hash changes ask Keep/Replace",
+      "status": "PASS"
+    },
+    {
+      "name": "My meals separates original verified vouchers, recovery and original-payer orders",
+      "status": "PASS"
+    },
+    {
+      "name": "Owner without a current voucher opens check form; restored UNKNOWN keeps original query visible",
+      "status": "FAIL",
+      "error": "Use an active demo verification string. Refresh expired codes."
+    }
+  ],
+  "errors": [],
+  "external": [],
+  "requestCount": 168,
+  "observedRequests": [
+    "http://127.0.0.1:15603/",
+    "http://127.0.0.1:15603/@vite/client",
+    "http://127.0.0.1:15603/src/main.tsx?t=1791653477199",
+    "http://127.0.0.1:15603/@react-refresh",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react-dom_client.js?v=d89bad99",
+    "http://127.0.0.1:15603/src/App.tsx?t=1791653477199",
+    "http://127.0.0.1:15603/src/style.css?t=1791653476634",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/rolldown-runtime-DC62tzP2.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/lucide-react.js?v=d89bad99",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/qrcode__react.js?v=d89bad99",
+    "http://127.0.0.1:15603/src/model.ts?t=1791650213558",
+    "http://127.0.0.1:15603/node_modules/.vite/deps/react-dom.js?v=d89bad99",
+    "http://127.0.0.1:15603/assets/chicken.jpg",
+    "http://127.0.0.1:15603/assets/tofu.jpg"
+  ]
+}

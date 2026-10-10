@@ -17,7 +17,6 @@ import {
   ShieldCheck,
   Store as StoreIcon,
   Utensils,
-  Wallet,
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
@@ -25,11 +24,18 @@ import { QRCodeSVG } from "qrcode.react";
 import * as M from "./model";
 import type { State, StoreId, Meal, Operation, Menu, Voucher } from "./model";
 const route = () => location.hash.slice(2) || "meals";
+const kitchenId = (to: string): StoreId | undefined => {
+  const id = to.startsWith("kitchen/") ? to.slice(8) : "";
+  return ["meadow", "river", "lantern"].includes(id)
+    ? (id as StoreId)
+    : undefined;
+};
 const labels: Record<string, string> = {
-  meals: "Meals",
-  orders: "My orders",
+  meals: "Kitchens",
+  "my/vouchers": "My meals",
+  orders: "Support orders",
   claim: "Claim a meal",
-  ledger: "Public ledger",
+  ledger: "Meal ledger",
   owner: "Workbench",
   menu: "Menu",
   settlements: "Settlements",
@@ -117,9 +123,9 @@ export default function App() {
     [s, setS] = useState(boot.state),
     [storageError, setStorageError] = useState(boot.error);
   const [page, setPage] = useState(route),
-    [store, setStore] = useState<StoreId>("meadow"),
+    [store, setStore] = useState<StoreId>(() => kitchenId(route()) ?? "meadow"),
     [counts, setCounts] = useState<Record<Meal, number>>({
-      Lunch: 1,
+      Lunch: 0,
       Dinner: 0,
     }),
     [nft, setNft] = useState(true);
@@ -138,6 +144,11 @@ export default function App() {
     [returnRecord, setReturnRecord] = useState(""),
     [welcome, setWelcome] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [ledgerStore, setLedgerStore] = useState<StoreId>("meadow");
+  const [claimStore, setClaimStore] = useState<StoreId>(
+    () => kitchenId(route()) ?? "meadow",
+  );
+  const catalogScroll = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null),
     swapDialog = useRef<HTMLDialogElement>(null),
     swapTrigger = useRef<HTMLElement | null>(null),
@@ -145,16 +156,15 @@ export default function App() {
     resetTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const change = () => {
-      setPage(route());
-      setError("");
-      setNotice("");
+      go(route());
     };
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
-  }, []);
+  }, [store, counts.Lunch, counts.Dinner, page]);
   useEffect(() => {
     heading.current?.focus();
     setOwnerNav(false);
+    if (page === "meals") window.scrollTo(0, catalogScroll.current);
   }, [page]);
   useEffect(() => {
     if (!storageError) {
@@ -200,11 +210,26 @@ export default function App() {
       return false;
     }
   }
-  const go = (to: string) => {
+  const commitRoute = (to: string) => {
+    if (page === "meals" && to !== "meals")
+      catalogScroll.current = window.scrollY;
+    const id = kitchenId(to);
+    if (id) setStore(id);
+    if (to === "claim" && page !== "claim") setClaimStore(store);
     location.hash = `/${to}`;
     setPage(to);
     setNotice("");
     setError("");
+  };
+  const go = (to: string) => {
+    const id = kitchenId(to);
+    if (id && id !== store && qty > 0) {
+      swapTrigger.current = document.activeElement as HTMLElement;
+      setReplacement(id);
+      history.replaceState(null, "", `#/${page}`);
+      return;
+    }
+    commitRoute(to);
   };
   const ownerPage = [
     "owner",
@@ -214,18 +239,23 @@ export default function App() {
     "records",
     "record",
   ].includes(page);
-  const selected = M.storeOf(s, ownerPage ? (s.owner ?? ownerChoice) : store),
+  const selected = M.storeOf(
+      s,
+      ownerPage
+        ? (s.owner ?? ownerChoice)
+        : page === "ledger"
+          ? ledgerStore
+          : page === "claim"
+            ? claimStore
+            : store,
+    ),
     t = M.totals(s, selected.id);
   const currentVoucher = s.vouchers.find((v) => v.id === voucherId),
     currentOp = s.ops.find((o) => o.id === opId);
   const qty = counts.Lunch + counts.Dinner,
     total = selected.menus.reduce((a, m) => a + counts[m.meal] * m.price, 0);
   function changeStore(id: StoreId) {
-    if (id === store) return;
-    if (qty > 0) {
-      swapTrigger.current = document.activeElement as HTMLElement;
-      setReplacement(id);
-    } else setStore(id);
+    go(`kitchen/${id}`);
   }
   function connect() {
     act((d) => {
@@ -254,15 +284,40 @@ export default function App() {
   }
   const publicNav = (
     <nav aria-label="Public navigation">
-      {["meals", "orders", "claim", "ledger"].map((p) => (
+      {["meals", "my/vouchers", "ledger"].map((p) => (
         <button
           key={p}
-          aria-current={page === p ? "page" : undefined}
+          aria-current={
+            page === p ||
+            (p === "meals" && !!kitchenId(page)) ||
+            (p === "my/vouchers" &&
+              ["orders", "my/orders", "voucher", "recovery"].includes(page))
+              ? "page"
+              : undefined
+          }
           onClick={() => go(p)}
         >
           {labels[p]}
         </button>
       ))}
+    </nav>
+  );
+  const myTabs = (
+    <nav className="my-tabs" aria-label="My meals sections">
+      <button
+        aria-current={page === "my/vouchers" ? "page" : undefined}
+        onClick={() => go("my/vouchers")}
+      >
+        My vouchers
+      </button>
+      <button
+        aria-current={
+          ["orders", "my/orders"].includes(page) ? "page" : undefined
+        }
+        onClick={() => go("my/orders")}
+      >
+        Support orders
+      </button>
     </nav>
   );
   const ownerLinks = [
@@ -392,34 +447,92 @@ export default function App() {
     );
   } else if (page === "meals") {
     content = (
+      <section className="catalog">
+        <h1 ref={heading} tabIndex={-1}>
+          Choose a kitchen
+        </h1>
+        <p className="subtitle">
+          Three simulated kitchens. Support a meal or claim one.
+        </p>
+        <div className="kitchen-list">
+          {s.stores.map((st, index) => {
+            const totals = M.totals(s, st.id);
+            return (
+              <article className="kitchen-card" key={st.id}>
+                <img
+                  src={`/assets/${st.menus[index === 1 ? 1 : 0].image}`}
+                  width={400}
+                  height={240}
+                  alt={`Illustrative meal at ${st.name}`}
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
+                <div className="kitchen-card-body">
+                  <p className="secondary">
+                    Simulated kitchen · Illustrative meal
+                  </p>
+                  <h2>{st.name}</h2>
+                  <p>{st.description}</p>
+                  <Facts
+                    items={[
+                      ["Meals supported", `${totals.supported} meals`],
+                      ["Available to claim", `${totals.available} meals`],
+                      [
+                        "Service hours",
+                        st.menus
+                          .map((m) => `${m.meal} ${m.start}:00–${m.end}:00`)
+                          .join(" · "),
+                      ],
+                    ]}
+                  />
+                  {st.paused && (
+                    <Status status="paused">
+                      Incident pause · New support and claims paused
+                    </Status>
+                  )}
+                  {totals.pending > 0 && (
+                    <p className="secondary">
+                      {totals.pending} original operations pending or needing
+                      verification.{" "}
+                      <button
+                        className="text"
+                        onClick={() => {
+                          setLedgerStore(st.id);
+                          go("ledger");
+                        }}
+                      >
+                        View original status
+                      </button>
+                    </p>
+                  )}
+                  <button
+                    className="primary full"
+                    aria-label={`View kitchen · ${st.name}`}
+                    onClick={() => changeStore(st.id)}
+                  >
+                    View kitchen <ArrowRight size={18} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    );
+  } else if (kitchenId(page)) {
+    content = (
       <div className="browse-grid">
         <section>
+          <button className="text" onClick={() => go("meals")}>
+            <ArrowLeft size={18} />
+            Back to kitchens
+          </button>
           <h1 ref={heading} tabIndex={-1}>
-            Choose a meal
+            {selected.name}
           </h1>
-          <p className="subtitle">One store per order.</p>
-          <div className="store-selector" aria-label="Choose a simulated store">
-            {s.stores.map((st) => (
-              <button
-                key={st.id}
-                aria-pressed={store === st.id}
-                className={store === st.id ? "selected" : ""}
-                onClick={() => changeStore(st.id)}
-              >
-                <StoreIcon size={25} />
-                <span>
-                  <strong>{st.name}</strong>
-                  <small>{M.totals(s, st.id).supported} meals supported</small>
-                </span>
-              </button>
-            ))}
-          </div>
+          <p className="subtitle">{selected.description}</p>
           <div className="store-heading">
             <div>
-              <h2>
-                {selected.name}{" "}
-                <span className="secondary inline">Simulated store</span>
-              </h2>
+              <p>Simulated kitchen · Illustrative meals</p>
               <p className="secondary">
                 Menu v{Math.max(...selected.menus.map((m) => m.version))} ·
                 Monad Testnet
@@ -433,9 +546,32 @@ export default function App() {
                 );
               }}
             >
-              Visit store website <ArrowUpRight size={18} />
+              Demo website unavailable <ArrowUpRight size={18} />
             </button>
           </div>
+          <div className="kitchen-facts">
+            <Facts
+              items={[
+                ["Meals supported", `${t.supported} meals`],
+                ["Available to claim", `${t.available} meals`],
+              ]}
+            />
+          </div>
+          <div className="receiving row between wrap">
+            <div>
+              <h2>Receiving a meal?</h2>
+              <p className="secondary">
+                One meal per demo email every 72 hours. No wallet needed.
+              </p>
+            </div>
+            <button disabled={selected.paused} onClick={() => go("claim")}>
+              Claim a meal
+            </button>
+          </div>
+          <h2>Support meals</h2>
+          <p className="secondary">
+            Choose quantities below. One kitchen per order.
+          </p>
           {selected.paused && (
             <Status status="unknown">
               Store paused for an incident. New support and claims are paused.
@@ -555,7 +691,7 @@ export default function App() {
             disabled={!qty || selected.paused || s.source !== "fresh"}
             onClick={review}
           >
-            Review payment
+            Review support
           </button>
           <p className="secondary">
             Wallet approval and payment are separate steps.
@@ -617,6 +753,11 @@ export default function App() {
               <>
                 {opPanel(currentOp)}
                 {currentOp.status === "final" && (
+                  <p className="success-text">
+                    Support confirmed. Thank you for sharing a meal.
+                  </p>
+                )}
+                {currentOp.status === "final" && (
                   <button
                     className="primary"
                     onClick={() => {
@@ -657,7 +798,10 @@ export default function App() {
                 )}
               </>
             )}
-            <button className="text" onClick={() => go("meals")}>
+            <button
+              className="text"
+              onClick={() => go(`kitchen/${currentOp.store}`)}
+            >
               Edit cart
             </button>
           </>
@@ -666,7 +810,92 @@ export default function App() {
         )}
       </section>
     );
-  } else if (page === "orders") {
+  } else if (page === "my/vouchers") {
+    const vouchers = s.vouchers.filter((v) => v.email === s.verified);
+    content = (
+      <section className="narrow">
+        <h1 ref={heading} tabIndex={-1}>
+          My meals
+        </h1>
+        <p className="subtitle">
+          Your vouchers, recovery and original support orders.
+        </p>
+        {myTabs}
+        <h2>My vouchers</h2>
+        <div className="panel">
+          <label>
+            Built-in email
+            <select
+              value={s.email ?? M.EMAILS[1]}
+              onChange={(e) =>
+                act((d) => {
+                  d.email = e.target.value;
+                  d.verified = null;
+                })
+              }
+            >
+              {M.EMAILS.map((email) => (
+                <option key={email}>{email}</option>
+              ))}
+            </select>
+          </label>
+          <p className="secondary">
+            Use a fictional demo identity. No email is sent.
+          </p>
+          <button
+            onClick={() =>
+              act((d) => {
+                d.verified = d.email;
+              })
+            }
+          >
+            Simulate email verification
+          </button>
+          {s.verified && <Status status="final">Demo email verified</Status>}
+        </div>
+        {!s.verified && (
+          <p>Verify the original built-in email to view your vouchers.</p>
+        )}
+        {s.verified && vouchers.length === 0 && (
+          <p>No vouchers for this demo identity yet.</p>
+        )}
+        {vouchers.map((v) => {
+          const unit = M.unitOf(s, v.unitId);
+          return (
+            <article className="voucher-list-item panel" key={v.id}>
+              <h2>{M.storeOf(s, unit.store).name}</h2>
+              <p>
+                {unit.terms.meal} · {unit.terms.name} · 1 meal
+              </p>
+              <Status status={v.state}>
+                {v.state === "locked"
+                  ? "Processing started"
+                  : v.state === "reported"
+                    ? "Handoff reported · Simulated"
+                    : v.state}
+              </Status>
+              <p>Valid until {M.time(v.expires)} · Asia/Shanghai</p>
+              <button onClick={() => viewVoucher(v.id)}>Open voucher</button>
+            </article>
+          );
+        })}
+        {s.ops
+          .filter(
+            (o) => o.kind === "issue" && o.email === s.verified && M.isOpen(o),
+          )
+          .map((o) => (
+            <div key={o.id}>{opPanel(o)}</div>
+          ))}
+        <div className="row wrap">
+          <button onClick={() => go("recovery")}>Recover my voucher</button>
+          <button className="text" onClick={() => go("claim")}>
+            Claim a meal
+          </button>
+        </div>
+        <p className="secondary">Recovery keeps the original expiry.</p>
+      </section>
+    );
+  } else if (page === "orders" || page === "my/orders") {
     const orders = s.orders.filter((o) => o.payer === s.wallet);
     const ops = s.ops.filter(
       (o) => o.payer === s.wallet && o.kind === "fund" && o.status !== "final",
@@ -674,11 +903,13 @@ export default function App() {
     content = (
       <section>
         <h1 ref={heading} tabIndex={-1}>
-          My orders
+          My meals
         </h1>
         <p className="subtitle">
           Your original support, meal progress and independent thank-you.
         </p>
+        {myTabs}
+        <h2>Support orders</h2>
         {!s.wallet ? (
           <button className="primary" onClick={connect}>
             Connect demo wallet
@@ -733,6 +964,15 @@ export default function App() {
                           `${o.unitIds.length - p.reported - p.refunded} meals`,
                         ],
                         ["Owner received", M.money(p.received)],
+                        [
+                          "Awaiting payment",
+                          M.money(
+                            o.unitIds
+                              .map((id) => M.unitOf(s, id))
+                              .filter((u) => u.bucket === "H")
+                              .reduce((sum, u) => sum + u.terms.price, 0),
+                          ),
+                        ],
                       ]}
                     />
                     <div className="order-actions">
@@ -766,7 +1006,7 @@ export default function App() {
                         <div key={op.id}>{opPanel(op)}</div>
                       ))}
                     <div className="thanks">
-                      <h3>Thank-you feedback</h3>
+                      <h3>A note of thanks</h3>
                       <Status status={o.nft}>
                         {o.nft === "declined"
                           ? "NFT declined"
@@ -915,8 +1155,8 @@ export default function App() {
               Store
               <select
                 aria-label="Store"
-                value={store}
-                onChange={(e) => setStore(e.target.value as StoreId)}
+                value={claimStore}
+                onChange={(e) => setClaimStore(e.target.value as StoreId)}
               >
                 {s.stores.map((st) => (
                   <option key={st.id} value={st.id}>
@@ -926,17 +1166,17 @@ export default function App() {
               </select>
             </label>
             <div className="claim-meals">
-              {M.storeOf(s, store).menus.map((m) => (
+              {M.storeOf(s, claimStore).menus.map((m) => (
                 <button
                   key={m.meal}
                   disabled={
-                    !s.verified || !m.listed || M.storeOf(s, store).paused
+                    !s.verified || !m.listed || M.storeOf(s, claimStore).paused
                   }
                   onClick={() => {
                     let id = "";
                     if (
                       act((d) => {
-                        id = M.issue(d, store, m.meal);
+                        id = M.issue(d, claimStore, m.meal);
                       })
                     )
                       setOpId(id);
@@ -955,6 +1195,9 @@ export default function App() {
             {issuance && (
               <>
                 {opPanel(issuance)}
+                {issuance.status === "final" && (
+                  <p className="success-text">Your voucher is ready.</p>
+                )}
                 {issuance.status === "final" && (
                   <button
                     className="primary"
@@ -1143,25 +1386,27 @@ export default function App() {
     content = (
       <>
         <h1 ref={heading} tabIndex={-1}>
-          <span className="desktop-only">Voucher &amp; handoff</span>
-          <span className="mobile-only">Workbench</span>
+          Kitchen workspace
         </h1>
-        <div className="metrics desktop-metrics">
-          {[
-            ["Meals supported", `${t.supported} (max 10)`],
-            ["Available now", t.available],
-            ["Active vouchers", t.active],
-            ["Reported handoffs", t.reported],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
-        </div>
+        <details className="workspace-totals">
+          <summary>Kitchen totals</summary>
+          <div className="metrics">
+            {[
+              ["Meals supported", `${t.supported} (max 10)`],
+              ["Available now", t.available],
+              ["Active vouchers", t.active],
+              ["Reported handoffs", t.reported],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </details>
         <div className="owner-grid">
           <section className="panel current-voucher">
-            <h2>Current voucher</h2>
+            <h2>{v ? "Current voucher" : "Check a voucher"}</h2>
             {v ? (
               <>
                 <Status
@@ -1273,10 +1518,10 @@ export default function App() {
           </section>
           <aside className="owner-summary">
             <section className="settlement-summary">
-              <h2>Settlement summary</h2>
+              <h2>Kitchen funds</h2>
               <div className="settlement-values">
                 <div>
-                  <p className="secondary">Awaiting settlement</p>
+                  <p className="secondary">Awaiting payment</p>
                   <strong>{M.money(t.H)}</strong>
                 </div>
                 <div>
@@ -1318,27 +1563,23 @@ export default function App() {
             </section>
           </aside>
         </div>
-        <details className="mobile-only totals-disclosure">
-          <summary>Store totals</summary>
-          <Facts
-            items={[
-              ["Meals supported", `${t.supported} / 10`],
-              ["Available now", t.available],
-              ["Active vouchers", t.active],
-              ["Reported handoffs", t.reported],
-            ]}
-          />
-        </details>
-        <section className="recent desktop-only">
+        {s.ops
+          .filter(
+            (o) => o.store === s.owner && M.isOpen(o) && o.id !== pending?.id,
+          )
+          .map((o) => (
+            <div key={o.id}>{opPanel(o)}</div>
+          ))}
+        <section className="recent">
           <div className="row between">
-            <h2>Recent operations</h2>
+            <h2>Activity</h2>
             <button className="text" onClick={() => go("records")}>
               View all records <ArrowRight size={18} />
             </button>
           </div>
           {recordsList(true)}
         </section>
-        <details className="verify">
+        <details className="verify" open={!v}>
           <summary>Check another demo voucher</summary>
           <label>
             Verification string
@@ -1592,10 +1833,10 @@ export default function App() {
         <div className="store-selector">
           {s.stores.map((st) => (
             <button
-              aria-pressed={store === st.id}
-              className={store === st.id ? "selected" : ""}
+              aria-pressed={ledgerStore === st.id}
+              className={ledgerStore === st.id ? "selected" : ""}
               key={st.id}
-              onClick={() => setStore(st.id)}
+              onClick={() => setLedgerStore(st.id)}
             >
               <StoreIcon size={23} />
               <strong>{st.name}</strong>
@@ -1603,29 +1844,76 @@ export default function App() {
           ))}
         </div>
         <h2>{selected.name} · Simulated store</h2>
-        <Facts
-          items={[
-            ["Meals supported", `${t.supported} / 10 cumulative`],
-            ["Available meals", t.available],
-            ["Active vouchers", t.active],
-            ["Reported handoffs", t.reported],
-            ["Pending original operations", t.pending],
-            ["F · Final support", M.money(t.F)],
-            ["A · Free funds", M.money(t.A)],
-            ["R · Allocated funds", M.money(t.R)],
-            ["H · Awaiting settlement", M.money(t.H)],
-            ["S · Received", M.money(t.S)],
-            ["X · Refunded", M.money(t.X)],
-          ]}
-        />
-        <p className="success-text">F = A + R + H + S + X · {M.money(t.F)}</p>
         <p className="secondary">
           Observed at {M.time(s.now)} · Asia/Shanghai · Local simulated state.
-          Reported includes both awaiting settlement and received.
         </p>
+        <div className="ledger-summary">
+          <Facts
+            items={[
+              [
+                "Meals supported",
+                `${t.supported} meals · Lifetime final support`,
+              ],
+              ["Available to claim", `${t.available} meals`],
+              ["Claimed · awaiting handoff", `${t.active} meals`],
+              ["Handed over · demo reported", `${t.reported} meals`],
+              ["Awaiting payment", M.money(t.H)],
+              ["Received", M.money(t.S)],
+              [
+                "Refunded",
+                `${s.units.filter((u) => u.store === selected.id && u.bucket === "X").length} meals · ${M.money(t.X)}`,
+              ],
+            ]}
+          />
+        </div>
+        {selected.paused && (
+          <Status status="paused">
+            Incident pause · New support and claims paused; balances retained
+          </Status>
+        )}
+        <p className="secondary">
+          Handed over means a final simulated handoff report. It includes both
+          awaiting payment and received meals.
+        </p>
+        <button className="text" onClick={() => go(`kitchen/${selected.id}`)}>
+          View kitchen <ArrowRight size={18} />
+        </button>
+        <details className="accounting-details">
+          <summary>Accounting details</summary>
+          <Facts
+            items={[
+              ["Meals supported", `${t.supported} / 10 cumulative`],
+              ["Available meals", t.available],
+              ["Active vouchers", t.active],
+              ["Reported handoffs", t.reported],
+              ["Pending original operations", t.pending],
+              ["F · Final support", M.money(t.F)],
+              ["A · Free funds", M.money(t.A)],
+              ["R · Allocated funds", M.money(t.R)],
+              ["H · Awaiting settlement", M.money(t.H)],
+              ["S · Received", M.money(t.S)],
+              ["X · Refunded", M.money(t.X)],
+              ...(["A", "R", "H", "S", "X"] as const).map(
+                (bucket) =>
+                  [
+                    `${bucket} · Meal count`,
+                    s.units.filter(
+                      (u) => u.store === selected.id && u.bucket === bucket,
+                    ).length,
+                  ] as [string, ReactNode],
+              ),
+            ]}
+          />
+          <p className="success-text">F = A + R + H + S + X · {M.money(t.F)}</p>
+          <p className="secondary">
+            Observed at {M.time(s.now)} · Asia/Shanghai · Local simulated state.
+            Reported includes both awaiting settlement and received.
+          </p>
+        </details>
+        <p>{t.pending} original operations pending or needing verification.</p>
         <h2>Public operations</h2>
         {s.ops
-          .filter((o) => o.store === store)
+          .filter((o) => o.store === selected.id)
           .toReversed()
           .map((o) => (
             <button
@@ -1852,9 +2140,9 @@ export default function App() {
           className={`public-header ${page === "voucher" ? "voucher-header" : ""}`}
         >
           {page === "voucher" && (
-            <button className="text" onClick={() => go("meals")}>
+            <button className="text" onClick={() => go("my/vouchers")}>
               <ArrowLeft size={22} />
-              Meals
+              My vouchers
             </button>
           )}
           <button className="brand" onClick={() => go("meals")}>
@@ -1863,16 +2151,11 @@ export default function App() {
           {page !== "voucher" && publicNav}
           <div className="header-right">
             {page !== "voucher" && (
-              <button onClick={connect}>
-                <Wallet size={18} />
-                {s.wallet ? "Demo wallet connected" : "Connect demo wallet"}
+              <button className="text" onClick={() => go("owner")}>
+                Kitchen workspace <ArrowUpRight size={18} />
               </button>
             )}
-            <small>
-              {page === "voucher"
-                ? "Frontend demo"
-                : "Frontend demo · Simulated data"}
-            </small>
+            <small>Demo · Simulated kitchens and payments</small>
             <small>{M.time(s.now)} · Asia/Shanghai</small>
           </div>
         </header>
@@ -2038,7 +2321,7 @@ export default function App() {
       >
         <h2 id="demo-reset-title">Reset this demo?</h2>
         <p>
-          This clears only CP29-UI03 synthetic data, including saved original
+          This clears only this demo's synthetic data, including saved original
           UNKNOWN operations. It restores the built-in fixture.
         </p>
         <p>Old services and other saved data are not changed.</p>
@@ -2067,7 +2350,7 @@ export default function App() {
                 setVoucherId("demo-voucher-2");
                 setOpId("");
                 setStore("meadow");
-                setCounts({ Lunch: 1, Dinner: 0 });
+                setCounts({ Lunch: 0, Dinner: 0 });
                 go("meals");
               } catch {
                 setStorageError("Local storage remains unavailable.");
@@ -2078,11 +2361,19 @@ export default function App() {
           </button>
         </div>
       </dialog>
-      <dialog ref={swapDialog} onCancel={() => setReplacement(null)}>
-        <h2>Replace your cart?</h2>
+      <dialog
+        ref={swapDialog}
+        aria-labelledby="cart-replacement-title"
+        onCancel={() => {
+          setReplacement(null);
+          swapTrigger.current?.focus();
+        }}
+      >
+        <h2 id="cart-replacement-title">Replace your cart?</h2>
         <p>Changing stores replaces the current single-store cart.</p>
         <div className="row wrap">
           <button
+            autoFocus
             onClick={() => {
               swapDialog.current?.close();
               setReplacement(null);
@@ -2098,6 +2389,7 @@ export default function App() {
               setCounts({ Lunch: 0, Dinner: 0 });
               swapDialog.current?.close();
               setReplacement(null);
+              commitRoute(`kitchen/${replacement!}`);
             }}
           >
             Replace cart
