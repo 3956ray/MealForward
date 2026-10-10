@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#234c3d"><meta name="description" content="留膳 MealForward：把一份热饭，留给下一位。探索三家模拟小店，体验支持、领券与透明餐账。">
+  <title>留膳 MealForward · 把暖意留给下一餐</title>
+  <link rel="stylesheet" href="/styles.css"><script src="/assets/qrcode.min.js" defer></script><script src="/app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳到主要内容</a>
+  <div class="demo-bar"><span class="demo-dot"></span>三店体验版 <span class="bar-separator">/</span> 所有商家、付款与交餐均为模拟 <a href="#about">了解演示 ↗</a></div>
+  <header class="header"><a href="#home" class="brand" aria-label="留膳首页"><svg viewBox="0 0 50 50" aria-hidden="true"><path d="M8 25h34c-1 12-8 17-17 17S9 37 8 25Z" fill="currentColor"/><path d="M15 19c-6-6 5-7 0-14M25 19c-6-6 5-7 0-14M35 19c-6-6 5-7 0-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>留膳<small>MealForward</small></span></a><nav aria-label="主导航"><a href="#stores" data-nav="stores">发现小店</a><a href="#how" data-nav="how">如何参与</a><a href="#ledger" data-nav="ledger">公开餐账</a></nav><div class="header-actions"><a class="my-link" href="#mine">我的餐券与订单</a><button class="button compact outline" data-action="wallet" id="wallet-button">体验钱包 <span>↗</span></button></div></header>
+  <main id="main" tabindex="-1"></main>
+  <footer><a class="footer-brand" href="#home">留膳 <span>MealForward</span></a><p>让一餐的暖意，走得更远。</p><div><a href="#about">演示说明</a><a href="#merchant">商家工作台 ↗</a><button class="text-button" data-action="reset">重置体验</button></div><small>独立开发者三店演示 · Monad Testnet 产品原型</small></footer>
+  <dialog id="dialog" aria-labelledby="dialog-title"><button class="dialog-close" data-action="close" aria-label="关闭弹窗">×</button><div id="dialog-body"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body></html>

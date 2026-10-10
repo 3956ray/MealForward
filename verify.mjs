@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {initialState,stats,support,claim,refund,credential,lock,report,settle,expire,H72,getStore} from './dist/model.mjs';
+const now=Date.parse('2026-10-10T12:00:00+08:00');
+const s=initialState(now);s.wallet=true;
+const o=support(s,'qinghe',3,true,now);
+assert.equal(stats(s,'qinghe').F,9);
+assert.throws(()=>support(s,'qinghe',2,true,now),/10 份/);
+// Exhaust earlier free units so the next voucher must bind to the new order.
+for(let i=0;i<4;i++)claim(s,'qinghe','seed-email-'+i,now);
+const c=claim(s,'qinghe','person-a',now);
+assert.equal(s.units.find(u=>u.id===c.unit).order,o.id);
+assert.throws(()=>claim(s,'shiguang','person-a',now+1000),/72 小时/);
+s.configs.qinghe.price=9;s.configs.qinghe.version=2;
+assert.equal(c.price,6);assert.equal(c.version,1);
+assert.equal(refund(s,o.id,now),2);
+assert.equal(stats(s,'qinghe').F,9);assert.equal(stats(s,'qinghe').X,2);
+const token=credential(s,c,now);assert.equal(token.length,64);assert.equal(c.tokenExpires,now+120000);
+s.merchant='shiguang';assert.throws(()=>lock(s,'qinghe',token,now),/本店/);
+s.merchant='qinghe';lock(s,'qinghe',token,now);
+assert.throws(()=>lock(s,'qinghe',token,now),/无效/);
+report(s,c,now);assert.equal(s.units.find(u=>u.id===c.unit).status,'H');
+assert.equal(settle(s,'qinghe',now),12);
+assert.equal(s.units.find(u=>u.id===c.unit).status,'S');
+assert.throws(()=>refund(s,o.id,now+1000),/没有/);
+const expired=claim(s,'shiguang','person-b',now);expire(s,now+H72+1);assert.equal(expired.status,'expired');assert.equal(s.units.find(u=>u.id===expired.unit).status,'A');
+for(const store of ['qinghe','shiguang','nuanxiang']){const t=stats(s,store);assert.equal(t.F,t.A+t.R+t.H+t.S+t.X);}
+const w=initialState(now);w.wallet=true;const cc=claim(w,'qinghe','locked-person',now);w.merchant='qinghe';lock(w,'qinghe',credential(w,cc,now),now);expire(w,now+H72+1);assert.equal(cc.status,'locked');assert.equal(w.units.find(u=>u.id===cc.unit).status,'R');
+assert.throws(()=>report(w,cc,now+H72+1),/条件/);
+assert.throws(()=>credential(w,w.coupons[0],now),/无法/);
+const outside=claim(w,'nuanxiang','outside-person',now);assert.throws(()=>credential(w,outside,Date.parse('2026-10-10T22:00:00+08:00')),/窗口/);
+console.log('PASS: caps, order attribution, cross-store cooldown, immutable prices, safe refunds, credential expiry, store permissions, lock/report/settle, expired recovery, ledger conservation.');
