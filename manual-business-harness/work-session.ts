@@ -14,6 +14,7 @@ export class WorkSessions {
     this.fetcher=fetcher; this.now=now
   }
   open(role:WorkRole):Lease {return {role,generation:0,closed:false,session:null}}
+  isBlocked():boolean {return this.blocked}
   private serial<T>(action:()=>Promise<T>):Promise<T> {
     const result=this.queue.then(action)
     this.queue=result.catch(()=>{})
@@ -40,7 +41,10 @@ export class WorkSessions {
           method:'POST',credentials:'same-origin',cache:'no-store',redirect:'error',
           headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})
       } catch {this.blocked=true;throw unconfirmed()}
-      if(!response.ok)throw new Error('当前身份未获此角色授权，或本轮授权已失效。')
+      if(!response.ok) {
+        if(response.status===0||response.status===408||response.status>=500){this.blocked=true;throw unconfirmed()}
+        throw new Error('当前身份未获此角色授权，或本轮授权已失效。')
+      }
       let session:WorkSession
       try {
         session=await response.json()
@@ -60,7 +64,9 @@ export class WorkSessions {
     lease.generation++
     if(close)lease.closed=true
     // SDK logout disables its local token synchronously, even during initialization.
-    const sdk = sdkLogout ? sdkLogout().then(()=>null,()=>unconfirmed()) : Promise.resolve(null)
+    let sdk:Promise<Error|null>
+    try {sdk = sdkLogout ? sdkLogout().then(()=>null,()=>unconfirmed()) : Promise.resolve(null)}
+    catch {sdk = Promise.resolve(unconfirmed())}
     return this.serial(async()=>{
       let failed=false
       try {await this.revoke(lease)}catch {failed=true}

@@ -56,11 +56,11 @@ def business_signer(*, config_file, plan_file, encryption_key_file, keystore_fil
     backend = load_backend(config_file, plan_file, encryption_key_file)
     verify_business_mapping(backend.runtime.config)
     config=backend.runtime.config
+    capability=private_file(capability_file).read_text().strip()
+    if len(capability)<43: raise ValueError('Explicit 256-bit IPC capability required')
     from .cp29_keystore import signer_from_encrypted_keystore
     sign=signer_from_encrypted_keystore(keystore_file,
              expected_service_address=config['participants']['issuer'],
              admin=config['participants']['admin'], merchant=config['participants']['merchant'],
              passphrase_prompt=password_prompt)
-    capability=private_file(capability_file).read_text().strip()
-    if len(capability)<43: raise ValueError('Explicit 256-bit IPC capability required')
     return operator_signer(backend,sign,capability)

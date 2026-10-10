@@ -40,8 +40,9 @@ def load_backend(config_file, plan_file, secret_file):
         raise ValueError('Explicit new10143 business configuration required')
     deployment = config['deployment']
     if (deployment['deploymentId'] != config['deploymentId'] or deployment['runId'] != config['runId'] or
-            deployment['contractAddress'] != config['contractAddress'] or deployment['merchant'] != config['participants']['merchant'] or
-            deployment['admin'] != config['participants']['admin']):
+            not same_address(deployment['contractAddress'], config['contractAddress']) or
+            not same_address(deployment['merchant'], config['participants']['merchant']) or
+            not same_address(deployment['admin'], config['participants']['admin'])):
         raise ValueError('Verified deployment and participant configuration differ')
     identity = {k: v for k, v in deployment.items() if k != 'deploymentId'}
     if digest(canonical(identity)) != deployment['deploymentId']:
@@ -56,6 +57,13 @@ def load_backend(config_file, plan_file, secret_file):
     rpc = TestnetRpc(deployment, config['participants'], HttpsTransport(config['rpcUrl']))
     secret = private_file(secret_file).read_bytes()  # application encryption only; never a wallet key
     return ManualBackend(store, rpc, secret, runtime, time.time)
+
+
+def same_address(left, right):
+    # Compare Ethereum address values without rewriting the verified deployment:
+    # its original spelling remains part of its canonical deploymentId digest.
+    return (isinstance(left, str) and isinstance(right, str) and
+            Web3.is_address(left) and Web3.is_address(right) and left.lower() == right.lower())
 
 
 def operator_signer(backend, key_provider, capability):

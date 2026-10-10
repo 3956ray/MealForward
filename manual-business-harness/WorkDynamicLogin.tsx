@@ -44,7 +44,13 @@ export default function WorkDynamicLogin({role,onAuthenticated,onInvalidated,onC
     if(running.current||!lease)return
     running.current=true;setBusy(true);setMessage('')
     try{await action()}
-    catch(e){if(lifecycle.current===lease)setMessage(e instanceof Error?e.message:'操作未确认，请先检查原登录状态。')}
+    catch(e){
+      const message=e instanceof Error?e.message:'操作未确认，请先检查原登录状态。'
+      // This is an application-wide authority barrier, including explicit
+      // login/logout failures and results arriving after this mount departed.
+      if(workSessions.isBlocked())callbacks.current.onCleanupError(message)
+      if(lifecycle.current===lease)setMessage(message)
+    }
     finally{running.current=false;if(lifecycle.current===lease)setBusy(false)}
   }
   const login=async()=>{
@@ -75,7 +81,7 @@ export default function WorkDynamicLogin({role,onAuthenticated,onInvalidated,onC
       <button type="submit" disabled={busy}>验证验证码</button>
     </form>}
     <p>Dynamic SDK：{snapshot.status==='authenticated'?'已登录':snapshot.status==='email-pending'?'等待验证码':'未登录'}</p>
-    <button disabled={busy||snapshot.status!=='authenticated'} onClick={()=>void run(login)}>使用此身份登录业务工作台</button>
+    <button disabled={busy||workSessions.isBlocked()||snapshot.status!=='authenticated'} onClick={()=>void run(login)}>使用此身份登录业务工作台</button>
     <button disabled={busy} onClick={()=>void run(async()=>{const lease=lifecycle.current;if(!lease)return;clear();await workSessions.invalidate(lease,()=>client.logout());setOtp('');setMessage('当前身份已退出。')})}>退出当前身份</button>
     {message&&<p role="status">{message}</p>}
   </section>

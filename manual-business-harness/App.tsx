@@ -35,7 +35,8 @@ export default function App() {
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf.current[activeRole.current] || '', 'X-Terminal-Cap': terminal.current},
       ...(data === undefined ? {} : {body: JSON.stringify(data)})})
     const value = await response.json()
-    if (generation !== viewGeneration.current || requestRole !== activeRole.current) throw new Error('工作页面已变化，请查询原操作。')
+    if (generation !== viewGeneration.current || requestRole !== activeRole.current ||
+        (workBlocked.current && (requestRole==='partner'||requestRole==='owner'))) throw new Error('工作页面已变化，请查询原操作。')
     if (!response.ok) throw Object.assign(new Error(value.message || '原操作暂不可用'), {status: response.status})
     if (value.csrfToken) csrf.current[requestRole] = value.csrfToken
     if (value.terminalCap) terminal.current = value.terminalCap
@@ -91,9 +92,10 @@ export default function App() {
     setOwner(null);setChallenge(null);setReview(null);setResult(null);setLink('');setCode('');setAccount('')
     wallet.current?.dispose();wallet.current=null
   }
-  const enabled = status?.runtimeAuthorized === true && !((role==='partner'||role==='owner')&&workBlocked.current)
+  const workUnavailable = (role==='partner'||role==='owner')&&workBlocked.current
+  const enabled = status?.runtimeAuthorized === true && !workUnavailable
   const button = (text: string, action: () => Promise<unknown>, requireReady = true) =>
-    <button disabled={busy || (requireReady && !enabled)} onClick={() => void run(action)}>{text}</button>
+    <button disabled={busy || workUnavailable || (requireReady && !enabled)} onClick={() => void run(action)}>{text}</button>
   async function accepted(path: string, data: unknown) {
     const v = await api(path, data); if (v.operation?.id) setOp(v.operation.id); return v
   }
@@ -112,7 +114,7 @@ export default function App() {
       {role === 'identity' && <Suspense fallback={<p>正在打开身份准备…</p>}><IdentityPanel/></Suspense>}
       {(role === 'partner' || role === 'owner') && <div className="login"><p>使用已配置的可信工作身份登录。{!status?.identityConfigured?'请等待当前身份模式确认。':status.identityMode==='single-operator-testnet'?'本轮为单操作者测试，不等于两个独立自然人交接。':'机构和老板必须用不同的已验证邮箱。'}地址本身不授予工作权限。</p>
         {status?.identityConfigured && <Suspense fallback={<p>正在打开 Dynamic 登录…</p>}><WorkDynamicLogin key={role} role={role} singleOperator={status?.identityMode==='single-operator-testnet'}
-          onAuthenticated={v=>{if(activeRole.current!==role)return;csrf.current[role]=v.csrfToken;setResult({actorId:v.actorId,role:v.role,expiresAt:v.expiresAt})}}
+          onAuthenticated={v=>{if(workBlocked.current||activeRole.current!==role)return;csrf.current[role]=v.csrfToken;setResult({actorId:v.actorId,role:v.role,expiresAt:v.expiresAt})}}
           onInvalidated={()=>{if(activeRole.current===role)clearWork()}}
           onCleanupError={message=>{workBlocked.current=true;clearWork();setError(message)}}
         /></Suspense>}
