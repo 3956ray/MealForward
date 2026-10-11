@@ -167,3 +167,5 @@ dialog{border-radius:8px;max-width:calc(100vw - 32px)}dialog h2{font-size:26px;l
 .store-body{display:flex;flex-direction:column;flex:1;grid-row:auto}
 .store-bottom{margin-top:auto;padding-top:20px}
 } /* UI08 fallback end */
+/* UI09: leave clear space below the whole action row and restore Claim outline. */
+.store-card .claim-link{margin-top:24px;border:1px solid var(--green);min-height:44px}

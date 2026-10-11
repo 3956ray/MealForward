@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import * as M from './dist/model.mjs';
 const {chromium}=await import('/Users/mili/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs');
-const base='http://127.0.0.1:15645/',evidence='/Users/mili/Documents/Leader/projects/monad-consumer-payments/research/cp29/ui08/developer/evidence';
+const base='http://127.0.0.1:15655/',evidence='/Users/mili/Documents/Leader/projects/monad-consumer-payments/research/cp29/ui09/developer/evidence';
 await mkdir(evidence,{recursive:true});
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const results=[],errors=[],external=[],requests=[];
@@ -31,7 +31,7 @@ async function overflow(page){assert.ok(await page.evaluate(()=>document.documen
 async function images(page){await page.locator('img').evaluateAll(imgs=>Promise.all(imgs.map(i=>{i.loading='eager';return i.decode();})));assert.ok(await page.locator('img').evaluateAll(imgs=>imgs.every(i=>i.complete&&i.naturalWidth>0)));}
 async function english(page){const text=await page.locator('body').innerText();assert.ok(!/\p{Script=Han}/u.test(text),'Visible UI is English');assert.ok(await page.locator('[aria-label],img').evaluateAll(els=>els.every(el=>!/[\u3400-\u9fff]/u.test(el.getAttribute('aria-label')||el.getAttribute('alt')||''))));}
 try{
- await check('UI08 public card hover, CTA, badge and responsive geometry',async()=>{const {verifyPublicCards}=await import('./card-verify.mjs');await verifyPublicCards({fresh,go,images,overflow,fixture,M,evidence});});
+ await check('UI09 Claim clearance and preserved UI08 public card geometry',async()=>{const {verifyPublicCards}=await import('./card-verify.mjs');await verifyPublicCards({fresh,go,images,overflow,fixture,M,evidence});});
 
  await check('UI07 quiet controls retain targets, tooltip, keyboard focus and row alignment at320/390/768/1440',async()=>{
   const measurements=[];
