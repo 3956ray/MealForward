@@ -10,6 +10,7 @@ contract ThreeStoreFactory {
     struct StoreConfig {
         bytes32 storeId;
         address owner;
+        StoreEscrow.Authorities authorities;
         StoreEscrow.CatalogEntry[] catalog;
     }
 
@@ -35,7 +36,14 @@ contract ThreeStoreFactory {
         }
         for (uint256 i; i < 3; ++i) {
             address escrow = address(
-                new StoreEscrow(asset_, configs[i].storeId, configs[i].owner, quoteAuthority_, configs[i].catalog)
+                new StoreEscrow(
+                    asset_,
+                    configs[i].storeId,
+                    configs[i].owner,
+                    quoteAuthority_,
+                    configs[i].authorities,
+                    configs[i].catalog
+                )
             );
             escrows[i] = escrow;
             escrowFor[configs[i].storeId] = escrow;

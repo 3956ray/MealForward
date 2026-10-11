@@ -8,13 +8,13 @@ contract AdversarialTest is C0TestBase {
     function testCrossEntryCallbacksFundToRefundAndRefundToFundAreGuarded() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        bytes32 id = fund(escrow, quote(PAYER, 1, 2, false));
+        bytes32 id = fund(escrow, quoteFor(escrow, PAYER, 1, 2, false));
         bad.configureCallback(address(escrow), abi.encodeCall(StoreEscrow.refund, (id, uint16(1))));
         bad.configure(AdversarialERC20.Behavior.CallbackCatch, AdversarialERC20.Behavior.Normal);
-        fund(escrow, quote(PAYER, 2, 1, false));
+        fund(escrow, quoteFor(escrow, PAYER, 2, 1, false));
         assertEq(escrow.getBatch(id).refundedMask, 0);
         assertEq(uint32(bad.callbackError()), uint32(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
-        StoreEscrow.FundingQuote memory inner = quote(address(bad), 3, 1, false);
+        StoreEscrow.FundingQuote memory inner = quoteFor(escrow, address(bad), 3, 1, false);
         bad.configureCallback(address(escrow), abi.encodeCall(StoreEscrow.fund, (inner, signature(escrow, inner))));
         bad.configure(AdversarialERC20.Behavior.Normal, AdversarialERC20.Behavior.CallbackCatch);
         refund(escrow, PAYER, id, 1);
@@ -27,15 +27,15 @@ contract AdversarialTest is C0TestBase {
     function testCrossStoreCallbacksNeedTheirOwnPayerDomainAndBatchAuthorization() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow other = new StoreEscrow(bad, bytes32(uint256(5)), OTHER_PAYER, authority, catalog(PRICE_A));
-        StoreEscrow.FundingQuote memory inner = quote(PAYER, 2, 1, false);
+        StoreEscrow other = new StoreEscrow(bad, bytes32(uint256(5)), OTHER_PAYER, authority, roles(), catalog(PRICE_A));
+        StoreEscrow.FundingQuote memory inner = quoteFor(escrow, PAYER, 2, 1, false);
         bad.configureCallback(address(other), abi.encodeCall(StoreEscrow.fund, (inner, signature(other, inner))));
         bad.configure(AdversarialERC20.Behavior.CallbackCatch, AdversarialERC20.Behavior.Normal);
-        bytes32 id = fund(escrow, quote(PAYER, 1, 1, false));
+        bytes32 id = fund(escrow, quoteFor(escrow, PAYER, 1, 1, false));
         assertEq(uint32(bad.callbackError()), uint32(StoreEscrow.UnauthorizedPayer.selector));
         inner.payer = address(bad);
         bad.configureCallback(address(other), abi.encodeCall(StoreEscrow.fund, (inner, signature(escrow, inner))));
-        fund(escrow, quote(PAYER, 3, 1, false));
+        fund(escrow, quoteFor(escrow, PAYER, 3, 1, false));
         assertEq(uint32(bad.callbackError()), uint32(StoreEscrow.UnauthorizedQuote.selector));
         bad.configureCallback(address(other), abi.encodeCall(StoreEscrow.refund, (id, uint16(1))));
         bad.configure(AdversarialERC20.Behavior.Normal, AdversarialERC20.Behavior.CallbackCatch);
@@ -52,7 +52,7 @@ contract AdversarialTest is C0TestBase {
         bad.configureCallback(address(escrow), abi.encodeCall(StoreEscrow.refund, (bytes32(uint256(99)), uint16(1))));
         bad.configure(AdversarialERC20.Behavior.CallbackCatch, AdversarialERC20.Behavior.Normal);
         bad.configureCallbackExtraCredit(true);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 2, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 2, false);
         bytes memory sig = signature(escrow, q);
         vm.expectRevert(StoreEscrow.TransferDeltaMismatch.selector);
         vm.prank(PAYER);
@@ -83,7 +83,7 @@ contract AdversarialTest is C0TestBase {
     function expectIncomingDeltaReject(AdversarialERC20.Behavior behavior) private {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 3, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 3, false);
         bytes memory sig = signature(escrow, q);
         bad.configure(behavior, AdversarialERC20.Behavior.Normal);
         vm.expectRevert(StoreEscrow.TransferDeltaMismatch.selector);
@@ -106,7 +106,7 @@ contract AdversarialTest is C0TestBase {
     }
 
     function maliciousEscrow(AdversarialERC20 bad) private returns (StoreEscrow escrow) {
-        escrow = new StoreEscrow(bad, bytes32(uint256(4)), PAYER, authority, catalog(PRICE_A));
+        escrow = new StoreEscrow(bad, bytes32(uint256(4)), PAYER, authority, roles(), catalog(PRICE_A));
         bad.mint(PAYER, 100 * PRICE_A);
         vm.prank(PAYER);
         bad.approve(address(escrow), 20 * PRICE_A);
@@ -115,7 +115,7 @@ contract AdversarialTest is C0TestBase {
     function testIncomingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 3, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 3, false);
         bytes memory sig = signature(escrow, q);
         for (uint256 mode = 1; mode <= 7; ++mode) {
             bad.configure(AdversarialERC20.Behavior(mode), AdversarialERC20.Behavior.Normal);
@@ -140,7 +140,7 @@ contract AdversarialTest is C0TestBase {
     function testOutgoingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        bytes32 id = fund(escrow, quote(PAYER, 1, 3, false));
+        bytes32 id = fund(escrow, quoteFor(escrow, PAYER, 1, 3, false));
         bad.mint(address(escrow), 10);
         for (uint256 mode = 1; mode <= 7; ++mode) {
             bad.configure(AdversarialERC20.Behavior.Normal, AdversarialERC20.Behavior(mode));
@@ -163,11 +163,11 @@ contract AdversarialTest is C0TestBase {
     function testStandardNoReturnTokenFundAndPartialRefund() public {
         NoReturnERC20 legacy = new NoReturnERC20();
         StoreEscrow escrow =
-            new StoreEscrow(IERC20(address(legacy)), bytes32(uint256(4)), PAYER, authority, catalog(PRICE_A));
+            new StoreEscrow(IERC20(address(legacy)), bytes32(uint256(4)), PAYER, authority, roles(), catalog(PRICE_A));
         legacy.mint(PAYER, 100 * PRICE_A);
         vm.prank(PAYER);
         legacy.approve(address(escrow), 3 * PRICE_A);
-        bytes32 id = fund(escrow, quote(PAYER, 1, 3, false));
+        bytes32 id = fund(escrow, quoteFor(escrow, PAYER, 1, 3, false));
         refund(escrow, PAYER, id, 5);
         assertEq(legacy.balanceOf(PAYER), 99 * PRICE_A);
         assertEq(legacy.balanceOf(address(escrow)), PRICE_A);
@@ -177,11 +177,11 @@ contract AdversarialTest is C0TestBase {
     function testIncomingAndOutgoingCallbacksRejectedByReentrancyGuard() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory inner = quote(address(bad), 2, 1, false);
+        StoreEscrow.FundingQuote memory inner = quoteFor(escrow, address(bad), 2, 1, false);
         bytes memory sig = signature(escrow, inner);
         bad.configureCallback(address(escrow), abi.encodeCall(StoreEscrow.fund, (inner, sig)));
         bad.configure(AdversarialERC20.Behavior.CallbackCatch, AdversarialERC20.Behavior.Normal);
-        bytes32 id = fund(escrow, quote(PAYER, 1, 3, false));
+        bytes32 id = fund(escrow, quoteFor(escrow, PAYER, 1, 3, false));
         assertEq(bad.callbackAttempts(), 1);
         assertTrue(!bad.callbackSucceeded());
         assertEq(uint32(bad.callbackError()), uint32(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
@@ -200,7 +200,7 @@ contract AdversarialTest is C0TestBase {
         StoreEscrow escrow = maliciousEscrow(bad);
         bad.configureCallback(address(escrow), abi.encodeCall(StoreEscrow.refund, (bytes32(uint256(99)), uint16(1))));
         bad.configure(AdversarialERC20.Behavior.CallbackBubble, AdversarialERC20.Behavior.Normal);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 3, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 3, false);
         bytes memory sig = signature(escrow, q);
         vm.expectRevert();
         vm.prank(PAYER);
@@ -221,7 +221,7 @@ contract AdversarialTest is C0TestBase {
     function testSuccessfulLookupReadsNoTokenBalanceAllowanceOrTransferEvenAfterFullRefund() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 10, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 10, false);
         bytes32 id = fund(escrow, q);
         vm.prank(PAYER);
         bad.approve(address(escrow), 0);
@@ -247,7 +247,7 @@ contract AdversarialTest is C0TestBase {
     function testMalformedReturnAndNoReturnNoMovementFailAtomically() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 2, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 2, false);
         bytes memory sig = signature(escrow, q);
         bad.configure(AdversarialERC20.Behavior.MalformedReturn, AdversarialERC20.Behavior.Normal);
         vm.expectRevert();
@@ -264,10 +264,11 @@ contract AdversarialTest is C0TestBase {
 
         NoReturnERC20 legacy = new NoReturnERC20();
         StoreEscrow other =
-            new StoreEscrow(IERC20(address(legacy)), bytes32(uint256(5)), PAYER, authority, catalog(PRICE_A));
+            new StoreEscrow(IERC20(address(legacy)), bytes32(uint256(5)), PAYER, authority, roles(), catalog(PRICE_A));
         legacy.mint(PAYER, 100 * PRICE_A);
         vm.prank(PAYER);
         legacy.approve(address(other), q.amount);
+        q = quoteFor(other, PAYER, 1, 2, false);
         sig = signature(other, q);
         legacy.configureNoMove(true);
         vm.expectRevert(StoreEscrow.TransferDeltaMismatch.selector);
@@ -286,7 +287,7 @@ contract AdversarialTest is C0TestBase {
     function testBalanceReadRevertDoesNotBecomeAZeroBalanceOrAStoredOperation() public {
         AdversarialERC20 bad = new AdversarialERC20();
         StoreEscrow escrow = maliciousEscrow(bad);
-        StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 2, false);
+        StoreEscrow.FundingQuote memory q = quoteFor(escrow, PAYER, 1, 2, false);
         bytes memory sig = signature(escrow, q);
         bad.configureBalanceRead(true);
         vm.expectRevert();

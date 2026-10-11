@@ -1,0 +1,1 @@
+{"termsHash":"0x054753af4fbf6d3b7200cfb427a94b9e0380de7211401091f5e4c76edcab9eac","voucherId":"0x9cf2e929c263024c1a13b206d84bcea56c9c6b0164fd3232cda2e3e0f77bf40c","operations":11,"crRejected":true}

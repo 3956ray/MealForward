@@ -19,7 +19,7 @@ contract LocalGasTest is C0TestBase {
         stores[0].fund(one, sig);
         emit log_named_uint("successful lookup qty1", beforeGas - gasleft());
 
-        StoreEscrow.FundingQuote memory ten = quote(OTHER_PAYER, 1, 10, true);
+        StoreEscrow.FundingQuote memory ten = quoteFor(stores[1], OTHER_PAYER, 1, 10, true);
         sig = signature(stores[1], ten);
         vm.prank(OTHER_PAYER);
         beforeGas = gasleft();
@@ -34,7 +34,7 @@ contract LocalGasTest is C0TestBase {
         stores[1].refund(batch, 511);
         emit log_named_uint("remaining refund qty10 mask511", beforeGas - gasleft());
 
-        StoreEscrow.FundingQuote memory extra = quote(OTHER_PAYER, 2, 1, false);
+        StoreEscrow.FundingQuote memory extra = quoteFor(stores[1], OTHER_PAYER, 2, 1, false);
         bytes memory data = abi.encodeCall(StoreEscrow.fund, (extra, signature(stores[1], extra)));
         vm.prank(OTHER_PAYER);
         beforeGas = gasleft();

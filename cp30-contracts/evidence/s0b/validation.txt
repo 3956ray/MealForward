@@ -1,0 +1,136 @@
+{
+  "status": "DEVELOPER_COMPLETE_NOT_ACCEPTED",
+  "unitTests": 74,
+  "retainedC0": 46,
+  "fuzzCases": 20000,
+  "invariantCalls": 32768,
+  "actualLifecycleTransitions": 2380,
+  "lifecycleActions": {
+    "issue": {
+      "success": 806,
+      "expectedRejection": 0,
+      "noop": 2882,
+      "attempts": 3688,
+      "minMaxSuccessPerRun": [
+        8,
+        24
+      ]
+    },
+    "lock": {
+      "success": 356,
+      "expectedRejection": 0,
+      "noop": 1711,
+      "attempts": 2067,
+      "minMaxSuccessPerRun": [
+        2,
+        8
+      ]
+    },
+    "markHandover": {
+      "success": 336,
+      "expectedRejection": 0,
+      "noop": 1202,
+      "attempts": 1538,
+      "minMaxSuccessPerRun": [
+        1,
+        7
+      ]
+    },
+    "report": {
+      "success": 324,
+      "expectedRejection": 0,
+      "noop": 1272,
+      "attempts": 1596,
+      "minMaxSuccessPerRun": [
+        1,
+        7
+      ]
+    },
+    "settle": {
+      "success": 307,
+      "expectedRejection": 0,
+      "noop": 1057,
+      "attempts": 1364,
+      "minMaxSuccessPerRun": [
+        0,
+        7
+      ]
+    },
+    "expire": {
+      "success": 128,
+      "expectedRejection": 0,
+      "noop": 895,
+      "attempts": 1023,
+      "minMaxSuccessPerRun": [
+        0,
+        7
+      ]
+    },
+    "refundWithIntent": {
+      "success": 123,
+      "expectedRejection": 0,
+      "noop": 819,
+      "attempts": 942,
+      "minMaxSuccessPerRun": [
+        0,
+        2
+      ]
+    },
+    "advanceClock": {
+      "success": 983,
+      "expectedRejection": 0,
+      "noop": 0,
+      "attempts": 983,
+      "minMaxSuccessPerRun": [
+        8,
+        24
+      ]
+    },
+    "donation": {
+      "success": 839,
+      "expectedRejection": 0,
+      "noop": 0,
+      "attempts": 839,
+      "minMaxSuccessPerRun": [
+        5,
+        23
+      ]
+    },
+    "successfulLookup": {
+      "success": 785,
+      "expectedRejection": 0,
+      "noop": 9,
+      "attempts": 794,
+      "minMaxSuccessPerRun": [
+        5,
+        23
+      ]
+    },
+    "wrongRole": {
+      "success": 0,
+      "expectedRejection": 753,
+      "noop": 0,
+      "attempts": 753,
+      "minMaxSuccessPerRun": [
+        0,
+        0
+      ]
+    },
+    "pauseResume": {
+      "success": 797,
+      "expectedRejection": 0,
+      "noop": 0,
+      "attempts": 797,
+      "minMaxSuccessPerRun": [
+        4,
+        21
+      ]
+    }
+  },
+  "sizeBounds": {
+    "escrow deployed bytes": 21459,
+    "factory deployed bytes": 350,
+    "escrow init with fixture bytes": 26845,
+    "factory init with fixture bytes": 32035
+  }
+}

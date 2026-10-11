@@ -1,0 +1,14 @@
+{
+  "solidityFormatting": "PASS",
+  "gitDiffWhitespace": "PASS",
+  "formatCommand": [
+    "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+    "fmt",
+    "--check",
+    "contracts",
+    "test"
+  ],
+  "generatedConstants": "Checked in fixed Solidity vectors; viem command independently checks all constants and writes only new evidence",
+  "testsFinished": true,
+  "noBackgroundTestProcessesStarted": true
+}

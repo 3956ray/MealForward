@@ -4,6 +4,10 @@ pragma solidity 0.8.28;
 import {C0TestBase, StoreEscrow, VmC0} from "./C0TestBase.sol";
 
 contract QuotesTest is C0TestBase {
+    function originalHash() private view returns (bytes32) {
+        return referenceTerms(stores[0], terms(MEAL_A, 2, PRICE_A, TERMS_A));
+    }
+
     function testIndependentEIP712DigestAndFundEvent() public {
         StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 3, false);
         assertEq(stores[0].quoteDigest(q), referenceDigest(q, 31337, address(stores[0])));
@@ -21,7 +25,7 @@ contract QuotesTest is C0TestBase {
         assertEq(entry.topics[3], bytes32(uint256(uint160(PAYER))));
         assertEq(
             keccak256(entry.data),
-            keccak256(abi.encode(MEAL_A, uint256(2), TERMS_A, PRICE_A, uint256(3), uint256(0), 3 * PRICE_A))
+            keccak256(abi.encode(MEAL_A, uint256(2), originalHash(), PRICE_A, uint256(3), uint256(0), 3 * PRICE_A))
         );
     }
 

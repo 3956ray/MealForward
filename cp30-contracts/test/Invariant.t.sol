@@ -74,7 +74,7 @@ contract FinancialHandler {
         }
     }
 
-    function _quote(uint256 payerIndex, uint256 quantity, bool mealB)
+    function _quote(StoreEscrow escrow, uint256 payerIndex, uint256 quantity, bool mealB)
         private
         returns (StoreEscrow.FundingQuote memory q)
     {
@@ -84,11 +84,42 @@ contract FinancialHandler {
             payers[payerIndex],
             mealB ? MEAL_B : MEAL_A,
             mealB ? 1 : 2,
-            mealB ? TERMS_B : TERMS_A,
+            referenceTerms(escrow, mealB, price),
             quantity,
             price,
             quantity * price,
             block.timestamp + 600
+        );
+    }
+
+    function referenceTerms(StoreEscrow escrow, bool mealB, uint256 price) private view returns (bytes32) {
+        bytes32 schema = keccak256(
+            "MealForwardTerms(uint256 schemaVersion,uint256 chainId,address escrow,bytes32 storeId,bytes32 mealId,uint256 version,address asset,uint256 unitPrice,bytes32 bodyDigest,bytes32 imageDigest,uint8 windowCount,uint16 startMinute0,uint16 endMinute0,uint16 startMinute1,uint16 endMinute1,uint16 utcOffsetMinutes)"
+        );
+        return keccak256(
+            bytes.concat(
+                abi.encode(
+                    schema,
+                    uint256(1),
+                    block.chainid,
+                    address(escrow),
+                    escrow.storeId(),
+                    mealB ? MEAL_B : MEAL_A,
+                    uint256(mealB ? 1 : 2),
+                    address(token)
+                ),
+                abi.encode(
+                    price,
+                    mealB ? TERMS_B : TERMS_A,
+                    keccak256("synthetic image"),
+                    uint8(1),
+                    uint16(0),
+                    uint16(1440),
+                    uint16(0),
+                    uint16(0),
+                    uint16(480)
+                )
+            )
         );
     }
 
@@ -123,7 +154,7 @@ contract FinancialHandler {
         uint256 remaining = 10 - fundedUnits[store];
         uint256 maxQuantity = remaining < 3 ? remaining : 3;
         uint256 quantity = remaining == 0 ? 1 : uint256(quantitySeed) % maxQuantity + 1;
-        StoreEscrow.FundingQuote memory q = _quote(uint256(payerSeed) % 4, quantity, mealB);
+        StoreEscrow.FundingQuote memory q = _quote(escrow, uint256(payerSeed) % 4, quantity, mealB);
         bytes memory sig = _signature(escrow, q);
         vm.prank(q.payer);
         if (remaining == 0) {
@@ -194,7 +225,7 @@ contract FinancialHandler {
     function tamperAction(uint8 storeSeed, uint8 payerSeed) external {
         uint256 store = uint256(storeSeed) % 3;
         StoreEscrow escrow = _stores[store];
-        StoreEscrow.FundingQuote memory q = _quote(uint256(payerSeed) % 4, 1, false);
+        StoreEscrow.FundingQuote memory q = _quote(escrow, uint256(payerSeed) % 4, 1, false);
         bytes memory sig = _signature(escrow, q);
         ++q.amount;
         vm.prank(q.payer);
@@ -401,7 +432,7 @@ contract FinancialInvariantTest is C0TestBase {
         for (uint256 i; i < 3; ++i) {
             row = string.concat(row, i == 0 ? "" : ",", decimal(handler.refundedUnits(i)));
         }
-        vm.writeLine("evidence/invariant-actions.jsonl", string.concat(row, "]}"));
+        vm.writeLine("evidence/s0b/c0-invariant-actions.jsonl", string.concat(row, "]}"));
     }
 
     function decimal(uint256 value) private pure returns (string memory) {

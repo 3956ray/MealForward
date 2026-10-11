@@ -1,0 +1,22 @@
+{
+  "baseline": "f1f7de9401e30153a19b255e12a39323c882b4c0",
+  "trackedDifferences": [
+    "cp30-contracts/AGENTS.md",
+    "cp30-contracts/README.md",
+    "cp30-contracts/contracts/StoreEscrow.sol",
+    "cp30-contracts/contracts/ThreeStoreFactory.sol",
+    "cp30-contracts/foundry.toml",
+    "cp30-contracts/test/Adversarial.t.sol",
+    "cp30-contracts/test/C0TestBase.sol",
+    "cp30-contracts/test/Factory.t.sol",
+    "cp30-contracts/test/Financial.t.sol",
+    "cp30-contracts/test/Fuzz.t.sol",
+    "cp30-contracts/test/Gas.t.sol",
+    "cp30-contracts/test/Invariant.t.sol",
+    "cp30-contracts/test/Quotes.t.sol",
+    "cp30-contracts/test/Vectors.t.sol",
+    "cp30-contracts/test/collect-evidence.py",
+    "cp30-contracts/test/write-vectors.mjs"
+  ],
+  "historicalContractsTestsConfigsLocksUnchanged": true
+}

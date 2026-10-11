@@ -1,0 +1,19 @@
+{
+  "forge": {
+    "version": "forge Version: 1.7.1\nCommit SHA: 4072e48705af9d93e3c0f6e29e93b5e9a40caed8\nBuild Timestamp: 2026-05-08T07:54:31.470926000Z (1778226871)\nBuild Profile: dist",
+    "path": "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+    "sha256": "e729589084ca2f1479354353d1ec3d4789451b577f4cdee4e7dc57cae64a38fa"
+  },
+  "solc": {
+    "version": "solc, the solidity compiler commandline interface\nVersion: 0.8.28+commit.7893614a.Darwin.appleclang",
+    "path": "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+    "sha256": "81515b0e53deaa266d549545ccaac0a5a96e6d4e8201c77f673b2c710976d9ea"
+  },
+  "node": {
+    "version": "v24.21.0",
+    "path": "/opt/homebrew/bin/node",
+    "sha256": "ee2a4493dc9e1bd0cf10f6a1aa773d0452054e2cb179b461f4d60cef66bd01ba"
+  },
+  "openzeppelin": "5.6.1",
+  "viem": "2.57.1"
+}

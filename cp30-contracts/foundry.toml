@@ -12,7 +12,7 @@ optimizer_runs = 200
 chain_id = 31337
 offline = true
 ffi = false
-fs_permissions = [{ access = "write", path = "./evidence" }]
+fs_permissions = [{ access = "write", path = "./evidence/s0b" }]
 gas_reports = ["StoreEscrow", "ThreeStoreFactory"]
 
 [profile.default.fuzz]
@@ -22,6 +22,7 @@ seed = "0xc030"
 [profile.default.invariant]
 runs = 64
 depth = 256
+failure_persist_dir = "evidence/s0b/invariant-failures"
 fail_on_revert = true
 call_override = false
 shrink_run_limit = 5000

@@ -1,0 +1,2741 @@
+{
+  "StoreEscrow": {
+    "abi": [
+      {
+        "type": "constructor",
+        "inputs": [
+          {
+            "name": "asset_",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "storeId_",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "owner_",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "quoteAuthority_",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "authorities_",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Authorities",
+            "components": [
+              {
+                "name": "catalog",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "issuer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "operator",
+                "type": "address",
+                "internalType": "address"
+              }
+            ]
+          },
+          {
+            "name": "entries",
+            "type": "tuple[]",
+            "internalType": "struct StoreEscrow.CatalogEntry[]",
+            "components": [
+              {
+                "name": "terms",
+                "type": "tuple",
+                "internalType": "struct StoreEscrow.TermsInput",
+                "components": [
+                  {
+                    "name": "mealId",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "version",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
+                    "name": "unitPrice",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
+                    "name": "bodyDigest",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "imageDigest",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "windowCount",
+                    "type": "uint8",
+                    "internalType": "uint8"
+                  },
+                  {
+                    "name": "startMinute0",
+                    "type": "uint16",
+                    "internalType": "uint16"
+                  },
+                  {
+                    "name": "endMinute0",
+                    "type": "uint16",
+                    "internalType": "uint16"
+                  },
+                  {
+                    "name": "startMinute1",
+                    "type": "uint16",
+                    "internalType": "uint16"
+                  },
+                  {
+                    "name": "endMinute1",
+                    "type": "uint16",
+                    "internalType": "uint16"
+                  }
+                ]
+              },
+              {
+                "name": "current",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "LIFETIME_CAP",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "OP_DOMAIN",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "QUOTE_TYPEHASH",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "TERMS_TYPEHASH",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "VOUCHER_DOMAIN",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "VOUCHER_LIFETIME",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "asset",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "contract IERC20"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "availableAmount",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "availableUnits",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "bucketAmount",
+        "inputs": [
+          {
+            "name": "bucket",
+            "type": "uint8",
+            "internalType": "enum StoreEscrow.Bucket"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "bucketCount",
+        "inputs": [
+          {
+            "name": "bucket",
+            "type": "uint8",
+            "internalType": "enum StoreEscrow.Bucket"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "catalog",
+        "inputs": [
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "version",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "unitPrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "catalogAuthority",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "close",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "expectedControlRevision",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "closed",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "computeTermsHash",
+        "inputs": [
+          {
+            "name": "input",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.TermsInput",
+            "components": [
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "version",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bodyDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "imageDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "windowCount",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "startMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "startMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "controlRevision",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "currentVersion",
+        "inputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "eip712Domain",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "fields",
+            "type": "bytes1",
+            "internalType": "bytes1"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "verifyingContract",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "extensions",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "expire",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "unitSeq",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "fund",
+        "inputs": [
+          {
+            "name": "quote",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.FundingQuote",
+            "components": [
+              {
+                "name": "quoteId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "currentVersion",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "quantity",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "signature",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "getAccounting",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Accounting",
+            "components": [
+              {
+                "name": "fundedUnits",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "fundedAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "counts",
+                "type": "uint256[5]",
+                "internalType": "uint256[5]"
+              },
+              {
+                "name": "amounts",
+                "type": "uint256[5]",
+                "internalType": "uint256[5]"
+              },
+              {
+                "name": "liability",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getBatch",
+        "inputs": [
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Batch",
+            "components": [
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "version",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "quantity",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "firstUnit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "refundedMask",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getOperation",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Operation",
+            "components": [
+              {
+                "name": "kind",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "caller",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "payloadHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "result",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "executedAt",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getTerms",
+        "inputs": [
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "version",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Terms",
+            "components": [
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "bodyDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "imageDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "windowCount",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "startMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "startMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getUnit",
+        "inputs": [
+          {
+            "name": "seq",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Unit",
+            "components": [
+              {
+                "name": "batchId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "localIndex",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "version",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bucket",
+                "type": "uint8",
+                "internalType": "enum StoreEscrow.Bucket"
+              },
+              {
+                "name": "generation",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "voucherId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getVoucher",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Voucher",
+            "components": [
+              {
+                "name": "unitSeq",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "generation",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "issuedAt",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "issuer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "lockId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "lockedAt",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "operator",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "processor",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "markerId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "handoverRecordedAt",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "handoverBlock",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "reportId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "settleId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "expired",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "issue",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "expectedUnitSeq",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "expectedNextGeneration",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expectedTermsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "issuerAuthority",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "liability",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "lifetimeFundedUnits",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "listed",
+        "inputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "lock",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "lockId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "markHandover",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lockId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "markerId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "nextCandidate",
+        "inputs": [
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "candidate",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.Candidate",
+            "components": [
+              {
+                "name": "available",
+                "type": "bool",
+                "internalType": "bool"
+              },
+              {
+                "name": "unitSeq",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "nextGeneration",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "needsExpiry",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "operationPayloadHash",
+        "inputs": [
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "caller",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "parametersHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "operatorAuthority",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "paused",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "publish",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "expectedControlRevision",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "input",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.TermsInput",
+            "components": [
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "version",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bodyDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "imageDigest",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "windowCount",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "startMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute0",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "startMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "endMinute1",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "name": "hash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "quoteAuthority",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "quoteDigest",
+        "inputs": [
+          {
+            "name": "quote",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.FundingQuote",
+            "components": [
+              {
+                "name": "quoteId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "currentVersion",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "quantity",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "quotePayloadHash",
+        "inputs": [
+          {
+            "name": "quote",
+            "type": "tuple",
+            "internalType": "struct StoreEscrow.FundingQuote",
+            "components": [
+              {
+                "name": "quoteId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "mealId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "currentVersion",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "termsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "quantity",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "unitPrice",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "pure"
+      },
+      {
+        "type": "function",
+        "name": "quoteUses",
+        "inputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "payloadHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "receiver",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "refund",
+        "inputs": [
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "unitMask",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "refundWithIntent",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "unitMask",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "refundedUnits",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "report",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lockId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "markerId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "resultId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "setListed",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "expectedControlRevision",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "value",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "setPaused",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "expectedControlRevision",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "value",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "settle",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "storeId",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "surplus",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "totalFundedAmount",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "totalRefundedAmount",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "event",
+        "name": "ControlChanged",
+        "inputs": [
+          {
+            "name": "kind",
+            "type": "uint8",
+            "indexed": false,
+            "internalType": "uint8"
+          },
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "value",
+            "type": "bool",
+            "indexed": false,
+            "internalType": "bool"
+          },
+          {
+            "name": "revision",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "EIP712DomainChanged",
+        "inputs": [],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Expired",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "unitSeq",
+            "type": "uint8",
+            "indexed": false,
+            "internalType": "uint8"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Funded",
+        "inputs": [
+          {
+            "name": "quoteId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "version",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "unitPrice",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "quantity",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "firstUnit",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "HandoverMarked",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "markerId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "lockId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "at",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "blockNumber",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Issued",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "unitSeq",
+            "type": "uint8",
+            "indexed": false,
+            "internalType": "uint8"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "issuedAt",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Locked",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "lockId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "generation",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "at",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "operator",
+            "type": "address",
+            "indexed": false,
+            "internalType": "address"
+          },
+          {
+            "name": "processor",
+            "type": "address",
+            "indexed": false,
+            "internalType": "address"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "OperationExecuted",
+        "inputs": [
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "kind",
+            "type": "uint8",
+            "indexed": false,
+            "internalType": "uint8"
+          },
+          {
+            "name": "caller",
+            "type": "address",
+            "indexed": false,
+            "internalType": "address"
+          },
+          {
+            "name": "payloadHash",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "result",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Published",
+        "inputs": [
+          {
+            "name": "mealId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "version",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "revision",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Refunded",
+        "inputs": [
+          {
+            "name": "batchId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "unitMask",
+            "type": "uint16",
+            "indexed": false,
+            "internalType": "uint16"
+          },
+          {
+            "name": "quantity",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Reported",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "resultId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "markerId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "Settled",
+        "inputs": [
+          {
+            "name": "voucherId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "opId",
+            "type": "bytes32",
+            "indexed": false,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "receiver",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "error",
+        "name": "AlreadyLocked",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "AlreadyRefunded",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "CandidateMismatch",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "CandidateUnavailable",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "CapExceeded",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "ECDSAInvalidSignature",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "ECDSAInvalidSignatureLength",
+        "inputs": [
+          {
+            "name": "length",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "type": "error",
+        "name": "ECDSAInvalidSignatureS",
+        "inputs": [
+          {
+            "name": "s",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "type": "error",
+        "name": "Insolvent",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidBatch",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidCatalog",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidConfiguration",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidLock",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidMarker",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidOperation",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidQuote",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidRefundMask",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidShortString",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidUnitState",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidVoucher",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "NoChange",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "NotExpired",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "OperatingDenied",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "OperationConflict",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "QuoteConflict",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "QuoteExpired",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "ReentrancyGuardReentrantCall",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "SafeERC20FailedOperation",
+        "inputs": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      },
+      {
+        "type": "error",
+        "name": "StaleRevision",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "StringTooLong",
+        "inputs": [
+          {
+            "name": "str",
+            "type": "string",
+            "internalType": "string"
+          }
+        ]
+      },
+      {
+        "type": "error",
+        "name": "TermsMismatch",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "TimeDenied",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "TransferDeltaMismatch",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "UnauthorizedPayer",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "UnauthorizedQuote",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "UnauthorizedRole",
+        "inputs": []
+      }
+    ],
+    "methodIdentifiers": {
+      "LIFETIME_CAP()": "3e4b7420",
+      "OP_DOMAIN()": "6397df21",
+      "QUOTE_TYPEHASH()": "f7581615",
+      "TERMS_TYPEHASH()": "3aa36987",
+      "VOUCHER_DOMAIN()": "e6e1383d",
+      "VOUCHER_LIFETIME()": "72ee4389",
+      "asset()": "38d52e0f",
+      "availableAmount()": "91f7cfb9",
+      "availableUnits()": "8324bb51",
+      "bucketAmount(uint8)": "8e3d9e38",
+      "bucketCount(uint8)": "48f56342",
+      "catalog(bytes32,uint256)": "46bc8f33",
+      "catalogAuthority()": "753c6ae8",
+      "close(bytes32,uint256)": "77e283d0",
+      "closed()": "597e1fb5",
+      "computeTermsHash((bytes32,uint256,uint256,bytes32,bytes32,uint8,uint16,uint16,uint16,uint16))": "80acfcb9",
+      "controlRevision()": "19d0a9a1",
+      "currentVersion(bytes32)": "3b426d3f",
+      "eip712Domain()": "84b0196e",
+      "expire(bytes32,bytes32,uint256)": "cf9f0197",
+      "fund((bytes32,address,bytes32,uint256,bytes32,uint256,uint256,uint256,uint256),bytes)": "3cccb50a",
+      "getAccounting()": "36cfd8ba",
+      "getBatch(bytes32)": "ed42136f",
+      "getOperation(bytes32)": "279412c5",
+      "getTerms(bytes32,uint256)": "ded2363a",
+      "getUnit(uint8)": "2bb7c0f4",
+      "getVoucher(bytes32)": "56dcb25e",
+      "issue(bytes32,bytes32,uint8,uint256,bytes32,uint256)": "8c540688",
+      "issuerAuthority()": "cbdb6f6a",
+      "liability()": "705727b5",
+      "lifetimeFundedUnits()": "16368136",
+      "listed(bytes32)": "bf7e3b60",
+      "lock(bytes32,bytes32,uint256,uint256)": "d62fcdde",
+      "markHandover(bytes32,bytes32,uint256,bytes32,uint256)": "2debe5d7",
+      "nextCandidate(bytes32)": "36f8a86e",
+      "operationPayloadHash(uint8,address,bytes32,bytes32)": "3e45b17c",
+      "operatorAuthority()": "7bbecc95",
+      "owner()": "8da5cb5b",
+      "paused()": "5c975abb",
+      "publish(bytes32,uint256,(bytes32,uint256,uint256,bytes32,bytes32,uint8,uint16,uint16,uint16,uint16))": "5e88339b",
+      "quoteAuthority()": "7a092896",
+      "quoteDigest((bytes32,address,bytes32,uint256,bytes32,uint256,uint256,uint256,uint256))": "9741462a",
+      "quotePayloadHash((bytes32,address,bytes32,uint256,bytes32,uint256,uint256,uint256,uint256))": "b4f2439f",
+      "quoteUses(bytes32)": "92b9ba87",
+      "receiver()": "f7260d3e",
+      "refund(bytes32,uint16)": "1ee2a4ec",
+      "refundWithIntent(bytes32,bytes32,uint16)": "1914528a",
+      "refundedUnits()": "662ca097",
+      "report(bytes32,bytes32,uint256,bytes32,bytes32)": "302897c2",
+      "setListed(bytes32,uint256,bytes32,bool)": "55e80d27",
+      "setPaused(bytes32,uint256,bool)": "3c16e692",
+      "settle(bytes32,bytes32,uint256)": "3daef73e",
+      "storeId()": "4e427852",
+      "surplus()": "13888565",
+      "totalFundedAmount()": "1439aef2",
+      "totalRefundedAmount()": "cd1e0355"
+    },
+    "abiSha256": "2ce99cae1c566728d7ce1d5c7f86530e899f4703512250b4fdef8512908cafc5",
+    "artifactSha256": "92c2b42db5728f0d9790a7bdcf1eed0f66969af1e26b19f5c9c0e9b3c5ddf4e5",
+    "creationBytes": 25501,
+    "creationBytecodeSha256": "d7ba273566fe56ed39b2e68836d04bcca78fbe1254ea951d9fb7cafa3276c561",
+    "deployedTemplateBytes": 21459,
+    "deployedTemplateSha256": "820ffa789ca625f6a2ac6688c06d0376fcbe1d14ce64800467142182fc609dbe",
+    "limitsEnforced": true,
+    "note": "Compiled runtime template includes zero immutable slots; hash is not a deployed-address attestation."
+  },
+  "ThreeStoreFactory": {
+    "abi": [
+      {
+        "type": "constructor",
+        "inputs": [
+          {
+            "name": "asset_",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "quoteAuthority_",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "configs",
+            "type": "tuple[3]",
+            "internalType": "struct ThreeStoreFactory.StoreConfig[3]",
+            "components": [
+              {
+                "name": "storeId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "owner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "authorities",
+                "type": "tuple",
+                "internalType": "struct StoreEscrow.Authorities",
+                "components": [
+                  {
+                    "name": "catalog",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "issuer",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "operator",
+                    "type": "address",
+                    "internalType": "address"
+                  }
+                ]
+              },
+              {
+                "name": "catalog",
+                "type": "tuple[]",
+                "internalType": "struct StoreEscrow.CatalogEntry[]",
+                "components": [
+                  {
+                    "name": "terms",
+                    "type": "tuple",
+                    "internalType": "struct StoreEscrow.TermsInput",
+                    "components": [
+                      {
+                        "name": "mealId",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                      },
+                      {
+                        "name": "version",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                      },
+                      {
+                        "name": "unitPrice",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                      },
+                      {
+                        "name": "bodyDigest",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                      },
+                      {
+                        "name": "imageDigest",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                      },
+                      {
+                        "name": "windowCount",
+                        "type": "uint8",
+                        "internalType": "uint8"
+                      },
+                      {
+                        "name": "startMinute0",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                      },
+                      {
+                        "name": "endMinute0",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                      },
+                      {
+                        "name": "startMinute1",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                      },
+                      {
+                        "name": "endMinute1",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "current",
+                    "type": "bool",
+                    "internalType": "bool"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "stateMutability": "nonpayable"
+      },
+      {
+        "type": "function",
+        "name": "asset",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "contract IERC20"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "escrowFor",
+        "inputs": [
+          {
+            "name": "storeId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "escrow",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "escrows",
+        "inputs": [
+          {
+            "name": "",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "quoteAuthority",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "",
+            "type": "address",
+            "internalType": "address"
+          }
+        ],
+        "stateMutability": "view"
+      },
+      {
+        "type": "event",
+        "name": "StoreCreated",
+        "inputs": [
+          {
+            "name": "slot",
+            "type": "uint256",
+            "indexed": true,
+            "internalType": "uint256"
+          },
+          {
+            "name": "storeId",
+            "type": "bytes32",
+            "indexed": true,
+            "internalType": "bytes32"
+          },
+          {
+            "name": "escrow",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "indexed": false,
+            "internalType": "address"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "error",
+        "name": "DuplicateStore",
+        "inputs": []
+      },
+      {
+        "type": "error",
+        "name": "InvalidConfiguration",
+        "inputs": []
+      }
+    ],
+    "methodIdentifiers": {
+      "asset()": "38d52e0f",
+      "escrowFor(bytes32)": "e83e6ec8",
+      "escrows(uint256)": "012f52ee",
+      "quoteAuthority()": "7a092896"
+    },
+    "abiSha256": "d9b52de21e4f9a4d35b82ff636b7af37836de28797d22fdad5a9505994be7b6e",
+    "artifactSha256": "8de12746a253605345cb717b0a29777e135b321c20eadb56ba53aeb0e0c4b4de",
+    "creationBytes": 28003,
+    "creationBytecodeSha256": "9f14cd1e3199774e48be0bff57f5f2a92aff9cd9191a3ee8925f88ff94210278",
+    "deployedTemplateBytes": 350,
+    "deployedTemplateSha256": "577f15e223cae63918072a6296618b8036d82129cc4ab47eaf3789ac8ea82d1d",
+    "limitsEnforced": true,
+    "note": "Compiled runtime template includes zero immutable slots; hash is not a deployed-address attestation."
+  }
+}

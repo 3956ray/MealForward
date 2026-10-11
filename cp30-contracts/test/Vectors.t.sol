@@ -6,6 +6,7 @@ import {C0TestBase, StoreEscrow} from "./C0TestBase.sol";
 contract VectorsTest is C0TestBase {
     function testFixedViemQuotePayloadDomainDigestAndBatchVectors() public {
         StoreEscrow.FundingQuote memory q = quote(PAYER, 1, 3, false);
+        q.termsHash = TERMS_A; // Preserved historical fixed C0 quote vector.
         q.deadline = 1_800_000_600;
         assertEq(stores[0].QUOTE_TYPEHASH(), 0x3c5c2a259cfd290637ab46e80ed773b838eeb00b20020cc5f0f9670053e0de81);
         assertEq(stores[0].quotePayloadHash(q), 0xe0d9492523d6166c100fed2b71ca466aa44512d4b2687e876346739a2ad1cb23);

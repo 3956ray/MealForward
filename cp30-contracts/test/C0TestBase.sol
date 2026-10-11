@@ -23,6 +23,7 @@ interface VmC0 {
     function deal(address, uint256) external;
     function recordLogs() external;
     function getRecordedLogs() external returns (Log[] memory);
+    function roll(uint256) external;
     function writeLine(string calldata path, string calldata data) external;
 }
 
@@ -68,33 +69,90 @@ abstract contract C0TestBase {
         }
     }
 
+    function roles() internal pure returns (StoreEscrow.Authorities memory) {
+        return StoreEscrow.Authorities(address(0x401), address(0x402), address(0x403));
+    }
+
+    function terms(bytes32 meal, uint256 version, uint256 price, bytes32 body)
+        internal
+        pure
+        returns (StoreEscrow.TermsInput memory)
+    {
+        return StoreEscrow.TermsInput(meal, version, price, body, keccak256("synthetic image"), 1, 0, 1440, 0, 0);
+    }
+
+    function referenceTerms(StoreEscrow escrow, StoreEscrow.TermsInput memory t) internal view returns (bytes32) {
+        bytes32 schema = keccak256(
+            "MealForwardTerms(uint256 schemaVersion,uint256 chainId,address escrow,bytes32 storeId,bytes32 mealId,uint256 version,address asset,uint256 unitPrice,bytes32 bodyDigest,bytes32 imageDigest,uint8 windowCount,uint16 startMinute0,uint16 endMinute0,uint16 startMinute1,uint16 endMinute1,uint16 utcOffsetMinutes)"
+        );
+        bytes memory first = abi.encode(
+            schema,
+            uint256(1),
+            block.chainid,
+            address(escrow),
+            escrow.storeId(),
+            t.mealId,
+            t.version,
+            address(escrow.asset())
+        );
+        bytes memory last = abi.encode(
+            t.unitPrice,
+            t.bodyDigest,
+            t.imageDigest,
+            t.windowCount,
+            t.startMinute0,
+            t.endMinute0,
+            t.startMinute1,
+            t.endMinute1,
+            uint16(480)
+        );
+        return keccak256(bytes.concat(first, last));
+    }
+
     function catalog(uint256 price) internal pure returns (StoreEscrow.CatalogEntry[] memory entries) {
         entries = new StoreEscrow.CatalogEntry[](3);
-        entries[0] = StoreEscrow.CatalogEntry(MEAL_A, 1, 4_000_000, keccak256("synthetic A v1"), false);
-        entries[1] = StoreEscrow.CatalogEntry(MEAL_A, 2, price, TERMS_A, true);
-        entries[2] = StoreEscrow.CatalogEntry(MEAL_B, 1, PRICE_B, TERMS_B, true);
+        entries[0] = StoreEscrow.CatalogEntry(terms(MEAL_A, 1, 4_000_000, keccak256("synthetic A v1")), false);
+        entries[1] = StoreEscrow.CatalogEntry(terms(MEAL_A, 2, price, TERMS_A), true);
+        entries[2] = StoreEscrow.CatalogEntry(terms(MEAL_B, 1, PRICE_B, TERMS_B), true);
     }
 
     function configs() internal pure returns (ThreeStoreFactory.StoreConfig[3] memory result) {
         for (uint256 i; i < 3; ++i) {
-            result[i] = ThreeStoreFactory.StoreConfig(bytes32(i + 1), address(uint160(0x201 + i)), catalog(PRICE_A));
+            result[i] = ThreeStoreFactory.StoreConfig(
+                bytes32(i + 1),
+                address(uint160(0x201 + i)),
+                StoreEscrow.Authorities(
+                    address(uint160(0x401 + i * 16)), address(uint160(0x402 + i * 16)), address(uint160(0x403 + i * 16))
+                ),
+                catalog(PRICE_A)
+            );
         }
     }
 
     function quote(address payer, uint256 id, uint256 quantity, bool mealB)
         internal
         view
+        returns (StoreEscrow.FundingQuote memory)
+    {
+        return quoteFor(stores[0], payer, id, quantity, mealB);
+    }
+
+    function quoteFor(StoreEscrow escrow, address payer, uint256 id, uint256 quantity, bool mealB)
+        internal
+        view
         returns (StoreEscrow.FundingQuote memory q)
     {
+        StoreEscrow.TermsInput memory t =
+            terms(mealB ? MEAL_B : MEAL_A, mealB ? 1 : 2, mealB ? PRICE_B : PRICE_A, mealB ? TERMS_B : TERMS_A);
         q = StoreEscrow.FundingQuote(
             bytes32(id),
             payer,
-            mealB ? MEAL_B : MEAL_A,
-            mealB ? 1 : 2,
-            mealB ? TERMS_B : TERMS_A,
+            t.mealId,
+            t.version,
+            referenceTerms(escrow, t),
             quantity,
-            mealB ? PRICE_B : PRICE_A,
-            quantity * (mealB ? PRICE_B : PRICE_A),
+            t.unitPrice,
+            quantity * t.unitPrice,
             block.timestamp + 600
         );
     }

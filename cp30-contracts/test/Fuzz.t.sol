@@ -7,10 +7,11 @@ contract FinancialFuzzTest is C0TestBase {
     function testFuzzOriginalPricePartialRefund(uint96 rawPrice, uint8 rawQuantity, uint16 rawMask) public {
         uint256 price = uint256(rawPrice) + 1;
         uint256 quantity = uint256(rawQuantity) % 10 + 1;
-        StoreEscrow escrow = new StoreEscrow(token, bytes32(uint256(4)), PAYER, authority, catalog(price));
+        StoreEscrow escrow = new StoreEscrow(token, bytes32(uint256(4)), PAYER, authority, roles(), catalog(price));
         vm.prank(PAYER);
         token.approve(address(escrow), quantity * price);
         StoreEscrow.FundingQuote memory q = quote(PAYER, 1, quantity, false);
+        q.termsHash = referenceTerms(escrow, terms(MEAL_A, 2, price, TERMS_A));
         q.unitPrice = price;
         q.amount = price * quantity;
         bytes32 id = fund(escrow, q);
@@ -77,7 +78,7 @@ contract FinancialFuzzTest is C0TestBase {
         uint16 all = uint16((1 << quantity) - 1);
         uint16 firstMask = rawMask & all;
         if (firstMask == 0) firstMask = 1;
-        bytes32 id = fund(stores[0], quote(PAYER, 1, quantity, false));
+        bytes32 id = fund(stores[0], quoteFor(stores[0], PAYER, 1, quantity, false));
         refund(stores[0], PAYER, id, firstMask);
         uint16 remaining = all ^ firstMask;
         if (remaining != 0) refund(stores[0], PAYER, id, remaining);

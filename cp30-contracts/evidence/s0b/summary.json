@@ -1,0 +1,306 @@
+{
+  "status": "DEVELOPER_COMPLETE_FOR_INDEPENDENT_REVIEW_NOT_ACCEPTED",
+  "baseline": "f1f7de9401e30153a19b255e12a39323c882b4c0",
+  "seed": "0xc030",
+  "unit": {
+    "tests": 74,
+    "retainedC0Tests": 46,
+    "newS0bTests": 28,
+    "failures": 0,
+    "originalTestNames": [
+      "testThreeStoresEachReachTenAndOneRefundDoesNotAffectOthers",
+      "testExactlyThreeFixedStoresAndNoFourthSlot",
+      "testRejectZeroAndDuplicateFactorySlots",
+      "testRejectMissingAssetOrAuthority",
+      "testInvalidLastCatalogRevertsAtomicFactoryCreation",
+      "testRejectInvalidCatalogFieldsDuplicatesAndMissingCurrent",
+      "testNoAdminWithdrawalChangePublicationOrNativeMealPayment",
+      "testStoreAssetCapAndBatchIsolation",
+      "testGoldenThreeFourThreeDifferentPricesAndFullRefundCannotReopenCap",
+      "testBatchLocalHighBitsAndMixedAlreadyRefundedMaskAtomic",
+      "testOwnerAsOriginalPayerHasOnlyTheirOwnRefundRights",
+      "testMixedOriginalPricesPayersAndContinuousUnitSequence",
+      "testQuantityOneAndTenAndCapNotRestoredByRefund",
+      "testCompetingFinalCapAcrossMealsAndPayers",
+      "testRefundMaskBoundsDuplicatesAndWrongPayerOrService",
+      "testNewQuoteCannotReuseARefundedUnit",
+      "testDonationsRemainSurplusAndWrongTokenDoesNotFund",
+      "testInsufficientBalanceAndAllowanceFailAtomicallyAndKeyCanRetry",
+      "testExternalNegativeRebaseFailsClosedWithoutErasingLiability",
+      "testMultiplicationAndLifetimeAmountOverflowRollback",
+      "testIndependentEIP712DigestAndFundEvent",
+      "testEveryQuoteFieldIsSignatureBound",
+      "testWrongChainEscrowNameAndVersionDomainsRejected",
+      "testWrongSignerMalformedAndMalleableSignaturesRejected",
+      "testSenderMustBeOriginalPayerIncludingReplay",
+      "testAuthorizedQuoteCannotOverrideCatalogAndValueChecks",
+      "testDeadlineExclusiveAndFailedQuoteDoesNotOccupyKey",
+      "testSameQuoteReturnsOriginalAfterDeadlineCapAndRefund",
+      "testSameKeyDifferentAuthorizedPayloadConflicts",
+      "testCrossEntryCallbacksFundToRefundAndRefundToFundAreGuarded",
+      "testCrossStoreCallbacksNeedTheirOwnPayerDomainAndBatchAuthorization",
+      "testCaughtCallbackFollowedByIncorrectDeltaStillRollsBackOuterAction",
+      "testIncomingReceiverTaxRollsBackPayerEscrowFeeAllowanceAndQuote",
+      "testIncomingSenderExtraFeeRollsBackPayerEscrowFeeAllowanceAndQuote",
+      "testIncomingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic",
+      "testOutgoingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic",
+      "testStandardNoReturnTokenFundAndPartialRefund",
+      "testIncomingAndOutgoingCallbacksRejectedByReentrancyGuard",
+      "testBubblingCallbackFailureRollsBackFundAndRefund",
+      "testSuccessfulLookupReadsNoTokenBalanceAllowanceOrTransferEvenAfterFullRefund",
+      "testMalformedReturnAndNoReturnNoMovementFailAtomically",
+      "testBalanceReadRevertDoesNotBecomeAZeroBalanceOrAStoredOperation",
+      "testFixedViemQuotePayloadDomainDigestAndBatchVectors",
+      "testActualEscrowEIP712DomainExposesExactNameVersionChainAndAddress",
+      "testHandlerReachabilityAndOriginalPayerReference",
+      "testLocalEVMCallGasWithExplicitInputsAndStates"
+    ]
+  },
+  "fuzz": {
+    "cases": 20000,
+    "newS0bCases": 10000,
+    "retainedC0Cases": 10000,
+    "methods": {
+      "testFuzzEverySignatureFieldRejectsMutation(uint256,uint8)": 2500,
+      "testFuzzLifetimeCapAcrossMealsPayersAndRefund(uint8,bool)": 2500,
+      "testFuzzOriginalPricePartialRefund(uint96,uint8,uint16)": 2500,
+      "testFuzzRefundPartitionAndNoDoubleCredit(uint8,uint16)": 2500,
+      "testFuzzIndependentFiveBucketOriginalPriceAndGeneration(uint64,uint8,uint256)": 5000,
+      "testFuzzOriginalWindowSecondsClassification(uint16,uint16,uint32)": 5000
+    },
+    "failures": 0
+  },
+  "c0Invariant": {
+    "runs": 64,
+    "depth": 256,
+    "calls": 16384,
+    "unexpectedReverts": 0,
+    "hookRows": 65,
+    "extraFinalVerificationRow": 1,
+    "bootstrapPerRun": {
+      "funds": 3,
+      "refunds": 3,
+      "donations": 3
+    },
+    "randomActions": {
+      "fundAction": {
+        "success": 901,
+        "expectedRejection": 1811,
+        "noop": 0,
+        "attempts": 2712
+      },
+      "refundAction": {
+        "success": 1177,
+        "expectedRejection": 0,
+        "noop": 1563,
+        "attempts": 2740
+      },
+      "donateAction": {
+        "success": 2646,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 2646
+      },
+      "replayAction": {
+        "success": 2771,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 2771
+      },
+      "tamperAction": {
+        "success": 0,
+        "expectedRejection": 2703,
+        "noop": 0,
+        "attempts": 2703
+      },
+      "foreignRefundAction": {
+        "success": 0,
+        "expectedRejection": 2812,
+        "noop": 0,
+        "attempts": 2812
+      }
+    }
+  },
+  "lifecycleInvariant": {
+    "runs": 64,
+    "depth": 256,
+    "calls": 16384,
+    "unexpectedReverts": 0,
+    "hookRows": 65,
+    "extraFinalVerificationRow": 1,
+    "lifecycleBootstrap": 0,
+    "setup": "chosen original inputs: A-v1 price3 qty3; B-v1 price5 qty3; publish A-v2 price7 qty4, F52 and 10 lifetime units",
+    "actualRandomLifecycleTransitions": 2380,
+    "randomActions": {
+      "issue": {
+        "success": 806,
+        "expectedRejection": 0,
+        "noop": 2882,
+        "attempts": 3688,
+        "minMaxSuccessPerRun": [
+          8,
+          24
+        ]
+      },
+      "lock": {
+        "success": 356,
+        "expectedRejection": 0,
+        "noop": 1711,
+        "attempts": 2067,
+        "minMaxSuccessPerRun": [
+          2,
+          8
+        ]
+      },
+      "markHandover": {
+        "success": 336,
+        "expectedRejection": 0,
+        "noop": 1202,
+        "attempts": 1538,
+        "minMaxSuccessPerRun": [
+          1,
+          7
+        ]
+      },
+      "report": {
+        "success": 324,
+        "expectedRejection": 0,
+        "noop": 1272,
+        "attempts": 1596,
+        "minMaxSuccessPerRun": [
+          1,
+          7
+        ]
+      },
+      "settle": {
+        "success": 307,
+        "expectedRejection": 0,
+        "noop": 1057,
+        "attempts": 1364,
+        "minMaxSuccessPerRun": [
+          0,
+          7
+        ]
+      },
+      "expire": {
+        "success": 128,
+        "expectedRejection": 0,
+        "noop": 895,
+        "attempts": 1023,
+        "minMaxSuccessPerRun": [
+          0,
+          7
+        ]
+      },
+      "refundWithIntent": {
+        "success": 123,
+        "expectedRejection": 0,
+        "noop": 819,
+        "attempts": 942,
+        "minMaxSuccessPerRun": [
+          0,
+          2
+        ]
+      },
+      "advanceClock": {
+        "success": 983,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 983,
+        "minMaxSuccessPerRun": [
+          8,
+          24
+        ]
+      },
+      "donation": {
+        "success": 839,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 839,
+        "minMaxSuccessPerRun": [
+          5,
+          23
+        ]
+      },
+      "successfulLookup": {
+        "success": 785,
+        "expectedRejection": 0,
+        "noop": 9,
+        "attempts": 794,
+        "minMaxSuccessPerRun": [
+          5,
+          23
+        ]
+      },
+      "wrongRole": {
+        "success": 0,
+        "expectedRejection": 753,
+        "noop": 0,
+        "attempts": 753,
+        "minMaxSuccessPerRun": [
+          0,
+          0
+        ]
+      },
+      "pauseResume": {
+        "success": 797,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 797,
+        "minMaxSuccessPerRun": [
+          4,
+          21
+        ]
+      }
+    },
+    "model": "All original fields, five buckets/counts/amounts, original clocks/generations, exact payer/owner/token balances are checked against independently chosen original inputs and model transitions, never populated from escrow state getters."
+  },
+  "historical": {
+    "rootMethods": 13,
+    "rootFuzzCases": 256,
+    "testnetNamedOfflineMethods": 4,
+    "failures": 0
+  },
+  "vectors": {
+    "canonicalTermsBodyImageVoucherAnd11AbiPayloads": "independent installed viem plus typed Solidity assertions",
+    "C0FixedQuoteSchema": "preserved unchanged synthetic fixed constants"
+  },
+  "gas": {
+    "measurement": "Local EVM call incl ABI/call overhead, excludes intrinsic fees; warmth varies within test, not live Monad fees",
+    "calls": {
+      "fresh fund qty1": 490828,
+      "successful lookup qty1": 10618,
+      "fresh fund qty10": 1750501,
+      "partial refund qty10 mask512": 106851,
+      "remaining refund qty10 mask511": 224567,
+      "reject cap after full refund qty1": 30340,
+      "issue normalize10 old R": 617666,
+      "publish v3": 240555,
+      "unlist": 102498,
+      "pause": 119188,
+      "issue first": 326193,
+      "issue lookup": 5990,
+      "lock": 193501,
+      "markHandover": 169684,
+      "report": 167886,
+      "settle": 197909,
+      "expire": 128456,
+      "refund intent 8 units": 357766,
+      "refund intent lookup": 6070,
+      "issue seq9 scans10": 350782,
+      "close": 119049,
+      "escrow deployed bytes": 21459,
+      "factory deployed bytes": 350,
+      "escrow init with fixture bytes": 26845,
+      "factory init with fixture bytes": 32035
+    }
+  },
+  "preservation": "All15 accepted C0 evidence files byte-identical; historical tracked contracts/tests/configs/locks unchanged",
+  "notRun": [
+    "private DB/API/global-email/login/recovery/QR120s",
+    "live canonical/finality/UNKNOWN/backend persistence",
+    "actual owner online intent/final-lock revalidation",
+    "real asset/network/wallet/deployment/grant/fees",
+    "providers/NFT/capacity/track eligibility"
+  ]
+}

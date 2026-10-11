@@ -1,0 +1,87 @@
+{
+  "provenance": "Expected original-input trajectory asserted after actual actions by testGoldenFiveBucketMixedPriceTrajectory in unit.json; no vm.store or arbitrary state injection",
+  "originalPrices": [
+    3,
+    3,
+    5,
+    5,
+    7
+  ],
+  "F": 23,
+  "fundedUnits": 5,
+  "donation": 2,
+  "columns": [
+    "A",
+    "R",
+    "H",
+    "S",
+    "X",
+    "liability",
+    "tokenBalance"
+  ],
+  "verifiedExpectedSteps": [
+    [
+      3,
+      8,
+      5,
+      7,
+      0,
+      16,
+      18
+    ],
+    [
+      3,
+      3,
+      10,
+      7,
+      0,
+      16,
+      18
+    ],
+    [
+      3,
+      3,
+      5,
+      12,
+      0,
+      11,
+      13
+    ],
+    [
+      6,
+      0,
+      5,
+      12,
+      0,
+      11,
+      13
+    ],
+    [
+      3,
+      0,
+      5,
+      12,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      0,
+      0,
+      17,
+      3,
+      3,
+      5
+    ],
+    [
+      0,
+      0,
+      0,
+      17,
+      6,
+      0,
+      2
+    ]
+  ]
+}

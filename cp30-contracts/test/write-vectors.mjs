@@ -22,5 +22,5 @@ const domainSeparator = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { ty
 const digest = hashTypedData({ domain, types: { FundingQuote: fields }, primaryType: 'FundingQuote', message });
 const batchId = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'address' }, { type: 'bytes32' }], [31337n, domain.verifyingContract, message.quoteId]));
 const vector = { scope: 'fixed synthetic offline vector; address 0x3000 is not a deployment', viemVersion: '2.57.1', domain, typeString, fields, message, typeHash, payloadHash, domainSeparator, digest, batchId };
-writeFileSync(new URL('../evidence/quote-vector.json', import.meta.url), JSON.stringify(vector, (_, value) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n');
+writeFileSync(new URL('../evidence/s0b/c0-quote-vector.json', import.meta.url), JSON.stringify(vector, (_, value) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n');
 process.stdout.write(JSON.stringify({ typeHash, payloadHash, domainSeparator, digest, batchId }) + '\n');

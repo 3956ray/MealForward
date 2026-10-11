@@ -1,0 +1,233 @@
+{
+  "environment": "env initially empty; only temporary isolated HOME and PATH=/usr/bin:/bin supplied",
+  "network": "none, offline in-process EVM; historical testnet chain IDs are cheatcode inputs only",
+  "seed": "0xc030",
+  "commands": [
+    {
+      "file": "c0-vector-command.txt",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/opt/homebrew/bin/node",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/test/write-vectors.mjs"
+      ]
+    },
+    {
+      "file": "s0b-vector-command.txt",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/opt/homebrew/bin/node",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/test/s0b-vectors.mjs"
+      ]
+    },
+    {
+      "file": "unit.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--no-match-test",
+        "testFuzz|invariant",
+        "--json",
+        "-vv"
+      ]
+    },
+    {
+      "file": "fuzz-c0.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-contract",
+        "FinancialFuzzTest",
+        "--match-test",
+        "testFuzz",
+        "--fuzz-runs",
+        "2500",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "fuzz-s0b.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-contract",
+        "S0bFuzzTest",
+        "--match-test",
+        "testFuzz",
+        "--fuzz-runs",
+        "5000",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "invariant.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-test",
+        "invariantIndependentOriginalUnitAndPayerReference",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "lifecycle.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-test",
+        "invariantIndependentFullLifecycle",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "gas-calls.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-contract",
+        "LocalGasTest|S0bGasTest",
+        "--json",
+        "-vv"
+      ]
+    },
+    {
+      "file": "gas-report.txt",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/s0b-final",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/s0b-final",
+        "--match-contract",
+        "LocalGasTest|S0bGasTest",
+        "--gas-report"
+      ]
+    },
+    {
+      "file": "historical-root.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/historical-root",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/historical-root",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "historical-testnet.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "test",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/testnet",
+        "--use",
+        "/Users/mili/Library/Application Support/svm/0.8.28/solc-0.8.28",
+        "--offline",
+        "--out",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/out/historical-testnet",
+        "--cache-path",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts/cache/historical-testnet",
+        "--fuzz-seed",
+        "0xc030",
+        "--json"
+      ]
+    },
+    {
+      "file": "profile.json",
+      "cwd": "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+      "argv": [
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/node_modules/@foundry-rs/forge-darwin-arm64/bin/forge",
+        "config",
+        "--root",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-contracts",
+        "--json"
+      ]
+    }
+  ],
+  "teardown": "All subprocesses returned; temporary HOME automatically removed; no server, Anvil, signer or background worker started"
+}
