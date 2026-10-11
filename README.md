@@ -1,10 +1,10 @@
 # MealForward · Three Stores
 
-CP29-UI07 quiet Service Time controls on the accepted UI06 card/image refinement for the selected English Three Stores Site. Static HTML, CSS and JavaScript modules; no installation or build. Public hero, three kitchen cards, bowl mark and approved local photographs remain. Merchant headings use system sans-serif, light meal rows and one prominent verification tool.
+CP29-UI08 public card hover and status badge repair on accepted UI07 for the selected English Three Stores Site. Static HTML, CSS and JavaScript modules; no installation or build. Public hero, three kitchen cards, bowl mark and approved local photographs remain. Merchant headings use system sans-serif, light meal rows and one prominent verification tool.
 
 Run locally: `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist`.
 
-Verify: `node verify.mjs`; syntax: `node --check dist/app.js`, `node --check dist/model.mjs`, `node --check browser-verify.mjs`. The isolated workstation browser harness requires installed Chrome, bundled Playwright and an owned loopback server on 15635. It creates fresh temporary contexts, allows only loopback/data requests, and writes current evidence to the UI07 Developer `evidence` directory. Its absolute runtime/evidence paths are QA-only, not Site dependencies.
+Verify: `node verify.mjs`; syntax: `node --check dist/app.js`, `node --check dist/model.mjs`, `node --check browser-verify.mjs`, `node --check card-verify.mjs`. The isolated workstation browser harness requires installed Chrome, bundled Playwright and an owned loopback server on 15645. It creates fresh temporary contexts, allows only loopback/data requests, and writes current evidence to the UI08 Developer `evidence` directory. Its absolute runtime/evidence paths are QA-only, not Site dependencies.
 
 Routes: `#home`, `#stores`, `#how`, `#store/{qinghe,shiguang,nuanxiang}`, `#ledger`, `#nft`, `#about`; private `#mine/coupons`, `#mine/orders`, `#coupon/<id>`, `#merchant/{overview,meals,verify,payouts}`. Original `#merchant` and `#mine` shortcuts still work.
 
