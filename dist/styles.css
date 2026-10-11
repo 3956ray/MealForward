@@ -150,3 +150,12 @@ dialog{border-radius:8px;max-width:calc(100vw - 32px)}dialog h2{font-size:26px;l
 .service-time-row .time-error{grid-column:1/-1;margin:0}
 @media(max-width:800px){.store-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:580px){.store-grid{grid-template-columns:1fr}.store-card{display:block;grid-row:auto}.store-body{display:block;grid-row:auto}.store-bottom{align-items:stretch}.header nav a,.header-actions>a{font-size:14px;line-height:20px}}
+
+/* UI07: small visible glyphs, full-size accessible click targets. */
+.time-control{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--green);font-family:var(--sans);cursor:pointer}
+.time-control .time-icon{display:block;width:18px;height:18px;font-size:17px;line-height:18px;font-weight:500;text-align:center}
+.time-control:hover,.time-control:focus-visible{background:var(--soft)}
+.time-control:disabled{background:transparent;color:var(--muted);opacity:.45;cursor:not-allowed}
+.time-hints{position:relative;min-height:40px;margin-top:8px}
+.time-tooltip{position:absolute;inset:0;color:var(--green);font-size:14px;font-weight:400;line-height:20px;text-align:left;white-space:normal;visibility:hidden;opacity:0;pointer-events:none}
+.form-field:not(:has(.time-control:focus-visible)):has([data-action="add-time"]:hover) .hint-add,.form-field:has([data-action="add-time"]:focus-visible) .hint-add,.form-field:not(:has(.time-control:focus-visible)):has([data-action="remove-time"][data-id="0"]:hover) .hint-remove-0,.form-field:has([data-action="remove-time"][data-id="0"]:focus-visible) .hint-remove-0,.form-field:not(:has(.time-control:focus-visible)):has([data-action="remove-time"][data-id="1"]:hover) .hint-remove-1,.form-field:has([data-action="remove-time"][data-id="1"]:focus-visible) .hint-remove-1{visibility:visible;opacity:1}
