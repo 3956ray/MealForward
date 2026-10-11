@@ -1,0 +1,153 @@
+No files changed, compilation skipped
+
+Ran 2 tests for test/Vectors.t.sol:VectorsTest
+[PASS] testActualEscrowEIP712DomainExposesExactNameVersionChainAndAddress() (gas: 11078)
+[PASS] testFixedViemQuotePayloadDomainDigestAndBatchVectors() (gas: 14198)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 2.34ms (348.17µs CPU time)
+
+Ran 1 test for test/Gas.t.sol:LocalGasTest
+[PASS] testLocalEVMCallGasWithExplicitInputsAndStates() (gas: 965354)
+Logs:
+  fresh fund qty1: 337220
+  successful lookup qty1: 38423
+  fresh fund qty10: 337248
+  partial refund qty10 mask512: 128491
+  remaining refund qty10 mask511: 68147
+  reject cap after full refund qty1: 49844
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.77ms (1.07ms CPU time)
+
+Ran 13 tests for test/Adversarial.t.sol:AdversarialTest
+[PASS] testBalanceReadRevertDoesNotBecomeAZeroBalanceOrAStoredOperation() (gas: 3820290)
+[PASS] testBubblingCallbackFailureRollsBackFundAndRefund() (gas: 4504874)
+[PASS] testCaughtCallbackFollowedByIncorrectDeltaStillRollsBackOuterAction() (gas: 4596640)
+[PASS] testCrossEntryCallbacksFundToRefundAndRefundToFundAreGuarded() (gas: 4658622)
+[PASS] testCrossStoreCallbacksNeedTheirOwnPayerDomainAndBatchAuthorization() (gas: 6812434)
+[PASS] testIncomingAndOutgoingCallbacksRejectedByReentrancyGuard() (gas: 4388746)
+[PASS] testIncomingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic() (gas: 6826937)
+[PASS] testIncomingReceiverTaxRollsBackPayerEscrowFeeAllowanceAndQuote() (gas: 3727225)
+[PASS] testIncomingSenderExtraFeeRollsBackPayerEscrowFeeAllowanceAndQuote() (gas: 3727224)
+[PASS] testMalformedReturnAndNoReturnNoMovementFailAtomically() (gas: 7497938)
+[PASS] testOutgoingFalseRevertTaxExtraDebitCreditRebaseAndNoMoveAtomic() (gas: 5668816)
+[PASS] testStandardNoReturnTokenFundAndPartialRefund() (gas: 2853410)
+[PASS] testSuccessfulLookupReadsNoTokenBalanceAllowanceOrTransferEvenAfterFullRefund() (gas: 4030720)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 5.61ms (11.74ms CPU time)
+
+Ran 12 tests for test/Financial.t.sol:FinancialTest
+[PASS] testBatchLocalHighBitsAndMixedAlreadyRefundedMaskAtomic() (gas: 1418262)
+[PASS] testCompetingFinalCapAcrossMealsAndPayers() (gas: 695908)
+[PASS] testDonationsRemainSurplusAndWrongTokenDoesNotFund() (gas: 1634277)
+[PASS] testExternalNegativeRebaseFailsClosedWithoutErasingLiability() (gas: 536534)
+[PASS] testGoldenThreeFourThreeDifferentPricesAndFullRefundCannotReopenCap() (gas: 1617528)
+[PASS] testInsufficientBalanceAndAllowanceFailAtomicallyAndKeyCanRetry() (gas: 1123001)
+[PASS] testMixedOriginalPricesPayersAndContinuousUnitSequence() (gas: 851185)
+[PASS] testMultiplicationAndLifetimeAmountOverflowRollback() (gas: 3455752)
+[PASS] testNewQuoteCannotReuseARefundedUnit() (gas: 841779)
+[PASS] testOwnerAsOriginalPayerHasOnlyTheirOwnRefundRights() (gas: 910091)
+[PASS] testQuantityOneAndTenAndCapNotRestoredByRefund() (gas: 1277401)
+[PASS] testRefundMaskBoundsDuplicatesAndWrongPayerOrService() (gas: 877340)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 5.68ms (8.87ms CPU time)
+
+Ran 8 tests for test/Factory.t.sol:FactoryTest
+[PASS] testExactlyThreeFixedStoresAndNoFourthSlot() (gas: 188480)
+[PASS] testInvalidLastCatalogRevertsAtomicFactoryCreation() (gas: 4027207)
+[PASS] testNoAdminWithdrawalChangePublicationOrNativeMealPayment() (gas: 624781)
+[PASS] testRejectInvalidCatalogFieldsDuplicatesAndMissingCurrent() (gas: 2216083)
+[PASS] testRejectMissingAssetOrAuthority() (gas: 1713770)
+[PASS] testRejectZeroAndDuplicateFactorySlots() (gas: 907969)
+[PASS] testStoreAssetCapAndBatchIsolation() (gas: 904654)
+[PASS] testThreeStoresEachReachTenAndOneRefundDoesNotAffectOthers() (gas: 1234884)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 5.63ms (7.20ms CPU time)
+
+Ran 9 tests for test/Quotes.t.sol:QuotesTest
+[PASS] testAuthorizedQuoteCannotOverrideCatalogAndValueChecks() (gas: 459788)
+[PASS] testDeadlineExclusiveAndFailedQuoteDoesNotOccupyKey() (gas: 399601)
+[PASS] testEveryQuoteFieldIsSignatureBound() (gas: 386839)
+[PASS] testIndependentEIP712DigestAndFundEvent() (gas: 355558)
+[PASS] testSameKeyDifferentAuthorizedPayloadConflicts() (gas: 492856)
+[PASS] testSameQuoteReturnsOriginalAfterDeadlineCapAndRefund() (gas: 667121)
+[PASS] testSenderMustBeOriginalPayerIncludingReplay() (gas: 410037)
+[PASS] testWrongChainEscrowNameAndVersionDomainsRejected() (gas: 189614)
+[PASS] testWrongSignerMalformedAndMalleableSignaturesRejected() (gas: 135995)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 5.68ms (7.94ms CPU time)
+
+Ran 1 test for test/Invariant.t.sol:FinancialInvariantTest
+[PASS] testHandlerReachabilityAndOriginalPayerReference() (gas: 7637577)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 8.69ms (3.66ms CPU time)
+
+╭------------------------------------------------+-----------------+--------+--------+--------+---------╮
+| contracts/StoreEscrow.sol:StoreEscrow Contract |                 |        |        |        |         |
++=======================================================================================================+
+| Deployment Cost                                | Deployment Size |        |        |        |         |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+|                                        1945576 |           10442 |        |        |        |         |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+|                                                |                 |        |        |        |         |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| Function Name                                  | Min             | Avg    | Median | Max    | # Calls |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| QUOTE_TYPEHASH                                 |             315 |    315 |    315 |    315 |       1 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| asset                                          |             327 |    327 |    327 |    327 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| availableAmount                                |            2394 |   2394 |   2394 |   2394 |      26 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| availableUnits                                 |             525 |   2525 |   2525 |   4525 |       6 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| catalog                                        |            4735 |   4735 |   4735 |   4735 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| currentVersion                                 |            2558 |   2558 |   2558 |   2558 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| eip712Domain                                   |            1684 |   1684 |   1684 |   1684 |       1 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| fund                                           |           24663 | 217262 | 306114 | 453589 |     112 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| getBatch                                       |           17946 |  17946 |  17946 |  17946 |      44 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| liability                                      |             413 |    413 |    413 |    413 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| lifetimeFundedUnits                            |            2351 |   2351 |   2351 |   2351 |      34 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| owner                                          |             304 |    304 |    304 |    304 |      14 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| quoteAuthority                                 |             238 |    238 |    238 |    238 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| quoteDigest                                    |            1330 |   1330 |   1330 |   1330 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| quotePayloadHash                               |            1039 |   1039 |   1039 |   1039 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| quoteUses                                      |            4707 |   4707 |   4707 |   4707 |      17 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| receiver                                       |             325 |    325 |    325 |    325 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| refund                                         |           29110 | 102983 | 121025 | 216430 |      56 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| refundedUnits                                  |            2394 |   2394 |   2394 |   2394 |      10 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| storeId                                        |             272 |    272 |    272 |    272 |       3 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| surplus                                        |            1462 |   5461 |   7769 |  10150 |       7 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| totalFundedAmount                              |            2329 |   2329 |   2329 |   2329 |      24 |
+|------------------------------------------------+-----------------+--------+--------+--------+---------|
+| totalRefundedAmount                            |            2349 |   2349 |   2349 |   2349 |      18 |
+╰------------------------------------------------+-----------------+--------+--------+--------+---------╯
+
+╭------------------------------------------------------------+-----------------+------+--------+------+---------╮
+| contracts/ThreeStoreFactory.sol:ThreeStoreFactory Contract |                 |      |        |      |         |
++===============================================================================================================+
+| Deployment Cost                                            | Deployment Size |      |        |      |         |
+|------------------------------------------------------------+-----------------+------+--------+------+---------|
+|                                                    5783952 |           13740 |      |        |      |         |
+|------------------------------------------------------------+-----------------+------+--------+------+---------|
+|                                                            |                 |      |        |      |         |
+|------------------------------------------------------------+-----------------+------+--------+------+---------|
+| Function Name                                              | Min             | Avg  | Median | Max  | # Calls |
+|------------------------------------------------------------+-----------------+------+--------+------+---------|
+| escrowFor                                                  |            2506 | 2506 |   2506 | 2506 |       5 |
+|------------------------------------------------------------+-----------------+------+--------+------+---------|
+| escrows                                                    |             220 | 2404 |   2420 | 2420 |     139 |
+╰------------------------------------------------------------+-----------------+------+--------+------+---------╯
+
+
+Ran 7 test suites in 14.33ms (36.40ms CPU time): 46 tests passed, 0 failed, 0 skipped (46 total tests)

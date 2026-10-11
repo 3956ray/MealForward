@@ -1,0 +1,166 @@
+{
+  "status": "COMPLETE_FOR_INDEPENDENT_REVIEW_NOT_ACCEPTED",
+  "seed": "0xc030",
+  "unit": {
+    "tests": 46,
+    "failures": 0
+  },
+  "fuzz": {
+    "methods": {
+      "testFuzzEverySignatureFieldRejectsMutation(uint256,uint8)": 2500,
+      "testFuzzLifetimeCapAcrossMealsPayersAndRefund(uint8,bool)": 2500,
+      "testFuzzOriginalPricePartialRefund(uint96,uint8,uint16)": 2500,
+      "testFuzzRefundPartitionAndNoDoubleCredit(uint8,uint16)": 2500
+    },
+    "cases": 10000,
+    "failures": 0
+  },
+  "invariant": {
+    "runs": 64,
+    "depth": 256,
+    "calls": 16384,
+    "unexpectedReverts": 0,
+    "hookRows": 65,
+    "extraFinalVerificationRow": 1,
+    "bootstrapPerRun": {
+      "funds": 3,
+      "refunds": 3,
+      "donations": 3
+    },
+    "includingBootstrapTotals": {
+      "funds": 1105,
+      "refunds": 1333,
+      "donations": 2838,
+      "replays": 2771,
+      "rejectedTamper": 2703,
+      "rejectedForeign": 2812,
+      "rejectedCap": 1799,
+      "refundNoops": 1599
+    },
+    "randomActions": {
+      "fundAction": {
+        "success": 913,
+        "expectedRejection": 1799,
+        "noop": 0,
+        "attempts": 2712
+      },
+      "refundAction": {
+        "success": 1141,
+        "expectedRejection": 0,
+        "noop": 1599,
+        "attempts": 2740
+      },
+      "donateAction": {
+        "success": 2646,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 2646
+      },
+      "replayAction": {
+        "success": 2771,
+        "expectedRejection": 0,
+        "noop": 0,
+        "attempts": 2771
+      },
+      "tamperAction": {
+        "success": 0,
+        "expectedRejection": 2703,
+        "noop": 0,
+        "attempts": 2703
+      },
+      "foreignRefundAction": {
+        "success": 0,
+        "expectedRejection": 2812,
+        "noop": 0,
+        "attempts": 2812
+      }
+    },
+    "minMaxSuccessesPerRun": {
+      "funds": [
+        13,
+        22
+      ],
+      "refunds": [
+        16,
+        25
+      ],
+      "donations": [
+        33,
+        55
+      ],
+      "replays": [
+        32,
+        60
+      ],
+      "rejectedTamper": [
+        31,
+        55
+      ],
+      "rejectedForeign": [
+        31,
+        59
+      ],
+      "rejectedCap": [
+        16,
+        41
+      ],
+      "refundNoops": [
+        14,
+        38
+      ]
+    },
+    "perStoreFundedUnitsMinMax": [
+      [
+        10,
+        10
+      ],
+      [
+        10,
+        10
+      ],
+      [
+        7,
+        10
+      ]
+    ],
+    "perStoreRefundedUnitsMinMax": [
+      [
+        6,
+        10
+      ],
+      [
+        4,
+        10
+      ],
+      [
+        4,
+        10
+      ]
+    ]
+  },
+  "historical": {
+    "rootMethods": 13,
+    "rootFuzzCases": 256,
+    "testnetNamedOfflineMethods": 4,
+    "failures": 0
+  },
+  "gas": {
+    "measurement": "local EVM call incl ABI/call overhead, excl intrinsic transaction fees; warmth varies in one test; not Monad cost",
+    "calls": {
+      "fresh fund qty1": 315400,
+      "successful lookup qty1": 10603,
+      "fresh fund qty10": 312916,
+      "partial refund qty10 mask512": 82675,
+      "remaining refund qty10 mask511": 19519,
+      "reject cap after full refund qty1": 21224
+    }
+  },
+  "notRun": [
+    "real asset/network/wallet/auth",
+    "R/H/S/fulfillment",
+    "database/API/worker",
+    "SDK/NFT integration",
+    "higher-cap capacity",
+    "track eligibility"
+  ]
+}

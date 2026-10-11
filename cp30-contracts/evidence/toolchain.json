@@ -1,0 +1,11 @@
+{
+  "forge": "forge Version: 1.7.1\nCommit SHA: 4072e48705af9d93e3c0f6e29e93b5e9a40caed8\nBuild Timestamp: 2026-05-08T07:54:31.470926000Z (1778226871)\nBuild Profile: dist",
+  "solc": "0.8.28+commit.7893614a",
+  "openzeppelin": "5.6.1",
+  "viem": "2.57.1",
+  "node": "v24.21.0",
+  "evidencePython": "Python 3.9.6",
+  "baseline": "44e644652855d76c154912455c296c86dadcd3d3",
+  "rootPackageLockSha256": "bb812196fe6cdd392797dbe3cbc9f3571ed2b72b21ba5384065212a73670e5b0",
+  "rootFoundrySha256": "0a78a8b523099b81ba06a7c702d37f274cc4a242e58ef6076f708c4ac41e2ba5"
+}

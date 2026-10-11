@@ -1,0 +1,21 @@
+{
+  ".gitignore": "64ad4f6ea752e18427ebab57d6feef76eb97d4a110ee6d2c3d15c9d0c211b8a6",
+  "cp30-contracts/AGENTS.md": "a7c6d6266c4a49bca83f09b6bbfe57ba513726a25202bf276fda468f04056175",
+  "cp30-contracts/README.md": "e31e013698aa284f6e120d32a05932e1c35d5688efa713ccd2a0e5b3adbf1904",
+  "cp30-contracts/contracts/StoreEscrow.sol": "bd6b4b31df120403ed4e44c190c7fa5ccb22ce38073131db46188741b46c4998",
+  "cp30-contracts/contracts/ThreeStoreFactory.sol": "9380cbf1945345fd2c52710be0ed90e253fc072ce0f807db9a48faf1d68f31c9",
+  "cp30-contracts/foundry.toml": "4bf694b7b3947b0d9befb789ccd6a2e559313e61355a71fabd3e39d6364174a2",
+  "cp30-contracts/test/Adversarial.t.sol": "34b61ed555676c07da730e516c9dcf921806c3e9bab2330555e944446053b968",
+  "cp30-contracts/test/C0TestBase.sol": "33b31c8739d831fac2eef17218755f52135bafc32aa258e8035ec869472773fb",
+  "cp30-contracts/test/Factory.t.sol": "a9fff7fb39f02abaef0fe0cc9c357c90ca1ce459ad5df27a88e8676ef6a97b6a",
+  "cp30-contracts/test/Financial.t.sol": "3470c2241cad59c668fd9572141e20319aa1983f0311664572d472d55f78df74",
+  "cp30-contracts/test/Fuzz.t.sol": "34f70f748b944aee2763676975b7dd612bd217886019e4cb69a78c9fc954b406",
+  "cp30-contracts/test/Gas.t.sol": "4219acc5faff4a39cc53ea3b84d594b74a8e6a4d83359c9a82d269d15c50cdf3",
+  "cp30-contracts/test/Invariant.t.sol": "633f320f48ad88df16fd17b774683257578acf97ba7c08a9bdd04e63ebbb1957",
+  "cp30-contracts/test/Quotes.t.sol": "30f5f28e1f9b4adde9aeb341949377476a11ae3c809a4cbb3c47b940cddf39a4",
+  "cp30-contracts/test/Vectors.t.sol": "a1c27f1cf40995c0ee1d8ae824ff291ecac1f4bee0638fd55a5bf08cb6ad622b",
+  "cp30-contracts/test/collect-evidence.py": "2f5ec706c8cb55efbbace05ed43bbbccf6ce5ffd2ec956f41810f332014ee6a1",
+  "cp30-contracts/test/mocks/AdversarialERC20.sol": "c66991e6857f1f70f5ad8e0cda58ebee45a17e330a793fc8aa09b57984f4e95f",
+  "cp30-contracts/test/mocks/MockERC20.sol": "89fb8787ff8da98965bbf1e4ac2290639f183e90df9a57e9d8a7e712175b84a5",
+  "cp30-contracts/test/write-vectors.mjs": "ee4ebcf8c709c61c626defa34310b0e888065960c8636b19af4f7b183ae8a598"
+}

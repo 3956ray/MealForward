@@ -1,0 +1,65 @@
+{
+  "scope": "fixed synthetic offline vector; address 0x3000 is not a deployment",
+  "viemVersion": "2.57.1",
+  "domain": {
+    "name": "MealForward C0 Funding",
+    "version": "1",
+    "chainId": 31337,
+    "verifyingContract": "0x0000000000000000000000000000000000003000"
+  },
+  "typeString": "FundingQuote(bytes32 quoteId,address payer,bytes32 mealId,uint256 currentVersion,bytes32 termsHash,uint256 quantity,uint256 unitPrice,uint256 amount,uint256 deadline)",
+  "fields": [
+    {
+      "name": "quoteId",
+      "type": "bytes32"
+    },
+    {
+      "name": "payer",
+      "type": "address"
+    },
+    {
+      "name": "mealId",
+      "type": "bytes32"
+    },
+    {
+      "name": "currentVersion",
+      "type": "uint256"
+    },
+    {
+      "name": "termsHash",
+      "type": "bytes32"
+    },
+    {
+      "name": "quantity",
+      "type": "uint256"
+    },
+    {
+      "name": "unitPrice",
+      "type": "uint256"
+    },
+    {
+      "name": "amount",
+      "type": "uint256"
+    },
+    {
+      "name": "deadline",
+      "type": "uint256"
+    }
+  ],
+  "message": {
+    "quoteId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+    "payer": "0x0000000000000000000000000000000000000101",
+    "mealId": "0xf6ae23d9c645946a75b7b62ffca8fcda402a88da357fe6622a3d2ca134526491",
+    "currentVersion": "2",
+    "termsHash": "0x2cfe3cf8f1bdc14f663d20057637428b7c085bc5d8dc9a147c4f15cded6183e2",
+    "quantity": "3",
+    "unitPrice": "6000000",
+    "amount": "18000000",
+    "deadline": "1800000600"
+  },
+  "typeHash": "0x3c5c2a259cfd290637ab46e80ed773b838eeb00b20020cc5f0f9670053e0de81",
+  "payloadHash": "0xe0d9492523d6166c100fed2b71ca466aa44512d4b2687e876346739a2ad1cb23",
+  "domainSeparator": "0xcf4924823a2a69bbaa6298ebd36de151de28c742d0bcaa6c9a01ee41ad6ed9e2",
+  "digest": "0x1c35a57cf1fc0e1194d5abe8bf1d34329dbacaa58363add2e72dd2ed332f51e0",
+  "batchId": "0x57b56315ba5ce61adef6d6158f30986dc073adf98ba42420d0fee62606f6ca44"
+}
