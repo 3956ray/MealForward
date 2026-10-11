@@ -1,24 +1,27 @@
-# 留膳 MealForward
+# MealForward · Three Stores
 
-Buildless responsive website based on the user's three-store MVP brief. Uses static HTML, CSS and JavaScript ES modules; no installation or build required.
+CP29-UI05 candidate for the selected Three Stores Site. Static HTML, CSS and JavaScript modules; no installation or build step. Public pages retain the paper background, forest green, meal photography and three kitchen cards. The invited merchant workspace has Overview, Meals, Verify & hand over, and Payouts.
 
-Run locally: `python3 -m http.server 4173 --directory dist`
+Run locally: `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist`.
 
-Verify: `node verify.mjs` and `node --check dist/app.js`.
+Verify: `node verify.mjs`. Syntax checks: `node --check dist/app.js`, `node --check dist/model.mjs`, `node --check browser-verify.mjs`.
 
-Routes: `#home`, `#stores`, `#store/qinghe`, `#store/shiguang`, `#store/nuanxiang`, `#mine/coupons`, `#mine/orders`, `#coupon/<local-id>`, `#merchant`, `#ledger`, `#nft`, `#about`.
+`browser-verify.mjs` is the explicitly authorized isolated QA harness for this workstation. It uses installed Chrome and bundled Playwright, requires the owned loopback server on port 15615, and writes evidence to the UI05 Developer report directory. Fresh temporary contexts permit only loopback/data requests; no existing browser profile is used. Harness runtime and evidence paths are workstation-specific; the Site runtime has no such dependency.
 
-All business operations are browser-local demonstrations. No real wallet, chain, mail service, authentication backend, NFT minting, or server database is connected. Local state is isolated per browser and resettable. No real emails are transmitted. Email digests and verification secrets in localStorage are demonstration data, not production security. Merchant permissions in frontend state demonstrate the flow, not enforce a security boundary.
+Public routes: `#home`, `#stores`, `#how`, `#store/qinghe`, `#store/shiguang`, `#store/nuanxiang`, `#ledger`, `#nft`, `#about`. Private routes: `#mine/coupons`, `#mine/orders`, `#coupon/<local-id>`, `#merchant/{overview,meals,verify,payouts}`. Original `#merchant` and `#mine` entries remain usable.
 
-Initial illustrative sales are 6, 4, 3 portions; each store has one settled and one reported portion. The remaining portions are free. The same local model drives support, ownership, old menu versions, global 72-hour cooldown, coupon expiry, 120-second credentials, lock, report, settlement and refund. Maximum per-store lifetime count is ten and refunds do not reopen capacity. Locked responsibility is retained after expiry. The UI has an explicit optional demo clock for trying lunch-window verification outside actual hours.
+All operations are browser-local simulations. No real wallet, chain, email, authentication backend, NFT minting, camera or server database is connected. Sign in selects fixed synthetic `.invalid` accounts. Visitor and neighbor accounts can support and receive; each owner account has a fixed invitation to its own kitchen. Sign-in or wallet connection does not grant another kitchen's authority. These checks illustrate application behavior; they are not production security against local storage manipulation.
 
-QA: Node assertions cover cap, attribution, immutable old prices, cross-store cooldown, safe refunds, short credentials, owner role, single lock, report/settle, expiry and ledger conservation. In-app browser verifies support, claim, QR, check, lock, report, settle and ledger. Desktop and 390px mobile views reviewed. Real network/contract/Gas/OTP/NFT/security/concurrency checks are not run.
+Initial illustrative support is 6, 4 and 3 meals, with one settled and one reported meal per kitchen. One model drives original-price accounting, the lifetime cap of ten per kitchen, global 72-hour recipient cooldown, original voucher expiry, service-window-bound codes of at most 120 seconds, non-consuming checks, unique locks, explicit handover reports, individual owner payouts and safe original-payer refunds. Operations start pending and become final only through an explicit original-operation check. UNKNOWN retains the original operation and reservations; timers do not settle funds or release locks. NFT failure is independent of payment.
 
-Third-party dependency: QRCode.js 1.0.0, bundled from npm via jsDelivr; MIT license. Noto Sans/Serif SC are loaded from Google Fonts with system fallbacks.
+Meals support drafts, confirmed publishing of future terms, and confirmed listing changes. Safety pause is separate. Existing orders/vouchers keep original terms. Sign-out and restoration clear active identity, wallet and display tokens while preserving history, locks and the 72-hour gate. Schema-1 migration preserves raw legacy terms and history but grants no unproven ownership. Bad/incompatible snapshots are blocked and preserved until explicit reset.
 
-Assets:
-- `dist/assets/hero-meal.jpg`: generated with the built-in Imagegen tool, compressed to JPEG for this project.
-- `dist/assets/vegetables.jpg`: Unsplash source https://images.unsplash.com/photo-1512621776951-a57141f2eefd
-- `dist/assets/bowl.jpg`: Unsplash source https://images.unsplash.com/photo-1547592180-85f173990554
+Browser checks cover desktop/mobile complete flows, invitation denial, sign-out/restoration, drafts/publishing/unlisting, recovery/expiry, UNKNOWN, malformed snapshots, four merchant views, keyboard/dialog behavior, local images, English and overflow. Real email/OTP, wallet/chain/Gas, contracts, production security and multi-client concurrency are not verified. Leader owns fixed-source review, packaging and Site publication.
 
-All imagery is marked illustrative; it is not evidence of real restaurant meals. Final generated asset path: `/Users/mili/Documents/Monad/sites/mealforward/dist/assets/hero-meal.jpg`. Full generation prompt is in `ASSET-PROMPT.md`.
+Fonts are system sans-serif and Georgia. QRCode.js 1.0.0 is bundled locally under MIT; no CDN is called at runtime. Approved illustrative assets are retained:
+
+- `dist/assets/hero-meal.jpg`: generated meal photograph; prompt in `ASSET-PROMPT.md`.
+- `dist/assets/vegetables.jpg`: original Unsplash source https://images.unsplash.com/photo-1512621776951-a57141f2eefd
+- `dist/assets/bowl.jpg`: original Unsplash source https://images.unsplash.com/photo-1547592180-85f173990554
+
+Photographs are illustrative and do not prove real restaurant offerings.
