@@ -130,3 +130,23 @@ dialog{border-radius:8px;max-width:calc(100vw - 32px)}dialog h2{font-size:26px;l
  .merchant-route #signout-button{font-size:14px;min-height:44px;white-space:nowrap}
  .merchant-route dialog{width:480px;max-width:calc(100vw - 16px);padding:24px 16px}
 }
+
+/* UI06: shared row tracks align each public card's complete content. */
+.store-grid{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+.store-card{display:grid;grid-row:span 10;grid-template-rows:subgrid;row-gap:0;min-width:0}
+.store-body{display:grid;grid-row:span 9;grid-template-rows:subgrid;row-gap:0;min-width:0}
+.store-body>*{min-width:0;overflow-wrap:anywhere}
+.store-heading{display:block}.store-heading span{display:block;margin-top:4px}
+.store-photo{width:100%}.store-heading h3,.store-description,.meal-name,.store-time{white-space:normal}
+.store-time{display:block}.store-bottom{align-items:start}
+.header nav a,.header-actions>a{font-family:var(--sans);font-size:14px;font-weight:400;line-height:20px}
+.image-editor h3,.time-heading h3{font-size:16px;font-family:var(--sans);font-weight:600}
+.image-editor .button{margin:8px 0}.editor-image{display:block;width:100%;max-width:240px;height:160px;object-fit:cover;border-radius:6px;margin:12px 0}
+.editor-image[hidden]{display:none}.image-editor .form-help,.time-heading+p{font-size:14px;line-height:20px}
+.time-heading{display:flex;align-items:center;gap:12px}.time-heading .button{min-width:44px;min-height:44px;padding:8px;font-size:20px}
+.service-time-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;margin-top:12px;align-items:end}
+.service-time-row select{width:100%;min-width:0;min-height:44px;padding:8px}
+.service-time-row label{display:block}.service-time-row .button{min-width:44px;min-height:44px;padding:8px;font-size:20px}
+.service-time-row .time-error{grid-column:1/-1;margin:0}
+@media(max-width:800px){.store-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){.store-grid{grid-template-columns:1fr}.store-card{display:block;grid-row:auto}.store-body{display:block;grid-row:auto}.store-bottom{align-items:stretch}.header nav a,.header-actions>a{font-size:14px;line-height:20px}}
