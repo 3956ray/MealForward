@@ -54,3 +54,79 @@ dialog{border-radius:8px;max-width:calc(100vw - 32px)}dialog h2{font-size:26px;l
 }
 @media(max-width:580px){.merchant-route .header-actions{width:100%;margin-left:0;justify-content:space-between}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Merchant refinement: one prominent verification tool, light list rows. */
+.merchant-route .header>nav,.merchant-route .header-actions>.my-link,.merchant-route #workspace-link{display:none}
+.merchant-route .header{padding:12px 32px;gap:16px;min-height:64px}
+.merchant-route .header-actions{width:auto;margin-left:auto;gap:16px}
+.merchant-route .merchant-shell{grid-template-columns:208px minmax(0,1fr);max-width:1392px;gap:32px;padding:24px 32px}
+.merchant-route h1,.merchant-route h2,.merchant-route h3{font-family:var(--sans)}
+.merchant-route .merchant-sidebar h2{font-size:18px;line-height:26px}
+.merchant-route .merchant-sidebar>p{display:block;font-size:14px;line-height:20px;margin-top:8px}
+.merchant-route .workspace-heading{margin-bottom:24px}
+.merchant-route .workspace-heading p{font-size:16px;line-height:24px;margin-top:8px}
+.merchant-route h2{font-size:20px;line-height:28px}
+.overview-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:32px;align-items:start}
+.verification-tool{padding:24px;background:white;border:1px solid var(--line);border-radius:8px}
+.verification-tool>p{font-size:14px;line-height:20px;margin-top:8px}
+.verification-tool .form-field{margin:16px 0 8px}
+.verification-tool textarea{min-height:72px;display:block}
+.verification-tool .error:empty{min-height:0;margin:0}
+.verification-tool .button{min-height:52px}
+.verification-tool details{margin-top:8px}
+.verification-case{border-top:1px solid var(--line);padding-top:24px;margin-top:24px}
+.verification-case .facts{margin:16px 0}
+.verification-tool .operation{padding:16px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;margin:0 0 24px}
+.metrics-section>p{font-size:14px;line-height:20px;margin:8px 0 16px}
+.merchant-route .merchant-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:0}
+.merchant-route .merchant-metrics .stat{border-top:1px solid var(--line);padding:16px 0}
+.merchant-route .stat h3{font-size:14px;line-height:20px;font-weight:500}
+.merchant-route .stat strong{font-variant-numeric:tabular-nums;font-size:28px;line-height:36px}
+.merchant-route .metric-currency{font-size:14px;line-height:20px;white-space:nowrap}
+.merchant-route .merchant-metrics .stat:last-child{grid-column:auto}
+.recent-activity{margin:24px 0}
+.recent-activity>p{font-size:14px;margin-top:8px}
+.meals-toolbar{display:flex;justify-content:flex-end;margin:-72px 0 24px}
+.meal-row{display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:16px;padding:24px 0;border-bottom:1px solid var(--line);outline-offset:4px}
+.meal-row>img{width:80px;height:64px;object-fit:cover;border-radius:6px}
+.meal-row h2{font-size:18px;line-height:26px;overflow-wrap:anywhere}
+.meal-row-copy>p{font-size:14px;line-height:20px;margin-top:8px;overflow-wrap:anywhere}
+.meal-row-copy>p:first-of-type{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meal-row-copy .meal-price{font-size:16px;line-height:24px}
+.meal-row-copy .pill{margin-top:8px}
+.meal-row-actions{display:flex;gap:8px;align-items:start}
+.meal-row-actions .button{font-size:14px;min-height:44px;padding:10px 12px}
+.obligations a{display:block;text-decoration:underline}
+.merchant-route .payout-item,.funds-summary{padding:24px 0;border:0;border-bottom:1px solid var(--line);background:none;border-radius:0}
+.merchant-route .payout-item .facts,.funds-summary .facts{margin:16px 0}
+.field-error{font-size:14px;line-height:20px;color:#9a3827;margin-top:8px}
+.field-error:empty{display:none}
+[aria-invalid=true]{border-color:#9a3827}
+.publish-image{width:80px;height:64px;object-fit:cover;border-radius:6px;margin-top:16px}
+.public-meal-list .detail-grid{padding-bottom:40px;margin-bottom:40px;border-bottom:1px solid var(--line)}
+@media(max-width:1100px){.overview-grid{grid-template-columns:1fr}.meal-row{grid-template-columns:80px minmax(0,1fr)}.meal-row-actions{grid-column:2}.merchant-route .merchant-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){
+ .merchant-route .merchant-shell{grid-template-columns:1fr;padding:16px;gap:20px}
+ .merchant-route .merchant-sidebar{border:0;padding:0}
+ .merchant-route .merchant-sidebar>h2{display:inline-block}
+ .merchant-route .merchant-sidebar>p{display:block;margin-top:4px}
+ .merchant-route .merchant-sidebar nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:8px 0 0}
+ .merchant-route .merchant-sidebar nav a{padding:8px 4px;min-height:44px;font-size:14px;line-height:20px}
+ .merchant-route .merchant-sidebar [aria-current=page]{color:var(--green);background:var(--soft);box-shadow:inset 0 -2px var(--green);border-radius:0}
+ .merchant-route .merchant-sidebar>.text-button{display:none}
+ .merchant-route .workspace-heading{margin-bottom:16px}
+ .merchant-route .overview-grid{gap:20px}
+ .merchant-route .verification-tool{padding:16px}
+ .merchant-route .merchant-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .meals-toolbar{margin:0 0 8px;justify-content:flex-start}
+ .meal-row{grid-template-columns:64px minmax(0,1fr);gap:16px;padding:20px 0}
+ .meal-row>img{width:64px;height:64px}
+ .meal-row-actions{grid-column:1/-1;flex-wrap:wrap}
+ .merchant-route .demo-bar{min-height:0;padding:4px 16px;font-size:14px;line-height:20px}
+ .merchant-route .header{padding:8px 16px;flex-wrap:nowrap;gap:8px;min-height:60px}
+ .merchant-route .brand{gap:6px}.merchant-route .brand span{font-size:18px}.merchant-route .brand svg{width:20px;height:20px}
+ .merchant-route .header-actions{width:auto;gap:8px;margin-left:auto;flex-wrap:nowrap;justify-content:flex-end}
+ .merchant-route .header-actions .button{min-height:44px;font-size:14px;padding:8px}
+ .merchant-route #signout-button{font-size:14px;min-height:44px;white-space:nowrap}
+ .merchant-route dialog{width:480px;max-width:calc(100vw - 16px);padding:24px 16px}
+}
