@@ -1,0 +1,32 @@
+{
+  "nodeTests": 3,
+  "nodeExitCode": 0,
+  "pythonTests": 1,
+  "pythonExitCode": 0,
+  "network": "NONE",
+  "scope": "Only new transaction crypto tests; no PrivateRuntime/PG/old suites invoked",
+  "keyHandling": "New synthetic in-memory test key; never returned or stored; raw fixture only in memory pipe",
+  "sourceType": "eip1559 only; empty access list; canonical reserialization; installed recovery/keccak",
+  "environment": "empty child environments; Python -I -B; explicit project/integrations source paths",
+  "notRun": [
+    "PrivateRuntime host composition",
+    "real approved ledger/nonce/grant/budget",
+    "PG/HTTP/RPC/provider/broadcast/deployment",
+    "actual identity/key/signature",
+    "on-chain nonce/balance/basefee/intrinsic-gas/finality verification"
+  ],
+  "commands": [
+    [
+      "/opt/homebrew/bin/node",
+      "--test",
+      "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-backend/integrations/business/transaction-crypto.test.mjs"
+    ],
+    [
+      "/Users/mili/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "-I",
+      "-B",
+      "-c",
+      "import sys,unittest; sys.path[:0]=['/Users/mili/Documents/Developer/mealforward-cp29-business', '/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-backend/integrations']; result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromName('business.test_transaction_crypto')); print(result.testsRun); sys.exit(not result.wasSuccessful())"
+    ]
+  ]
+}

@@ -1,0 +1,6 @@
+test_actual_empty_environment_bridge_and_runtime_hash_facet (business.test_transaction_crypto.TransactionCryptoBridgeTest.test_actual_empty_environment_bridge_and_runtime_hash_facet) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.190s
+
+OK

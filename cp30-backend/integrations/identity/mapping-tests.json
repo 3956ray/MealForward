@@ -1,0 +1,10 @@
+{
+  "runtime": "/Users/mili/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+  "version": "Python 3.12.14",
+  "pyjwtImportAvailable": false,
+  "testExitCode": 0,
+  "mappingTestsRun": 5,
+  "scope": "Only identity.test_adapter mapping tests; no old suite, HTTP, PG or networking",
+  "productionVerifierTested": false,
+  "environment": "empty; -I -B; explicit project and integrations source paths"
+}

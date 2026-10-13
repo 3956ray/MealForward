@@ -1,0 +1,11 @@
+✔ actual EIP1559 decode/recovery/keccak and approved envelope (25.11625ms)
+✔ signed original payload changes are rejected in every approved field (18.794416ms)
+✔ unsupported, unsigned, noncanonical, access-list and high-S raws reject (2.107208ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 287.636667

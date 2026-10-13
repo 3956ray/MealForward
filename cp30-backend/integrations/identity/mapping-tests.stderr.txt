@@ -1,0 +1,10 @@
+testAbsentOrUnapprovedMappingAndDependencyAreExplicit (identity.test_adapter.IdentityMappingTest.testAbsentOrUnapprovedMappingAndDependencyAreExplicit) ... ok
+testApprovedMappingPrivateIdentityAndHashedBinding (identity.test_adapter.IdentityMappingTest.testApprovedMappingPrivateIdentityAndHashedBinding) ... ok
+testSignedVerifiedCredentialsRejectsAmbiguityMissingTypesAndTopLevelOnly (identity.test_adapter.IdentityMappingTest.testSignedVerifiedCredentialsRejectsAmbiguityMissingTypesAndTopLevelOnly) ... ok
+testSignedVerifiedCredentialsUniqueTargetOrDirectEmail (identity.test_adapter.IdentityMappingTest.testSignedVerifiedCredentialsUniqueTargetOrDirectEmail) ... ok
+testSubjectBindingAndStrictSignedVerificationEvidenceReject (identity.test_adapter.IdentityMappingTest.testSubjectBindingAndStrictSignedVerificationEvidenceReject) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.004s
+
+OK

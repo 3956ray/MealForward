@@ -1,0 +1,47 @@
+{
+  "pythonTests": 4,
+  "pythonExitCode": 0,
+  "nodeExitCode": 0,
+  "nodeTests": 2,
+  "realInstalledViemSyntheticRecovery": true,
+  "frozenEmailFilesUnchanged": {
+    "adapter.py": "6ea4132d21cbf714d3708eac9f97673e30105ed9a9c656450cf7a82e14dd4167",
+    "__init__.py": "dac1a8ecd31538216b2a9ffbcf0d2545de1732991dc02288c94897656ef911f3",
+    "test_adapter.py": "5180895aa1b64e319bdb3c9da4572d00c01ad75ffed7a7819fd959b4db05e134",
+    "README.md": "e940620797e2f58a534c9d3dac328211081123e8aca2376ba51d44b034aa5c63",
+    "run-offline.py": "50a5307815bdc75ee64989fb70343051619c5a843f7e0cf0e0e72817befb4a95",
+    "mapping-tests.json": "1f8dc1a163deeea2680806c5f3a5c25f09a47d9eb59f76c70a3044f4c9490f94",
+    "mapping-tests.stdout.txt": "f0b5c2c2211c8d67ed15e75e656c7862d086e9245420892a7de62cd9ec582a06",
+    "mapping-tests.stderr.txt": "cbf0c111b88112ad5c4f6f8f4e153d5d35440892e681cbe78548ecaf9d3c4a71"
+  },
+  "environment": "empty child environments; Python -I -B; explicit project/integrations paths",
+  "signatureHandling": "Public fixture signatures in memory pipes only; no signature/JWT/key persisted or logged",
+  "notRun": [
+    "PG/session/controller/authority integration",
+    "live wallet EOA classification",
+    "real wallet/provider/identity",
+    "HTTP/RPC/network/broadcast/deployment",
+    "SMART/ERC1271/multisig proof",
+    "old identity/security suites"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/Users/mili/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "-I",
+        "-B",
+        "-c",
+        "import sys,unittest; sys.path[:0]=['/Users/mili/Documents/Developer/mealforward-cp29-business', '/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-backend/integrations']; r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromName('identity.test_wallet_proof')); print(r.testsRun); sys.exit(not r.wasSuccessful())"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/node",
+        "--test",
+        "/Users/mili/Documents/Developer/mealforward-cp29-business/cp30-backend/integrations/identity/wallet-proof-codec.test.mjs"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

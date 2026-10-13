@@ -1,0 +1,16 @@
+[profile.default]
+src = "contracts"
+test = "test"
+out = "out"
+cache_path = "cache"
+libs = ["../../../node_modules"]
+remappings = ["@openzeppelin/contracts/=../../../node_modules/@openzeppelin/contracts/", "accepted-escrow/=../../../cp30-contracts/contracts/"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+chain_id = 31337
+# Explicit EIP170 ceiling: never raise it to make candidate onboarding executable.
+code_size_limit = 24576
+offline = true
+ffi = false

@@ -1,0 +1,9 @@
+testEoaClassificationSessionMismatchAndConcurrentCas (identity.test_wallet_proof.WalletProofTest.testEoaClassificationSessionMismatchAndConcurrentCas) ... ok
+testMemorySuccessExactBindingAndSingleConsumption (identity.test_wallet_proof.WalletProofTest.testMemorySuccessExactBindingAndSingleConsumption) ... ok
+testPostRecoveryAndTransactionClockSessionOrChallengeChangesReject (identity.test_wallet_proof.WalletProofTest.testPostRecoveryAndTransactionClockSessionOrChallengeChangesReject) ... ok
+testRealInstalledViemRecoveryOfPublicSyntheticFixture (identity.test_wallet_proof.WalletProofTest.testRealInstalledViemRecoveryOfPublicSyntheticFixture) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.707s
+
+OK

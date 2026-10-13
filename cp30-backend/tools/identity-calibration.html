@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>身份配置校准</title>
+<main><h1>身份配置校准</h1>
+<p>这是环境准备步骤。登录样本仅用于公钥验签和脱敏结构检查，不创建业务会话或授予角色。配置仍需审核。</p>
+<form id="email-form"><label>邮箱 <input id="email" type="email" required autocomplete="off"></label><button>发送验证码</button></form>
+<form id="otp-form"><label>验证码 <input id="otp" inputmode="numeric" pattern="[0-9]{4,10}" required autocomplete="off"></label><button>验证并校准</button></form>
+<button id="clear" type="button">清除登录样本</button><p id="status" role="status"></p><pre id="result"></pre>
+</main><script type="module" src="/identity-calibration.js"></script></html>

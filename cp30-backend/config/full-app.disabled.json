@@ -1,0 +1,30 @@
+{
+  "mode": "CP30_FULL_APPLICATION", "enabled": false,
+  "registrar": {
+    "mode": "CP30_REGISTRAR_RUNTIME", "enabled": false,
+    "namespace": null, "profile": null, "grant": null,
+    "transactionLimits": null, "rpc": null, "keyHandle": null,
+    "postgresBin": null, "pythonExecutable": null
+  },
+  "application": {
+    "mode": "CP30_FULL_APPLICATION", "enabled": false,
+    "origin": null, "httpPort": null, "allowedOrigin": null,
+    "allowedOriginApproved": false,
+    "tls": {"certfile": null, "keyfile": null},
+    "identity": {"claimProfile": null, "emailProfile": null},
+    "walletProof": {"name": null, "version": null, "chainId": null,
+      "verifyingContract": null, "backendOriginHash": null, "ttlSeconds": 300},
+    "walletKindRpc": null, "registrationObserver": null,
+    "activation": {"identity": false, "ownerWalletBinding": false,
+      "storeDeployment": false, "payerWalletTransactions": false,
+      "ownerSettlement": false, "expiresAt": null},
+    "business": {"asset": null, "rpc": null, "observer": null,
+      "approvalBudget": null, "maxSnapshotAgeSeconds": 120},
+    "businessTemplate": {"roles": {
+      "quoteAuthority": {"account": null, "profileCaps": null, "grant": null},
+      "issuerAuthority": {"account": null, "profileCaps": null, "grant": null},
+      "operatorAuthority": {"account": null, "profileCaps": null, "grant": null}
+    }},
+    "custody": null, "broadcastRpc": null
+  }
+}
