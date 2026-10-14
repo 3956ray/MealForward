@@ -23,7 +23,7 @@ class RuntimeLedgerJournal:
             if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode)!=0o600:raise RuntimeLedgerClosed('EXTERNAL_RUNTIME_JOURNAL_REQUIRED')
             fcntl.flock(self.fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
             self.sequence=0;self.head='0'*64;self.checkpoint=None;self.pending=None;self.terminal=None;self.failed=False
-            if os.fstat(self.fd).st_size>16777216:raise ValueError('EXTERNAL_JOURNAL_LIMIT')
+            if os.fstat(self.fd).st_size>67108864:raise ValueError('EXTERNAL_JOURNAL_LIMIT')
             with os.fdopen(os.dup(self.fd),'rb') as source:
                 for line in source:
                     if not line.endswith(b'\n') or len(line)>1048576:raise RuntimeLedgerClosed('EXTERNAL_RUNTIME_JOURNAL_DAMAGED')
@@ -70,7 +70,7 @@ class RuntimeLedgerJournal:
         if self.failed:raise RuntimeLedgerClosed('EXTERNAL_RUNTIME_JOURNAL_DAMAGED')
         payload={'sequence':self.sequence+1,'parent':self.head,'namespace':self.namespace,'kind':kind,'data':data}
         row={**payload,'digest':word_hash(payload)};raw=canonical(row)+b'\n'
-        if len(raw)>1048576 or os.fstat(self.fd).st_size+len(raw)>16777216:raise RuntimeLedgerClosed('RUNTIME_JOURNAL_LIMIT')
+        if len(raw)>1048576 or os.fstat(self.fd).st_size+len(raw)>67108864:raise RuntimeLedgerClosed('RUNTIME_JOURNAL_LIMIT')
         try:
             view=memoryview(raw)
             while view:

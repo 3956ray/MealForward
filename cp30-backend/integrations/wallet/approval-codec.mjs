@@ -61,7 +61,9 @@ async function run(method, p) {
       ...(type === 'legacy' ? {} : { accessList: t.accessList }),
     };
     if (type !== 'legacy' && !Array.isArray(t.accessList)) reject();
-    const r = word(t.r), s = word(t.s);
+    // secp256k1 components may arrive zero-stripped (63 hex) from RPC/wallets; pad canonically.
+    const padded = x => { if (typeof x !== 'string' || !/^0x[0-9a-fA-F]{1,64}$/.test(x)) reject(); return '0x' + x.slice(2).toLowerCase().padStart(64, '0'); };
+    const r = padded(t.r), s = padded(t.s);
     if (new secp256k1.Signature(BigInt(r), BigInt(s)).hasHighS()) reject();
     let signature;
     if (type === 'legacy') {

@@ -54,7 +54,8 @@ READ_ABI = {
 }
 SEND_ABI = {'0x8c540688':('issuerAuthority',6), '0xd62fcdde':('operatorAuthority',4),
             '0x2debe5d7':('operatorAuthority',5), '0x302897c2':('operatorAuthority',5),
-            '0x3daef73e':('owner',3), '0x3cccb50a':('payer',None)}
+            '0x3daef73e':('owner',3), '0x3cccb50a':('payer',None),
+            '0x5e88339b':('catalogAuthority',12), '0x55e80d27':('catalogAuthority',4)}
 _ZERO = '0x'+'0'*64
 
 
@@ -165,7 +166,7 @@ def validate_request(method,params,scope):
         if name=='getUnit' and int(words[0],16)>9: _fail('BUSINESS_RPC_ARGUMENT_REJECTED')
         if name=='getTerms' and int(words[1],16)==0: _fail('BUSINESS_RPC_ARGUMENT_REJECTED')
         if name=='operationPayloadHash':
-            roles={5:'issuerAuthority',6:'operatorAuthority',7:'operatorAuthority',8:'operatorAuthority',9:'owner'}
+            roles={1:'catalogAuthority',2:'catalogAuthority',5:'issuerAuthority',6:'operatorAuthority',7:'operatorAuthority',8:'operatorAuthority',9:'owner'}
             role=roles.get(int(words[0],16))
             if role is None or '0x'+words[1][24:]!=binding[role]: _fail('BUSINESS_RPC_ARGUMENT_REJECTED')
 
