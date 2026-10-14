@@ -167,7 +167,7 @@ function renderLive(scroll=false){
  else if(route==='merchant')main.innerHTML=renderLiveKitchen({context:ctx,view:id,meals:live.ownerMealStoreId===ctx.store?.id?live.ownerMeals:[],overview:live.ownerMealStoreId===ctx.store?.id?live.overview:null,error:live.error||live.catalogError,busy:live.busy,capabilities:live.mealCapabilities,unavailableReasons:live.mealUnavailableReasons,payouts:live.payoutStoreId===ctx.store?.id?live.payouts:null,payoutsLoading:live.payoutsLoading});
  else if(route==='store')main.innerHTML=renderLiveStore(live.stores.find(s=>String(s.id)===id),live.meals[id]??[],ctx.setup);
  else if(route==='contributions')main.innerHTML=renderContributions({session:ctx.session,orders:live.supportOrders,loading:live.supportOrdersLoading,error:live.error,setup:ctx.setup});
- else if(route==='mine')main.innerHTML=renderMyMeals({session:ctx.session,vouchers:live.vouchers,intents:live.claimIntents,loading:live.claimRecordsLoading,error:live.error});
+ else if(route==='mine')main.innerHTML=renderMyMeals({session:ctx.session,vouchers:live.vouchers,intents:live.claimIntents,loading:live.claimRecordsLoading,error:live.error,pending:ctx.session?(live.claimPending?.wallet===ctx.session.wallet?live.claimPending:readClaimRecovery(ctx.session.wallet)):null});
  else if(route.startsWith('verify'))main.innerHTML='<div class="container page"><h1>Kitchen verification</h1><p>Open the kitchen workspace to scan or paste a fresh voucher code. Reading a code does not confirm meal handover.</p><a class="button" href="#merchant/overview">Kitchen workspace</a></div>';
  else if(['coupon','ledger','nft'].includes(route))main.innerHTML=`<div class="container page">${pageHead(route==='ledger'?'Meal ledger':'Your meal records','This feature is not connected in the current registration release.')}<a class="button outline" href="#stores">Return to kitchens</a></div>`;
  else if(route==='about')main.innerHTML=`<div class="container page">${pageHead('About MealForward','A warm meal. A kinder day.')}<section class="panel"><h2>Open your kitchen</h2><p>Wallet sign-in, kitchen registration and first-meal publication use the connected service. A saved draft, a confirmed contract and a published meal are separate steps.</p><p>You can review and support the original public meal. Claim a public meal and follow its original progress in My meals. Kitchen owners check and confirm handover in their workspace. Settlement availability follows the connected service.</p><p>Monad Testnet · Test assets have no real dollar value.</p><a class="button" href="#register">Open a kitchen</a></section></div>`;
@@ -459,6 +459,71 @@ async function loadSupportOrders(){
  catch(err){if(generation!==live.generation)return;if(isLiveAuthRejection(err)){clearLiveIdentity(liveMessage(err));return;}live.error=liveMessage(err);}
  finally{if(generation===live.generation){live.supportOrdersLoading=false;renderLive();}}
 }
+async function sendOriginalSupportStep(flow,kind){
+ const id=flow.intent?.intentId??flow.intent?.id,step=flow.preparation?.actions?.find(item=>item.kind===kind);
+ if(flow.quoteExpired||!id||!['approve','fund'].includes(kind)||step?.allowed!==true||flow.attempted[kind]||live.supportAttempts[id]?.[kind]||supportState(flow.intent)==='FINAL_SUCCEEDED')throw Error('This wallet step is not available. Check the original contribution.');
+ if(step.account?.toLowerCase()!==flow.wallet)throw Error('The wallet step does not match the signed-in account.');
+ live.supportAttempts[id]??={};live.supportAttempts[id][kind]=true;flow.attempted=live.supportAttempts[id];flow.preparation=null;
+ flow.status='Check your wallet. This original step will not be sent again automatically.';
+ let walletStepReturned=false;
+ try{
+  const sent=await live.api.sendSupportTransaction(id,kind);walletStepReturned=true;
+  if(!supportCurrent(flow))return;
+  if(sent.transactionHash){flow.knownHashes[kind]=sent.transactionHash;flow.lastHash=sent.transactionHash;}
+  await refreshSupport(flow);
+ }catch(err){
+  if(!supportCurrent(flow))return;
+  if(!walletStepReturned&&err?.walletStepNotStarted===true){
+   delete live.supportAttempts[id][kind];delete flow.attempted[kind];
+   flow.status='Wallet request was not started. Resolve the preparation error and check original progress.';
+  }else{
+   if(/^0x[0-9a-fA-F]{64}$/.test(err.transactionHash??'')){flow.knownHashes[kind]=err.transactionHash;flow.lastHash=err.transactionHash;}
+   flow.status='The original wallet step is pending or uncertain. Check its progress; do not send it again.';
+  }
+  throw err;
+ }
+}
+async function continueOriginalSupport(flow){
+ // One business confirmation may involve TWO distinct wallet transactions.
+ // Never move from allowance to fund until the backend verifies the original allowance receipt.
+ if(!flow.intent){
+  if(!flow.review||flow.confirmAttempted)return;
+  flow.confirmAttempted=true;
+  let intent;
+  try{intent=await live.api.confirmSupport(flow.review.reviewId);}
+  catch(err){
+   if(!supportCurrent(flow))return;
+   if(err?.code==='PAYER_REQUIRED'||err?.code==='FINALIZED_FACTS_STALE')flow.confirmAttempted=false;
+   throw err;
+  }
+  if(!supportCurrent(flow))return;
+  flow.intent=intent;
+ }
+ await refreshSupport(flow);
+ for(let pass=0;pass<8&&supportCurrent(flow);pass++){
+  syncSupportQuote(flow);
+  if(flow.quoteExpired||supportState(flow.intent)==='FINAL_SUCCEEDED')return;
+  const steps=flow.preparation?.actions??[];
+  const fund=steps.find(a=>a.kind==='fund'&&a.allowed===true);
+  const approve=steps.find(a=>a.kind==='approve'&&a.allowed===true);
+  const original=flow.intent?.intentId??flow.intent?.id;
+  const next=!live.supportAttempts[original]?.approve&&approve?'approve':!live.supportAttempts[original]?.fund&&fund?'fund':null;
+  if(next){
+   await sendOriginalSupportStep(flow,next);
+   if(!supportCurrent(flow)||next==='fund')return;
+  }else if(live.supportAttempts[original]?.fund){
+   flow.status='Payment sent. We are checking the original confirmation; it will appear in My contributions.';return;
+  }
+  if(pass===7)break;
+  if(typeof document!=='undefined'&&document.hidden)break;
+  // Read-only status check. Never opens another transaction after an uncertain attempt.
+  await new Promise(resolve=>setTimeout(resolve,1150));
+  if(!supportCurrent(flow))return;
+  await refreshSupport(flow);
+ }
+ if(supportCurrent(flow)&&!flow.quoteExpired&&supportState(flow.intent)!=='FINAL_SUCCEEDED')
+  flow.status='Your original contribution is saved. Finish any remaining wallet step using Continue payment, or check My contributions.';
+}
 async function handleSupportAction(action,target){
  if(action==='support-close'){closeSupportFlow();return;}
  if(!live.context.session){await openWalletChooser();return;}
@@ -477,7 +542,8 @@ async function handleSupportAction(action,target){
   const id=target.dataset.intentId;if(!id)return;closeSupportFlow();live.support={...newSupportFlow(),intent:{id,stage:'PENDING'},attempted:live.supportAttempts[id]??{}};await supportTask(refreshSupport);return;
  }
  await supportTask(async flow=>{
-  if(action==='support-review'){
+   if(action==='support-pay')await continueOriginalSupport(flow);
+   else if(action==='support-review'){
    if(flow.intent||flow.review)return;if(!Number.isInteger(flow.quantity)||flow.quantity<1||flow.quantity>10)throw Error('Choose between 1 and 10 meals.');
    const review=await live.api.createSupportReview({storeId:flow.store.id,mealId:flow.meal.id,quantity:flow.quantity});if(!supportCurrent(flow))return;
    if(!review.reviewId||review.review?.payer?.toLowerCase()!==flow.wallet)throw Error('The review does not match the selected wallet. Sign in again.');flow.review=review;
@@ -501,25 +567,7 @@ async function handleSupportAction(action,target){
    if(!supportCurrent(flow))return;flow.intent=intent;await refreshSupport(flow);
   }
   else if(action==='support-check'){await refreshSupport(flow);}
-  else if(action==='support-send'){
-   const kind=target.dataset.kind,id=flow.intent?.intentId??flow.intent?.id,step=flow.preparation?.actions?.find(item=>item.kind===kind);
-   if(flow.quoteExpired||!id||!['approve','fund'].includes(kind)||step?.allowed!==true||flow.attempted[kind]||live.supportAttempts[id]?.[kind]||supportState(flow.intent)==='FINAL_SUCCEEDED')throw Error('This wallet step is not available. Check the original contribution.');
-   if(step.account?.toLowerCase()!==flow.wallet)throw Error('The wallet step does not match the signed-in account.');
-   live.supportAttempts[id]??={};live.supportAttempts[id][kind]=true;flow.attempted=live.supportAttempts[id];flow.preparation=null;flow.status='Check your wallet. This original step will not be sent again automatically.';
-   let walletStepReturned=false;
-   try{const sent=await live.api.sendSupportTransaction(id,kind);walletStepReturned=true;if(!supportCurrent(flow))return;if(sent.transactionHash){flow.knownHashes[kind]=sent.transactionHash;flow.lastHash=sent.transactionHash;}await refreshSupport(flow);}
-   catch(err){
-    if(!supportCurrent(flow))return;
-    if(!walletStepReturned&&err?.walletStepNotStarted===true){
-     delete live.supportAttempts[id][kind];delete flow.attempted[kind];
-     flow.status='Wallet request was not started. Resolve the preparation error and check original progress.';
-    }else{
-     if(/^0x[0-9a-fA-F]{64}$/.test(err.transactionHash??'')){flow.knownHashes[kind]=err.transactionHash;flow.lastHash=err.transactionHash;}
-     flow.status='The original wallet step is pending or uncertain. Check its progress; do not send it again.';
-    }
-    throw err;
-   }
-  }
+   else if(action==='support-send')await sendOriginalSupportStep(flow,target.dataset.kind);
   else if(action==='support-record'){
    const kind=target.dataset.kind,id=flow.intent?.intentId??flow.intent?.id;if(!id||!['approve','fund'].includes(kind)||(!flow.knownHashes[kind]&&!flow.preparation?.actions?.some(item=>item.kind===kind&&item.canRetryRecord===true)))throw Error('No known transaction is available to record. Check the original contribution.');
    await live.api.retrySupportTransactionRecord(id,kind);if(!supportCurrent(flow))return;await refreshSupport(flow);
@@ -528,6 +576,56 @@ async function handleSupportAction(action,target){
 }
 
 function claimCurrent(flow){return !!flow&&live.claim===flow&&flow.generation===live.generation&&live.context.session?.wallet===flow.wallet;}
+const CLAIM_RECOVERY_PREFIX='mealforward-claim-original-v2:';
+function claimRecoveryKey(wallet){return CLAIM_RECOVERY_PREFIX+String(wallet??'').toLowerCase();}
+function readClaimRecovery(wallet){
+ if(!wallet||typeof sessionStorage==='undefined')return null;
+ try{
+  const r=JSON.parse(sessionStorage.getItem(claimRecoveryKey(wallet))||'null');
+  return r?.wallet===wallet&&typeof r.reviewId==='string'&&r.reviewId.length<=128&&r.reviewId.length>0&&(!r.intentId||typeof r.intentId==='string'&&r.intentId.length<=128)?r:null;
+ }catch{return null;}
+}
+function rememberClaimRecovery(flow){
+ if(!claimCurrent(flow)||!flow.review?.reviewId)return;
+ const value={wallet:flow.wallet,reviewId:flow.review.reviewId,intentId:flow.intent?.intentId??flow.intent?.id??null};
+ live.claimPending=value;
+ try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(claimRecoveryKey(flow.wallet),JSON.stringify(value));}catch{/* The backend remains authoritative; this tab keeps the original reference. */}
+}
+function clearClaimRecovery(wallet){
+ live.claimPending=null;
+ try{if(typeof sessionStorage!=='undefined')sessionStorage.removeItem(claimRecoveryKey(wallet));}catch{/* Best-effort cleanup of non-secret references only. */}
+}
+async function openPendingClaim(){
+ const wallet=live.context.session?.wallet;if(!wallet)return;
+ const pending=live.claimPending?.wallet===wallet?live.claimPending:readClaimRecovery(wallet);
+ if(!pending)return;
+ closeClaimFlow();closeSupportFlow();live.claim=newClaimFlow();
+ live.claimPending=pending;live.claim.review={reviewId:pending.reviewId};
+ if(pending.intentId){live.claim.intent={id:pending.intentId,stage:'PENDING'};await claimTask(refreshClaim);}
+ else showClaimFlow();
+}
+async function submitOriginalClaim(flow){
+ if(!flow.review){
+  const review=await live.api.createClaimReview({storeId:flow.store.id,mealId:flow.meal.id});if(!claimCurrent(flow))return;
+  if(!review.reviewId||review.review?.mealId?.replace(/^0x/,'')!==flow.meal.id.replace(/^0x/,''))throw Error('The claim review does not match the selected meal.');
+  flow.review=review;rememberClaimRecovery(flow);
+ }
+ if(flow.intent||flow.confirmAttempted)return;
+ flow.confirmAttempted=true;rememberClaimRecovery(flow);
+ let intent;
+ try{intent=await live.api.confirmClaim(flow.review.reviewId);}
+ catch(err){
+  if(!claimCurrent(flow))return;
+  if(err?.code==='FINALIZED_FACTS_STALE'){
+   flow.confirmAttempted=false; // Same review + same idempotency key only; never create a replacement.
+   throw Error('Chain data needs refreshing. Continue this original claim after the service recovers; do not request another meal.');
+  }
+  throw err; // Uncertain: do not resubmit automatically.
+ }
+ if(!claimCurrent(flow))return;
+ flow.intent=intent;rememberClaimRecovery(flow);await refreshClaim(flow);
+}
+
 function closeClaimFlow(){const flow=live.claim;if(!flow)return;clearTimeout(flow.displayTimer);flow.display=null;live.claim=null;close(true);body.innerHTML='';}
 function newClaimFlow(){return {generation:live.generation,wallet:live.context.session.wallet,busy:false,error:'',review:null,intent:null,voucher:null,display:null,confirmAttempted:false};}
 function showClaimFlow(){
@@ -562,20 +660,26 @@ async function refreshClaim(flow){
  if(typeof voucherId!=='string'||!/^0x[0-9a-fA-F]{64}$/.test(voucherId))throw Error('The claim is confirmed, but its voucher reference is not available yet. Check the original progress or My meals.');
  const voucher=await live.api.getVoucher(voucherId);if(!claimCurrent(flow))return;
  if((voucher?.voucherId??voucher?.id)!==voucherId)throw Error('The voucher does not match the original claim.');
- flow.voucher=voucher;live.claimPending=null;
+ flow.voucher=voucher;clearClaimRecovery(flow.wallet);
  const index=live.vouchers.findIndex(item=>(item.voucherId??item.id)===voucherId);if(index<0)live.vouchers.push(voucher);else live.vouchers[index]=voucher;
 }
 async function handleClaimAction(action,target){
  if(action==='claim-close'){closeClaimFlow();return;}
  if(!live.context.session){await openWalletChooser();return;}
  if(action==='claim-records'){await loadClaimRecords();return;}
- if(action==='claim-start'){
-  const store=live.stores.find(item=>item.id===target.dataset.storeId),meal=live.meals[store?.id]?.find(item=>item.id===target.dataset.mealId&&item.listed===true&&item.eligible!==false&&Number(item.financial?.counts?.A??item.available)>0);
-  if(!store||!meal){live.error='This public meal has no available portions. Refresh the kitchen.';renderLive();return;}
-  closeClaimFlow();closeSupportFlow();live.claim={...newClaimFlow(),store,meal};
-  if(live.claimPending){live.claim.confirmAttempted=true;live.claim.error='An original claim confirmation is unresolved. Check My meals before starting another claim.';}
-  showClaimFlow();return;
- }
+  if(action==='claim-resume-start'){await openPendingClaim();return;}
+  if(action==='claim-start'){
+   const store=live.stores.find(item=>item.id===target.dataset.storeId),meal=live.meals[store?.id]?.find(item=>item.id===target.dataset.mealId&&item.listed===true&&item.eligible!==false&&Number(item.financial?.counts?.A??item.available)>0);
+   if(!store||!meal){live.error='This public meal has no available portions. Refresh the kitchen.';renderLive();return;}
+   closeClaimFlow();closeSupportFlow();live.claim={...newClaimFlow(),store,meal};
+   const pending=live.claimPending?.wallet===live.claim.wallet?live.claimPending:readClaimRecovery(live.claim.wallet);
+   if(pending){
+    live.claimPending=pending;live.claim.review={reviewId:pending.reviewId};
+    if(pending.intentId){live.claim.intent={id:pending.intentId,stage:'PENDING'};await claimTask(refreshClaim);}
+    else showClaimFlow();
+   }else showClaimFlow();
+   return;
+  }
  if(action==='claim-open'||action==='claim-voucher'){
   closeClaimFlow();closeSupportFlow();live.claim=newClaimFlow();
   if(action==='claim-open'){live.claim.intent={id:target.dataset.intentId};await claimTask(refreshClaim);}
@@ -583,12 +687,17 @@ async function handleClaimAction(action,target){
   return;
  }
  await claimTask(async flow=>{
-  if(action==='claim-review'){
+   if(action==='claim-one-tap'){
+    if(!flow.intent&&!flow.confirmAttempted)await submitOriginalClaim(flow);
+   }else if(action==='claim-resume'){
+    // A same-review recheck is allowed only after a deterministic stale-facts response.
+    if(flow.review&&!flow.intent&&!flow.confirmAttempted)await submitOriginalClaim(flow);
+   }else if(action==='claim-review'){
    if(flow.review||flow.intent||flow.confirmAttempted||live.claimPending)return;
    const review=await live.api.createClaimReview({storeId:flow.store.id,mealId:flow.meal.id});if(!claimCurrent(flow))return;
-   if(!review.reviewId||review.review?.mealId?.replace(/^0x/,'')!==flow.meal.id.replace(/^0x/,''))throw Error('The claim review does not match the selected meal.');flow.review=review;
+   if(!review.reviewId||review.review?.mealId?.replace(/^0x/,'')!==flow.meal.id.replace(/^0x/,''))throw Error('The claim review does not match the selected meal.');flow.review=review;rememberClaimRecovery(flow);
   }else if(action==='claim-confirm'){
-   if(!flow.review||flow.intent||flow.confirmAttempted)return;flow.confirmAttempted=true;live.claimPending={reviewId:flow.review.reviewId};
+   if(!flow.review||flow.intent||flow.confirmAttempted)return;flow.confirmAttempted=true;rememberClaimRecovery(flow);
    let intent;
    try{intent=await live.api.confirmClaim(flow.review.reviewId);}
    catch(err){
@@ -599,7 +708,7 @@ async function handleClaimAction(action,target){
     }
     throw err;
    }
-   if(!claimCurrent(flow))return;flow.intent=intent;live.claimPending.intentId=intent.intentId??intent.id;await refreshClaim(flow);
+   if(!claimCurrent(flow))return;flow.intent=intent;rememberClaimRecovery(flow);await refreshClaim(flow);
   }else if(action==='claim-check'){await refreshClaim(flow);}
   else if(action==='claim-copy-link'){
    const display=flow.display;if(!display||Date.now()>=display.expiresLocally)throw Error('This private link has expired. Request a new QR code.');

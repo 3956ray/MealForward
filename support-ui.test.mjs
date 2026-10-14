@@ -143,3 +143,46 @@ test('quote countdown uses server time plus elapsed time and expiry blocks a pre
  await h.act('support-open',{intentId});assert.match(h.body.innerHTML,/Quote deadline/);assert.match(h.body.innerHTML,/Time remaining/);assert.match(h.body.innerHTML,/2m 0s/);assert.equal(h.live.support.quoteExpired,false);
  h.live.support.quoteClock.receivedAt=Date.now()-121000;await h.act('support-send',{kind:'approve'});assert.equal(h.calls.filter(c=>c[0]==='send').length,0);assert.equal(h.live.support.quoteExpired,true);assert.doesNotMatch(h.body.innerHTML,/data-live-action="support-send"|Check original progress/);assert.match(h.body.innerHTML,/Quote expired/);
 });
+
+test('CP31 simplified checkout shows one business payment action and transparent total',()=>{
+ const wallet='0x'+'1'.repeat(40);
+ const review={reviewId:'review-1',review:{name:'Rice',quantity:3,unitPrice:'500000',amount:'1500000',payer:wallet}};
+ const html=renderSupportFlow({review,meal:{name:'Rice',unitPrice:'500000'},store:{name:'Kitchen'},quantity:3,confirmAttempted:false},{assetDecimals:6,assetSymbol:'USDC'});
+ assert.match(html,/1\.5 USDC/);
+ assert.match(html,/0\.5 USDC/);
+ assert.match(html,/Confirm &amp; pay/);
+ assert.match(html,/wallet may ask for two confirmations/i);
+ assert.ok(html.indexOf('Confirm &amp; pay')<html.indexOf('Technical details'));
+ assert.match(html,/<details class="ux-technical">/);
+});
+
+test('CP31 one payment confirmation orchestrates approve and fund only after verified allowance',async()=>{
+ const h=harness();await h.act('support-start');h.live.support.quantity=2;await h.act('support-review');
+ assert.match(h.body.innerHTML,/Confirm &amp; pay/);
+ await h.act('support-pay');
+ assert.deepEqual(h.calls.filter(c=>c[0]==='send').map(c=>c[2]),['approve','fund']);
+ assert.equal(h.live.supportAttempts[intentId].approve,true);
+ assert.equal(h.live.supportAttempts[intentId].fund,true);
+ assert.equal(h.calls.filter(c=>c[0]==='catalog').length,0,'wallet hash is not finality');
+ h.state.stage='FINAL_SUCCEEDED';await h.act('support-check');
+ assert.match(h.body.innerHTML,/Support confirmed/);
+});
+
+test('CP31 checkout never sends a duplicate after uncertain approval',async()=>{
+ const h=harness();await h.act('support-start');await h.act('support-review');
+ h.live.api.sendSupportTransaction=async()=>{throw Object.assign(Error('Wallet result unknown'),{code:'ORIGINAL_PAYMENT_UNKNOWN'});};
+ await h.act('support-pay');
+ assert.equal(h.live.supportAttempts[intentId].approve,true);
+ assert.equal(h.live.supportAttempts[intentId].fund,undefined);
+ assert.match(h.live.support.error,/Wallet result unknown/);
+ assert.match(h.body.innerHTML,/My contributions/);
+});
+
+test('CP31 order card shows order amount first, technical reference inside details',()=>{
+ const id='b'.repeat(36),hash='0x'+'3'.repeat(64);
+ const html=renderContributions({session:{wallet:'0x'+'1'.repeat(40)},orders:[{intentId:id,name:'Rice',quantity:3,amount:'1500000',stage:'FINAL_SUCCEEDED',transactionHash:hash}],setup:{assetDecimals:6,assetSymbol:'USDC'}});
+ assert.match(html,/3 meals/);assert.match(html,/1\.5 USDC/);
+ assert.match(html,/href="https:\/\/testnet\.monadscan\.com\/tx\/0x3{64}"/);
+ assert.match(html,/<details class="ux-technical">/);
+ assert.ok(html.indexOf('1.5 USDC')<html.indexOf(id));
+});

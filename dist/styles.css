@@ -188,3 +188,61 @@ dialog{border-radius:8px;max-width:calc(100vw - 32px)}dialog h2{font-size:26px;l
 #live-meal-form .notice{margin-top:24px}#live-meal-form .order-actions{margin-top:24px}
 
 #verification-camera{width:100%;max-height:320px;object-fit:contain;border-radius:12px;background:#14251c;margin:12px 0}
+
+/* CP31 · Clearer people-facing tasks; original business and safety operations remain intact. */
+.ux-checkout{width:min(100%,640px);margin-inline:auto;display:grid;gap:18px}
+.ux-checkout .eyebrow,.ux-record .eyebrow,.ux-record-page .eyebrow{font-size:11px;letter-spacing:.13em;color:var(--orange);font-weight:700}
+.ux-checkout h2{font-size:clamp(27px,5vw,37px);line-height:1.2}
+.ux-stepper{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ux-stepper li{display:flex;align-items:center;gap:7px;padding:10px 5px;border-top:2px solid var(--line);color:var(--muted);font-size:12px;line-height:1.3}
+.ux-stepper li.active{border-color:var(--green);color:var(--green);font-weight:700}
+.ux-stepper li.complete{border-color:var(--orange);color:var(--ink)}
+.ux-stepper li span{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:1px solid currentColor;display:grid;place-items:center}
+.ux-stepper li.active span{background:var(--green);color:white;border-color:var(--green)}
+.ux-checkout-meal{display:flex;align-items:center;gap:15px;padding:18px 0;border-block:1px solid var(--line)}
+.ux-checkout-meal strong{font-family:var(--serif);font-size:22px;font-weight:600}
+.ux-checkout-meal p{color:var(--muted);font-size:14px;margin-top:5px}
+.ux-checkout-photo{flex:0 0 100px;width:100px;height:78px;overflow:hidden;border-radius:9px;background:var(--soft)}
+.ux-checkout-photo img{width:100%;height:100%;object-fit:cover}
+.ux-checkout-photo .live-photo-placeholder{min-height:100%;display:grid;place-items:center;font-size:12px}
+.ux-checkout-summary{background:white;border:1px solid var(--line);border-radius:10px;padding:10px 18px}
+.ux-checkout-summary .facts{margin:0;border:0}
+.ux-checkout-summary .facts>div{padding:11px 0}
+.ux-total{padding:16px 0 8px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-top:1px dashed var(--line)}
+.ux-total strong{font-size:clamp(21px,4vw,29px);font-family:var(--serif);color:var(--green);font-weight:600}
+.ux-quantity-label{display:block;font-weight:650}
+.ux-checkout input[type=number]{width:100%;max-width:155px;min-height:50px;border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:white}
+.ux-helper{line-height:1.55;font-size:14px;color:var(--muted)}
+.ux-primary{display:flex}
+.ux-primary>.button{width:100%;min-height:52px;font-weight:700;font-size:16px;justify-content:center}
+.ux-progress-note{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.ux-technical{border-top:1px solid var(--line);padding:13px 0 5px;overflow-wrap:anywhere}
+.ux-technical summary{cursor:pointer;color:var(--muted);font-size:13px;padding:8px 0;min-height:42px}
+.ux-technical .facts{margin:8px 0 15px}
+.ux-technical .button{margin:5px 10px 5px 0}
+.ux-technical dd,.ux-technical dt{overflow-wrap:anywhere}
+.ux-confirmed{display:flex;flex-direction:column;gap:6px;background:#eff4eb;border:1px solid #c5d8c3;color:var(--green);padding:17px 19px;border-radius:9px}
+.ux-confirmed strong{font-family:var(--serif);font-size:23px}
+.ux-tx a{text-decoration:underline;text-underline-offset:3px;color:var(--green);font-weight:600}
+.ux-record-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:18px 0;color:var(--muted);font-size:14px}
+.ux-record{padding:24px;border-radius:10px;background:white;border:1px solid var(--line);margin:0 0 18px;box-shadow:0 8px 25px rgba(35,76,61,.045)}
+.ux-record-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.ux-record h2{font-size:clamp(22px,3vw,28px);line-height:1.35}
+.ux-record .muted{font-size:14px;margin-top:6px}
+.ux-status{flex:0 0 auto;padding:6px 11px;border-radius:999px;border:1px solid #d8e0d7;background:#f6f7f2;color:#516457;font-size:12px;font-weight:700;line-height:1.4;max-width:175px;text-align:center}
+.ux-status.is-success{background:#e7f3e6;border-color:#bdd7c0;color:#285f43}
+.ux-record-main{display:flex;flex-direction:column;gap:5px;padding:20px 0;margin:13px 0;border-block:1px solid var(--line)}
+.ux-record-main strong{font-family:var(--serif);font-size:32px;color:var(--green)}
+.ux-record-main span{color:var(--muted);font-size:14px}
+.ux-record .order-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.ux-record .order-actions a:not(.button){color:var(--green);text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.ux-record .ux-technical{margin-top:13px}
+.ux-claim .ux-voucher-sheet{border:1px solid #d2dccc;border-radius:12px;background:#f6f8f0;padding:22px;display:grid;gap:14px}
+.ux-voucher-sheet h3{font-family:var(--serif);font-size:25px}
+.ux-voucher-sheet .qr-wrap{background:white;border:1px dashed #9ab49d;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;align-items:center;overflow-wrap:anywhere}
+.ux-voucher-sheet .qr-wrap a{text-decoration:underline;text-underline-offset:3px}
+.ux-voucher-sheet .code-string{font-size:13px;word-break:break-all;user-select:all}
+.ux-pending-claim{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:16px;margin-bottom:22px}
+.ux-pending-claim .button{margin-left:auto}
+@media(max-width:640px){.ux-record-header{flex-direction:column;align-items:flex-start}.ux-stepper li{font-size:11px;gap:5px}.ux-checkout-photo{flex-basis:78px;width:78px;height:68px}.ux-checkout-meal strong{font-size:19px}.ux-record{padding:18px}.ux-record .order-actions .button{width:100%;justify-content:center}.ux-primary>.button{min-height:52px}}
+@media(prefers-reduced-motion:reduce){.ux-primary .button,.ux-record .button{transition:none;transform:none}}
