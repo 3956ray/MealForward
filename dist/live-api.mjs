@@ -130,6 +130,10 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     busy=true;unwatchWallet();invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');const generation=epoch;let committed=false,committedCsrf=null;const wallet=provider();
     const changed=()=>invalidate();let watching=false;
     try{
+      // Never prompt MetaMask unless the origin-bound login backend responds first.
+      const config=await setup();
+      if(!config.walletLoginEnabled)throw fail('WALLET_LOGIN_UNAVAILABLE','Wallet login is not enabled for this site address.');
+      checkEpoch(generation);
       if(!wallet?.request || !wallet.on || !wallet.removeListener)throw fail('WALLET_UNAVAILABLE','Install or enable MetaMask in this browser, then sign in again.');
       if(wallet.isMetaMask!==true || wallet.isPhantom===true)throw fail('METAMASK_REQUIRED','Sign in with MetaMask, not another wallet provider.');
       // Use MetaMask's already-authorized active account for SIWE sign-in.
@@ -147,7 +151,6 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
       const selected=Array.isArray(accounts)?accounts[0]:null;
       if(typeof selected!=='string'||!ADDRESS.test(selected.toLowerCase()))throw fail('ACCOUNT_NOT_CONNECTED','Unlock MetaMask and connect your current account to continue.');
       const address=selected.toLowerCase();
-      const config=await setup();if(!config.walletLoginEnabled)throw fail('WALLET_LOGIN_UNAVAILABLE','Wallet login is not enabled for this site address.');
       wallet.on('accountsChanged',changed);wallet.on('chainChanged',changed);watching=true;
       await checkWallet(wallet,address);checkEpoch(generation);
       await request('POST','/v1/auth/pre-session',{}, {'X-C1-Bootstrap':'1'});checkEpoch(generation);

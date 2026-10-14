@@ -96,9 +96,23 @@ function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,server
   };
   return {api:createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls,flow,wallet};
 }
+
+test('unreachable API blocks MetaMask prompts before requesting any account',async()=>{
+ const {wallet,flow}=loginFixture();
+ const api=createLiveApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>{throw Error('offline');}});
+ await assert.rejects(api.loginWithMetaMask(),{code:'CONNECTION_UNAVAILABLE'});
+ assert.deepEqual(flow,[]);
+});
+test('HTML in place of login backend JSON never opens a MetaMask prompt',async()=>{
+ const {wallet,flow}=loginFixture();
+ const api=createLiveApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>({ok:false,status:404,json:async()=>{throw Error('html');}})});
+ await assert.rejects(api.loginWithMetaMask(),{code:'SERVICE_UNAVAILABLE'});
+ assert.deepEqual(flow,[]);
+});
+
 test('already connected MetaMask logs in with a signature, without requesting accounts again',async()=>{
   const {api,calls,flow}=loginFixture();assert.equal((await api.loginWithMetaMask()).session.wallet,owner);
-  assert.equal(flow[0],'wallet:eth_accounts');
+  assert.deepEqual(flow.slice(0,2),['api:/v1/connection','api:/v1/identity/setup']);
   assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,0);
   assert.equal(flow.filter(e=>e==='wallet:personal_sign').length,1);
   assert.equal(flow.some(e=>e==='wallet:wallet_requestPermissions'),false);
@@ -107,7 +121,7 @@ test('already connected MetaMask logs in with a signature, without requesting ac
 test('first-time connection asks MetaMask permission exactly once before signing',async()=>{
   const {api,flow}=loginFixture({available:[],connectedAccounts:[owner]});
   assert.equal((await api.loginWithMetaMask()).session.wallet,owner);
-  assert.deepEqual(flow.slice(0,3),['wallet:eth_accounts','wallet:eth_requestAccounts','api:/v1/connection']);
+  assert.deepEqual(flow.slice(0,4),['api:/v1/connection','api:/v1/identity/setup','wallet:eth_accounts','wallet:eth_requestAccounts']);
   assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,1);
   assert.equal(flow.filter(e=>e==='wallet:personal_sign').length,1);
 });
@@ -226,7 +240,7 @@ test('active MetaMask account B is used directly even if account A is also autho
 });
 test('native rejection cannot fall back to a previously connected wallet',async()=>{
  const {api,calls,flow}=loginFixture({available:[],nativeReject:true});await assert.rejects(api.loginWithMetaMask(),{code:4001});
- assert.deepEqual(flow,['wallet:eth_accounts','wallet:eth_requestAccounts']);assert.equal(calls.length,0);
+ assert.deepEqual(flow,['api:/v1/connection','api:/v1/identity/setup','wallet:eth_accounts','wallet:eth_requestAccounts']);assert.equal(calls.length,2);
 });
 test('MetaMask native response without an account never creates a login challenge',async()=>{
  const {api,calls}=loginFixture({available:[],connectedAccounts:[]});await assert.rejects(api.loginWithMetaMask(),{code:'ACCOUNT_NOT_CONNECTED'});

@@ -2,7 +2,7 @@ import * as M from './model.mjs';
 import {normalizeUpload,verifyStoredImages} from './image.mjs';
 import {renderRegistration,renderLiveCards,renderLiveKitchen,renderLiveStore,validateDraft,hasOwnedKitchen,renderLiveMealEditor,priceLabel,halfHourOptions,renderSupportFlow,renderContributions,supportState,renderClaimFlow,renderMyMeals,renderVerificationEntry,renderSettlementFlow,renderMealPublishFlow} from './onboarding-view.mjs';
 const LIVE_MODE=true;
-const live={api:null,context:{},busy:false,error:'',blocked:true,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
+const live={api:null,context:{},busy:false,error:'',blocked:true,backendOffline:false,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
 const {STORES,getStore,stats,displayText:english,money,nowFor}=M;
 const main=document.querySelector('#main'),dialog=document.querySelector('#dialog'),body=document.querySelector('#dialog-body');
 let restoring=true,state,storageError='',filter='all',checkout=null,checkedId='',nextResult='final',resume=null,dialogKind='',dialogTrigger=null,resetConfirmButton=null,toastTimer,editorInitial='',editorValues=null,verificationInput='',claimSelection=null,replacement=null,editorEpoch=0,imageRequest=0,uploadPending=false,editorImage='';
@@ -159,7 +159,7 @@ function renderLive(scroll=false){
  document.body.classList.toggle('merchant-route',route==='merchant');
  document.querySelector('#signin-button').textContent=session?'Switch wallet':'Sign in with MetaMask';
  document.querySelector('#signin-button').setAttribute('aria-label',session?'Switch wallet in MetaMask':'Sign in with MetaMask');
- document.querySelector('#signin-button').disabled=live.busy;
+ document.querySelector('#signin-button').disabled=live.busy||live.backendOffline;
  document.querySelector('#signout-button').hidden=!session;document.querySelector('#signout-button').disabled=live.busy;
  workspace.hidden=false;workspace.href=canEnterKitchen()?'#merchant/overview':'#register';workspace.textContent=canEnterKitchen()?'My kitchen':ctx.registration?'Continue registration':'Open a kitchen';
  document.querySelectorAll('[data-nav]').forEach(a=>a.setAttribute('aria-current',a.dataset.nav===route?'page':'false'));
@@ -185,8 +185,8 @@ function renderLive(scroll=false){
  }
  if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch in MetaMask / Sign in again</button></div>`);
  if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Confirm the login signature in MetaMask. First-time connections may require wallet permission.</p>');
- if(route!=='register'&&live.error)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
- if(live.blocked)main.insertAdjacentHTML('beforeend','<div class="container live-connection"><p class="notice">Connection unavailable. Previously loaded records may be out of date. New registration and authorization actions are paused.</p><button class="button outline" data-live-action="recover">Check connection & recover</button></div>');
+ if(route!=='register'&&live.error&&!live.backendOffline)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
+ if(live.blocked)main.insertAdjacentHTML('beforeend',`<div class="container live-connection"><p class="notice" role="status">${live.backendOffline?'The MealForward backend is not connected to this website. MetaMask login and real meal operations cannot complete here. No wallet confirmation is needed until the API is deployed.':'Connection unavailable. Previously loaded records may be out of date. New registration and authorization actions are paused.'}</p><button class="button outline" data-live-action="recover">Check connection & recover</button></div>`);
  if(scroll&&!['stores','how'].includes(route)){window.scrollTo(0,0);main.focus({preventScroll:true});}
 }
 function checkLiveGeneration(generation){if(generation!==live.generation)throw Object.assign(Error('The wallet session changed.'),{code:'STALE_UI_SESSION'});}
@@ -200,7 +200,10 @@ function clearLiveIdentity(message=''){
 }
 window.addEventListener('mealforward-session-invalidated',()=>{if(LIVE_MODE)clearLiveIdentity('Wallet changed. Sign in again with the newly selected wallet.');});
 function acceptContext(ctx){live.context=live.reloginRequired?{setup:ctx.setup,session:null,store:null,registration:null,registrations:[]}:ctx;live.blocked=false;live.signed=false;if(!live.reloginRequired)live.error='';}
-async function loadLiveContext(generation=live.generation){const ctx=await currentLiveResult(live.api.getContext(),generation);acceptContext(ctx);return ctx;}
+async function loadLiveContext(generation=live.generation){
+ try{const ctx=await currentLiveResult(live.api.getContext(),generation);live.backendOffline=false;acceptContext(ctx);return ctx;}
+ catch(err){if(['SERVICE_UNAVAILABLE','CONNECTION_UNAVAILABLE'].includes(err?.code))live.backendOffline=true;throw err;}
+}
 async function loadLiveCatalog(generation=live.generation){
  const response=await currentLiveResult(live.api.listStores(),generation),stores=Array.isArray(response)?response:response.items??[];
  const results=await currentLiveResult(Promise.allSettled(stores.map(store=>live.api.getStoreMeals(store.id))),generation);
@@ -394,6 +397,7 @@ async function saveLiveMealDraft(imageOnly=false){
 
 async function startMetaMaskLogin(){
  if(live.busy)return;
+ if(live.backendOffline){live.error='The backend is not connected. Use Check connection & recover when the API is deployed; wallet signing is unavailable here.';renderLive();return;}
  if(!live.api?.loginWithMetaMask){live.error='The login service is not connected. Check the connection before signing in.';renderLive();return;}
  // Clear previously shown private data before the wallet can select a new owner.
  // MetaMask handles account permission natively; this page has no chooser.
