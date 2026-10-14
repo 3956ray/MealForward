@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLiveApi,walletTypedData} from './dist/live-api.mjs';
+import {createLiveApi,walletTypedData,metaMaskProvider} from './dist/live-api.mjs';
 const id='0x'+'1'.repeat(64),owner='0x'+'2'.repeat(40);
 const memory=()=>{const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k),data};};
 const response=(value,status=200)=>({ok:status<400,status,json:async()=>value});
@@ -64,17 +64,18 @@ test('foreign wallet cannot authorize a store; offline site never returns synthe
   await assert.rejects(createLiveApi({storage:memory(),fetchImpl:async()=>{throw Error('offline');}}).getContext(),{code:'CONNECTION_UNAVAILABLE'});
 });
 
-function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,serverAddress=loginAddress,available=[owner],onMe=()=>{}}={}){
-  const storage=memory(),listeners=new Map(),calls=[];
-  const wallet={on:(event,fn)=>listeners.set(event,fn),removeListener:event=>listeners.delete(event),async request({method}){
-    if(method==='eth_requestAccounts'){listeners.get('accountsChanged')?.([owner]);return available;}
-    return method==='eth_accounts'?available:method==='eth_chainId'?'0x279f':'0x'+'a'.repeat(130);
+function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,serverAddress=loginAddress,available=[owner],onMe=()=>{},nativeReject=false,connectedAccounts=available,chain='0x279f'}={}){
+  const storage=memory(),listeners=new Map(),calls=[],flow=[];
+  const wallet={isMetaMask:true,on:(event,fn)=>listeners.set(event,fn),removeListener:event=>listeners.delete(event),async request({method}){
+    flow.push('wallet:'+method);
+    if(method==='eth_requestAccounts'){if(nativeReject)throw Object.assign(Error('User rejected'),{code:4001});return connectedAccounts;}
+    return method==='eth_accounts'?available:method==='eth_chainId'?chain:'0x'+'a'.repeat(130);
   }};
   const now=Math.floor(Date.now()/1000),nonce='b'.repeat(64),challengeId='11111111-1111-4111-8111-111111111111';
   const challenge={challengeId,address:loginAddress,chainId:10143,nonce,domain:'localhost:16443',uri:identity.walletLoginOrigin,issuedAt:now,expiresAt:now+180};
   challenge.message=`localhost:16443 wants you to sign in with your Ethereum account:\n${loginAddress}\n\nSign in to MealForward with your test wallet.\n\nURI: ${challenge.uri}\nVersion: 1\nChain ID: 10143\nNonce: ${nonce}\nIssued At: ${new Date(now*1000).toISOString()}\nExpiration Time: ${new Date((now+180)*1000).toISOString()}\nRequest ID: ${challengeId}`;
   const fetchImpl=async(path,options)=>{
-    calls.push({path,options});
+    calls.push({path,options});flow.push('api:'+path);
     if(path==='/v1/connection')return response(config);
     if(path==='/v1/identity/setup')return response(identity);
     if(path==='/v1/auth/pre-session')return response({csrf:'pre-csrf'});
@@ -89,14 +90,16 @@ function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,server
     if(path==='/v1/auth/logout')return response({ok:true});
     throw Error('unexpected request');
   };
-  return {api:createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls};
+  return {api:createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls,flow,wallet};
 }
-test('explicitly selected wallet completes normal sign-in',async()=>{
-  const {api,calls}=loginFixture();await api.getWalletAccounts();assert.equal((await api.loginWallet({address:owner})).session.wallet,owner);
+test('MetaMask native connection completes signed login without a site account picker',async()=>{
+  const {api,calls,flow}=loginFixture();assert.equal((await api.loginWithMetaMask()).session.wallet,owner);
+  assert.equal(flow[0],'wallet:eth_requestAccounts');assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,1);
+  assert.equal(flow.some(e=>e==='wallet:wallet_requestPermissions'),false);
   assert.equal(calls.filter(c=>c.path.endsWith('/logout')).length,0);
 });
 for(const mode of ['changeOnMe','failOnMe'])test(`post-commit ${mode} revokes only original login authorization`,async()=>{
-  const {api,calls}=loginFixture({[mode]:true});await api.getWalletAccounts();await assert.rejects(api.loginWallet({address:owner}));
+  const {api,calls}=loginFixture({[mode]:true});await assert.rejects(api.loginWithMetaMask());
   const revoked=calls.find(c=>c.path==='/v1/auth/logout');assert.ok(revoked);
   assert.equal(revoked.options.headers['X-C1-CSRF'],'original-login-csrf');
   assert.equal(revoked.options.headers['X-C1-Preserve-Session-Cookie'],'1');
@@ -197,31 +200,43 @@ test('private meal drafts preserve published content, exact prices and retry ide
   assert.equal(requests[2].headers['Idempotency-Key'],requests[3].headers['Idempotency-Key']);assert.equal(requests[3].headers['X-C1-Draft-Revision'],'2');
 });
 
-test('explicit second authorized account logs into that account rather than accounts[0]',async()=>{
-  const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({loginAddress:second,available:[owner,second]});
-  assert.deepEqual(await api.getWalletAccounts(),[owner,second]);
-  const result=await api.loginWallet({address:second});assert.equal(result.session.wallet,second);assert.equal(result.store,null);
-  const challenge=calls.find(c=>c.path.endsWith('/wallet/challenge'));assert.equal(JSON.parse(challenge.options.body).address,second);
+test('MetaMask active account is used instead of an old cached account',async()=>{
+ const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({loginAddress:second,serverAddress:second,available:[second,owner]});
+ const result=await api.loginWithMetaMask();assert.equal(result.session.wallet,second);assert.equal(result.store,null);
+ const challenge=calls.find(c=>c.path.endsWith('/wallet/challenge'));assert.equal(JSON.parse(challenge.options.body).address,second);
 });
-test('login requires an explicit authorized account selection',async()=>{
- const {api,calls}=loginFixture();await assert.rejects(api.loginWallet(),{code:'ACCOUNT_SELECTION_REQUIRED'});await api.getWalletAccounts();
- await assert.rejects(api.loginWallet({address:'0x'+'9'.repeat(40)}),{code:'WALLET_CHANGED'});
+test('native rejection cannot fall back to a previously connected wallet',async()=>{
+ const {api,calls,flow}=loginFixture({nativeReject:true});await assert.rejects(api.loginWithMetaMask(),{code:4001});
+ assert.deepEqual(flow,['wallet:eth_requestAccounts']);assert.equal(calls.length,0);
+});
+test('MetaMask native response without an account never creates a login challenge',async()=>{
+ const {api,calls}=loginFixture({connectedAccounts:[]});await assert.rejects(api.loginWithMetaMask(),{code:'ACCOUNT_NOT_CONNECTED'});
  assert.equal(calls.some(c=>c.path.endsWith('/wallet/challenge')),false);
 });
-
-test('a server session for a different allowed account is rejected after sign-in',async()=>{
- const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({loginAddress:second,serverAddress:owner,available:[owner,second]});
- await api.getWalletAccounts();await assert.rejects(api.loginWallet({address:second}),{code:'LOGIN_ACCOUNT_MISMATCH'});
+test('wallet account changed between connect and signature is rejected',async()=>{
+ const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({connectedAccounts:[second,owner],available:[owner,second]});
+ await assert.rejects(api.loginWithMetaMask(),{code:'WALLET_CHANGED'});
+ assert.equal(calls.some(c=>c.path.endsWith('/wallet/challenge')),false);
+});
+test('wrong Monad chain is blocked before the login challenge',async()=>{
+ const {api,calls}=loginFixture({chain:'0x1'});await assert.rejects(api.loginWithMetaMask(),{code:'WALLET_CHANGED'});
+ assert.equal(calls.some(c=>c.path.endsWith('/wallet/challenge')),false);
+});
+test('server returning a different authenticated wallet triggers explicit logout',async()=>{
+ const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({loginAddress:second,serverAddress:owner,available:[second,owner]});
+ await assert.rejects(api.loginWithMetaMask(),{code:'SESSION_CHANGED'});
  assert.ok(calls.some(c=>c.path==='/v1/auth/logout'));assert.equal((await api.getContext()).session,null);
 });
-test('unsupported wallet account permissions do not silently select an old account',async()=>{
- const wallet={on(){},removeListener(){},async request({method}){if(method==='wallet_requestPermissions')throw Object.assign(Error('unsupported'),{code:4200});return [owner];}};
- const api=createLiveApi({storage:memory(),provider:()=>wallet});
- await assert.rejects(api.getWalletAccounts({requestPermissions:true}),{code:'ACCOUNT_SELECTION_UNSUPPORTED'});
+test('provider resolver selects MetaMask rather than Phantom in a multi-wallet browser',()=>{
+ const prior=globalThis.ethereum,phantom={isPhantom:true,isMetaMask:true},metamask={isMetaMask:true};
+ try{globalThis.ethereum={providers:[phantom,metamask]};assert.equal(metaMaskProvider(),metamask);
+  globalThis.ethereum=phantom;assert.equal(metaMaskProvider(),null);
+  globalThis.ethereum=metamask;assert.equal(metaMaskProvider(),metamask);
+ }finally{globalThis.ethereum=prior;}
 });
 
 test('UI cancellation revokes a late committed sign-in and keeps reload anonymous',async()=>{
- let api;const f=loginFixture({onMe:()=>api.invalidateSession()});api=f.api;await api.getWalletAccounts();
- await assert.rejects(api.loginWallet({address:owner}),{code:'SESSION_CHANGED'});
+ let api;const f=loginFixture({onMe:()=>api.invalidateSession()});api=f.api;
+ await assert.rejects(api.loginWithMetaMask(),{code:'SESSION_CHANGED'});
  assert.ok(f.calls.some(c=>c.path==='/v1/auth/logout'));assert.equal((await api.getContext()).session,null);
 });

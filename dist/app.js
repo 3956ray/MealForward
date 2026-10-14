@@ -1,8 +1,8 @@
 import * as M from './model.mjs';
 import {normalizeUpload,verifyStoredImages} from './image.mjs';
-import {renderRegistration,renderLiveCards,renderLiveKitchen,renderLiveStore,validateDraft,hasOwnedKitchen,renderLiveMealEditor,priceLabel,halfHourOptions,renderWalletChooser,renderSupportFlow,renderContributions,supportState,renderClaimFlow,renderMyMeals,renderVerificationEntry,renderSettlementFlow,renderMealPublishFlow} from './onboarding-view.mjs';
+import {renderRegistration,renderLiveCards,renderLiveKitchen,renderLiveStore,validateDraft,hasOwnedKitchen,renderLiveMealEditor,priceLabel,halfHourOptions,renderSupportFlow,renderContributions,supportState,renderClaimFlow,renderMyMeals,renderVerificationEntry,renderSettlementFlow,renderMealPublishFlow} from './onboarding-view.mjs';
 const LIVE_MODE=true;
-const live={api:null,context:{},busy:false,error:'',blocked:true,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,walletChooser:null,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
+const live={api:null,context:{},busy:false,error:'',blocked:true,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
 const {STORES,getStore,stats,displayText:english,money,nowFor}=M;
 const main=document.querySelector('#main'),dialog=document.querySelector('#dialog'),body=document.querySelector('#dialog-body');
 let restoring=true,state,storageError='',filter='all',checkout=null,checkedId='',nextResult='final',resume=null,dialogKind='',dialogTrigger=null,resetConfirmButton=null,toastTimer,editorInitial='',editorValues=null,verificationInput='',claimSelection=null,replacement=null,editorEpoch=0,imageRequest=0,uploadPending=false,editorImage='';
@@ -134,18 +134,18 @@ document.addEventListener('click',async event=>{if(LIVE_MODE)return;const el=eve
  }catch(err){error(err.message);}});
 document.addEventListener('input',event=>{if(event.target.id==='token-input')verificationInput=event.target.value;});
 document.addEventListener('change',event=>{if(event.target===document.querySelector('#image-file')&&dialogKind==='edit'&&dialog.open&&event.target.files[0])uploadImage(event.target.files[0]);if(event.target.id==='menu-image'){imageRequest++;uploadPending=false;editorImage=event.target.value;previewEditorImage();document.querySelector('#image-status').textContent='Unsaved preview · Bundled image.';}if(event.target.id==='next-result')nextResult=event.target.value;if(event.target.id==='demo-voucher'){checkedId='';verificationInput='';document.querySelector('#token-input').value='';}});
-dialog.addEventListener('cancel',event=>{if(LIVE_MODE&&live.mealPublish){event.preventDefault();closeMealPublish();return;}if(LIVE_MODE&&live.settlement){event.preventDefault();closeSettlementFlow();return;}if(LIVE_MODE&&live.verification){event.preventDefault();closeVerificationEntry();return;}if(LIVE_MODE&&live.claim){event.preventDefault();closeClaimFlow();return;}if(LIVE_MODE&&live.support){event.preventDefault();closeSupportFlow();return;}if(LIVE_MODE&&live.walletChooser){event.preventDefault();closeWalletChooser();return;}if(LIVE_MODE&&(live.mealEditor||live.mealListing)){event.preventDefault();closeLiveMealEditor();return;}if(dialogKind==='edit'&&editorDirty()){event.preventDefault();discardEditor();}else{editorEpoch++;imageRequest++;uploadPending=false;dialogKind='';resetConfirmButton=null;requestAnimationFrame(()=>dialogTrigger?.isConnected?dialogTrigger.focus():main.focus());}});
+dialog.addEventListener('cancel',event=>{if(LIVE_MODE&&live.mealPublish){event.preventDefault();closeMealPublish();return;}if(LIVE_MODE&&live.settlement){event.preventDefault();closeSettlementFlow();return;}if(LIVE_MODE&&live.verification){event.preventDefault();closeVerificationEntry();return;}if(LIVE_MODE&&live.claim){event.preventDefault();closeClaimFlow();return;}if(LIVE_MODE&&live.support){event.preventDefault();closeSupportFlow();return;}if(LIVE_MODE&&(live.mealEditor||live.mealListing)){event.preventDefault();closeLiveMealEditor();return;}if(dialogKind==='edit'&&editorDirty()){event.preventDefault();discardEditor();}else{editorEpoch++;imageRequest++;uploadPending=false;dialogKind='';resetConfirmButton=null;requestAnimationFrame(()=>dialogTrigger?.isConnected?dialogTrigger.focus():main.focus());}});
 const publicDemoBar=document.querySelector('.demo-bar').innerHTML;
 function syncRouteChrome(){if(LIVE_MODE){document.body.classList.toggle('merchant-route',location.hash.startsWith('#merchant'));return;}const merchant=location.hash.slice(1).split('/')[0]==='merchant';document.body.classList.toggle('merchant-route',merchant);document.querySelector('.demo-bar').innerHTML=merchant?'Demo · Simulated kitchens, payments and handovers':publicDemoBar;}
 window.addEventListener('storage',event=>{if(LIVE_MODE)return;if(event.storageArea!==localStorage||event.key!==M.KEY&&event.key!==null)return;try{if(localStorage.getItem(M.KEY)!==savedRaw)restoreSaved(true);}catch{restoreSaved(true);}});
-window.addEventListener('hashchange',()=>{if(LIVE_MODE){closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeWalletChooser();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
+window.addEventListener('hashchange',()=>{if(LIVE_MODE){closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
 document.querySelector('.skip').addEventListener('click',event=>{event.preventDefault();main.focus();main.scrollIntoView();});
 setInterval(()=>{if(LIVE_MODE)return;if(storageError||restoring||externalAuthorityLost)return;const now=nowFor(state);if(state.coupons.some(c=>c.token&&c.tokenExpires<=now||c.status==='issued'&&c.expires<=now&&!state.ops.some(o=>M.isOpen(o)&&o.coupon===c.id))){try{mutate(s=>M.expire(s,now));}catch(err){error(err.message);}}tickCode();},1000);
 syncRouteChrome();
 render();
 if(LIVE_MODE)startLive();else restoreSaved();
 
-function liveMessage(err){if(err?.code==='FINALIZED_FACTS_STALE')return 'Payment data needs updating (FINALIZED_FACTS_STALE). Wait for the service to recover, then check the original contribution. Payment is not confirmed.';if(err?.code==='WALLET_UNAVAILABLE')return 'No wallet extension is available in this browser. Open this page in a browser with your wallet extension installed and enabled, then try Sign in with wallet again.';return err?.message||'The service is unavailable. Check the connection and continue your original registration.';}
+function liveMessage(err){if(err?.code==='FINALIZED_FACTS_STALE')return 'Payment data needs updating (FINALIZED_FACTS_STALE). Wait for the service to recover, then check the original contribution. Payment is not confirmed.';if(err?.code==='WALLET_UNAVAILABLE'||err?.code==='METAMASK_REQUIRED')return 'MetaMask is not available. Enable the MetaMask browser extension and try again.';if(err?.code===4001)return 'You cancelled the MetaMask request. Sign in again whenever you are ready.';if(err?.code===-32002)return 'A MetaMask request is already open. Confirm or reject it in MetaMask first.';return err?.message||'The service is unavailable. Check the connection and continue your original registration.';}
 function canEnterKitchen(){return hasOwnedKitchen(live.context)&&(!live.context.registration||live.context.registration.state==='CONFIRMED'&&(live.context.registration.listingConfirmed===true||live.context.registration.businessReady===true));}
 function readLiveDraft(){
  const form=document.querySelector('#registration-form');if(!form)return;
@@ -157,8 +157,8 @@ function renderLive(scroll=false){
  startSettlementClock();
  const [route,id]=location.hash.slice(1).split('/'),ctx=live.context,session=ctx.session,workspace=document.querySelector('#workspace-link');
  document.body.classList.toggle('merchant-route',route==='merchant');
- document.querySelector('#signin-button').textContent=session?'Wallet account':'Sign in with wallet';
- document.querySelector('#signin-button').setAttribute('aria-label',session?'Wallet account':'Sign in with wallet');
+ document.querySelector('#signin-button').textContent=session?'Switch wallet':'Sign in with MetaMask';
+ document.querySelector('#signin-button').setAttribute('aria-label',session?'Switch wallet in MetaMask':'Sign in with MetaMask');
  document.querySelector('#signin-button').disabled=live.busy;
  document.querySelector('#signout-button').hidden=!session;document.querySelector('#signout-button').disabled=live.busy;
  workspace.hidden=false;workspace.href=canEnterKitchen()?'#merchant/overview':'#register';workspace.textContent=canEnterKitchen()?'My kitchen':ctx.registration?'Continue registration':'Open a kitchen';
@@ -183,7 +183,8 @@ function renderLive(scroll=false){
   main.querySelector('.ledger-teaser p').textContent='A saved draft, a confirmed contract and a published first meal.';main.querySelector('.ledger-teaser a').href='#register';main.querySelector('.ledger-teaser a').textContent='Open a kitchen';
   if(['stores','how'].includes(route)&&scroll)requestAnimationFrame(()=>main.querySelector('#'+route)?.scrollIntoView());
  }
- if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch wallet / Sign in again</button></div>`);
+ if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch in MetaMask / Sign in again</button></div>`);
+ if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Continue in MetaMask to connect your account and sign the login message.</p>');
  if(route!=='register'&&live.error)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
  if(live.blocked)main.insertAdjacentHTML('beforeend','<div class="container live-connection"><p class="notice">Connection unavailable. Previously loaded records may be out of date. New registration and authorization actions are paused.</p><button class="button outline" data-live-action="recover">Check connection & recover</button></div>');
  if(scroll&&!['stores','how'].includes(route)){window.scrollTo(0,0);main.focus({preventScroll:true});}
@@ -194,7 +195,7 @@ async function currentLiveResult(promise,generation){const result=await promise;
 function showLiveError(){if(live.error){const feedback=main.querySelector('#live-error, .page-error, [role="alert"]');if(feedback){feedback.setAttribute('tabindex','-1');feedback.focus({preventScroll:true});feedback.scrollIntoView({block:'center',behavior:'instant'});}}}
 function clearLiveIdentity(message=''){
  live.api?.invalidateSession?.();
- live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};closeWalletChooser(false);closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
+ live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};live.signingIn=false;closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
  if(live.preview)URL.revokeObjectURL(live.preview);live.preview='';live.error=message;live.busy=false;live.loading=false;live.blocked=false;live.reloginRequired=true;renderLive();showLiveError();
 }
 window.addEventListener('mealforward-session-invalidated',()=>{if(LIVE_MODE)clearLiveIdentity('Wallet changed. Sign in again with the newly selected wallet.');});
@@ -253,12 +254,9 @@ document.addEventListener('click',event=>{
  if(action.startsWith('verification-'))return handleVerificationEntry(action,target);
  if(action.startsWith('claim-')){if(live.verification)closeVerificationEntry();return handleClaimAction(action,target);}
  if(action.startsWith('support-')){if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();return handleSupportAction(action,target);}
- if(action==='wallet-close'){closeWalletChooser();return;}
- if(action==='wallet-connect')return loadWalletChoices(true);
- if(action==='wallet-confirm')return confirmWalletChoice();
  if(live.busy)return;
  if(action.startsWith('meal-')){const generation=live.generation;try{return Promise.resolve(handleLiveMealAction(action,target)).catch(err=>{if(generation===live.generation){live.error=liveMessage(err);renderLive();showLiveError();}});}catch(err){live.error=liveMessage(err);renderLive();showLiveError();return;}}
- if(action==='login')return openWalletChooser();
+ if(action==='login')return startMetaMaskLogin();
  if(action==='add-time'||action.startsWith('remove-time-')){readLiveDraft();if(action==='add-time'&&live.draft.windows.length<2)live.draft.windows.push(['','']);else if(action.startsWith('remove-time-')&&live.draft.windows.length>1)live.draft.windows.splice(Number(action.split('-').at(-1)),1);renderLive();return;}
  return liveTask(async generation=>{
   if(action==='recover'){try{await loadLiveContext(generation);await loadLiveCatalog(generation);if(live.context.store)await loadLiveKitchen(generation);}catch(err){checkLiveGeneration(generation);live.blocked=true;throw err;}}
@@ -280,7 +278,6 @@ document.addEventListener('input',event=>{if(!LIVE_MODE)return;if(event.target.c
 document.addEventListener('change',event=>{
  if(!LIVE_MODE)return;
  if(event.target.id==='support-quantity'&&supportCurrent(live.support)&&!live.support.review&&!live.support.intent){live.support.quantity=Number(event.target.value);showSupportFlow();return;}
- if(event.target.id==='wallet-choice'&&walletChoiceCurrent(live.walletChooser)){live.walletChooser.selected=event.target.value;const confirm=body.querySelector('[data-live-action="wallet-confirm"]');if(confirm)confirm.disabled=!live.walletChooser.accounts.includes(event.target.value);return;}
  if(event.target.closest('#live-meal-form'))readLiveMealEditor();
  if(event.target.id==='live-meal-image'&&event.target.files[0]){uploadLiveMealPreview(event.target.files[0]);return;}
  if(event.target.id==='register-photo'){readLiveDraft();if(live.preview)URL.revokeObjectURL(live.preview);const file=event.target.files[0];live.draft.photo=file;live.preview=file&&['image/jpeg','image/png','image/webp'].includes(file.type)&&file.size<=5*1024*1024?URL.createObjectURL(file):'';renderLive();}
@@ -361,7 +358,7 @@ function handleLiveMealAction(action,target){
  if(action==='meal-retry-image')return saveLiveMealDraft(true);
  if(action==='meal-publish'){editor.error=liveMealReason('publish');renderLiveMealDialog();}
 }
-document.querySelector('.dialog-close').addEventListener('click',()=>{if(LIVE_MODE){if(live.mealPublish)closeMealPublish();else if(live.settlement)closeSettlementFlow();else if(live.verification)closeVerificationEntry();else if(live.claim)closeClaimFlow();else if(live.support)closeSupportFlow();else if(live.walletChooser)closeWalletChooser();else closeLiveMealEditor();}});
+document.querySelector('.dialog-close').addEventListener('click',()=>{if(LIVE_MODE){if(live.mealPublish)closeMealPublish();else if(live.settlement)closeSettlementFlow();else if(live.verification)closeVerificationEntry();else if(live.claim)closeClaimFlow();else if(live.support)closeSupportFlow();else closeLiveMealEditor();}});
 document.addEventListener('submit',event=>{if(LIVE_MODE&&event.target.id==='live-meal-form'){event.preventDefault();saveLiveMealDraft();}});
 
 function liveMealValidation(values){
@@ -395,33 +392,29 @@ async function saveLiveMealDraft(imageOnly=false){
  }
 }
 
-function walletChoiceCurrent(choice){return !!choice&&live.walletChooser===choice&&choice.generation===live.generation;}
-function closeWalletChooser(cancelLogin=true){if(!live.walletChooser)return;const signing=live.walletChooser.signing;live.walletChooser=null;close(true);body.innerHTML='';if(signing&&cancelLogin)clearLiveIdentity('Wallet sign-in was cancelled. Choose an account and sign in again.');}
-function showWalletChooser(){if(!walletChoiceCurrent(live.walletChooser))return;modal(renderWalletChooser(live.walletChooser),'live-wallet-choice');}
-async function openWalletChooser(){
- const websiteAccount=live.context.session?.wallet??null;clearLiveIdentity();
- live.walletChooser={generation:live.generation,websiteAccount,accounts:[],selected:'',loading:false,signing:false,error:''};showWalletChooser();await loadWalletChoices(false);
-}
-async function loadWalletChoices(requestPermissions=false){
- const choice=live.walletChooser;if(!walletChoiceCurrent(choice)||choice.loading||choice.signing)return;choice.loading=true;choice.selected='';choice.error='';showWalletChooser();
- try{if(!live.api)live.api=(await currentLiveResult(import('./live-api.mjs'),choice.generation)).liveApi;const accounts=await live.api.getWalletAccounts({requestPermissions});if(!walletChoiceCurrent(choice))return;choice.accounts=Array.isArray(accounts)?accounts.filter(address=>/^0x[0-9a-f]{40}$/.test(address)):[];}
- catch(err){if(walletChoiceCurrent(choice)){choice.accounts=[];choice.error=liveMessage(err);}}
- finally{if(walletChoiceCurrent(choice)){choice.loading=false;showWalletChooser();}}
-}
-async function confirmWalletChoice(){
- const choice=live.walletChooser;if(!walletChoiceCurrent(choice)||choice.loading||choice.signing||!choice.accounts.includes(choice.selected))return;
- const address=choice.selected,generation=choice.generation;choice.signing=true;choice.error='';showWalletChooser();
+async function startMetaMaskLogin(){
+ if(live.busy)return;
+ if(!live.api?.loginWithMetaMask){live.error='The login service is not connected. Check the connection before signing in.';renderLive();return;}
+ // Clear previously shown private data before the wallet can select a new owner.
+ // MetaMask handles account permission natively; this page has no chooser.
+ clearLiveIdentity();
+ const generation=live.generation;
+ live.signingIn=true;live.busy=true;live.error='';renderLive();
  try{
-  const result=await live.api.loginWallet({address});if(!walletChoiceCurrent(choice))return;
-  if(result?.session?.wallet!==address)throw Error('The signed-in website account does not match the selected wallet. Sign in again.');
-  const context=await live.api.getContext();if(!walletChoiceCurrent(choice))return;
-  if(context?.session?.wallet!==address)throw Error('The website session changed. Sign in again with the selected wallet.');
+  // The native eth_requestAccounts request starts synchronously in the click.
+  const context=await live.api.loginWithMetaMask();checkLiveGeneration(generation);
+  if(!/^0x[0-9a-f]{40}$/.test(context?.session?.wallet??''))throw Error('The MetaMask sign-in account could not be verified. Sign in again.');
   live.reloginRequired=false;acceptContext(context);
-  if(canEnterKitchen()){await loadLiveKitchen(generation);if(!walletChoiceCurrent(choice))return;location.hash='#merchant/overview';}else location.hash='#stores';
-  choice.signing=false;closeWalletChooser();renderLive(true);
+  if(canEnterKitchen()){
+   location.hash='#merchant/overview';
+   await loadLiveKitchen(generation);checkLiveGeneration(generation);
+  }else location.hash='#stores';
+ }catch(err){
+  if(generation!==live.generation)return;
+  live.error=liveMessage(err);live.reloginRequired=!live.context.session;
+ }finally{
+  if(generation===live.generation){live.signingIn=false;live.busy=false;renderLive();showLiveError();}
  }
- catch(err){if(walletChoiceCurrent(choice)){live.reloginRequired=true;live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.ownerMeals=[];live.mealCapabilities={};choice.error=liveMessage(err);}}
- finally{if(walletChoiceCurrent(choice)){choice.signing=false;showWalletChooser();}}
 }
 
 function supportCurrent(flow){return !!flow&&live.support===flow&&flow.generation===live.generation&&live.context.session?.wallet===flow.wallet;}
@@ -526,7 +519,7 @@ async function continueOriginalSupport(flow){
 }
 async function handleSupportAction(action,target){
  if(action==='support-close'){closeSupportFlow();return;}
- if(!live.context.session){await openWalletChooser();return;}
+ if(!live.context.session){await startMetaMaskLogin();return;}
  if(action==='support-orders'){await loadSupportOrders();return;}
  if(action==='support-start'){
   const store=live.stores.find(item=>item.id===target.dataset.storeId),meal=live.meals[store?.id]?.find(item=>item.id===target.dataset.mealId&&item.listed===true&&item.eligible!==false);
@@ -665,7 +658,7 @@ async function refreshClaim(flow){
 }
 async function handleClaimAction(action,target){
  if(action==='claim-close'){closeClaimFlow();return;}
- if(!live.context.session){await openWalletChooser();return;}
+ if(!live.context.session){await startMetaMaskLogin();return;}
  if(action==='claim-records'){await loadClaimRecords();return;}
   if(action==='claim-resume-start'){await openPendingClaim();return;}
   if(action==='claim-start'){

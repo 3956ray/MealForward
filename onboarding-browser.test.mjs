@@ -12,7 +12,7 @@ const setup={walletLoginEnabled:true,registrationEnabled:true,assetDecimals:6,as
 window.calls=[];
 export const liveApi={
 async getContext(){if(window.offline)throw Error('Service unavailable');return {setup,session:window.signedIn?{wallet:'0x'+'e'.repeat(40),stores:window.fixtureReady?[storeId]:[]}:null,registration:window.saved?registration():null,registrations:window.saved?[registration()]:[],store:window.fixtureReady?store:null};},
-async getWalletAccounts(){return ['0x'+'e'.repeat(40)];},async loginWallet({address}){window.calls.push('login');window.signedIn=true;return this.getContext();},async logout(){window.calls.push('logout');window.signedIn=false;window.saved=false;},
+async loginWithMetaMask(){window.calls.push('login');window.signedIn=true;return this.getContext();},async logout(){window.calls.push('logout');window.signedIn=false;window.saved=false;},
 async saveRegistration(input){window.calls.push('save');window.saved=true;window.fixtureState='DRAFT';await new Promise(r=>setTimeout(r,80));return registration();},
 async signRegistration(){window.calls.push('sign');return {signed:true,registrationId:id};},
 async enableRegistration(){window.calls.push('enable');window.fixtureState='UNKNOWN';return registration();},
@@ -25,7 +25,7 @@ try{
   await context.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
   await context.route('**/live-api.mjs',route=>route.fulfill({contentType:'text/javascript',body:adapter}));
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-  await page.goto(base+'#register');await page.getByRole('button',{name:'Sign in with wallet',exact:true}).last().click();await page.getByLabel('Accounts available to this website').selectOption('0x'+'e'.repeat(40));await page.getByRole('button',{name:'Continue with selected account',exact:true}).click();await page.goto(base+'#register');
+  await page.goto(base+'#register');await page.getByRole('button',{name:'Sign in with MetaMask',exact:true}).last().click();await page.goto(base+'#register');
   await page.getByLabel('Kitchen name',{exact:true}).fill('New kitchen');await page.getByLabel('First meal name',{exact:true}).fill('First bowl');await page.getByLabel('Meal description',{exact:true}).fill('Seasonal rice');await page.getByLabel('Price per meal',{exact:false}).fill('7');
   await page.getByLabel('Meal photo',{exact:true}).setInputFiles({name:'meal.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP00AAAAASUVORK5CYII=','base64')});
   await page.getByLabel('Start 1',{exact:true}).selectOption('11:00');await page.getByLabel('End 1',{exact:true}).selectOption('13:00');

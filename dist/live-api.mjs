@@ -6,6 +6,13 @@ const STORAGE='mealforward-live-requests-v1';
 const CSRF='mealforward-live-csrf-v1';
 const RELOGIN='mealforward-live-relogin-v1';
 const fail=(code,message,status=0)=>Object.assign(new Error(message),{code,status});
+// Prefer the real MetaMask provider when multiple wallets inject window.ethereum.
+// No website-side account chooser is used: MetaMask owns account permissions.
+export function metaMaskProvider(){
+  const injected=globalThis.ethereum;
+  const providers=Array.isArray(injected?.providers)?injected.providers:[injected];
+  return providers.find(p=>p?.isMetaMask===true && p?.isPhantom!==true && p?.isRabby!==true)??null;
+}
 const reference=id=>{if(!ID.test(id))throw fail('INVALID_REFERENCE','Choose the original registration.');return id;};
 
 export function parseVoucherCode(input,siteOrigin){
@@ -27,16 +34,16 @@ export function walletTypedData(typed){
   return {...typed,domain:{...domain},types:{...typed.types,EIP712Domain:fields}};
 }
 
-export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globalThis.sessionStorage,provider=()=>globalThis.ethereum,origin=()=>globalThis.location.origin,uuid=()=>crypto.randomUUID(),onSessionInvalidated=()=>globalThis.window?.dispatchEvent(new CustomEvent('mealforward-session-invalidated',{detail:{reason:'wallet-changed'}}))}={}){
+export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globalThis.sessionStorage,provider=metaMaskProvider,origin=()=>globalThis.location.origin,uuid=()=>crypto.randomUUID(),onSessionInvalidated=()=>globalThis.window?.dispatchEvent(new CustomEvent('mealforward-session-invalidated',{detail:{reason:'wallet-changed'}}))}={}){
   let csrf=storage?.getItem(CSRF)||null,epoch=0,signature=null,session=null,busy=false;
-  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null,selectedProvider=null;
+  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null;
   const readJournal=()=>{try{return JSON.parse(storage?.getItem(STORAGE)||'{}');}catch{return {};}};
   const journal=readJournal();
   const voucherAccess=new Map();
   const saveJournal=()=>storage?.setItem(STORAGE,JSON.stringify(journal));
   const checkEpoch=value=>{if(epoch!==value)throw fail('SESSION_CHANGED','Your wallet or session changed. Sign in again.');};
   function invalidate(){epoch++;signature=null;session=null;voucherAccess.clear();}
-  function invalidateSession(){selectedProvider=null;invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');}
+  function invalidateSession(){invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');}
   function walletChanged(){invalidateSession();onSessionInvalidated();}
   function unwatchWallet(){if(watched){watched.removeListener('accountsChanged',walletChanged);watched.removeListener('chainChanged',walletChanged);watched=null;}}
   function watchWallet(){const wallet=provider();if(wallet===watched)return;unwatchWallet();if(wallet?.on&&wallet?.removeListener){wallet.on('accountsChanged',walletChanged);wallet.on('chainChanged',walletChanged);watched=wallet;}}
@@ -114,28 +121,27 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
   }
   async function checkWallet(wallet,address){
     const [accounts,chain]=await Promise.all([wallet.request({method:'eth_accounts'}),wallet.request({method:'eth_chainId'})]);
-    if(provider()!==wallet || !accounts?.some(value=>value.toLowerCase()===address) || !/^0x[0-9a-f]+$/i.test(chain) || BigInt(chain)!==10143n)throw fail('WALLET_CHANGED','Select the original wallet on Monad Testnet and sign in again.');
+    if(provider()!==wallet || typeof accounts?.[0]!=='string' || accounts[0].toLowerCase()!==address || !/^0x[0-9a-f]+$/i.test(chain) || BigInt(chain)!==10143n)throw fail('WALLET_CHANGED','Select the correct account on Monad Testnet (10143) in MetaMask and sign in again.');
   }
-  async function getWalletAccounts({requestPermissions=false}={}){
-    if(busy)throw fail('BUSY','A wallet request is already in progress.');
-    const wallet=provider();if(!wallet?.request||!wallet.on||!wallet.removeListener)throw fail('WALLET_UNAVAILABLE','Open this page in a browser with your wallet available.');
-    busy=true;unwatchWallet();invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');selectedProvider=null;
-    try{
-      if(requestPermissions){try{await wallet.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]});}catch(error){if([-32601,4200].includes(error?.code))throw fail('ACCOUNT_SELECTION_UNSUPPORTED','Select the account in your wallet’s connected-site settings, then refresh the account list.');throw error;}}
-      const accounts=await wallet.request({method:'eth_accounts'});
-      if(provider()!==wallet)throw fail('WALLET_CHANGED','The wallet provider changed. Choose your account again.');
-      const values=[...new Set((Array.isArray(accounts)?accounts:[]).map(value=>String(value).toLowerCase()).filter(value=>ADDRESS.test(value)))];
-      selectedProvider=wallet;return values;
-    }finally{busy=false;watchWallet();}
-  }
-  async function loginWallet({address}={}){
+  // Must be called directly from the user's click: requestAccounts is the first
+  // awaited operation, so the native MetaMask permission dialog can open.
+  async function loginWithMetaMask(){
     if(busy)throw fail('BUSY','A wallet request is already in progress.');
     busy=true;unwatchWallet();invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');const generation=epoch;let committed=false,committedCsrf=null;const wallet=provider();
     const changed=()=>invalidate();let watching=false;
     try{
+      if(!wallet?.request || !wallet.on || !wallet.removeListener)throw fail('WALLET_UNAVAILABLE','Install or enable MetaMask in this browser, then sign in again.');
+      if(wallet.isMetaMask!==true || wallet.isPhantom===true)throw fail('METAMASK_REQUIRED','Sign in with MetaMask, not another wallet provider.');
+      // Native MetaMask UI owns choosing/connecting an account. Never silently
+      // fall back to a previously connected account if this was rejected.
+      const accounts=await wallet.request({method:'eth_requestAccounts'});
+      checkEpoch(generation);
+      if(provider()!==wallet)throw fail('WALLET_CHANGED','The wallet provider changed during connection. Try again.');
+      const selected=Array.isArray(accounts)?accounts[0]:null;
+      if(typeof selected!=='string'||!ADDRESS.test(selected.toLowerCase()))throw fail('ACCOUNT_NOT_CONNECTED','Select an account in MetaMask to continue.');
+      const address=selected.toLowerCase();
       const config=await setup();if(!config.walletLoginEnabled)throw fail('WALLET_LOGIN_UNAVAILABLE','Wallet login is not enabled for this site address.');
-      if(!wallet?.request || !wallet.on || !wallet.removeListener)throw fail('WALLET_UNAVAILABLE','Open this page in a browser with your wallet available.');
-      if(!ADDRESS.test(address)||selectedProvider!==wallet)throw fail('ACCOUNT_SELECTION_REQUIRED','Choose the wallet account to sign in with.');
+      if(!ADDRESS.test(address))throw fail('ACCOUNT_NOT_CONNECTED','Choose an account in MetaMask to sign in.');
       wallet.on('accountsChanged',changed);wallet.on('chainChanged',changed);watching=true;
       await checkWallet(wallet,address);checkEpoch(generation);
       await request('POST','/v1/auth/pre-session',{}, {'X-C1-Bootstrap':'1'});checkEpoch(generation);
@@ -148,7 +154,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
       const loginResponse=await request('POST','/v1/identity/wallet/login',{challengeId:challenge.challengeId,signature:signed});committed=true;committedCsrf=loginResponse.csrf;
       checkEpoch(generation);await checkWallet(wallet,address);checkEpoch(generation);
       requireRelogin=false;storage?.removeItem(RELOGIN);
-      const result=await getContext();checkEpoch(generation);if(result.session?.wallet!==address)throw fail('LOGIN_ACCOUNT_MISMATCH','The signed-in wallet does not match the account you selected. Sign in again.');return result;
+      const result=await getContext();checkEpoch(generation);if(result.session?.wallet?.toLowerCase()!==address)throw fail('LOGIN_ACCOUNT_MISMATCH','The signed-in wallet does not match the account you selected. Sign in again.');return result;
     }catch(error){requireRelogin=true;storage?.setItem(RELOGIN,'1');if(committed){try{if(typeof committedCsrf!=='string')throw Error('missing csrf');await request('POST','/v1/auth/logout',{}, {'X-C1-Preserve-Session-Cookie':'1'},{csrf:committedCsrf});invalidate();}catch{throw fail('LOGOUT_UNCONFIRMED','The incomplete wallet session could not be revoked. Reload and sign out before continuing.');}}throw error;}
     finally{if(watching){wallet.removeListener('accountsChanged',changed);wallet.removeListener('chainChanged',changed);}busy=false;watchWallet();}
   }
@@ -502,6 +508,6 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     }finally{busy=false;}
   }
 
-  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,getWalletAccounts,loginWallet,logout,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
+  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,loginWithMetaMask,logout,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
 }
 export const liveApi=createLiveApi();
