@@ -70,16 +70,9 @@ node --test live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-c
 - After a confirmed payment, **My Contributions** shows a real original order, the actual amount and transaction link when present. An `UNKNOWN` result never becomes success or sends a replacement.
 - A recipient clicks **Claim this meal** once. If issue remains pending, **My Meals** or same-wallet recovery shows that original claim. A voucher is displayed only after finalized issue + exact voucher verification.
 - The owner can still manage drafts, publish/list, verify a private code, explicitly confirm physical handover and settle after the separate 180-second platform wait; no CP30 contract semantics are changed here.
-## CP31 follow-up: direct MetaMask login (2026-10-14)
+## CP31 history: original direct-MetaMask implementation (superseded)
 
-**User experience:** clicking **Sign in with MetaMask** (including the header and wallet-sensitive support/claim entry points) immediately invokes MetaMask's native `eth_requestAccounts` flow. The website does **not** display a custom Choose Account, Connect Another Account or Continue-with-selected-account screen. MetaMask may still show its own permission and login-signature prompts; those wallet confirmations cannot be suppressed safely.
-
-**Integration:** `dist/live-api.mjs` resolves MetaMask from a multi-provider `window.ethereum.providers` environment, rejects other providers and uses the first account returned by `eth_requestAccounts`. It checks the active wallet and Monad Testnet chain 10143, validates the original server challenge, obtains the user's explicit login signature, and verifies that the server session matches that same account. Requests start from the user's click with no awaited network preflight before the wallet permission popup. A disconnected or rejected wallet is **never** silently substituted with an old cached account.
-
-**Privacy and recovery:** login or wallet switching clears all existing private frontend state before authentication; account/chain changes invalidate pending requests. Concurrent clicks cannot create multiple wallet prompts. Any signed-but-invalid final session is revoked through the original backend logout path. No private key, signature, login token, or QR secret is persisted by this change. All original Intent and transaction recovery rules remain unchanged. Switching to another account is done inside MetaMask, then by signing in again; the website never chooses a different account for the user.
-
-**Verification:** Node offline integration suites returned **142/142 PASS** after the change (previous CP31 baseline: 138/138). The direct login, native rejection, selected account, wrong chain, account-change race, server mismatch, multi-provider selection, double click, and stale-UI safeguards have explicit regression coverage. This does **not** claim live MetaMask browser/real backend acceptance or production deployment. A browser + native MetaMask smoke test on the genuine CP30 HTTPS runtime is still necessary before release.
-
+The first attempt removed MealForward's own account selector but incorrectly called `eth_requestAccounts` on every sign-in. This could still show MetaMask's native account picker and did not meet the desired one-signature experience for connected wallets. The **current** implementation is the active-account-first login below; keep this history only as a regression warning.
 
 ## CP31 login correction: sign with MetaMask's active account (2026-10-14)
 
