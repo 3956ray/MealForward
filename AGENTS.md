@@ -1,3 +1,12 @@
+## CP30 接手运维层（2026-10-14 起生效，ZCode 工作区）
+
+- 本节是接手后的运维现状与工作方式，**不推翻下方各 CP 冻结合同**；冲突时以冻结合同 + 最新交接文档为准。
+- **三轨并行模型（2026-10-14 起）**：前端轨（根 `src/`，skill `cp30-frontend`）、后端轨（`cp30-backend/**`，skill `cp30-backend`，排障查 `cp30-ops`）、合约轨（`cp30-contracts/**` 冻结只读优先，skill `cp30-contracts`）。文件互不重叠；跨轨接口变更必须走交接文档通告；联调入口 `/cp30-integrate`。
+- 交接真源：`cp30-backend/docs/WEB-GPT-HANDOFF-2026-10-14.md`；排障手册：`.zcode/skills/cp30-ops/SKILL.md`；一键健康检查：`/cp30-status`。
+- 运行时：`/Users/mili/.mf-cp30-20261013/`（六服务 + PG17 私有 socket，前端 `https://localhost:16443`）；启停唯一入口 `cp30-backend/tools/isolated-entry.py connection-bootstrap stop|start`，不得直接杀进程。
+- 红线速记：UNKNOWN 只恢复原 intent 不重发；实库不清不重建；时间 UTC+8 不换算；任何密钥/密码只引用路径不输出内容；父目录与 cp30-contracts 字节不动。
+- 已知未回填事项：043 迁移 GRANT 热修复未回迁移文件（赛后重 pin，042/043/044 pin = 7113f618/c79e1e5d/cf82137d）；authority grant 北京 2026-10-14 10:04:44 到期。
+
 ## CP27 当前 BUILD（覆盖CP26只含四方法限制）
 
 - 基线630269d；Leader冻结CP27 ALIGNMENT/APPROVED-TARGET。唯一CP19历史参考，不是新业务目标；新业务目标未配置。
