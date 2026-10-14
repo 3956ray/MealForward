@@ -69,3 +69,24 @@
 ## 实际状态
 
 **本文件仅为可执行前置评估，不是 Render 部署完成证据。**
+
+## 2026-10-15 Render workspace execution (observed)
+
+The user explicitly approved the Render workspace LaoDao (id `tea-db7q3ou7bikc73bp2bt0`) and restricted changes to free resources.
+
+Read-only inventory showed no services and no Postgres instances before creation. A **new isolated, empty, free Postgres 17** instance was created:
+
+- Name: `mealforward-cp31-test-pg`
+- Render ID: `dpg-db7tld67bikc73cje45g-a`
+- Database: `mealforward_cp31_test_pg`
+- Region: Singapore
+- Plan: `free`, 1 GB quota; Render declined explicit `diskSizeGb` for free, then accepted omitted diskSizeGb.
+- Render creation timestamp: `2026-10-14T19:40:36Z`
+- Free-instance expiry: `2026-11-13T19:40:36Z`
+- Dashboard: https://dashboard.render.com/d/dpg-db7tld67bikc73cje45g-a
+- Last inspection: status `creating` (not confirmed available); no SQL migrations or application data copied, no web services created.
+- **Connection restriction:** IP allowlist is `[]`; read-only Render SQL tool explicitly refused connection. Do **not** disable the restriction or open `0.0.0.0/0` to bypass this; use internal connectivity from a Render service in the same region after code readiness/security review. Managed DB may have different privileges than the local superuser-owned `initdb` cluster.
+- Payment resources created: **none**.
+
+Next gates: inspect instance status, validate PostgreSQL 17 migrations with least-privilege role design and free-tier compatibility, implement hardened cloud test-only API, verify journal recovery/persistence before any blockchain action, then connect same-origin Vercel routing. Do not infer login success from DB creation.
+
