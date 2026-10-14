@@ -79,3 +79,14 @@ node --test live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-c
 **Privacy and recovery:** login or wallet switching clears all existing private frontend state before authentication; account/chain changes invalidate pending requests. Concurrent clicks cannot create multiple wallet prompts. Any signed-but-invalid final session is revoked through the original backend logout path. No private key, signature, login token, or QR secret is persisted by this change. All original Intent and transaction recovery rules remain unchanged. Switching to another account is done inside MetaMask, then by signing in again; the website never chooses a different account for the user.
 
 **Verification:** Node offline integration suites returned **142/142 PASS** after the change (previous CP31 baseline: 138/138). The direct login, native rejection, selected account, wrong chain, account-change race, server mismatch, multi-provider selection, double click, and stale-UI safeguards have explicit regression coverage. This does **not** claim live MetaMask browser/real backend acceptance or production deployment. A browser + native MetaMask smoke test on the genuine CP30 HTTPS runtime is still necessary before release.
+
+
+## CP31 login correction: sign with MetaMask's active account (2026-10-14)
+
+**Actual UX:** On **Sign in**, first call non-prompting `eth_accounts`. When MetaMask has already authorized this site, use `accounts[0]` (its exposed active account), validate Monad Testnet chain 10143, fetch the server-owned login challenge, then call `personal_sign` with that same address. Do **not** call `eth_requestAccounts` on every sign-in: it may show MetaMask's native account chooser even when the user already connected. No website address selection step or permission re-request.
+
+**First visit:** If and only if `eth_accounts` returns `[]`, perform the required `eth_requestAccounts` permission request once and then sign. Wallets do not expose an unauthorized active address to a website, so a genuine first connection cannot securely skip native permission. Do not use `selectedAddress`, saved address, localStorage, prior server cookie, or an arbitrary second account to bypass it.
+
+**Security:** Keep all existing nonce/domain/origin/chain/signature checks, post-sign address and provider verification, account-change invalidation, same-wallet session validation, idempotency/recovery and logout behavior. No on-chain transaction is sent for login.
+
+**Testing:** Node tests explicitly cover already-authorized one-signature login with zero `eth_requestAccounts`, first-time connection permission then signature, rejection without fallback, multi-authorized account selection from the current provider, incorrect-chain rejection and post-commit session mismatch. Native popup UI needs human testing in a real browser with the actual connected backend.

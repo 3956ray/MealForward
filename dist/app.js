@@ -184,7 +184,7 @@ function renderLive(scroll=false){
   if(['stores','how'].includes(route)&&scroll)requestAnimationFrame(()=>main.querySelector('#'+route)?.scrollIntoView());
  }
  if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch in MetaMask / Sign in again</button></div>`);
- if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Continue in MetaMask to connect your account and sign the login message.</p>');
+ if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Confirm the login signature in MetaMask. First-time connections may require wallet permission.</p>');
  if(route!=='register'&&live.error)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
  if(live.blocked)main.insertAdjacentHTML('beforeend','<div class="container live-connection"><p class="notice">Connection unavailable. Previously loaded records may be out of date. New registration and authorization actions are paused.</p><button class="button outline" data-live-action="recover">Check connection & recover</button></div>');
  if(scroll&&!['stores','how'].includes(route)){window.scrollTo(0,0);main.focus({preventScroll:true});}
@@ -401,7 +401,8 @@ async function startMetaMaskLogin(){
  const generation=live.generation;
  live.signingIn=true;live.busy=true;live.error='';renderLive();
  try{
-  // The native eth_requestAccounts request starts synchronously in the click.
+  // Already connected MetaMask accounts go directly to the login signature.
+  // Only a never-connected wallet needs the native permission dialog first.
   const context=await live.api.loginWithMetaMask();checkLiveGeneration(generation);
   if(!/^0x[0-9a-f]{40}$/.test(context?.session?.wallet??''))throw Error('The MetaMask sign-in account could not be verified. Sign in again.');
   live.reloginRequired=false;acceptContext(context);

@@ -123,8 +123,8 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const [accounts,chain]=await Promise.all([wallet.request({method:'eth_accounts'}),wallet.request({method:'eth_chainId'})]);
     if(provider()!==wallet || typeof accounts?.[0]!=='string' || accounts[0].toLowerCase()!==address || !/^0x[0-9a-f]+$/i.test(chain) || BigInt(chain)!==10143n)throw fail('WALLET_CHANGED','Select the correct account on Monad Testnet (10143) in MetaMask and sign in again.');
   }
-  // Must be called directly from the user's click: requestAccounts is the first
-  // awaited operation, so the native MetaMask permission dialog can open.
+  // Start from the user's click: authorized wallets go directly to login signing.
+  // First-time wallets may still need MetaMask's required permission prompt.
   async function loginWithMetaMask(){
     if(busy)throw fail('BUSY','A wallet request is already in progress.');
     busy=true;unwatchWallet();invalidate();requireRelogin=true;storage?.setItem(RELOGIN,'1');const generation=epoch;let committed=false,committedCsrf=null;const wallet=provider();
@@ -132,16 +132,22 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     try{
       if(!wallet?.request || !wallet.on || !wallet.removeListener)throw fail('WALLET_UNAVAILABLE','Install or enable MetaMask in this browser, then sign in again.');
       if(wallet.isMetaMask!==true || wallet.isPhantom===true)throw fail('METAMASK_REQUIRED','Sign in with MetaMask, not another wallet provider.');
-      // Native MetaMask UI owns choosing/connecting an account. Never silently
-      // fall back to a previously connected account if this was rejected.
-      const accounts=await wallet.request({method:'eth_requestAccounts'});
+      // Use MetaMask's already-authorized active account for SIWE sign-in.
+      // eth_requestAccounts can re-open a native account picker, even when a
+      // connected account exists. Request permission only for a first connection.
+      let accounts=await wallet.request({method:'eth_accounts'});
       checkEpoch(generation);
-      if(provider()!==wallet)throw fail('WALLET_CHANGED','The wallet provider changed during connection. Try again.');
+      if(provider()!==wallet)throw fail('WALLET_CHANGED','The MetaMask provider changed during sign-in. Try again.');
+      if(!Array.isArray(accounts))throw fail('WALLET_UNAVAILABLE','MetaMask returned an invalid account response.');
+      if(accounts.length===0){
+        accounts=await wallet.request({method:'eth_requestAccounts'});
+        checkEpoch(generation);
+        if(provider()!==wallet)throw fail('WALLET_CHANGED','The MetaMask provider changed during connection. Try again.');
+      }
       const selected=Array.isArray(accounts)?accounts[0]:null;
-      if(typeof selected!=='string'||!ADDRESS.test(selected.toLowerCase()))throw fail('ACCOUNT_NOT_CONNECTED','Select an account in MetaMask to continue.');
+      if(typeof selected!=='string'||!ADDRESS.test(selected.toLowerCase()))throw fail('ACCOUNT_NOT_CONNECTED','Unlock MetaMask and connect your current account to continue.');
       const address=selected.toLowerCase();
       const config=await setup();if(!config.walletLoginEnabled)throw fail('WALLET_LOGIN_UNAVAILABLE','Wallet login is not enabled for this site address.');
-      if(!ADDRESS.test(address))throw fail('ACCOUNT_NOT_CONNECTED','Choose an account in MetaMask to sign in.');
       wallet.on('accountsChanged',changed);wallet.on('chainChanged',changed);watching=true;
       await checkWallet(wallet,address);checkEpoch(generation);
       await request('POST','/v1/auth/pre-session',{}, {'X-C1-Bootstrap':'1'});checkEpoch(generation);
@@ -154,7 +160,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
       const loginResponse=await request('POST','/v1/identity/wallet/login',{challengeId:challenge.challengeId,signature:signed});committed=true;committedCsrf=loginResponse.csrf;
       checkEpoch(generation);await checkWallet(wallet,address);checkEpoch(generation);
       requireRelogin=false;storage?.removeItem(RELOGIN);
-      const result=await getContext();checkEpoch(generation);if(result.session?.wallet?.toLowerCase()!==address)throw fail('LOGIN_ACCOUNT_MISMATCH','The signed-in wallet does not match the account you selected. Sign in again.');return result;
+      const result=await getContext();checkEpoch(generation);if(result.session?.wallet?.toLowerCase()!==address)throw fail('LOGIN_ACCOUNT_MISMATCH','The signed-in wallet does not match the active MetaMask account. Sign in again.');return result;
     }catch(error){requireRelogin=true;storage?.setItem(RELOGIN,'1');if(committed){try{if(typeof committedCsrf!=='string')throw Error('missing csrf');await request('POST','/v1/auth/logout',{}, {'X-C1-Preserve-Session-Cookie':'1'},{csrf:committedCsrf});invalidate();}catch{throw fail('LOGOUT_UNCONFIRMED','The incomplete wallet session could not be revoked. Reload and sign out before continuing.');}}throw error;}
     finally{if(watching){wallet.removeListener('accountsChanged',changed);wallet.removeListener('chainChanged',changed);}busy=false;watchWallet();}
   }

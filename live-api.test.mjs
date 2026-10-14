@@ -66,10 +66,14 @@ test('foreign wallet cannot authorize a store; offline site never returns synthe
 
 function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,serverAddress=loginAddress,available=[owner],onMe=()=>{},nativeReject=false,connectedAccounts=available,chain='0x279f'}={}){
   const storage=memory(),listeners=new Map(),calls=[],flow=[];
+  let authorized=[...available];
   const wallet={isMetaMask:true,on:(event,fn)=>listeners.set(event,fn),removeListener:event=>listeners.delete(event),async request({method}){
     flow.push('wallet:'+method);
-    if(method==='eth_requestAccounts'){if(nativeReject)throw Object.assign(Error('User rejected'),{code:4001});return connectedAccounts;}
-    return method==='eth_accounts'?available:method==='eth_chainId'?chain:'0x'+'a'.repeat(130);
+    if(method==='eth_requestAccounts'){
+      if(nativeReject)throw Object.assign(Error('User rejected'),{code:4001});
+      authorized=[...connectedAccounts];return connectedAccounts;
+    }
+    return method==='eth_accounts'?authorized:method==='eth_chainId'?chain:'0x'+'a'.repeat(130);
   }};
   const now=Math.floor(Date.now()/1000),nonce='b'.repeat(64),challengeId='11111111-1111-4111-8111-111111111111';
   const challenge={challengeId,address:loginAddress,chainId:10143,nonce,domain:'localhost:16443',uri:identity.walletLoginOrigin,issuedAt:now,expiresAt:now+180};
@@ -92,11 +96,20 @@ function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,server
   };
   return {api:createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls,flow,wallet};
 }
-test('MetaMask native connection completes signed login without a site account picker',async()=>{
+test('already connected MetaMask logs in with a signature, without requesting accounts again',async()=>{
   const {api,calls,flow}=loginFixture();assert.equal((await api.loginWithMetaMask()).session.wallet,owner);
-  assert.equal(flow[0],'wallet:eth_requestAccounts');assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,1);
+  assert.equal(flow[0],'wallet:eth_accounts');
+  assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,0);
+  assert.equal(flow.filter(e=>e==='wallet:personal_sign').length,1);
   assert.equal(flow.some(e=>e==='wallet:wallet_requestPermissions'),false);
   assert.equal(calls.filter(c=>c.path.endsWith('/logout')).length,0);
+});
+test('first-time connection asks MetaMask permission exactly once before signing',async()=>{
+  const {api,flow}=loginFixture({available:[],connectedAccounts:[owner]});
+  assert.equal((await api.loginWithMetaMask()).session.wallet,owner);
+  assert.deepEqual(flow.slice(0,3),['wallet:eth_accounts','wallet:eth_requestAccounts','api:/v1/connection']);
+  assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,1);
+  assert.equal(flow.filter(e=>e==='wallet:personal_sign').length,1);
 });
 for(const mode of ['changeOnMe','failOnMe'])test(`post-commit ${mode} revokes only original login authorization`,async()=>{
   const {api,calls}=loginFixture({[mode]:true});await assert.rejects(api.loginWithMetaMask());
@@ -205,18 +218,24 @@ test('MetaMask active account is used instead of an old cached account',async()=
  const result=await api.loginWithMetaMask();assert.equal(result.session.wallet,second);assert.equal(result.store,null);
  const challenge=calls.find(c=>c.path.endsWith('/wallet/challenge'));assert.equal(JSON.parse(challenge.options.body).address,second);
 });
+test('active MetaMask account B is used directly even if account A is also authorized',async()=>{
+ const second='0x'+'9'.repeat(40),{api,calls,flow}=loginFixture({loginAddress:second,serverAddress:second,available:[second,owner]});
+ assert.equal((await api.loginWithMetaMask()).session.wallet,second);
+ assert.equal(flow.filter(e=>e==='wallet:eth_requestAccounts').length,0);
+ assert.equal(JSON.parse(calls.find(c=>c.path.endsWith('/wallet/challenge')).options.body).address,second);
+});
 test('native rejection cannot fall back to a previously connected wallet',async()=>{
- const {api,calls,flow}=loginFixture({nativeReject:true});await assert.rejects(api.loginWithMetaMask(),{code:4001});
- assert.deepEqual(flow,['wallet:eth_requestAccounts']);assert.equal(calls.length,0);
+ const {api,calls,flow}=loginFixture({available:[],nativeReject:true});await assert.rejects(api.loginWithMetaMask(),{code:4001});
+ assert.deepEqual(flow,['wallet:eth_accounts','wallet:eth_requestAccounts']);assert.equal(calls.length,0);
 });
 test('MetaMask native response without an account never creates a login challenge',async()=>{
- const {api,calls}=loginFixture({connectedAccounts:[]});await assert.rejects(api.loginWithMetaMask(),{code:'ACCOUNT_NOT_CONNECTED'});
+ const {api,calls}=loginFixture({available:[],connectedAccounts:[]});await assert.rejects(api.loginWithMetaMask(),{code:'ACCOUNT_NOT_CONNECTED'});
  assert.equal(calls.some(c=>c.path.endsWith('/wallet/challenge')),false);
 });
-test('wallet account changed between connect and signature is rejected',async()=>{
- const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({connectedAccounts:[second,owner],available:[owner,second]});
- await assert.rejects(api.loginWithMetaMask(),{code:'WALLET_CHANGED'});
- assert.equal(calls.some(c=>c.path.endsWith('/wallet/challenge')),false);
+test('wallet selected account after first connection must match the actual signing account',async()=>{
+ const second='0x'+'9'.repeat(40),{api,calls}=loginFixture({available:[],connectedAccounts:[second,owner],loginAddress:owner});
+ await assert.rejects(api.loginWithMetaMask(),/钱包登录请求不匹配/);
+ assert.equal(calls.some(c=>c.path.endsWith('/wallet/login')),false);
 });
 test('wrong Monad chain is blocked before the login challenge',async()=>{
  const {api,calls}=loginFixture({chain:'0x1'});await assert.rejects(api.loginWithMetaMask(),{code:'WALLET_CHANGED'});
