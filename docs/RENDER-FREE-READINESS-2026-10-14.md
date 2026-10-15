@@ -90,3 +90,19 @@ Read-only inventory showed no services and no Postgres instances before creation
 
 Next gates: inspect instance status, validate PostgreSQL 17 migrations with least-privilege role design and free-tier compatibility, implement hardened cloud test-only API, verify journal recovery/persistence before any blockchain action, then connect same-origin Vercel routing. Do not infer login success from DB creation.
 
+
+## 2026-10-15 Auth Pilot deployment (actual Render state)
+
+Approved workspace LaoDao; free resources only. Branch codex/mealforward-cp31-auth-pilot at b2edd96f23d65ef2ac739ecabb779fcf107395bd forks frontend CP31 and retains Sites dist/. New cloud-auth/ Node API is a real EIP-191/SIWE login verifier with PostgreSQL one-time nonce/Session, origin-locked cookies/CSRF, and NO active blockchain or funds routes. Local mock protocol tests 5/5 passed. Original CP30 data, keys, journals, and contracts were not imported.
+
+Confirmed Render resources:
+
+- Free PostgreSQL 17: mealforward-cp31-test-pg, ID dpg-db7tld67bikc73cje45g-a, Singapore, available. Expires 2026-11-13T19:40:36Z. Empty external allowlist retained.
+- Free Web Service: mealforward-cp31-auth-laodao, ID srv-db86vp0u01pc73eoumfg, Singapore, https://mealforward-cp31-auth-laodao.onrender.com, autoDeploy off. Deploy dep-db86vpgu01pc73eouo40, Git b2edd96, Render status live, build successful, Node 26.12.0, bound PORT 10000.
+- Web Service environment has PUBLIC_ORIGIN=https://mealforward-cp31-auth-laodao.onrender.com and CP31_EMPTY_TEST_DB_INIT=yes but NO DATABASE_URL; application startup logs dbReady: false. Therefore wallet login remains fail-closed and is NOT available yet.
+
+Exact next action: user opens Render database page https://dashboard.render.com/d/dpg-db7tld67bikc73cje45g-a, Connect tab, copies Internal Database URL (not External), then Web Service page https://dashboard.render.com/web/srv-db86vp0u01pc73eoumfg, Environment tab, adds DATABASE_URL privately and selects Save and deploy. **Do not paste database URL/password into ChatGPT, source code, chat logs or GitHub.** Both service and database are in Singapore, so no external DB firewall opening is needed.
+
+After env deployment, verify runtime log dbReady: true, GET /health 200, public /v1/connection JSON, real MetaMask login signature, POST session, /v1/me exact wallet, and logout/replay refusal. No pilot success claim until authenticated browser E2E confirmed. This pilot is not the CP30 business backend: original Kitchens, My Contributions, My Meals, Fund, Issue, Lock, Report and Settle are deliberately unavailable.
+
+Free service plans were selected; build minutes/bandwidth beyond monthly included quota could still produce usage charges depending on workspace billing settings. Do not promote to paid service or production without user request.
