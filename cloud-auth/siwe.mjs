@@ -2,7 +2,7 @@
 import {createSiweMessage} from 'viem/siwe';
 import {getAddress, recoverMessageAddress} from 'viem';
 const ADDRESS=/^0x[0-9a-f]{40}$/;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NONCE=/^[0-9a-f]{64}$/;
 const statement='Sign in to MealForward with your test wallet.';
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',');
