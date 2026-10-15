@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#234c3d"><meta name="description" content="MealForward: open your kitchen, register your first meal and follow deployment and publication on Monad Testnet.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>MealForward · A warm meal. A kinder day.</title>
+  <link rel="icon" href="/assets/hero-meal.jpg">
+  <link rel="stylesheet" href="/styles.css"><script src="/assets/qrcode.min.js" defer></script><script src="/app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <div class="demo-bar"><span class="demo-dot"></span>Monad Testnet <span class="bar-separator">/</span> Kitchen registration · Test assets only <a href="#about">About MealForward</a></div>
+  <header class="header"><a href="#home" class="brand" aria-label="MealForward home"><svg viewBox="0 0 50 50" aria-hidden="true"><path d="M8 25h34c-1 12-8 17-17 17S9 37 8 25Z" fill="currentColor"/><path d="M15 19c-6-6 5-7 0-14M25 19c-6-6 5-7 0-14M35 19c-6-6 5-7 0-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>MealForward</span></a><nav aria-label="Main navigation"><a href="#stores" data-nav="stores">Kitchens</a><a href="#how" data-nav="how">How it works</a><a href="#ledger" data-nav="ledger">Meal ledger</a></nav><div class="header-actions"><a class="my-link" href="#mine">My meals</a><a id="workspace-link" href="#merchant" hidden>Kitchen workspace</a><button class="button compact outline" data-action="signin" id="signin-button">Sign in</button><button class="text-button" id="signout-button" data-action="signout" hidden>Sign out</button></div></header>
+  <main id="main" tabindex="-1"></main>
+  <footer><a class="footer-brand" href="#home">MealForward</a><p>A warm meal. A kinder day.</p><div><a href="#about">About MealForward</a><a href="#merchant">Kitchen workspace</a><a href="#register">Open a kitchen</a></div><small>Monad Testnet · Test assets have no real dollar value</small></footer>
+  <dialog id="dialog" aria-labelledby="dialog-title"><button class="dialog-close" data-action="close" aria-label="Close dialog">×</button><div id="dialog-body"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body></html>
