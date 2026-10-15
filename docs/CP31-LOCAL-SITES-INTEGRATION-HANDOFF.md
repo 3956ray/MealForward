@@ -1,0 +1,73 @@
+# CP31 Sites × CP30 — 本机同源联调操作手册
+
+日期：2026-10-15（UTC+8）。**目前为预检工具与只读功能交付，不是已安装到本机 CP30 运行时的证明。**
+
+## 1. 已提交的内容
+
+分支：`codex/mealforward-integrated-mvp`，提交 `45a104562cf79b8d2acf2e65c338b28eb66fa3e6`。
+
+- `sites-frontend/dist/`：Sites 风格 CP31 真正前端，保留三步资助、一键领取、My Contributions/My Meals 及商家工作台。
+- `sites-frontend/dist/ledger-view.mjs`：新增 Public Ledger 真实只读页面，只消费 CP30 `GET /v1/ledger` 的已聚合字段 `{items:[{store, financial:{counts:{F,A,R,H,S,X}, F,H,S,liability}, funded}]}`。各类缺失/前后账不一致时不显示虚构数据；不展示受助者二维码、签名及个人信息。
+- `sites-frontend/ledger-view.test.mjs`：6 项离线 UI/DTO/隐私回归。
+- `cp30-backend/tools/cp31-sites-preflight.py`：严格静态文件白名单校验、CSP 与 API 同源契约预检；运行时仅读取公开源代码，不访问本机私有 PG/Journals/钱包。
+- `cp30-backend/src/c1/static_assets.py` 为已有 CP30 机制：`staticRoot` 和 `staticFiles` 明确指定公开构建资源，路径不允许符号链接/越界，启动时快照文件；`Application.handle` 对 `/v1/*` **不交给静态资源**，仍走原真实 API。
+
+## 2. 在 Mac 上进行只读预检（不消耗 ZCode Token）
+
+以下只需用户运行普通终端命令，**不会修改**现有 `~/.mf-cp30-20261013/` 运行目录、服务、PostgreSQL 或 Journal：
+
+```bash
+mkdir -p "$HOME/Documents/Developer"
+git clone --single-branch --branch codex/mealforward-integrated-mvp \
+  https://github.com/3956ray/MealForward.git \
+  "$HOME/Documents/Developer/mealforward-cp31-integration-review"
+cd "$HOME/Documents/Developer/mealforward-cp31-integration-review/cp30-backend"
+python3 tools/cp31-sites-preflight.py
+```
+
+预期 `status: PASS`，并显示一个仅包含 13 个固定文件名的 `staticRoot/staticFiles` JSON 片段。这不是服务器更改指令；该片段之后必须由**受控的私有运行配置安装流程**使用。
+
+如果此文件夹已存在，不要覆盖或 `git reset --hard`，改用新的审核目录。若版本不兼容或预检失败，停止安装，不尝试放宽路径保护。
+
+可选离线测试（Node >=22）：
+
+```bash
+cd "$HOME/Documents/Developer/mealforward-cp31-integration-review/sites-frontend"
+node --test ledger-view.test.mjs
+```
+
+完整旧前端模拟/接口单元测试需要对应的 Node 依赖；带 `onboarding-browser.test.mjs` 的浏览器脚本使用旧本机 Playwright 绝对路径，不能在不满足依赖时算作通过。
+
+## 3. 安全装入现有 `https://localhost:16443` 的前置门槛
+
+**此文档不提供直接覆盖 `application.json` 的命令**，因为 CP30 的 `INSTALLED.json.configs`、`WALLET-LOGIN-INSTALLED.json.originalConfigs`、`sourcePins` 等会校验代码和配置来源。用户已存在真实 Testnet `fund/issue/lock/report` 历史和尚未结算义务，运行目录不能 reset/re-init。
+
+由具有本机权限的操作者在另一次明确审查下：
+
+1. 只读确认六服务 PID、`c1_connection` PG17.11、账本 Journal 当前 checkpoint/文件大小和 042–044 安装状态；备份数据库 + Journal，并验证对应恢复点。
+2. 确认实际正在运行的应用与仓库 source hashes；不复写旧 config/未授权重签任何 Pin。
+3. 在运行时私有配置中引入明确白名单 `staticRoot/staticFiles`，将站点绑定到 **现有相同** `https://localhost:16443`。不要使用跨源 localhost 或云端 Vercel Preview API 重定向。
+4. 只按 CP30 官方“已安装配置/source pin 受控变更流程”进行 restart，禁止按端口 kill、清空 DB、删除 Journal 或重发未知交易。
+5. 浏览器真钱包进行登录→Kitchens→My Contributions→My Meals→Public Ledger **只读验证**；私有订单和 Voucher 必须只属于当前钱包，且旧 original Intent 与链上收据不变。
+6. 如不能证明配置更新和回滚策略，**保持现有服务原样**，只交付预检报告，不做安装。
+
+### 关键用例
+
+- 无登录：`/v1/stores` 和 `/v1/ledger` 匿名只读；`/v1/my/orders`、`/v1/my/vouchers` 必须不泄露其他钱包数据。
+- 登录当前 MetaMask：`/v1/me` 与当前地址一致；My Contributions/Meals 展示原 DB 真数据，而非 Auth Pilot 的空目录。
+- 切换钱包/重新登录：旧订单与 Voucher 不可读，未完成 Intent 只能从其原验证来源恢复；不要自动重签或发送资金交易。
+- Public Ledger：F=A+R+H+S+X（份数），公开资金单位为链上最小单位转化的 USDC；缺失或不一致要提示“needs verification”而不是渲染假的成功值。
+- 断网/服务停机：页面展示连接错误，不能假装已读取最新账目或提交链上操作。
+
+## 4. 当前测试证据与阻塞
+
+- 新 Public Ledger 独立 Node 测试 **6/6 PASS**。
+- 基于原交接 ZIP 静态前端应用本次 ledger 补丁，离线 Node 模块/状态测试 **136/136 PASS**；另一个依赖用户私有 Playwright 绝对路径的浏览器脚本无法在当前容器运行，故未纳入通过数。由于版本不同，这 **不是**目前整合分支全套测试的通过证明。
+- CP30 的 `StaticAssets` 以 13 个固定白名单文件运行独立 Python 预检 **PASS**。
+- 当前容器禁止访问 localhost 的浏览器连接，因此未宣称 Chromium E2E 通过。
+- **尚未**把前端配置写入现有本机私有运行配置，也未让 Render Auth Pilot 接入 CP30 历史店铺/订单/券。Render 上的资金业务继续关闭。
+- 旧 CP30 `settle FINAL_SUCCEEDED` 仍缺少独立交易证据；资金 Journal 不能依赖 Render 免费磁盘。
+
+## 5. 下一道 Gate
+
+G1 只有在真实同源 CP30 /v1 API 与新版 Sites 前端之间完成受控只读浏览器验收后才判定通过。随后 G2 为隔离 PG17 迁移及权限回归、Session/Intent 原操作恢复机制；G3 为持久签名 Journal/Worker 可靠性，未过不开放云端 Funds。
