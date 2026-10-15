@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import pg from 'pg';
 import {makePilotHandler} from './core.mjs';
 import {makeChallenge,verifyChallenge} from './siwe.mjs';
-import {pgStore,initializeSchema} from './db.mjs';
+import {pgStore,initializeSchema,probeAuthStorage} from './db.mjs';
 
 const origin=process.env.PUBLIC_ORIGIN;
 if(!/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin||''))throw Error('PUBLIC_ORIGIN_MUST_BE_EXACT_RENDER_URL');
@@ -21,8 +21,9 @@ if(databaseUrl){
   try{
     if(process.env.CP31_EMPTY_TEST_DB_INIT!=='yes')throw Error('EXPLICIT_EMPTY_TEST_DB_INIT_REQUIRED');
     await initializeSchema(pool);
+    await probeAuthStorage(pool,makeChallenge,origin);
     store=pgStore(pool);ready=await store.health();
-  }catch(e){console.error('CP31_AUTH_PILOT_DATABASE_NOT_READY',e.message);await pool.end().catch(()=>{});}
+  }catch(e){console.error('CP31_AUTH_PILOT_DATABASE_NOT_READY',JSON.stringify({kind:e?.message==='AUTH_SQL_PROBE_FAILED'?'SQL_PROBE':'INIT',stage:e?.stage||'init',sqlstate:e?.sqlstate||(/^[0-9A-Z]{5}$/.test(e?.code||'')?e.code:'NONE')}));await pool.end().catch(()=>{});}
 }
 if(!store){store={health:async()=>false};}
 const auth=makePilotHandler({store,origin,siwe:{makeChallenge,verifyChallenge}});

@@ -110,6 +110,15 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
       // Never put raw body, signature, cookie, URL query, database error or stack in logs.
       const status=Number.isInteger(err?.status)?err.status:503;
       const code=typeof err?.code==='string'&&/^[A-Z_]{3,64}$/.test(err.code)?err.code:'SERVICE_UNAVAILABLE';
+      if(status>=500){
+        // Strictly structural diagnostics: never log headers, body, cookies,
+        // signature, wallet address, challenge, SQL statements or exception text.
+        const route=['/v1/auth/pre-session','/v1/identity/wallet/challenge',
+          '/v1/identity/wallet/login','/v1/me','/v1/store-registrations'].includes(path)?path:'OTHER';
+        const sqlstate=typeof err?.code==='string'&&/^[0-9A-Z]{5}$/.test(err.code)?err.code:'NONE';
+        const type=err instanceof TypeError?'TYPE_ERROR':err instanceof RangeError?'RANGE_ERROR':'OTHER';
+        console.error('CP31_AUTH_PILOT_REQUEST_5XX',JSON.stringify({route,method:method==='GET'||method==='POST'?method:'OTHER',status,sqlstate,type}));
+      }
       return json(res,status,{error:code});
     }
   };

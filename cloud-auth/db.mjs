@@ -1,3 +1,4 @@
+import {randomBytes, randomUUID, createHash} from 'node:crypto';
 /** Dedicated empty Render PG17 schema: never opens/copies CP30 live state. */
 const schema='mf_cp31_auth_pilot';
 export async function initializeSchema(pool){
@@ -59,4 +60,37 @@ export function pgStore(pool){
     async getSession(hash,now){const r=await pool.query('SELECT wallet FROM mf_cp31_auth_pilot.sessions WHERE token_hash=$1 AND expires_at>$2 AND NOT revoked',[hash,now]);return r.rows[0]||null},
     async revokeSession(hash,csrfHash,now){const r=await pool.query('UPDATE mf_cp31_auth_pilot.sessions SET revoked=true WHERE token_hash=$1 AND csrf_hash=$2 AND expires_at>$3 AND NOT revoked',[hash,csrfHash,now]);return r.rowCount===1}
   };
+}
+
+// Rollback-only probe of the *real* Postgres write/read queries used before a
+// wallet signature is requested. Never commits synthetic auth records.
+export async function probeAuthStorage(pool,makeChallenge,origin){
+  const c=await pool.connect();
+  let inTransaction=false,stage='construct';
+  try {
+    const now=Math.floor(Date.now()/1000);
+    const preHash=createHash('sha256').update(randomBytes(32)).digest('hex');
+    const csrfHash=createHash('sha256').update(randomBytes(32)).digest('hex');
+    const challenge=makeChallenge({wallet:'0x'+'1'.repeat(40),origin,chainId:10143,
+      nonce:randomBytes(32).toString('hex'),challengeId:randomUUID(),issuedAt:now,expiresAt:now+180});
+    const store=pgStore({query:(...args)=>c.query(...args)});
+    stage='begin';await c.query('BEGIN');inTransaction=true;
+    stage='pre_insert';await store.createPre({preHash,csrfHash,expiresAt:now+300});
+    stage='challenge_insert';
+    const inserted=await store.createChallenge({preHash,csrfHash,challenge,now});
+    if(!inserted)throw Error('PROBE_CHALLENGE_NOT_STORED');
+    stage='challenge_read';
+    const stored=await store.getChallenge({preHash,csrfHash,challengeId:challenge.challengeId,now});
+    if(!stored||stored.challengeId!==challenge.challengeId)throw Error('PROBE_CHALLENGE_NOT_READABLE');
+    stage='rollback';await c.query('ROLLBACK');inTransaction=false;
+    return true;
+  }catch(e){
+    const error=Error('AUTH_SQL_PROBE_FAILED');
+    error.stage=stage;
+    error.sqlstate=typeof e?.code==='string'&&/^[0-9A-Z]{5}$/.test(e.code)?e.code:'NONE';
+    throw error;
+  }finally{
+    if(inTransaction)await c.query('ROLLBACK').catch(()=>{});
+    c.release();
+  }
 }
