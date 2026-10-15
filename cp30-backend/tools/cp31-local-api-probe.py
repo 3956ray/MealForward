@@ -17,7 +17,7 @@ SITE = ROOT / 'sites-frontend' / 'dist'
 ENDPOINTS = ('/v1/connection', '/v1/identity/setup', '/v1/stores',
              '/v1/ledger', '/v1/me', '/app.js', '/ledger-view.mjs')
 MAX_BYTES = 512 * 1024
-SAFE_ERROR = re.compile(r'[A-Z][A-Z0-9_]{0,63}\\Z')
+SAFE_ERROR = re.compile(r'[A-Z][A-Z0-9_]{0,63}\Z')
 
 
 def inspect(endpoint):
