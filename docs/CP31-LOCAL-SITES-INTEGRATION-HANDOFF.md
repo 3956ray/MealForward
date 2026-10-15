@@ -71,3 +71,26 @@ node --test ledger-view.test.mjs
 ## 5. 下一道 Gate
 
 G1 只有在真实同源 CP30 /v1 API 与新版 Sites 前端之间完成受控只读浏览器验收后才判定通过。随后 G2 为隔离 PG17 迁移及权限回归、Session/Intent 原操作恢复机制；G3 为持久签名 Journal/Worker 可靠性，未过不开放云端 Funds。
+
+## 6. 2026-10-15 用户本机预检证据
+
+用户在 Mac 终端克隆本分支至 `~/Desktop/mealforward-integrated-review` 并执行
+`python3 ~/Desktop/mealforward-integrated-review/cp30-backend/tools/cp31-sites-preflight.py`，
+回传的 JSON 显示 `status: PASS`、`mode: read_only_preflight`、13 项静态文件、
+`apiNamespaceReserved: /v1/` 及 `walletSigningOrDatabaseWrites: false`。
+
+**判定：G1 的静态清单预检通过；不代表原 CP30 当前 HTTPS 服务已加载 Sites 构建。**
+原 Mac `c1_connection`、`INSTALLED.json`、交易 Journal、Signer Grant 及运行服务没有因此被修改。
+
+**下一步（仅公开、匿名 HTTP GET 检查）：** 从用户 Mac 向明确绑定
+`127.0.0.1:16443` 的 `localhost` TLS Origin 查询
+`/v1/connection`、`/v1/identity/setup`、`/v1/stores`、`/v1/ledger`、
+`/v1/me`、`/app.js`、`/ledger-view.mjs`，只记录 HTTP 状态和 Content-Type，
+不输出任何响应内容、Cookie、Signature 或 Privileged Config。
+正常服务的 `/v1/me` 匿名返回 401；静态 `/app.js` 返回 404 意味着原 CP30
+尚未启用新的静态 Sites 白名单，不能擅自为此重启服务。GET 访问可能增加普通
+访问日志和限流计数，不能把它当作完全无运行时写入。
+
+**红线：** 预检通过不授予修改运行时配置、应用 source pin、私有 journal、
+数据库角色、交易授权或启动/停止服务的权限。要安装新的静态清单，必须先核对
+备份、安装指纹以及受控回滚程序。
