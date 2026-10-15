@@ -226,6 +226,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const value=await request('POST','/v1/store-registrations/'+id+'/enable',{ownerSignature:signed.value});
     signature=null;return value;
   }
+  async function getPublicLedger(){const value=await request('GET','/v1/ledger');if(!Array.isArray(value?.items))throw fail('LEDGER_INVALID','The public ledger response needs verification.');return value;}
   async function listStores(){const value=await request('GET','/v1/stores');return value.items||[];}
   async function getStoreMeals(id){if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose a verified store.');return (await request('GET','/v1/stores/'+id+'/meals')).items||[];}
   async function getOwnerOverview(id){requireCurrentLogin();const generation=epoch;if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose your store.');const result=await request('GET','/v1/stores/'+id+'/workbench');checkEpoch(generation);return result;}
@@ -517,6 +518,6 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     }finally{busy=false;}
   }
 
-  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,loginWithMetaMask,logout,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
+  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,loginWithMetaMask,logout,getPublicLedger,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
 }
 export const liveApi=createLiveApi();
