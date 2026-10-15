@@ -58,6 +58,12 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(result['public_item_count'], 2)
         self.assertNotIn('hidden', json.dumps(result))
 
+    def test_registered_catalog_is_a_nonledger_public_control(self):
+        result = self.run_case('/v1/registered-stores', 200,
+                               b'{"items":[{"registrationId":"privateid"}]}')
+        self.assertEqual(result['public_item_count'], 1)
+        self.assertNotIn('privateid', json.dumps(result))
+
     def test_asset_fingerprint_matches_checked_out_version(self):
         with TemporaryDirectory() as tmp:
             previous = probe.SITE
