@@ -2,7 +2,7 @@
 """Anonymous localhost CP30 HTTP/asset probe. No cookies, tokens or DB access.
 
 GET requests may increment normal server access/rate-limit counters.
-Only seven hardcoded local URLs are contacted. Response bodies are never printed.
+Only eight hardcoded local URLs are contacted. Response bodies are never printed.
 """
 import hashlib
 import http.client
@@ -14,8 +14,8 @@ import ssl
 HOST = 'localhost:16443'
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / 'sites-frontend' / 'dist'
-ENDPOINTS = ('/v1/connection', '/v1/identity/setup', '/v1/stores',
-             '/v1/ledger', '/v1/me', '/app.js', '/ledger-view.mjs')
+ENDPOINTS = ('/v1/connection', '/v1/identity/setup', '/v1/registered-stores',
+             '/v1/stores', '/v1/ledger', '/v1/me', '/app.js', '/ledger-view.mjs')
 MAX_BYTES = 512 * 1024
 SAFE_ERROR = re.compile(r'[A-Z][A-Z0-9_]{0,63}\Z')
 
@@ -41,7 +41,7 @@ def inspect(endpoint):
             expected = SITE / endpoint.removeprefix('/')
             result['matches_checked_out_cp31'] = (expected.is_file() and
                 hashlib.sha256(body).digest() == hashlib.sha256(expected.read_bytes()).digest())
-        elif response.status == 200 and endpoint in ('/v1/stores', '/v1/ledger'):
+        elif response.status == 200 and endpoint in ('/v1/registered-stores', '/v1/stores', '/v1/ledger'):
             try:
                 payload = json.loads(body)
                 result['public_item_count'] = len(payload['items']) if isinstance(payload.get('items'), list) else 'INVALID_ITEMS'
