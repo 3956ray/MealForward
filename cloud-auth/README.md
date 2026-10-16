@@ -14,7 +14,7 @@ This is a **real cryptographic wallet-signature test**, *not* the CP30 funds/vou
 
 ## Endpoints
 
-`/health` returns status from PostgreSQL, `GET /v1/connection` / `/v1/identity/setup` return real auth-pilot metadata, `POST /v1/auth/pre-session` creates server pre-session, `POST /v1/identity/wallet/challenge` stores the unique SIWE message, `POST /v1/identity/wallet/login` verifies signature and atomically establishes DB Session, `GET /v1/me` reads Session, and `POST /v1/auth/logout` revokes it. `/v1/stores` returns an empty pilot catalog. **Every unsupported `/v1/*` business endpoint returns 503 `AUTH_PILOT_NO_BUSINESS_WRITES`**. No fake contribution, claim, QR, escrow settlement, session or chain receipt is generated.
+`/health` returns status from PostgreSQL, `GET /v1/connection` / `/v1/identity/setup` return real auth-pilot metadata, `POST /v1/auth/pre-session` creates server pre-session, `POST /v1/identity/wallet/challenge` stores the unique SIWE message, `POST /v1/identity/wallet/login` verifies signature and atomically establishes DB Session, `GET /v1/me` reads Session, and `POST /v1/auth/logout` revokes it. `/v1/stores`, `/v1/ledger`, `/v1/my/*` and other business GET routes return **503 `ORIGINAL_BUSINESS_NOT_CONNECTED`**; this is not an empty original catalog. Even authenticated wallets receive no original CP30 business records or roles. **Every unsupported `/v1/*` business endpoint returns 503 `AUTH_PILOT_NO_BUSINESS_WRITES`**. No fake contribution, claim, QR, escrow settlement, session or chain receipt is generated.
 
 ## Local tests and release restrictions
 
