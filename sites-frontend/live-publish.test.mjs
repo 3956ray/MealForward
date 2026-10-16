@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi} from './dist/live-api.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const store='1'.repeat(64),account='0x'+'2'.repeat(40),meal='0x'+'3'.repeat(64),old='4'.repeat(64);
 const draft='11111111-1111-4111-8111-111111111111',reviewId='22222222-2222-4222-8222-222222222222',intentId='33333333-3333-4333-8333-333333333333',childId='44444444-4444-4444-8444-444444444444';
 async function fixture({owner=true,reviewChange={},late=false,lose=false,published=false,wrongIntent=false,storageValues=new Map([['mealforward-live-csrf-v1','csrf']])}={}){
@@ -27,7 +29,7 @@ async function fixture({owner=true,reviewChange={},late=false,lose=false,publish
   throw Error('Unexpected route '+path);
  };
  const args={fetchImpl,storage,provider:()=>provider,origin:()=> 'https://localhost:16443'};
- const api=createLiveApi(args);await api.getContext();return {api,calls,args,storageValues};
+ const api=legacyFixtureApi(args);await api.getContext();return {api,calls,args,storageValues};
 }
 test('publication review freezes the saved half-dollar meal and Beijing half-hour window without wallet mutation',async()=>{
  const f=await fixture(),r=await f.api.createMealPublishReview({storeId:store,draftId:draft,expectedRevision:2});
@@ -39,7 +41,7 @@ test('publication review freezes the saved half-dollar meal and Beijing half-hou
 test('publication loss and reload retain the exact original confirmation; polling performs no mutation',async()=>{
  const f=await fixture({lose:true}),input={storeId:store,draftId:draft,reviewId};
  await assert.rejects(f.api.confirmMealPublish(input),{code:'CONNECTION_UNAVAILABLE'});
- const reloaded=createLiveApi(f.args);await reloaded.getContext();
+ const reloaded=legacyFixtureApi(f.args);await reloaded.getContext();
  assert.equal((await reloaded.confirmMealPublish(input)).stage,'UNKNOWN');
  const posts=f.calls.filter(c=>c.path.endsWith('/publish'));assert.equal(posts.length,2);assert.equal(posts[0].headers['Idempotency-Key'],posts[1].headers['Idempotency-Key']);
  const start=f.calls.length;assert.equal((await reloaded.getMealPublishIntent(store,intentId)).id,intentId);

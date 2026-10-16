@@ -231,10 +231,20 @@ async function loadLiveContext(generation=live.generation){
  catch(err){if(['SERVICE_UNAVAILABLE','CONNECTION_UNAVAILABLE'].includes(err?.code))live.backendOffline=true;throw err;}
 }
 async function loadLiveCatalog(generation=live.generation){
+ // G1: a failed refresh must never leave stale listings and counts actionable.
+ live.stores=[];live.meals={};live.catalogError='';
+ if(live.context?.setup?.authPilot===true||live.context?.setup?.mode==='CP31_AUTH_PILOT_ONLY'){
+  live.catalogError='Original business records are not connected to this identity pilot.';
+  return;
+ }
  const response=await currentLiveResult(live.api.listStores(),generation),stores=Array.isArray(response)?response:response.items??[];
  const results=await currentLiveResult(Promise.allSettled(stores.map(store=>live.api.getStoreMeals(store.id))),generation);
- live.stores=stores;results.forEach((result,i)=>{if(result.status==='fulfilled')live.meals[stores[i].id]=Array.isArray(result.value)?result.value:result.value.items??[];});
- live.catalogError=results.some(r=>r.status==='rejected')?'Some menus could not be refreshed. Previously loaded meals may be out of date.':'';
+ if(results.some(r=>r.status==='rejected')){
+  live.catalogError='Kitchen menus could not be fully verified. Earlier meal selections are unavailable until all current public records are checked.';
+  return;
+ }
+ live.meals=Object.fromEntries(stores.map((store,i)=>[store.id,Array.isArray(results[i].value)?results[i].value:results[i].value.items]));
+ live.stores=stores;
 }
 async function loadPublicLedger(generation=live.generation){
  if(!live.api||live.publicLedgerLoading)return;

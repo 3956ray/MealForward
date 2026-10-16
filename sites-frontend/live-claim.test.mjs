@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi} from './dist/live-api.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const wallet='0x'+'3'.repeat(40),store='1'.repeat(64),meal='2'.repeat(64),voucher='0x'+'4'.repeat(64),review='11111111-1111-4111-8111-111111111111',intent='22222222-2222-4222-8222-222222222222';
 async function fixture({loseConfirm=false,mismatch=false,rotateDuringRecover=false,replayRecover=false}={}){
  const values=new Map([['mealforward-live-csrf-v1','old-csrf']]),calls=[],handlers={};let lost=false;
@@ -21,7 +23,7 @@ async function fixture({loseConfirm=false,mismatch=false,rotateDuringRecover=fal
  if(path.endsWith('/display'))return ok({...dto,display:'d'.repeat(43),validUntil:Math.floor(Date.now()/1000)+120});
  throw Error('unexpected route '+path);
  };
- const api=createLiveApi({fetchImpl,storage,provider:()=>provider,origin:()=> 'https://localhost:16443',onSessionInvalidated(){}});await api.getContext();return {api,calls,values,handlers};
+ const api=legacyFixtureApi({fetchImpl,storage,provider:()=>provider,origin:()=> 'https://localhost:16443',onSessionInvalidated(){}});await api.getContext();return {api,calls,values,handlers};
 }
 test('real claim review validates original meal, and confirmation retains its original idempotency key',async()=>{
  const f=await fixture({loseConfirm:true});await f.api.createClaimReview({storeId:store,mealId:meal});

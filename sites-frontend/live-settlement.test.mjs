@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi} from './dist/live-api.mjs';
 import {prepareSettle} from './dist/assets/live-wallet.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const address=n=>'0x'+String(n).repeat(40),word=n=>'0x'+String(n).repeat(64),owner=address(2),store=word(1).slice(2),voucher=word(7),id='11111111-1111-4111-8111-111111111111';
 const response=(v,status=200)=>({ok:status<400,status,json:async()=>v});
 async function fixture({tamper=false,failAdmission=false,failHash=false,tooEarly=false,wrongVoucher=false,foreign=false}={}){
@@ -23,7 +25,7 @@ async function fixture({tamper=false,failAdmission=false,failHash=false,tooEarly
  if(path.endsWith('/wallet-transactions')){if(failHash&&!lost){lost=true;throw Error('lost');}attempts.settle={hash:JSON.parse(o.body).transactionHash,confirmed:false};return response({status:'PENDING'});}
  throw Error('unexpected '+path);
  };
- const args={fetchImpl,storage,provider:()=>wallet,origin:()=> 'https://localhost:16443'},api=createLiveApi(args);await api.getContext();return {api,args,calls,attempts,get sends(){return sends;}};
+ const args={fetchImpl,storage,provider:()=>wallet,origin:()=> 'https://localhost:16443'},api=legacyFixtureApi(args);await api.getContext();return {api,args,calls,attempts,get sends(){return sends;}};
 }
 test('settlement review and confirmation never send wallet transactions',async()=>{
  const f=await fixture();assert.equal((await f.api.getPayouts(store)).items[0].state,'H');await f.api.createSettlementReview({storeId:store,voucherId:voucher});
@@ -35,10 +37,10 @@ test('early, foreign-owner and mismatched transaction/voucher cannot reach walle
 });
 test('settlement submits exactly once and a known hash can be recorded again without resending',async()=>{
  const f=await fixture({failHash:true});await assert.rejects(f.api.sendSettlementTransaction(store,id),{code:'CONNECTION_UNAVAILABLE'});assert.equal(f.sends,1);
- const recovered=createLiveApi(f.args);await recovered.getContext();const p=await recovered.getSettlementWalletPreparation(store,id);assert.equal(p.actions[0].allowed,false);assert.equal(p.actions[0].canRetryRecord,true);
+ const recovered=legacyFixtureApi(f.args);await recovered.getContext();const p=await recovered.getSettlementWalletPreparation(store,id);assert.equal(p.actions[0].allowed,false);assert.equal(p.actions[0].canRetryRecord,true);
  await recovered.retrySettlementTransactionRecord(store,id);assert.equal(f.sends,1);await assert.rejects(recovered.sendSettlementTransaction(store,id),e=>e.code==='ORIGINAL_PAYMENT_PENDING'&&e.walletStepNotStarted!==true);
 });
 test('unknown settlement admission survives reload and cannot send again',async()=>{
  const f=await fixture({failAdmission:true});await assert.rejects(f.api.sendSettlementTransaction(store,id),e=>e.code==='CONNECTION_UNAVAILABLE'&&e.walletStepNotStarted!==true);
- const recovered=createLiveApi(f.args);await recovered.getContext();await assert.rejects(recovered.sendSettlementTransaction(store,id),e=>e.code==='ORIGINAL_PAYMENT_PENDING'&&e.walletStepNotStarted!==true);assert.equal(f.sends,0);
+ const recovered=legacyFixtureApi(f.args);await recovered.getContext();await assert.rejects(recovered.sendSettlementTransaction(store,id),e=>e.code==='ORIGINAL_PAYMENT_PENDING'&&e.walletStepNotStarted!==true);assert.equal(f.sends,0);
 });
