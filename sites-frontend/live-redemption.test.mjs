@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi,parseVoucherCode} from './dist/live-api.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const origin='https://localhost:16443',code='a'.repeat(43),store='1'.repeat(64),wallet='0x'+'2'.repeat(40),voucher='0x'+'3'.repeat(64),caseId='0x'+'4'.repeat(64),intent='11111111-1111-4111-8111-111111111111';
 async function fixture({owner=true,loseLock=false,mismatch=false,changeDuringCheck=false}={}){
  const values=new Map([['mealforward-live-csrf-v1','csrf']]),calls=[],events={};let lost=false;
@@ -21,7 +23,7 @@ async function fixture({owner=true,loseLock=false,mismatch=false,changeDuringChe
  if(path.endsWith('/cases/'+caseId))return ok({...dto,id:caseId,voucher,lockId:caseId,redemptionIntents:[operation('lock')],serverTime:1800000000});
  throw Error('Unexpected route '+path);
  };
- const api=createLiveApi({fetchImpl,storage,provider:()=>provider,origin:()=>origin,onSessionInvalidated(){}});await api.getContext();return {api,calls,values,events};
+ const api=legacyFixtureApi({fetchImpl,storage,provider:()=>provider,origin:()=>origin,onSessionInvalidated(){}});await api.getContext();return {api,calls,values,events};
 }
 test('private link parser accepts only exact same-site voucher links or bounded codes',()=>{
  assert.equal(parseVoucherCode(code,origin),code);assert.equal(parseVoucherCode(origin+'/#verify?code='+code,origin),code);
