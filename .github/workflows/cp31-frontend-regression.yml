@@ -26,4 +26,4 @@ jobs:
       - name: Run isolated CP31 regressions
         run: |
           cd sites-frontend
-          node --test login-meal-resume.test.mjs verification-login-resume.test.mjs live-read-contract.test.mjs onboarding-wallet.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
+          node --test login-meal-resume.test.mjs verification-login-resume.test.mjs live-read-contract.test.mjs onboarding-wallet.test.mjs onboarding.test.mjs live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
