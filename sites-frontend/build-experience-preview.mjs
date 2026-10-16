@@ -39,6 +39,7 @@ const notice = '<section class="sandbox-disclosure" role="note" aria-label="测�
   '<a href="/test-guide.html" aria-label="阅读中文测试步骤">查看测试步骤 <span aria-hidden="true">↗</span></a></section>';
 if (!html.includes('<main id="main"')) throw Error('Missing main application landmark.');
 html = html.replace('<main id="main"', notice + '\n  <main id="main"');
+await writeFile(htmlPath, html);
 const css = [
   '/* Sandboxed experience preview: unmistakable and mobile-friendly. */',
   '.sandbox-disclosure{max-width:1236px;margin:4px auto 18px;padding:17px 22px;border:1px solid #d6ddcc;border-left:4px solid #d86b3f;border-radius:12px;background:#f2f2e9;display:flex;align-items:center;justify-content:space-between;gap:22px;color:#253c32}',
