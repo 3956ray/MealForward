@@ -1,0 +1,26 @@
+name: MealForward G1 live anonymous HTTPS safety smoke
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-anon-https-smoke-20261017
+  pull_request:
+    paths:
+      - "cloud-auth/g1-live-public-smoke.py"
+      - ".github/workflows/cp31-g1-live-http-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  public-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      MF_G1_PUBLIC_SMOKE_ALLOWED: "yes"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Anonymous GET-only live Auth Pilot source truth
+        run: python -B cloud-auth/g1-live-public-smoke.py
