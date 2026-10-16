@@ -3,7 +3,7 @@ import {normalizeUpload,verifyStoredImages} from './image.mjs';
 import {renderPublicLedger} from './ledger-view.mjs';
 import {renderRegistration,renderLiveCards,renderLiveKitchen,renderLiveStore,validateDraft,hasOwnedKitchen,renderLiveMealEditor,priceLabel,halfHourOptions,renderSupportFlow,renderContributions,supportState,renderClaimFlow,renderMyMeals,renderVerificationEntry,renderSettlementFlow,renderMealPublishFlow} from './onboarding-view.mjs';
 const LIVE_MODE=true;
-const live={api:null,context:{},busy:false,error:'',blocked:true,backendOffline:false,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',publicLedger:[],publicLedgerLoading:false,publicLedgerError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
+const live={api:null,context:{},busy:false,error:'',blocked:true,backendOffline:false,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',publicLedger:[],publicLedgerLoading:false,publicLedgerError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,pendingVerification:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
 const {STORES,getStore,stats,displayText:english,money,nowFor}=M;
 const main=document.querySelector('#main'),dialog=document.querySelector('#dialog'),body=document.querySelector('#dialog-body');
 let restoring=true,state,storageError='',filter='all',checkout=null,checkedId='',nextResult='final',resume=null,dialogKind='',dialogTrigger=null,resetConfirmButton=null,toastTimer,editorInitial='',editorValues=null,verificationInput='',claimSelection=null,replacement=null,editorEpoch=0,imageRequest=0,uploadPending=false,editorImage='';
@@ -139,7 +139,7 @@ dialog.addEventListener('cancel',event=>{if(LIVE_MODE&&live.mealPublish){event.p
 const publicDemoBar=document.querySelector('.demo-bar').innerHTML;
 function syncRouteChrome(){if(LIVE_MODE){document.body.classList.toggle('merchant-route',location.hash.startsWith('#merchant'));return;}const merchant=location.hash.slice(1).split('/')[0]==='merchant';document.body.classList.toggle('merchant-route',merchant);document.querySelector('.demo-bar').innerHTML=merchant?'Demo · Simulated kitchens, payments and handovers':publicDemoBar;}
 window.addEventListener('storage',event=>{if(LIVE_MODE)return;if(event.storageArea!==localStorage||event.key!==M.KEY&&event.key!==null)return;try{if(localStorage.getItem(M.KEY)!==savedRaw)restoreSaved(true);}catch{restoreSaved(true);}});
-window.addEventListener('hashchange',()=>{if(LIVE_MODE){closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#ledger')loadPublicLedger();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
+window.addEventListener('hashchange',()=>{if(LIVE_MODE){if(live.pendingVerification&&location.hash!=='#merchant/verify'&&!location.hash.startsWith('#verify?'))live.pendingVerification=null;closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#ledger')loadPublicLedger();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
 document.querySelector('.skip').addEventListener('click',event=>{event.preventDefault();main.focus();main.scrollIntoView();});
 setInterval(()=>{if(LIVE_MODE)return;if(storageError||restoring||externalAuthorityLost)return;const now=nowFor(state);if(state.coupons.some(c=>c.token&&c.tokenExpires<=now||c.status==='issued'&&c.expires<=now&&!state.ops.some(o=>M.isOpen(o)&&o.coupon===c.id))){try{mutate(s=>M.expire(s,now));}catch(err){error(err.message);}}tickCode();},1000);
 syncRouteChrome();
@@ -197,7 +197,7 @@ async function currentLiveResult(promise,generation){const result=await promise;
 function showLiveError(){if(live.error){const feedback=main.querySelector('#live-error, .page-error, [role="alert"]');if(feedback){feedback.setAttribute('tabindex','-1');feedback.focus({preventScroll:true});feedback.scrollIntoView({block:'center',behavior:'instant'});}}}
 function clearLiveIdentity(message=''){
  live.api?.invalidateSession?.();
- live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};live.signingIn=false;closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
+ live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;live.pendingVerification=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};live.signingIn=false;closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
  if(live.preview)URL.revokeObjectURL(live.preview);live.preview='';live.error=message;live.busy=false;live.loading=false;live.blocked=false;live.reloginRequired=true;renderLive();showLiveError();
 }
 window.addEventListener('mealforward-session-invalidated',()=>{if(LIVE_MODE)clearLiveIdentity('Wallet changed. Sign in again with the newly selected wallet.');});
@@ -409,6 +409,7 @@ async function startMetaMaskLogin(pendingAction=null){
  if(live.backendOffline){live.error='The backend is not connected. Use Check connection & recover when the API is deployed; wallet signing is unavailable here.';renderLive();return;}
  if(!live.api?.loginWithMetaMask){live.error='The login service is not connected. Check the connection before signing in.';renderLive();return;}
  const entryHash=location.hash;
+ const pendingVerification=!pendingAction&&entryHash==='#merchant/verify'?live.pendingVerification:null;
  // The optional pending action contains only public store/meal IDs and is never persisted.
  // It cannot authorize payment, claiming, signing or wallet transactions.
  // Clear previously shown private data before the wallet can select a new owner.
@@ -422,7 +423,15 @@ async function startMetaMaskLogin(pendingAction=null){
   const context=await live.api.loginWithMetaMask();checkLiveGeneration(generation);
   if(!/^0x[0-9a-f]{40}$/.test(context?.session?.wallet??''))throw Error('The MetaMask sign-in account could not be verified. Sign in again.');
   live.reloginRequired=false;acceptContext(context);
-  if(pendingAction){
+  if(pendingVerification){
+   // Only the authenticated kitchen owner may reopen the original short-lived code.
+   // Never auto-check, lock, report or settle from a URL, even after login.
+   if(location.hash===entryHash){
+    if(Date.now()>=pendingVerification.expiresAt)live.error='The original QR code may have expired. Ask the recipient for a fresh code before checking.';
+    else if(canEnterKitchen())openVerificationEntry(pendingVerification.input);
+    else live.error='Sign in with the kitchen owner wallet to check this private code. No voucher action was performed.';
+   }
+  }else if(pendingAction){
    // Ignore the original click if the user navigated elsewhere while signing.
    if(location.hash===entryHash){
     if(!['support','claim'].includes(pendingAction.kind))throw Error('The selected action is no longer valid. Choose a meal again.');
@@ -765,7 +774,14 @@ async function handleClaimAction(action,target){
 
 function takeVerificationLink(){
  if(!location.hash.startsWith('#verify?'))return null;
- const input=location.origin+'/'+location.hash;history.replaceState(null,'',location.pathname+location.search+'#merchant/verify');return input;
+ const input=location.origin+'/'+location.hash;
+ // Immediately remove the private code from the address bar. It must never be
+ // persisted to localStorage, sessionStorage, a URL redirect or a log.
+ history.replaceState(null,'',location.pathname+location.search+'#merchant/verify');
+ if(input.length>512){live.pendingVerification=null;return null;}
+ // Maximum QR lifetime is 120 seconds. The server remains authoritative.
+ live.pendingVerification={input,expiresAt:Date.now()+120000};
+ return input;
 }
 function verificationCurrent(flow){return !!flow&&live.verification===flow&&flow.generation===live.generation&&flow.wallet===live.context.session?.wallet&&hasOwnedKitchen(live.context)&&flow.storeId===live.context.store.id;}
 function stopVerificationCamera(flow){if(!flow)return;flow.cameraEpoch++;clearTimeout(flow.scanTimer);flow.stream?.getTracks().forEach(track=>track.stop());flow.stream=null;flow.scanning=false;flow.cameraPending=false;const video=document.querySelector('#verification-camera');if(video)video.srcObject=null;}
@@ -779,6 +795,7 @@ function readVerificationCode(flow,input){
 }
 function openVerificationEntry(input=null){
  if(!hasOwnedKitchen(live.context)){live.error='Sign in with the kitchen owner wallet, then scan or paste the voucher again.';renderLive();return;}
+ live.pendingVerification=null;
  closeVerificationEntry();closeClaimFlow();closeSupportFlow();live.verification={generation:live.generation,wallet:live.context.session.wallet,storeId:live.context.store.id,code:null,error:'',status:'',cameraEpoch:0,stream:null,scanning:false,cameraPending:false,busy:false,checked:null,intent:null,case:null,records:[],lockAttempted:false,handoverAttempted:false};
  if(input)readVerificationCode(live.verification,input);else showVerificationEntry();
 }
