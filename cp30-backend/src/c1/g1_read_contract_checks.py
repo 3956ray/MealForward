@@ -5,9 +5,10 @@ source predicates that tie private records to the authenticated principal.
 These source assertions DO NOT establish installed database/RLS correctness.
 """
 from pathlib import Path
-import re
 import unittest
-from .live_checks import LiveChecks
+from types import SimpleNamespace
+from .live_checks import Ledger, Client
+from .live_gateway import LiveGateway
 
 MIGRATION = Path(__file__).resolve().parents[2] / 'connection-migrations' / '044-live-multi-meal.sql'
 STORE = 'a' * 64
@@ -15,8 +16,13 @@ STORE = 'a' * 64
 
 class G1ReadContractChecks(unittest.TestCase):
     def setUp(self):
-        LiveChecks.setUp(self)
-        self.api.responses['live_api'] = {'items': []}
+        self.api,worker=Ledger(),Ledger()
+        clients={role:Client() for role in ('quoteAuthority','issuerAuthority','operatorAuthority')}
+        config={'enabled':True,'asset':{'chainId':31337,'address':'0x'+'2'*40,'decimals':6,
+            'symbol':'TEST','codeHash':'0x'+'9'*64,'reviewed':True},'maxSnapshotAgeSeconds':120}
+        self.gateway=LiveGateway(api_ledger=self.api,worker_ledger=worker,config=config,clients=clients,
+            activation_gate=SimpleNamespace(allowed=lambda *_:True),clock=lambda:100)
+        self.api.responses['live_api']={'items': []}
 
     def test_all_public_and_wallet_scoped_read_routes_use_read_only_transaction(self):
         routes = {
