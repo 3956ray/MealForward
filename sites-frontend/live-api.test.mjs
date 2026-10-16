@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi,walletTypedData,metaMaskProvider} from './dist/live-api.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const id='0x'+'1'.repeat(64),owner='0x'+'2'.repeat(40);
 const memory=()=>{const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k),data};};
 const response=(value,status=200)=>({ok:status<400,status,json:async()=>value});
@@ -28,8 +30,8 @@ test('response loss reuses original registration and idempotency key after reloa
   };
   const args={storage,fetchImpl,origin:()=>identity.walletLoginOrigin};
   const form={storeName:'Kitchen',mealName:'Meal',description:'Fresh',price:'7.25',photo:new Blob(['png'],{type:'image/png'}),windows:[[600,720]]};
-  await assert.rejects(createLiveApi(args).saveRegistration(form),{code:'CONNECTION_UNAVAILABLE'});
-  const result=await createLiveApi(args).saveRegistration(form);
+  await assert.rejects(legacyFixtureApi(args).saveRegistration(form),{code:'CONNECTION_UNAVAILABLE'});
+  const result=await legacyFixtureApi(args).saveRegistration(form);
   assert.equal(result.state,'DRAFT');assert.equal(images,1);
   assert.equal(requests[0].body,requests[1].body);
   assert.equal(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);
@@ -39,7 +41,7 @@ test('original progress comes from authenticated list and public projection',asy
   const store=id.slice(2),registration={registrationId:id,storeId:id,state:'CONFIRMED',businessReady:true};
   const fetchImpl=async path=>response({'/v1/connection':config,'/v1/identity/setup':identity,'/v1/me':{walletAddress:owner},'/v1/store-registrations':{items:[registration]},'/v1/stores':{items:[{id:store,name:'Kitchen'}]},['/v1/stores/'+store+'/meals']:{items:[{listed:true}]}}[path]);
   const storage=memory();storage.setItem('mealforward-live-csrf-v1','csrf');
-  const result=await createLiveApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin}).getContext();
+  const result=await legacyFixtureApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin}).getContext();
   assert.equal(result.session.wallet,owner);assert.equal(result.registration.registrationId,id);assert.equal(result.store.id,store);
 });
 test('authorization never persists the signature or emits deployment without explicit enable',async()=>{
@@ -52,16 +54,16 @@ test('authorization never persists the signature or emits deployment without exp
     if(path.endsWith('/enable')){enabled++;assert.equal(JSON.parse(options.body).ownerSignature,signed);return response({state:'PENDING'});}
     return response({registrationId:id,state:'DRAFT',walletActionsEnabled:true,typedData:typed});
   };
-  const api=createLiveApi({storage,fetchImpl,provider:()=>provider,origin:()=>identity.walletLoginOrigin});
+  const api=legacyFixtureApi({storage,fetchImpl,provider:()=>provider,origin:()=>identity.walletLoginOrigin});
   await api.signRegistration({registrationId:id});assert.equal(enabled,0);
   await api.enableRegistration(id);assert.equal(enabled,1);
   assert.ok(!JSON.stringify([...storage.data]).includes(signed));
   await assert.rejects(api.enableRegistration(id),{code:'SIGNATURE_REQUIRED'});
 });
 test('foreign wallet cannot authorize a store; offline site never returns synthetic success',async()=>{
-  const api=createLiveApi({storage:memory(),origin:()=>identity.walletLoginOrigin,fetchImpl:async path=>response(path==='/v1/connection'?config:path==='/v1/identity/setup'?identity:path==='/v1/me'?{walletAddress:'0x'+'4'.repeat(40)}:{registrationId:id,state:'DRAFT',walletActionsEnabled:true,typedData:typed})});
+  const api=legacyFixtureApi({storage:memory(),origin:()=>identity.walletLoginOrigin,fetchImpl:async path=>response(path==='/v1/connection'?config:path==='/v1/identity/setup'?identity:path==='/v1/me'?{walletAddress:'0x'+'4'.repeat(40)}:{registrationId:id,state:'DRAFT',walletActionsEnabled:true,typedData:typed})});
   await assert.rejects(api.signRegistration({registrationId:id}),{code:'OWNER_MISMATCH'});
-  await assert.rejects(createLiveApi({storage:memory(),fetchImpl:async()=>{throw Error('offline');}}).getContext(),{code:'CONNECTION_UNAVAILABLE'});
+  await assert.rejects(legacyFixtureApi({storage:memory(),fetchImpl:async()=>{throw Error('offline');}}).getContext(),{code:'CONNECTION_UNAVAILABLE'});
 });
 
 function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,serverAddress=loginAddress,available=[owner],onMe=()=>{},nativeReject=false,connectedAccounts=available,chain='0x279f'}={}){
@@ -94,18 +96,18 @@ function loginFixture({changeOnMe=false,failOnMe=false,loginAddress=owner,server
     if(path==='/v1/auth/logout')return response({ok:true});
     throw Error('unexpected request');
   };
-  return {api:createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls,flow,wallet};
+  return {api:legacyFixtureApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin}),calls,flow,wallet};
 }
 
 test('unreachable API blocks MetaMask prompts before requesting any account',async()=>{
  const {wallet,flow}=loginFixture();
- const api=createLiveApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>{throw Error('offline');}});
+ const api=legacyFixtureApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>{throw Error('offline');}});
  await assert.rejects(api.loginWithMetaMask(),{code:'CONNECTION_UNAVAILABLE'});
  assert.deepEqual(flow,[]);
 });
 test('HTML in place of login backend JSON never opens a MetaMask prompt',async()=>{
  const {wallet,flow}=loginFixture();
- const api=createLiveApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>({ok:false,status:404,json:async()=>{throw Error('html');}})});
+ const api=legacyFixtureApi({storage:memory(),provider:()=>wallet,origin:()=>identity.walletLoginOrigin,fetchImpl:async()=>({ok:false,status:404,json:async()=>{throw Error('html');}})});
  await assert.rejects(api.loginWithMetaMask(),{code:'SERVICE_UNAVAILABLE'});
  assert.deepEqual(flow,[]);
 });
@@ -137,13 +139,13 @@ test('occupied one-store MVP blocks new saves before image upload or deployment'
     if(options.method!=='GET')writes++;
     return response(path==='/v1/connection'?{...config,firstRun:{stores:1}}:path==='/v1/identity/setup'?identity:path==='/v1/me'?{walletAddress:owner}:path==='/v1/stores'?{items:[{id:id.slice(2)}]}:{items:[]});
   };
-  const api=createLiveApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
+  const api=legacyFixtureApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
   assert.equal((await api.getContext()).setup.registrationEnabled,false);
   await assert.rejects(api.saveRegistration({}),{code:'REGISTRATION_UNAVAILABLE'});assert.equal(writes,0);
 });
 test('anonymous 401 preserves enabled wallet login even when the one-store slot is occupied',async()=>{
   const fetchImpl=async path=>path==='/v1/me'?response({error:'UNAUTHENTICATED',setup:null},401):response(path==='/v1/connection'?{...config,firstRun:{stores:1}}:path==='/v1/identity/setup'?identity:{items:[{id:id.slice(2)}]});
-  const result=await createLiveApi({storage:memory(),fetchImpl,origin:()=>identity.walletLoginOrigin}).getContext();
+  const result=await legacyFixtureApi({storage:memory(),fetchImpl,origin:()=>identity.walletLoginOrigin}).getContext();
   assert.equal(result.session,null);assert.equal(result.setup.walletLoginEnabled,true);assert.equal(result.setup.registrationEnabled,false);
 });
 test('wallet change clears old session access, persists relogin across reload, and rejects late owner responses',async()=>{
@@ -157,19 +159,19 @@ test('wallet change clears old session access, persists relogin across reload, a
     return response({'/v1/connection':config,'/v1/identity/setup':identity,'/v1/me':{walletAddress:owner},'/v1/store-registrations':{items:[registration]},'/v1/stores':{items:[{id:id.slice(2)}]},['/v1/stores/'+id.slice(2)+'/meals']:{items:[{listed:true}]}}[path]);
   };
   const args={storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin,onSessionInvalidated:()=>events++};
-  const api=createLiveApi(args);assert.equal((await api.getContext()).session.wallet,owner);
+  const api=legacyFixtureApi(args);assert.equal((await api.getContext()).session.wallet,owner);
   const pending=api.getOwnerOverview(id.slice(2));await Promise.resolve();address='0x'+'9'.repeat(40);
   for(const fn of handlers.get('accountsChanged'))fn([address]);
   release();await assert.rejects(pending,{code:'SESSION_CHANGED'});
   const context=await api.getContext();assert.equal(context.session,null);assert.equal(context.registrations.length,0);assert.equal(events,1);
   await assert.rejects(api.getRegistration(id),{code:'LOGIN_REQUIRED'});
-  assert.equal((await createLiveApi(args).getContext()).session,null);assert.equal(privateReads,1);
+  assert.equal((await legacyFixtureApi(args).getContext()).session,null);assert.equal(privateReads,1);
 });
 test('reload with a different connected wallet does not recover the old cookie owner',async()=>{
   const storage=memory();storage.setItem('mealforward-live-csrf-v1','csrf');let events=0;
   const wallet={on(){},removeListener(){},request:async({method})=>method==='eth_accounts'?['0x'+'9'.repeat(40)]:'0x279f'};
   const fetchImpl=async path=>response(path==='/v1/connection'?config:path==='/v1/identity/setup'?identity:{walletAddress:owner});
-  const context=await createLiveApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin,onSessionInvalidated:()=>events++}).getContext();
+  const context=await legacyFixtureApi({storage,fetchImpl,provider:()=>wallet,origin:()=>identity.walletLoginOrigin,onSessionInvalidated:()=>events++}).getContext();
   assert.equal(context.session,null);assert.equal(context.registration,null);assert.equal(events,1);
 });
 
@@ -177,7 +179,7 @@ test('published meal remains recoverable while business services are not ready',
   const registration={registrationId:id,storeId:id,state:'CONFIRMED',businessReady:false};
   const fetchImpl=async path=>response({'/v1/connection':config,'/v1/identity/setup':identity,'/v1/me':{walletAddress:owner},'/v1/store-registrations':{items:[registration]},['/v1/store-registrations/'+id]:registration,'/v1/stores':{items:[{id:id.slice(2)}]},['/v1/stores/'+id.slice(2)+'/meals']:{items:[{listed:true}]}}[path]);
   const storage=memory();storage.setItem('mealforward-live-csrf-v1','csrf');
-  const api=createLiveApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
+  const api=legacyFixtureApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
   const context=await api.getContext();
   assert.equal(context.registration.listingConfirmed,true);assert.equal(context.registration.businessReady,false);assert.equal(context.store.id,id.slice(2));
   assert.equal((await api.getRegistration(id)).listingConfirmed,true);
@@ -193,7 +195,7 @@ test('owner menu requires authenticated ownership and a backend workbench grant'
     const routes={'/v1/connection':config,'/v1/identity/setup':identity,'/v1/me':{walletAddress:owner},'/v1/store-registrations':{items:owned?[registration]:[]},'/v1/stores':{items:[{id:id.slice(2)}]},['/v1/stores/'+id.slice(2)+'/meals']:{items:[meal]}};
     assert.ok(Object.hasOwn(routes,path),path);return response(routes[path]);
   };
-  const api=createLiveApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
+  const api=legacyFixtureApi({storage,fetchImpl,origin:()=>identity.walletLoginOrigin});
   await assert.rejects(api.getOwnerMeals(id.slice(2)),{code:'OWNER_ACCESS_REQUIRED'});assert.equal(workbenchReads,0);
   await api.getContext();const result=await api.getOwnerMeals(id.slice(2));assert.equal(result.items[0].listed,true);assert.ok(Object.values(result.capabilities).every(v=>v===false));
   denied=true;await assert.rejects(api.getOwnerMeals(id.slice(2)),{code:'OWNER_BINDING_CHANGED'});
@@ -215,12 +217,12 @@ test('private meal drafts preserve published content, exact prices and retry ide
     const routes={'/v1/connection':config,'/v1/identity/setup':identity,'/v1/me':{walletAddress:owner},'/v1/store-registrations':{items:[{registrationId:id,storeId:id,state:'CONFIRMED',businessReady:true}]},'/v1/stores':{items:[{id:id.slice(2)}]},['/v1/stores/'+id.slice(2)+'/meals']:{items:[publicMeal]}};
     assert.ok(Object.hasOwn(routes,path),path);return response(routes[path]);
   };
-  const args={storage,fetchImpl,origin:()=>identity.walletLoginOrigin};let api=createLiveApi(args);await api.getContext();
+  const args={storage,fetchImpl,origin:()=>identity.walletLoginOrigin};let api=legacyFixtureApi(args);await api.getContext();
   const menu=await api.getOwnerMeals(id.slice(2));assert.equal(menu.items[0].name,'Published');assert.equal(menu.items[0].draft.name,'Future');assert.equal(menu.items[0].draft.price,'7.250001');assert.equal(menu.capabilities.edit,true);assert.equal(menu.capabilities.publish,false);
   assert.equal((await api.getMealDraft(id.slice(2),meal)).draft.unitPrice,'7250001');
   const input={name:'Future',description:'Private',price:'7.250001',windows:[[600,720]],expectedRevision:0};
   await assert.rejects(api.saveMealDraft(id.slice(2),newId,input),{code:'CONNECTION_UNAVAILABLE'});
-  api=createLiveApi(args);await api.getContext();await api.saveMealDraft(id.slice(2),newId,input);
+  api=legacyFixtureApi(args);await api.getContext();await api.saveMealDraft(id.slice(2),newId,input);
   assert.equal(JSON.parse(requests[0].body).price,'7250001');assert.equal(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);
   const file=new Blob(['photo'],{type:'image/png'});await assert.rejects(api.uploadMealImage(id.slice(2),newId,file,{expectedRevision:2}),{code:'CONNECTION_UNAVAILABLE'});
   await api.uploadMealImage(id.slice(2),newId,file,{expectedRevision:2});
