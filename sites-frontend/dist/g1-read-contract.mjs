@@ -19,7 +19,7 @@ const validVoucher=id=>typeof id==='string'&&VOUCHER.test(id);
 const nullable=(value,validator)=>value==null||validator(value);
 const validAmount=x=>decimal(x);
 const safeWindow=x=>Array.isArray(x)&&x.length<=2&&x.length>0&&x.every(w=>Array.isArray(w)&&w.length===2&&w.every(Number.isInteger)&&w[0]>=0&&w[0]<w[1]&&w[1]<=1440)&&x.every((w,i)=>i===0||x[i-1][1]<=w[0]);
-const SENSITIVE_FIELDS=new Set(['email','emailhash','recipientkey','recipient_key','phone','cookie','csrf','signature','signingkey','privatekey','secret','accesstoken','display','displaycode','displayurl','sessiontoken','walletsignature','voucheraccess','recipientaddress']);
+const SENSITIVE_FIELDS=new Set(['email','emailhash','recipientkey','recipient_key','phone','cookie','csrf','signature','signingkey','privatekey','secret','accesstoken','display','displaycode','displayurl','sessiontoken','walletsignature','voucheraccess','recipientaddress','walletaddress']);
 const cleanPublic=(node,scope,depth=0)=>{
   check(depth<=7,scope);
   if(Array.isArray(node)){check(node.length<=5000,scope);for(const item of node)cleanPublic(item,scope,depth+1);}
