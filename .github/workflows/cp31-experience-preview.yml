@@ -1,0 +1,36 @@
+name: MealForward isolated experience preview
+on:
+  push:
+    branches:
+      - codex/mealforward-experience-sandbox-20261016
+  pull_request:
+    paths:
+      - "sites-frontend/**"
+      - ".github/workflows/cp31-experience-preview.yml"
+permissions:
+  contents: read
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build isolated user experience preview
+        run: |
+          node sites-frontend/build-experience-preview.mjs
+          node --check sites-frontend/preview-dist/app.js
+          node --check sites-frontend/preview-dist/model.mjs
+          node --check sites-frontend/preview-dist/image.mjs
+      - name: Check sandbox isolation and QA guide
+        run: |
+          cd sites-frontend
+          node --test experience-preview.test.mjs
+      - name: Run real CP31 front-end adapter & interaction regressions
+        run: |
+          cd sites-frontend
+          node --test login-meal-resume.test.mjs verification-login-resume.test.mjs live-read-contract.test.mjs onboarding-wallet.test.mjs onboarding.test.mjs live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
