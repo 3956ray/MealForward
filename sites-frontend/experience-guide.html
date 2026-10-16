@@ -60,9 +60,9 @@ code{font-family:ui-monospace,monospace;font-size:12px;background:#e8eae2;paddin
 </div></section>
 <section class="step"><div class="num">04</div><div>
 <h3>店主：核销、确认交餐和结算</h3>
-<p>进入 <b>Kitchen workspace → Verify &amp; hand over</b>。本地演示允许你先以该店主演示账号自行领取一张模拟券，再使用其 <b>Use demo voucher code</b> / 粘贴验证码演示 Check、Lock 和 Report；或直接到 <b>Payouts</b> 测试已有样例的店主结算。将下一次模拟结果设为 Final，然后检查餐账变化。</p>
+<p>进入 <b>Kitchen workspace → Verify &amp; hand over</b>。使用 <code>qinghe.owner@mealforward.invalid</code> 作为青禾店主登录。点击 <b>Prepare a valid sandbox code</b>（准备有效的模拟验证码）：系统会明确模拟领取者重新展示一张该店可用餐券；如果该店不在供应时间，会仅将模拟时钟向前推进到有效时段，保留餐券原始到期时间。验证码将自动填入本页。接着依次点击 <b>Check voucher</b> → <b>Reserve for handover</b> → <b>Check original operation</b> 并明确选 Final → <b>Confirm handoff &amp; report</b> → Final，然后进入 <b>Payouts</b> 测试老板钱包的模拟结算。所有步骤仍必须逐次确认，Check 绝不自动锁券。</p>
 <div class="tags"><span>Check 不会消费</span><span>Lock ≠ Report</span><span>Report ≠ Settle</span></div>
-<p>预期：交餐确认与结算分离，资金状态只有原操作 Final 时才更新。注意：浏览器本地演示不能证明不同真实账户间共享餐券或链上收款。</p>
+<p>预期：交餐确认与结算分离，资金状态只有原操作 Final 时才更新。注意：原模拟系统切换用户时会注销临时二维码，不同设备、不同浏览器及不同测试域名不会共享餐券。本按钮是单浏览器中的<strong>独立模拟受助者出示新二维码</strong>，仅用于核对商家页面与状态机，不能代表真实跨账户扫码、领取认证或链上收款已经通过。</p>
 </div></section>
 <section class="step"><div class="num">05</div><div>
 <h3>异常恢复与隐私</h3>
