@@ -36,6 +36,7 @@ function harness({now=evening,issuedAt=evening,withoutQrRenderer=false}={}){
     'const hours=x=>"11:30–13:30 / 17:00–20:00";',
     'const facts=x=>JSON.stringify(x);',
     'const notice=x=>"<p>"+x+"</p>";',
+    'const errorBox="<p class=error role=alert></p>";',
     'const btn=(label,action,id="",style="")=>"<button data-action=\\""+action+"\\" data-id=\\""+id+"\\">"+label+"</button>";',
     'const modal=(html,kind)=>events.modals.push({html,kind});',
     'const mutate=fn=>{state=M.transaction(state,fn);};',
