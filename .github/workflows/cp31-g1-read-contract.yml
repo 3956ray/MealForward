@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify CP30 backend route mapping and server-scoped SQL reads
+        run: |
+          PYTHONPATH=cp30-backend/src python -B -m unittest -v c1.g1_read_contract_checks
       - name: Syntax and isolation checks
         run: |
           node --check sites-frontend/dist/app.js
