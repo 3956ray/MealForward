@@ -145,8 +145,47 @@ def verify_source_schema(connection):
     ).fetchone()[0]
     if "signed_quote IS NULL" not in api_source or "CAPACITY" not in api_source:
         fail("EXPIRED_QUOTE_CAPACITY_HOTFIX_MISSING")
+    for table in ("c1_private.sessions", "c1_runtime_private.state",
+                  "c1_live_private.claims"):
+        if connection.execute(
+            "SELECT has_table_privilege('c1_live_api', %s, 'SELECT')",
+            (table,),
+        ).fetchone()[0]:
+            fail("DIRECT_PRIVATE_TABLE_READ_GRANTED")
     return {"stateRows": 0, "reviewedFunctions": len(functions),
-            "catalogRoleExecute": True, "sqlSourcePins": len(ALLOWED_PINS)}
+            "catalogRoleExecute": True, "directPrivateReadGranted": False,
+            "sqlSourcePins": len(ALLOWED_PINS)}
+
+
+def verify_initialized_runtime_rejects_045(connection):
+    # Reuse the same new, disposable test database. Synthetic rows exist only
+    # in a transaction explicitly rolled back before the database is dropped.
+    with connection.transaction():
+        connection.execute(
+            "INSERT INTO c1_private.deployment"
+            "(ns,manifest,now,clock_floor,heartbeat) "
+            "VALUES('g2-guard-probe','{}',100,100,100)"
+        )
+        connection.execute(
+            "INSERT INTO c1_runtime_private.state"
+            "(ns,revision,head,material_hash,source_epoch,credential_epoch,"
+            "restore_generation,journal_sequence,journal_digest) "
+            "VALUES('g2-guard-probe',0,%s,%s,1,1,1,1,%s)",
+            ("a" * 64, "b" * 64, "c" * 64),
+        )
+        try:
+            with connection.transaction():
+                connection.execute(
+                    (ROOT / "connection-migrations" /
+                     "045-live-runtime-hotfix-parity.sql").read_text(encoding="utf-8")
+                )
+        except psycopg.Error as exc:
+            if exc.diag.message_primary != "FRESH_UNINITIALIZED_RUNTIME_REQUIRED":
+                fail("WRONG_INITIALIZED_RUNTIME_ERROR")
+        else:
+            fail("G2_045_ALLOWED_INITIALIZED_RUNTIME")
+        raise psycopg.Rollback()
+    return True
 
 
 def run():
@@ -208,6 +247,9 @@ def run():
                     raise error from None
             result = verify_source_schema(db)
             db.commit()
+            # Do not modify an installed ledger. Prove 045 rejects the
+            # intentionally populated synthetic checkpoint in this test DB.
+            result["initializedRuntime045Rejected"] = verify_initialized_runtime_rejects_045(db)
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_PASS",
             "pgMajor": 17,
