@@ -20,7 +20,7 @@ function makeRecipientVoucher(now=atLunch){
 function afterOwnerSwitch(now=atLunch){
  const s=makeRecipientVoucher(now);
  const voucher=s.coupons.at(-1);
- const originalCode=M.credential(s,voucher,now);
+ const originalCode=M.inWindow(M.getStore(voucher.store),now,voucher.windows)?M.credential(s,voucher,now):null;
  M.signIn(s,owner); // Frozen model deliberately invalidates all temporary codes.
  return {s,voucherId:voucher.id,originalCode};
 }
