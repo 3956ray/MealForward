@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLiveApi} from './dist/live-api.mjs';
 import {prepareApprove,prepareFund} from './dist/assets/live-wallet.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const address=n=>'0x'+String(n).repeat(40),word=n=>'0x'+String(n).repeat(64),payer=address(2),intent='11111111-1111-4111-8111-111111111111',store=word(1).slice(2),meal=word(8).slice(2);
 const response=(value,status=200)=>({ok:status<400,status,json:async()=>value});
 async function fixture({tamper=false,failAdmission=false,failHash=false,incompleteReview=false,failPreparation=false}={}){
@@ -28,7 +30,7 @@ async function fixture({tamper=false,failAdmission=false,failHash=false,incomple
   throw Error('unexpected '+path);
  };
  const args={storage,fetchImpl,provider:()=>wallet,origin:()=> 'https://localhost:16443'};
- const api=createLiveApi(args);await api.getContext();return {api,args,attempts,calls,get sends(){return sends;}};
+ const api=legacyFixtureApi(args);await api.getContext();return {api,args,attempts,calls,get sends(){return sends;}};
 }
 test('support permits only published meal IDs and exact review parameters',async()=>{
  const f=await fixture();await assert.rejects(f.api.createSupportReview({storeId:store,mealId:intent,quantity:1}),{code:'INVALID_SUPPORT'});
@@ -46,11 +48,11 @@ test('approve must finalize before fund and a pending attempt is never resent',a
 });
 test('unknown attempt admission blocks sending again even after reload',async()=>{
  const f=await fixture({failAdmission:true});await assert.rejects(f.api.sendSupportTransaction(intent,'approve'),{code:'CONNECTION_UNAVAILABLE'});
- const again=createLiveApi(f.args);await again.getContext();await assert.rejects(again.sendSupportTransaction(intent,'approve'),{code:'ORIGINAL_PAYMENT_PENDING'});assert.equal(f.sends,0);
+ const again=legacyFixtureApi(f.args);await again.getContext();await assert.rejects(again.sendSupportTransaction(intent,'approve'),{code:'ORIGINAL_PAYMENT_PENDING'});assert.equal(f.sends,0);
 });
 test('known hash reporting retries without another wallet transaction',async()=>{
  const f=await fixture({failHash:true});await assert.rejects(f.api.sendSupportTransaction(intent,'approve'),{code:'CONNECTION_UNAVAILABLE'});assert.equal(f.sends,1);
- const again=createLiveApi(f.args);await again.getContext();assert.equal((await again.getSupportWalletPreparation(intent)).actions[0].canRetryRecord,true);
+ const again=legacyFixtureApi(f.args);await again.getContext();assert.equal((await again.getSupportWalletPreparation(intent)).actions[0].canRetryRecord,true);
  await again.retrySupportTransactionRecord(intent,'approve');assert.equal(f.sends,1);assert.equal(f.attempts.approve.hash,word(6));
 });
 
@@ -69,6 +71,6 @@ test('preparation failure explicitly reports no new wallet step and preserves re
 test('unknown admission never reports wallet step not started, including after reload',async()=>{
  const f=await fixture({failAdmission:true});
  await assert.rejects(f.api.sendSupportTransaction(intent,'approve'),e=>e.code==='CONNECTION_UNAVAILABLE'&&e.walletStepNotStarted!==true);
- const recovered=createLiveApi(f.args);await recovered.getContext();
+ const recovered=legacyFixtureApi(f.args);await recovered.getContext();
  await assert.rejects(recovered.sendSupportTransaction(intent,'approve'),e=>e.walletStepNotStarted!==true);assert.equal(f.sends,0);
 });
