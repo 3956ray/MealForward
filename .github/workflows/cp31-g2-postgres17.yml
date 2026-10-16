@@ -1,0 +1,44 @@
+name: MealForward G2 PG17 disposable migrations
+on:
+  push:
+    branches:
+      - codex/mealforward-g2-pg17-disposable-ci-20261017
+  pull_request:
+    paths:
+      - "cp30-backend/**"
+      - ".github/workflows/cp31-g2-postgres17.yml"
+permissions:
+  contents: read
+jobs:
+  pg-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MF_G2_DISPOSABLE_ONLY: ack-fresh-gha-postgres-17
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: postgres
+      PGPASSWORD: gha-disposable-test-postgres-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start disposable Postgres 17.11 on runner loopback
+        run: |
+          docker run -d --rm --name mf-g2-disposable             -e POSTGRES_USER=postgres             -e POSTGRES_PASSWORD="$PGPASSWORD"             -e POSTGRES_DB=postgres             -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g2-disposable pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned PostgreSQL adapter
+        run: |
+          python -m pip install --disable-pip-version-check --no-input --only-binary=:all: "psycopg[binary]==3.3.6"
+      - name: Verify original SQL pinned source
+        run: python -B cp30-backend/tools/live-runtime-hotfix-parity-source-check.py
+      - name: Run source migrations 001 through 045 in disposable PG17
+        run: python -B cp30-backend/tools/g2-disposable-pg17-ci.py
