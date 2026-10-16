@@ -404,10 +404,13 @@ async function saveLiveMealDraft(imageOnly=false){
  }
 }
 
-async function startMetaMaskLogin(){
+async function startMetaMaskLogin(pendingAction=null){
  if(live.busy)return;
  if(live.backendOffline){live.error='The backend is not connected. Use Check connection & recover when the API is deployed; wallet signing is unavailable here.';renderLive();return;}
  if(!live.api?.loginWithMetaMask){live.error='The login service is not connected. Check the connection before signing in.';renderLive();return;}
+ const entryHash=location.hash;
+ // The optional pending action contains only public store/meal IDs and is never persisted.
+ // It cannot authorize payment, claiming, signing or wallet transactions.
  // Clear previously shown private data before the wallet can select a new owner.
  // MetaMask handles account permission natively; this page has no chooser.
  clearLiveIdentity();
@@ -419,7 +422,22 @@ async function startMetaMaskLogin(){
   const context=await live.api.loginWithMetaMask();checkLiveGeneration(generation);
   if(!/^0x[0-9a-f]{40}$/.test(context?.session?.wallet??''))throw Error('The MetaMask sign-in account could not be verified. Sign in again.');
   live.reloginRequired=false;acceptContext(context);
-  if(canEnterKitchen()){
+  if(pendingAction){
+   // Ignore the original click if the user navigated elsewhere while signing.
+   if(location.hash===entryHash){
+    if(!['support','claim'].includes(pendingAction.kind))throw Error('The selected action is no longer valid. Choose a meal again.');
+    await loadLiveCatalog(generation);checkLiveGeneration(generation);
+    if(live.catalogError)throw Error('The kitchens could not be verified after sign-in. Refresh the menu before continuing.');
+    const store=live.stores.find(item=>item.id===pendingAction.storeId);
+    const meal=live.meals[store?.id]?.find(item=>item.id===pendingAction.mealId&&item.listed===true&&item.eligible!==false);
+    if(!store||!meal||pendingAction.kind==='claim'&&!(Number(meal.financial?.counts?.A??meal.available)>0))
+     throw Error('This meal is no longer available. Review the current menu before trying again.');
+    const selected={dataset:{storeId:store.id,mealId:meal.id}};
+    // Reopen only the first UI step; explicit review/intent/wallet actions remain gated.
+    if(pendingAction.kind==='support')await handleSupportAction('support-start',selected);
+    else await handleClaimAction('claim-start',selected);
+   }
+  }else if(canEnterKitchen()){
    location.hash='#merchant/overview';
    await loadLiveKitchen(generation);checkLiveGeneration(generation);
   }else location.hash='#stores';
@@ -533,7 +551,7 @@ async function continueOriginalSupport(flow){
 }
 async function handleSupportAction(action,target){
  if(action==='support-close'){closeSupportFlow();return;}
- if(!live.context.session){await startMetaMaskLogin();return;}
+ if(!live.context.session){await startMetaMaskLogin(action==='support-start'?{kind:'support',storeId:target.dataset.storeId,mealId:target.dataset.mealId}:null);return;}
  if(action==='support-orders'){await loadSupportOrders();return;}
  if(action==='support-start'){
   const store=live.stores.find(item=>item.id===target.dataset.storeId),meal=live.meals[store?.id]?.find(item=>item.id===target.dataset.mealId&&item.listed===true&&item.eligible!==false);
@@ -672,7 +690,7 @@ async function refreshClaim(flow){
 }
 async function handleClaimAction(action,target){
  if(action==='claim-close'){closeClaimFlow();return;}
- if(!live.context.session){await startMetaMaskLogin();return;}
+ if(!live.context.session){await startMetaMaskLogin(action==='claim-start'?{kind:'claim',storeId:target.dataset.storeId,mealId:target.dataset.mealId}:null);return;}
  if(action==='claim-records'){await loadClaimRecords();return;}
   if(action==='claim-resume-start'){await openPendingClaim();return;}
   if(action==='claim-start'){
