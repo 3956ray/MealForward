@@ -2,6 +2,8 @@
 
 更新：2026-10-16（UTC+8）。编制依据：本次 ChatGPT 对话的用户回传证据、项目历史决定、GitHub 整合分支和交接文件。**不是正在运行的 Mac 的实时状态**。
 
+**下载边界说明：** 本 GitHub 文件夹保存 Markdown 交接文档；`tools/cp30_maintenance_backup_gate_v2.py` 随交接 ZIP 附件提供，并**未**提交到此 GitHub 文档目录，也不会自动复制到 Mac 的 `~/Downloads`。用户必须亲自下载、确认 SHA256 后才能运行。只在用户本机操作，不要把原始 Journal、密码或配置上传 GitHub。
+
 ## 打开顺序
 
 1. `01-AGENT-INSTRUCTIONS.md` —— 新 Agent 的常驻职责、权限门禁、证据规则；可放进 Agent 指令栏，或在新对话第一条发送。
