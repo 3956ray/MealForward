@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createLiveApi} from './dist/live-api.mjs';
 import {renderSupportFlow,renderContributions,renderLiveKitchen,renderLiveStore,supportState} from './dist/onboarding-view.mjs';
+// Existing pre-G1 fixture only: production adapter always validates full CP30 DTOs.
+const legacyFixtureApi=options=>createLiveApi({...options,testOnlyAllowIncompleteReadFixtures:true});
 const source=readFileSync(new URL('./dist/app.js',import.meta.url),'utf8'),support=source.slice(source.indexOf('function supportCurrent('));
 const authGuard=source.split('\n').find(line=>line.startsWith('function isLiveAuthRejection('));
 const wallet='0x'+'1'.repeat(40),intentId='original-intent';
@@ -46,7 +48,7 @@ test('stale confirmation retries the same review and actual adapter key, recover
  const data=new Map([['mealforward-live-csrf-v1','csrf']]),storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)},requests=[];
  const provider={request:async({method})=>method==='eth_accounts'?[wallet]:'0x279f'};
  const response=(value,status=200)=>({ok:status<400,status,json:async()=>value});
- const api=createLiveApi({storage,provider:()=>provider,origin:()=> 'https://localhost:16443',fetchImpl:async(path,options)=>{
+ const api=legacyFixtureApi({storage,provider:()=>provider,origin:()=> 'https://localhost:16443',fetchImpl:async(path,options)=>{
   if(path==='/v1/support/intents'){requests.push(options);return requests.length===1?response({error:'FINALIZED_FACTS_STALE'},503):response({id:intentId,stage:'PENDING'});}
   if(path==='/v1/me')return response({walletAddress:wallet});
   if(path==='/v1/connection')return response({});
