@@ -6,6 +6,16 @@ const STORAGE='mealforward-live-requests-v1';
 const CSRF='mealforward-live-csrf-v1';
 const RELOGIN='mealforward-live-relogin-v1';
 const fail=(code,message,status=0)=>Object.assign(new Error(message),{code,status});
+// CP31 G0 and G1 are independent gates. An Auth Pilot proves wallet identity,
+// not the availability of any original CP30 store, voucher, or transaction.
+const AUTH_PILOT_ALLOWED_POSTS=new Set(['/v1/auth/pre-session','/v1/identity/wallet/challenge','/v1/identity/wallet/login','/v1/auth/logout']);
+export function isAuthOnlyBackend(connection,identity){
+  return connection?.authPilot===true||connection?.mode==='CP31_AUTH_PILOT_ONLY'||identity?.authPilot===true;
+}
+export function guardAuthOnlyRequest(authOnly,method,path){
+  if(authOnly&&method!=='GET'&&!AUTH_PILOT_ALLOWED_POSTS.has(path))
+    throw fail('AUTH_PILOT_NO_BUSINESS_WRITES','This deployment verifies MetaMask sign-in only. Original meals, voucher issuance, payments and settlement are not connected.');
+}
 // Prefer the real MetaMask provider when multiple wallets inject window.ethereum.
 // No website-side account chooser is used: MetaMask owns account permissions.
 export function metaMaskProvider(){
@@ -36,7 +46,7 @@ export function walletTypedData(typed){
 
 export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globalThis.sessionStorage,provider=metaMaskProvider,origin=()=>globalThis.location.origin,uuid=()=>crypto.randomUUID(),onSessionInvalidated=()=>globalThis.window?.dispatchEvent(new CustomEvent('mealforward-session-invalidated',{detail:{reason:'wallet-changed'}}))}={}){
   let csrf=storage?.getItem(CSRF)||null,epoch=0,signature=null,session=null,busy=false;
-  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null;
+  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null,authOnlyMode=false;
   const readJournal=()=>{try{return JSON.parse(storage?.getItem(STORAGE)||'{}');}catch{return {};}};
   const journal=readJournal();
   const voucherAccess=new Map();
@@ -50,6 +60,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
   function requireCurrentLogin(){if(requireRelogin)throw fail('LOGIN_REQUIRED','Wallet changed. Sign in again with the newly selected wallet.');}
   async function request(method,path,body,extra={},control={}){
     if(!path.startsWith('/v1/'))throw fail('INVALID_PATH','Invalid service request.');
+    guardAuthOnlyRequest(authOnlyMode,method,path);
     const headers={...extra},options={method,headers,credentials:'same-origin',cache:'no-store'};
     let key;
     if(method!=='GET'){
@@ -88,7 +99,12 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
   }
   async function setup(){
     const [connection,identity]=await Promise.all([request('GET','/v1/connection'),request('GET','/v1/identity/setup')]);
-    return {...connection,walletLoginEnabled:identity.walletLoginEnabled===true && identity.walletLoginChainId===10143 && identity.walletLoginOrigin===origin(),walletLoginOrigin:identity.walletLoginOrigin};
+    authOnlyMode=isAuthOnlyBackend(connection,identity);
+    return {...connection,authPilot:authOnlyMode,
+      registrationEnabled:authOnlyMode?false:connection.registrationEnabled,
+      transactionActionsEnabled:authOnlyMode?false:connection.transactionActionsEnabled,
+      walletLoginEnabled:identity.walletLoginEnabled===true && identity.walletLoginChainId===10143 && identity.walletLoginOrigin===origin(),
+      walletLoginOrigin:identity.walletLoginOrigin};
   }
   async function registrationCapacity(config){
     if(config.firstRun?.stores===1 && (await listStores()).length>=1){
