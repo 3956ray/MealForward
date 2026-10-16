@@ -1,0 +1,37 @@
+name: MealForward G1 pilot source truth
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-pilot-source-readiness-20261017
+  pull_request:
+    paths:
+      - "cloud-auth/**"
+      - "dist/**"
+      - ".github/workflows/cp31-g1-pilot-source.yml"
+permissions:
+  contents: read
+jobs:
+  identity-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned isolated login dependencies
+        run: |
+          cd cloud-auth
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Validate source mode and browser adapter syntax
+        run: |
+          node --check cloud-auth/core.mjs
+          node --check cloud-auth/server.mjs
+          node --check dist/app.js
+          node --check dist/live-api.mjs
+      - name: Test real SIWE protocol and no phantom CP30 data
+        run: |
+          cd cloud-auth
+          npm test
