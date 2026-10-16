@@ -6,6 +6,16 @@ const STORAGE='mealforward-live-requests-v1';
 const CSRF='mealforward-live-csrf-v1';
 const RELOGIN='mealforward-live-relogin-v1';
 const fail=(code,message,status=0)=>Object.assign(new Error(message),{code,status});
+// CP31 G0 and G1 are independent gates. An Auth Pilot proves wallet identity,
+// not the availability of any original CP30 store, voucher, or transaction.
+const AUTH_PILOT_ALLOWED_POSTS=new Set(['/v1/auth/pre-session','/v1/identity/wallet/challenge','/v1/identity/wallet/login','/v1/auth/logout']);
+export function isAuthOnlyBackend(connection,identity){
+  return connection?.authPilot===true||connection?.mode==='CP31_AUTH_PILOT_ONLY'||identity?.authPilot===true;
+}
+export function guardAuthOnlyRequest(authOnly,method,path){
+  if(authOnly&&method!=='GET'&&!AUTH_PILOT_ALLOWED_POSTS.has(path))
+    throw fail('AUTH_PILOT_NO_BUSINESS_WRITES','This deployment verifies MetaMask sign-in only. Original meals, voucher issuance, payments and settlement are not connected.');
+}
 // Prefer the real MetaMask provider when multiple wallets inject window.ethereum.
 // No website-side account chooser is used: MetaMask owns account permissions.
 export function metaMaskProvider(){
@@ -36,7 +46,7 @@ export function walletTypedData(typed){
 
 export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globalThis.sessionStorage,provider=metaMaskProvider,origin=()=>globalThis.location.origin,uuid=()=>crypto.randomUUID(),onSessionInvalidated=()=>globalThis.window?.dispatchEvent(new CustomEvent('mealforward-session-invalidated',{detail:{reason:'wallet-changed'}}))}={}){
   let csrf=storage?.getItem(CSRF)||null,epoch=0,signature=null,session=null,busy=false;
-  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null;
+  let requireRelogin=storage?.getItem(RELOGIN)==='1',watched=null,authOnlyMode=false;
   const readJournal=()=>{try{return JSON.parse(storage?.getItem(STORAGE)||'{}');}catch{return {};}};
   const journal=readJournal();
   const voucherAccess=new Map();
@@ -50,6 +60,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
   function requireCurrentLogin(){if(requireRelogin)throw fail('LOGIN_REQUIRED','Wallet changed. Sign in again with the newly selected wallet.');}
   async function request(method,path,body,extra={},control={}){
     if(!path.startsWith('/v1/'))throw fail('INVALID_PATH','Invalid service request.');
+    guardAuthOnlyRequest(authOnlyMode,method,path);
     const headers={...extra},options={method,headers,credentials:'same-origin',cache:'no-store'};
     let key;
     if(method!=='GET'){
@@ -82,9 +93,18 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     if(key && !control.retainKey){delete journal[key];saveJournal();}
     return data;
   }
+  function verifiedItems(value,scope){
+    if(!value||!Array.isArray(value.items))throw fail('READ_RESPONSE_INVALID','The '+scope+' response is incomplete. No records have been changed; check the original service before retrying.');
+    return value.items;
+  }
   async function setup(){
     const [connection,identity]=await Promise.all([request('GET','/v1/connection'),request('GET','/v1/identity/setup')]);
-    return {...connection,walletLoginEnabled:identity.walletLoginEnabled===true && identity.walletLoginChainId===10143 && identity.walletLoginOrigin===origin(),walletLoginOrigin:identity.walletLoginOrigin};
+    authOnlyMode=isAuthOnlyBackend(connection,identity);
+    return {...connection,authPilot:authOnlyMode,
+      registrationEnabled:authOnlyMode?false:connection.registrationEnabled,
+      transactionActionsEnabled:authOnlyMode?false:connection.transactionActionsEnabled,
+      walletLoginEnabled:identity.walletLoginEnabled===true && identity.walletLoginChainId===10143 && identity.walletLoginOrigin===origin(),
+      walletLoginOrigin:identity.walletLoginOrigin};
   }
   async function registrationCapacity(config){
     if(config.firstRun?.stores===1 && (await listStores()).length>=1){
@@ -110,7 +130,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     if(provider()?.request){try{await checkWallet(provider(),current.wallet);}catch{walletChanged();return anonymous;}checkEpoch(generation);}
     const data=await request('GET','/v1/store-registrations');checkEpoch(generation);
     const stores=await listStores();checkEpoch(generation);
-    const registrations=await Promise.all((data.items||[]).map(r=>withListing(r,stores)));checkEpoch(generation);
+    const registrations=await Promise.all(verifiedItems(data,'kitchen registration').map(r=>withListing(r,stores)));checkEpoch(generation);
     const priority=r=>['PENDING','UNKNOWN'].includes(r.state)?0:r.state==='CONFIRMED'?1:2;
     const registration=[...registrations].sort((a,b)=>priority(a)-priority(b))[0]||null;
     const owned=registrations.filter(r=>r.state==='CONFIRMED' && (r.listingConfirmed || r.businessReady)).map(r=>r.storeId.replace(/^0x/,''));
@@ -226,8 +246,9 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const value=await request('POST','/v1/store-registrations/'+id+'/enable',{ownerSignature:signed.value});
     signature=null;return value;
   }
-  async function listStores(){const value=await request('GET','/v1/stores');return value.items||[];}
-  async function getStoreMeals(id){if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose a verified store.');return (await request('GET','/v1/stores/'+id+'/meals')).items||[];}
+  async function getPublicLedger(){const value=await request('GET','/v1/ledger');if(!Array.isArray(value?.items))throw fail('LEDGER_INVALID','The public ledger response needs verification.');return value;}
+  async function listStores(){const value=await request('GET','/v1/stores');return verifiedItems(value,'public kitchens');}
+  async function getStoreMeals(id){if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose a verified store.');return verifiedItems(await request('GET','/v1/stores/'+id+'/meals'),'public meals');}
   async function getOwnerOverview(id){requireCurrentLogin();const generation=epoch;if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose your store.');const result=await request('GET','/v1/stores/'+id+'/workbench');checkEpoch(generation);return result;}
   function checkedMerchantVoucher(value,storeId){
     if(value?.store!==storeId||!ID.test(value.voucherId??value.voucher??value.id)||!['R','H','S','X'].includes(value.state))throw fail('VOUCHER_MISMATCH','The kitchen voucher could not be verified.');
@@ -371,7 +392,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const value=await request('POST','/v1/support/intents',{reviewId},{},{epoch:scope.generation,retainKey:true});checkEpoch(scope.generation);return value;
   }
   async function getSupportIntent(id){const scope=await supportScope();const result=await request('GET','/v1/intents/'+intentReference(id));checkEpoch(scope.generation);return result;}
-  async function getSupportOrders(){const scope=await supportScope();const result=await request('GET','/v1/my/orders');checkEpoch(scope.generation);return result.items||[];}
+  async function getSupportOrders(){const scope=await supportScope();const result=await request('GET','/v1/my/orders');checkEpoch(scope.generation);return verifiedItems(result,'my contributions');}
   function preparedSupport(data,address){
     const m=data.material;if(m?.kind!=='fund'||m.expectedAccount?.toLowerCase()!==address||m.binding?.chainId!==10143)throw fail('PAYMENT_ACCOUNT_MISMATCH','This contribution belongs to another wallet or network.');
     const wallet={chainId:10143,account:address};
@@ -491,8 +512,8 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const scope=await supportScope(),data=await request('GET','/v1/intents/'+intentReference(id));checkEpoch(scope.generation);
     if(data.action!=='issue'||(data.intentId??data.id)!==id)throw fail('CLAIM_INTENT_MISMATCH','The original claim response could not be verified.');return data;
   }
-  async function getClaimIntents(){const scope=await supportScope(),data=await request('GET','/v1/my/claims');checkEpoch(scope.generation);return data.items||[];}
-  async function getMyVouchers(){const scope=await supportScope(),data=await request('GET','/v1/my/vouchers');checkEpoch(scope.generation);return data.items||[];}
+  async function getClaimIntents(){const scope=await supportScope(),data=await request('GET','/v1/my/claims');checkEpoch(scope.generation);return verifiedItems(data,'my claims');}
+  async function getMyVouchers(){const scope=await supportScope(),data=await request('GET','/v1/my/vouchers');checkEpoch(scope.generation);return verifiedItems(data,'my meals');}
   async function getVoucher(id){
     const scope=await supportScope(),data=await request('GET','/v1/vouchers/'+reference(id));checkEpoch(scope.generation);
     if((data.voucherId??data.id)!==id)throw fail('VOUCHER_MISMATCH','The original voucher could not be verified.');return data;
@@ -517,6 +538,6 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     }finally{busy=false;}
   }
 
-  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,loginWithMetaMask,logout,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
+  return {createMealPublishReview,confirmMealPublish,getMealPublishIntent,getMealPublishIntents,getPayouts,createSettlementReview,confirmSettlement,getSettlementIntent,getSettlementWalletPreparation,sendSettlementTransaction,retrySettlementTransactionRecord,checkVoucher,lockVoucher,getRedemptionIntent,getRedemptionCase,confirmHandover,createClaimReview,confirmClaim,getClaimIntent,getClaimIntents,getMyVouchers,getVoucher,prepareVoucherDisplay,getContext,invalidateSession,loginWithMetaMask,logout,getPublicLedger,saveRegistration,signRegistration,enableRegistration,getRegistration,listStores,getStoreMeals,getOwnerOverview,getOwnerMeals,getMealDraft,saveMealDraft,uploadMealImage,createSupportReview,confirmSupport,getSupportIntent,getSupportOrders,getSupportWalletPreparation,sendSupportTransaction,retrySupportTransactionRecord};
 }
 export const liveApi=createLiveApi();

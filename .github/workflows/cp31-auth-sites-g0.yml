@@ -1,0 +1,35 @@
+name: MealForward Render G0 Auth-Only Sites Regression
+on:
+  push:
+    branches: [codex/mealforward-authpilot-sites-g0-20261016]
+  pull_request:
+    paths:
+      - "cloud-auth/**"
+      - "dist/**"
+      - ".github/workflows/cp31-auth-sites-g0.yml"
+permissions:
+  contents: read
+jobs:
+  site-auth-g0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact auth-pilot dependencies without scripts
+        run: cd cloud-auth && npm install --ignore-scripts --no-audit --no-fund
+      - name: Check updated Sites and Auth Pilot syntax
+        run: |
+          node --check dist/app.js
+          node --check dist/live-api.mjs
+          node --check dist/ledger-view.mjs
+          node --check cloud-auth/server.mjs
+          node --check cloud-auth/core.mjs
+      - name: Test real wallet challenge protocol and strict auth-only UI
+        run: |
+          cd cloud-auth
+          npm test

@@ -1,8 +1,9 @@
 import * as M from './model.mjs';
 import {normalizeUpload,verifyStoredImages} from './image.mjs';
+import {renderPublicLedger} from './ledger-view.mjs';
 import {renderRegistration,renderLiveCards,renderLiveKitchen,renderLiveStore,validateDraft,hasOwnedKitchen,renderLiveMealEditor,priceLabel,halfHourOptions,renderSupportFlow,renderContributions,supportState,renderClaimFlow,renderMyMeals,renderVerificationEntry,renderSettlementFlow,renderMealPublishFlow} from './onboarding-view.mjs';
 const LIVE_MODE=true;
-const live={api:null,context:{},busy:false,error:'',blocked:true,backendOffline:false,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
+const live={api:null,context:{},busy:false,error:'',blocked:true,backendOffline:false,signed:false,draft:{windows:[['','']]},errors:{},preview:'',stores:[],meals:{},overview:null,loading:true,catalogError:'',publicLedger:[],publicLedgerLoading:false,publicLedgerError:'',generation:0,reloginRequired:false,ownerMeals:[],ownerMealStoreId:null,mealCapabilities:{},mealUnavailableReasons:{},mealEditor:null,mealListing:null,signingIn:false,mealPublish:null,mealPublishPending:{},settlement:null,payouts:null,payoutStoreId:null,payoutsLoading:false,settlementAttempts:{},settlementPending:{},verification:null,claim:null,claimPending:null,pendingVerification:null,vouchers:[],claimIntents:[],claimRecordsLoading:false,support:null,supportOrders:[],supportOrdersLoading:false,supportAttempts:{}};
 const {STORES,getStore,stats,displayText:english,money,nowFor}=M;
 const main=document.querySelector('#main'),dialog=document.querySelector('#dialog'),body=document.querySelector('#dialog-body');
 let restoring=true,state,storageError='',filter='all',checkout=null,checkedId='',nextResult='final',resume=null,dialogKind='',dialogTrigger=null,resetConfirmButton=null,toastTimer,editorInitial='',editorValues=null,verificationInput='',claimSelection=null,replacement=null,editorEpoch=0,imageRequest=0,uploadPending=false,editorImage='';
@@ -138,7 +139,7 @@ dialog.addEventListener('cancel',event=>{if(LIVE_MODE&&live.mealPublish){event.p
 const publicDemoBar=document.querySelector('.demo-bar').innerHTML;
 function syncRouteChrome(){if(LIVE_MODE){document.body.classList.toggle('merchant-route',location.hash.startsWith('#merchant'));return;}const merchant=location.hash.slice(1).split('/')[0]==='merchant';document.body.classList.toggle('merchant-route',merchant);document.querySelector('.demo-bar').innerHTML=merchant?'Demo · Simulated kitchens, payments and handovers':publicDemoBar;}
 window.addEventListener('storage',event=>{if(LIVE_MODE)return;if(event.storageArea!==localStorage||event.key!==M.KEY&&event.key!==null)return;try{if(localStorage.getItem(M.KEY)!==savedRaw)restoreSaved(true);}catch{restoreSaved(true);}});
-window.addEventListener('hashchange',()=>{if(LIVE_MODE){closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
+window.addEventListener('hashchange',()=>{if(LIVE_MODE){if(live.pendingVerification&&location.hash!=='#merchant/verify'&&!location.hash.startsWith('#verify?'))live.pendingVerification=null;closeMealPublish();closeSettlementFlow();closeVerificationEntry();closeClaimFlow();closeSupportFlow();closeLiveMealEditor(true);}syncRouteChrome();if(dialog.open)close(true);render(true);if(LIVE_MODE&&location.hash==='#contributions')loadSupportOrders();if(LIVE_MODE&&location.hash==='#mine')loadClaimRecords();if(LIVE_MODE&&location.hash==='#ledger')loadPublicLedger();if(LIVE_MODE&&location.hash==='#merchant/payouts')loadPayouts();if(LIVE_MODE&&location.hash.startsWith('#verify?')){const input=takeVerificationLink();openVerificationEntry(input);}});
 document.querySelector('.skip').addEventListener('click',event=>{event.preventDefault();main.focus();main.scrollIntoView();});
 setInterval(()=>{if(LIVE_MODE)return;if(storageError||restoring||externalAuthorityLost)return;const now=nowFor(state);if(state.coupons.some(c=>c.token&&c.tokenExpires<=now||c.status==='issued'&&c.expires<=now&&!state.ops.some(o=>M.isOpen(o)&&o.coupon===c.id))){try{mutate(s=>M.expire(s,now));}catch(err){error(err.message);}}tickCode();},1000);
 syncRouteChrome();
@@ -152,6 +153,29 @@ function readLiveDraft(){
  const data=new FormData(form);for(const key of ['storeName','mealName','description','price']){const input=form.elements.namedItem(key);if(input)live.draft[key]=input.value;}
  live.draft.windows=live.draft.windows.map((_,i)=>[form.elements.namedItem('start-'+i)?.value??'',form.elements.namedItem('end-'+i)?.value??'']);
  const photo=data.get('photo');if(photo?.size)live.draft.photo=photo;
+}
+function isAuthOnlyMode(){return live.context?.setup?.authPilot===true||live.context?.setup?.mode==='CP31_AUTH_PILOT_ONLY';}
+function maskUnavailableBusinessOnPilot(route,session){
+ if(!isAuthOnlyMode())return;
+ // This is a real MetaMask identity server, but it has NO original CP30 meals.
+ // Never render demo data, zero-value pseudo-business records or live fund buttons.
+ const permitted=['','home','stores','how','about'];
+ if(!permitted.includes(route)){
+  main.innerHTML='<section class="container page"><div class="eyebrow">CP31 · G0 IDENTITY GATE</div><h1>MetaMask sign-in test only</h1><p>The isolated server verifies wallets and sessions; original kitchens, orders, vouchers, QR redemption and payouts are not connected.</p><p>Nothing here proves a payment, meal issue or settlement. Continue testing wallet identity, refresh, switching accounts and logout.</p><a class="button outline" href="#home">Back to sign-in test</a></section>';
+ } else if(route!=='about'){
+  const grid=main.querySelector('.store-grid');
+  if(grid)grid.innerHTML='<section class="empty"><h2>No CP30 business data connected</h2><p>The wallet-login pilot is not the original kitchen database. An empty response here does not mean there are no real kitchens.</p></section>';
+  const strip=main.querySelector('.summary-strip');
+  if(strip)strip.innerHTML='<div class="summary-intro">Identity-only test</div><div class="summary-item"><strong>G0</strong><small>MetaMask session<br>verification</small></div><div class="summary-item"><strong>—</strong><small>Original kitchens<br>not connected</small></div>';
+  const actions=main.querySelector('.hero-ctas');
+  if(actions)actions.innerHTML='<button class="button" data-live-action="account">'+(session?'Switch wallet in MetaMask':'Test MetaMask sign-in')+'</button><a class="button outline" href="#about">About this test</a>';
+  const teaser=main.querySelector('.ledger-teaser');
+  if(teaser)teaser.innerHTML='<p>No public meal ledger is connected to the auth-only service.</p>';
+  const steps=main.querySelector('.how-steps');
+  if(steps)steps.innerHTML='<div><div class="step-number">01</div><h3>Connect MetaMask</h3><p>Use the selected account on Monad Testnet 10143.</p></div><div><div class="step-number">02</div><h3>Verify session</h3><p>Sign in, refresh, switch wallet and sign out.</p></div><div><div class="step-number">03</div><h3>Business gated</h3><p>Real funding and voucher records require the separate G1 connector.</p></div>';
+ }
+ document.querySelector('#workspace-link').hidden=true;
+ main.insertAdjacentHTML('afterbegin','<section class="container" role="status"><p class="notice">G0 identity pilot only · No original meal, contribution, voucher, QR handover or payout data is connected. No blockchain transaction is required to test sign-in.</p></section>');
 }
 function renderLive(scroll=false){
  startSettlementClock();
@@ -169,7 +193,8 @@ function renderLive(scroll=false){
  else if(route==='contributions')main.innerHTML=renderContributions({session:ctx.session,orders:live.supportOrders,loading:live.supportOrdersLoading,error:live.error,setup:ctx.setup});
  else if(route==='mine')main.innerHTML=renderMyMeals({session:ctx.session,vouchers:live.vouchers,intents:live.claimIntents,loading:live.claimRecordsLoading,error:live.error,pending:ctx.session?(live.claimPending?.wallet===ctx.session.wallet?live.claimPending:readClaimRecovery(ctx.session.wallet)):null});
  else if(route.startsWith('verify'))main.innerHTML='<div class="container page"><h1>Kitchen verification</h1><p>Open the kitchen workspace to scan or paste a fresh voucher code. Reading a code does not confirm meal handover.</p><a class="button" href="#merchant/overview">Kitchen workspace</a></div>';
- else if(['coupon','ledger','nft'].includes(route))main.innerHTML=`<div class="container page">${pageHead(route==='ledger'?'Meal ledger':'Your meal records','This feature is not connected in the current registration release.')}<a class="button outline" href="#stores">Return to kitchens</a></div>`;
+ else if(route==='ledger')main.innerHTML=renderPublicLedger({items:live.publicLedger,stores:live.stores,setup:ctx.setup,loading:live.publicLedgerLoading,error:live.publicLedgerError});
+ else if(['coupon','nft'].includes(route))main.innerHTML=`<div class="container page">${pageHead(route==='ledger'?'Meal ledger':'Your meal records','This feature is not connected in the current registration release.')}<a class="button outline" href="#stores">Return to kitchens</a></div>`;
  else if(route==='about')main.innerHTML=`<div class="container page">${pageHead('About MealForward','A warm meal. A kinder day.')}<section class="panel"><h2>Open your kitchen</h2><p>Wallet sign-in, kitchen registration and first-meal publication use the connected service. A saved draft, a confirmed contract and a published meal are separate steps.</p><p>You can review and support the original public meal. Claim a public meal and follow its original progress in My meals. Kitchen owners check and confirm handover in their workspace. Settlement availability follows the connected service.</p><p>Monad Testnet · Test assets have no real dollar value.</p><a class="button" href="#register">Open a kitchen</a></section></div>`;
  else {home();
   const strip=main.querySelector('.summary-strip');strip.innerHTML=`<div class="summary-intro">A small meal. Shared with care.</div><div class="summary-item"><strong>${live.loading?'…':live.catalogError?'—':live.stores.length}</strong><small>Registered<br>kitchens</small></div><div class="summary-item"><small>Monad Testnet<br>Connected records</small></div><div class="summary-item"><a href="#register">Open your kitchen →</a></div>`;
@@ -180,11 +205,11 @@ function renderLive(scroll=false){
   main.querySelector('.section-foot').textContent=live.catalogError||'Open a kitchen to support its public meal. Test assets have no real dollar value.';
   main.querySelector('.how-intro p').textContent='Open your kitchen and follow each step of its first meal publication.';
   main.querySelector('.how-steps').innerHTML=[['01','Save your first meal','Sign in with your wallet and save your kitchen and first meal.'],['02','Authorize your kitchen','Review the saved details, sign the authorization and explicitly enable automatic deployment.'],['03','Follow the original progress','Wait for the contract and first-meal publication to be confirmed. Refreshing continues the same registration.']].map(([n,title,text])=>`<div><div class="step-number">${n}</div><h3>${title}</h3><p>${text}</p></div>`).join('');
-  main.querySelector('.ledger-teaser p').textContent='A saved draft, a confirmed contract and a published first meal.';main.querySelector('.ledger-teaser a').href='#register';main.querySelector('.ledger-teaser a').textContent='Open a kitchen';
+  main.querySelector('.ledger-teaser p').textContent='Public accounting from the connected service. No recipient identities are shown.';main.querySelector('.ledger-teaser a').href='#ledger';main.querySelector('.ledger-teaser a').textContent='View meal ledger';
   if(['stores','how'].includes(route)&&scroll)requestAnimationFrame(()=>main.querySelector('#'+route)?.scrollIntoView());
  }
+ maskUnavailableBusinessOnPilot(route,session);
  if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch in MetaMask / Sign in again</button></div>`);
- if(ctx.setup?.authPilot)main.insertAdjacentHTML('afterbegin','<section class="container" aria-label="Authentication pilot notice"><p class="notice" role="status"><strong>Authentication test environment.</strong> This is a real MetaMask login test only. Original kitchens, contribution records, vouchers and blockchain transactions are not connected in this isolated preview.</p></section>');
  if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Confirm the login signature in MetaMask. First-time connections may require wallet permission.</p>');
  if(route!=='register'&&live.error&&!live.backendOffline)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
  if(live.blocked)main.insertAdjacentHTML('beforeend',`<div class="container live-connection"><p class="notice" role="status">${live.backendOffline?'The MealForward backend is not connected to this website. MetaMask login and real meal operations cannot complete here. No wallet confirmation is needed until the API is deployed.':'Connection unavailable. Previously loaded records may be out of date. New registration and authorization actions are paused.'}</p><button class="button outline" data-live-action="recover">Check connection & recover</button></div>`);
@@ -196,7 +221,7 @@ async function currentLiveResult(promise,generation){const result=await promise;
 function showLiveError(){if(live.error){const feedback=main.querySelector('#live-error, .page-error, [role="alert"]');if(feedback){feedback.setAttribute('tabindex','-1');feedback.focus({preventScroll:true});feedback.scrollIntoView({block:'center',behavior:'instant'});}}}
 function clearLiveIdentity(message=''){
  live.api?.invalidateSession?.();
- live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};live.signingIn=false;closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
+ live.generation++;if(live.mealPublish)closeMealPublish();live.mealPublishPending={};if(live.settlementClock)stopSettlementClock();if(live.settlement)closeSettlementFlow();live.payouts=null;live.payoutStoreId=null;live.payoutsLoading=false;live.settlementAttempts={};live.settlementPending={};if(live.verification)closeVerificationEntry();if(live.claim)closeClaimFlow();live.vouchers=[];live.claimIntents=[];live.claimRecordsLoading=false;live.claimPending=null;live.pendingVerification=null;closeSupportFlow();live.supportOrders=[];live.supportOrdersLoading=false;live.supportAttempts={};live.signingIn=false;closeLiveMealEditor(true);live.ownerMeals=[];live.ownerMealStoreId=null;live.mealCapabilities={};live.mealUnavailableReasons={};live.context={setup:live.context.setup,session:null,store:null,registration:null,registrations:[]};live.overview=null;live.signed=false;live.draft={windows:[['','']]};live.errors={};
  if(live.preview)URL.revokeObjectURL(live.preview);live.preview='';live.error=message;live.busy=false;live.loading=false;live.blocked=false;live.reloginRequired=true;renderLive();showLiveError();
 }
 window.addEventListener('mealforward-session-invalidated',()=>{if(LIVE_MODE)clearLiveIdentity('Wallet changed. Sign in again with the newly selected wallet.');});
@@ -210,6 +235,13 @@ async function loadLiveCatalog(generation=live.generation){
  const results=await currentLiveResult(Promise.allSettled(stores.map(store=>live.api.getStoreMeals(store.id))),generation);
  live.stores=stores;results.forEach((result,i)=>{if(result.status==='fulfilled')live.meals[stores[i].id]=Array.isArray(result.value)?result.value:result.value.items??[];});
  live.catalogError=results.some(r=>r.status==='rejected')?'Some menus could not be refreshed. Previously loaded meals may be out of date.':'';
+}
+async function loadPublicLedger(generation=live.generation){
+ if(!live.api||live.publicLedgerLoading)return;
+ live.publicLedgerLoading=true;live.publicLedgerError='';if(location.hash==='#ledger')renderLive();
+ try{const result=await currentLiveResult(live.api.getPublicLedger(),generation);live.publicLedger=result.items;}
+ catch(error){if(generation!==live.generation)return;live.publicLedger=[];live.publicLedgerError=liveMessage(error);}
+ finally{if(generation===live.generation){live.publicLedgerLoading=false;if(location.hash==='#ledger')renderLive();}}
 }
 function requireLiveOwner(storeId=live.context.store?.id){if(!hasOwnedKitchen(live.context)||storeId!==live.context.store.id)throw Error('This wallet has no permission to manage this kitchen.');}
 async function loadLiveKitchen(generation=live.generation){
@@ -247,7 +279,7 @@ async function startLive(){
  document.querySelector('#signout-button').removeAttribute('data-action');document.querySelector('#signout-button').dataset.liveAction='logout';
  const generation=live.generation;
  try{const adapter=await currentLiveResult(import('./live-api.mjs'),generation);live.api=adapter.liveApi;live.parseVoucherCode=adapter.parseVoucherCode;}catch{if(generation!==live.generation)return;live.error='The connection adapter is unavailable.';live.loading=false;renderLive();return;}
- await liveTask(async generation=>{const results=await currentLiveResult(Promise.allSettled([loadLiveContext(generation),loadLiveCatalog(generation)]),generation);if(results[0].status==='rejected'){live.blocked=true;live.error=liveMessage(results[0].reason);}if(results[1].status==='rejected')live.catalogError=liveMessage(results[1].reason);if(live.context.store)await loadLiveKitchen(generation);});if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
+ await liveTask(async generation=>{const results=await currentLiveResult(Promise.allSettled([loadLiveContext(generation),loadLiveCatalog(generation)]),generation);if(results[0].status==='rejected'){live.blocked=true;live.error=liveMessage(results[0].reason);}if(results[1].status==='rejected')live.catalogError=liveMessage(results[1].reason);if(live.context.store)await loadLiveKitchen(generation);});if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#ledger')await loadPublicLedger();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
 }
 document.addEventListener('click',event=>{
  if(!LIVE_MODE)return;const target=event.target.closest('[data-live-action]');if(!target||target.disabled)return;
@@ -396,10 +428,14 @@ async function saveLiveMealDraft(imageOnly=false){
  }
 }
 
-async function startMetaMaskLogin(){
+async function startMetaMaskLogin(pendingAction=null){
  if(live.busy)return;
  if(live.backendOffline){live.error='The backend is not connected. Use Check connection & recover when the API is deployed; wallet signing is unavailable here.';renderLive();return;}
  if(!live.api?.loginWithMetaMask){live.error='The login service is not connected. Check the connection before signing in.';renderLive();return;}
+ const entryHash=location.hash;
+ const pendingVerification=!pendingAction&&entryHash==='#merchant/verify'?live.pendingVerification:null;
+ // The optional pending action contains only public store/meal IDs and is never persisted.
+ // It cannot authorize payment, claiming, signing or wallet transactions.
  // Clear previously shown private data before the wallet can select a new owner.
  // MetaMask handles account permission natively; this page has no chooser.
  clearLiveIdentity();
@@ -411,7 +447,30 @@ async function startMetaMaskLogin(){
   const context=await live.api.loginWithMetaMask();checkLiveGeneration(generation);
   if(!/^0x[0-9a-f]{40}$/.test(context?.session?.wallet??''))throw Error('The MetaMask sign-in account could not be verified. Sign in again.');
   live.reloginRequired=false;acceptContext(context);
-  if(canEnterKitchen()){
+  if(pendingVerification){
+   // Only the authenticated kitchen owner may reopen the original short-lived code.
+   // Never auto-check, lock, report or settle from a URL, even after login.
+   if(location.hash===entryHash){
+    if(Date.now()>=pendingVerification.expiresAt)live.error='The original QR code may have expired. Ask the recipient for a fresh code before checking.';
+    else if(canEnterKitchen())openVerificationEntry(pendingVerification.input);
+    else live.error='Sign in with the kitchen owner wallet to check this private code. No voucher action was performed.';
+   }
+  }else if(pendingAction){
+   // Ignore the original click if the user navigated elsewhere while signing.
+   if(location.hash===entryHash){
+    if(!['support','claim'].includes(pendingAction.kind))throw Error('The selected action is no longer valid. Choose a meal again.');
+    await loadLiveCatalog(generation);checkLiveGeneration(generation);
+    if(live.catalogError)throw Error('The kitchens could not be verified after sign-in. Refresh the menu before continuing.');
+    const store=live.stores.find(item=>item.id===pendingAction.storeId);
+    const meal=live.meals[store?.id]?.find(item=>item.id===pendingAction.mealId&&item.listed===true&&item.eligible!==false);
+    if(!store||!meal||pendingAction.kind==='claim'&&!(Number(meal.financial?.counts?.A??meal.available)>0))
+     throw Error('This meal is no longer available. Review the current menu before trying again.');
+    const selected={dataset:{storeId:store.id,mealId:meal.id}};
+    // Reopen only the first UI step; explicit review/intent/wallet actions remain gated.
+    if(pendingAction.kind==='support')await handleSupportAction('support-start',selected);
+    else await handleClaimAction('claim-start',selected);
+   }
+  }else if(canEnterKitchen()){
    location.hash='#merchant/overview';
    await loadLiveKitchen(generation);checkLiveGeneration(generation);
   }else location.hash='#stores';
@@ -525,7 +584,7 @@ async function continueOriginalSupport(flow){
 }
 async function handleSupportAction(action,target){
  if(action==='support-close'){closeSupportFlow();return;}
- if(!live.context.session){await startMetaMaskLogin();return;}
+ if(!live.context.session){await startMetaMaskLogin(action==='support-start'?{kind:'support',storeId:target.dataset.storeId,mealId:target.dataset.mealId}:null);return;}
  if(action==='support-orders'){await loadSupportOrders();return;}
  if(action==='support-start'){
   const store=live.stores.find(item=>item.id===target.dataset.storeId),meal=live.meals[store?.id]?.find(item=>item.id===target.dataset.mealId&&item.listed===true&&item.eligible!==false);
@@ -664,7 +723,7 @@ async function refreshClaim(flow){
 }
 async function handleClaimAction(action,target){
  if(action==='claim-close'){closeClaimFlow();return;}
- if(!live.context.session){await startMetaMaskLogin();return;}
+ if(!live.context.session){await startMetaMaskLogin(action==='claim-start'?{kind:'claim',storeId:target.dataset.storeId,mealId:target.dataset.mealId}:null);return;}
  if(action==='claim-records'){await loadClaimRecords();return;}
   if(action==='claim-resume-start'){await openPendingClaim();return;}
   if(action==='claim-start'){
@@ -739,7 +798,14 @@ async function handleClaimAction(action,target){
 
 function takeVerificationLink(){
  if(!location.hash.startsWith('#verify?'))return null;
- const input=location.origin+'/'+location.hash;history.replaceState(null,'',location.pathname+location.search+'#merchant/verify');return input;
+ const input=location.origin+'/'+location.hash;
+ // Immediately remove the private code from the address bar. It must never be
+ // persisted or copied into another URL, a telemetry event or a log.
+ history.replaceState(null,'',location.pathname+location.search+'#merchant/verify');
+ if(input.length>512){live.pendingVerification=null;return null;}
+ // Maximum QR lifetime is 120 seconds. The server remains authoritative.
+ live.pendingVerification={input,expiresAt:Date.now()+120000};
+ return input;
 }
 function verificationCurrent(flow){return !!flow&&live.verification===flow&&flow.generation===live.generation&&flow.wallet===live.context.session?.wallet&&hasOwnedKitchen(live.context)&&flow.storeId===live.context.store.id;}
 function stopVerificationCamera(flow){if(!flow)return;flow.cameraEpoch++;clearTimeout(flow.scanTimer);flow.stream?.getTracks().forEach(track=>track.stop());flow.stream=null;flow.scanning=false;flow.cameraPending=false;const video=document.querySelector('#verification-camera');if(video)video.srcObject=null;}
@@ -753,6 +819,7 @@ function readVerificationCode(flow,input){
 }
 function openVerificationEntry(input=null){
  if(!hasOwnedKitchen(live.context)){live.error='Sign in with the kitchen owner wallet, then scan or paste the voucher again.';renderLive();return;}
+ live.pendingVerification=null;
  closeVerificationEntry();closeClaimFlow();closeSupportFlow();live.verification={generation:live.generation,wallet:live.context.session.wallet,storeId:live.context.store.id,code:null,error:'',status:'',cameraEpoch:0,stream:null,scanning:false,cameraPending:false,busy:false,checked:null,intent:null,case:null,records:[],lockAttempted:false,handoverAttempted:false};
  if(input)readVerificationCode(live.verification,input);else showVerificationEntry();
 }
