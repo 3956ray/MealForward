@@ -35,4 +35,4 @@ jobs:
       - name: G1 SQL-shaped read DTOs and G0 regression suite
         run: |
           cd sites-frontend
-          node --test g1-read-contract.test.mjs live-read-contract.test.mjs auth-only-gate.test.mjs login-meal-resume.test.mjs verification-login-resume.test.mjs onboarding-wallet.test.mjs onboarding.test.mjs live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
+          node --test g1-catalog-failclosed.test.mjs g1-read-contract.test.mjs live-read-contract.test.mjs auth-only-gate.test.mjs login-meal-resume.test.mjs verification-login-resume.test.mjs onboarding-wallet.test.mjs onboarding.test.mjs live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
