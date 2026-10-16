@@ -114,3 +114,13 @@ G1 只有在真实同源 CP30 /v1 API 与新版 Sites 前端之间完成受控�
 **下一步安全探针：** 先在用户 Mac 的独立审核目录快进拉取本分支，然后执行 `python3 cp30-backend/tools/cp31-local-api-probe.py`。该工具只对七个固定的 127.0.0.1:16443 HTTPS 端点发匿名 GET，显示 HTTP 状态、允许列出的 JSON 错误码、公开结果**数量**，并对服务器 `app.js` 与 `ledger-view.mjs` 进行相对审核副本的 SHA256 相等检查。不会输出原始响应、签名、Cookie、订单、餐券或数据库密钥；正常 HTTP GET 可能更新服务器限流计数/访问日志。使用的 4 项离线 Mock 测试通过，**未**对用户实际运行服务进行本机探针执行。
 
 **不能做：** 直接重写私有 config、手动重锚 Journal、清空已有库/旧券，或将 422 当成“无商家”而返回空数组。需要先确认原 HTTP 错误与资源指纹，再判断下一步是只读服务状态审计、固定函数 SQL 门禁检查，还是受控静态资源重新安装。
+
+## 8. 2026-10-16 注册目录对照：HTTP 200
+
+用户用明确本机 origin 发匿名 `GET /v1/registered-stores`，实际返回 **HTTP 200**。不读取 Cookie 或 response body，也未做任何链上操作。
+
+**源码路由区别：** `/v1/registered-stores` 经过 `Application.handle` 的共享 `controller.query`、`_rate` 和 `OnboardingGateway.public_catalog()`；`/v1/stores`、`/v1/ledger` 则经 `LiveGateway.call → PgRuntimeLedger.transaction(read_only=True) → controller.begin/read-only checkpoint validation → runtime_internal live_api`。因此对照 200 把问题范围主要缩至后者，但不证明账本故障的具体原因。
+
+**错误掩码风险：** `RuntimeLedgerClosed` 与 `LedgerRejected` 继承 `ValueError`。上游 `Application.handle` 捕获通用 `ValueError` 并返回 `422 INVALID_REQUEST`，可能将内部一致性故障误报为客户端参数问题。只有经脱敏的运行时诊断才能确认来源，不应跳过安全门、掩盖 422、清空原记录或自动重发 UNKNOWN。
+
+**下一步：** 仅统计 `~/.mf-cp30-20261013/logs` 中 controller/application/runtime/PG 的固定异常类别出现次数（保留原始日志不改动，不粘贴日志原文或凭证）；无记录时不能断言健康，因为某些异常捕获器不会记录具体类别。随后由有本机权限的操作者经过安装完整性审计，做定向只读的 ledger_status 与 Journal checkpoint 差异检查；该高级检查不得绕开受信 RPC、直接修改 private schema 或在正在运行的 ledger journal 上抢独占锁。
