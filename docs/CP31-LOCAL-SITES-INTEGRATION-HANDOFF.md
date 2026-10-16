@@ -124,3 +124,25 @@ G1 只有在真实同源 CP30 /v1 API 与新版 Sites 前端之间完成受控�
 **错误掩码风险：** `RuntimeLedgerClosed` 与 `LedgerRejected` 继承 `ValueError`。上游 `Application.handle` 捕获通用 `ValueError` 并返回 `422 INVALID_REQUEST`，可能将内部一致性故障误报为客户端参数问题。只有经脱敏的运行时诊断才能确认来源，不应跳过安全门、掩盖 422、清空原记录或自动重发 UNKNOWN。
 
 **下一步：** 仅统计 `~/.mf-cp30-20261013/logs` 中 controller/application/runtime/PG 的固定异常类别出现次数（保留原始日志不改动，不粘贴日志原文或凭证）；无记录时不能断言健康，因为某些异常捕获器不会记录具体类别。随后由有本机权限的操作者经过安装完整性审计，做定向只读的 ledger_status 与 Journal checkpoint 差异检查；该高级检查不得绕开受信 RPC、直接修改 private schema 或在正在运行的 ledger journal 上抢独占锁。
+
+## 9. 2026-10-16 终端日志分类快照
+
+用户本机只读诊断：`GET /v1/registered-stores` 为 HTTP 200，`GET /v1/stores` / `GET /v1/ledger` 都为 `422 INVALID_REQUEST`；`/app.js` 200 但与审核副本不同，`/ledger-view.mjs` 404。
+
+**最新日志尾部 256KiB 关键词统计（仅是日志出现次数，并非新请求对应的错误次数）：**
+
+| 日志文件 | 记录 |
+| --- | --- |
+| `application-95b4d3525ac1242a.log` | `DB_UNAVAILABLE`: 7，`C1_DIAGNOSTIC`: 2152 |
+| `application-41f93cc72aa0cc04.log` | `C1_DIAGNOSTIC`: 341 |
+| `controller-95b4d3525ac1242a.log` | `C1_DIAGNOSTIC`: 7 |
+| `controller-b80a8617966c6229.log` | `NO_MATCH` |
+| `automatic-business-95b4d3525ac1242a.log` | `C1_DIAGNOSTIC`: 1691 |
+| `automatic-business-41f93cc72aa0cc04.log` | `C1_DIAGNOSTIC`: 14 |
+| `pg.log` | `NO_MATCH` |
+
+GitHub Pull HTTP2 framing 错误后，又收到 `curl 28: couldn't connect to github.com:443`，故本机审核目录可能停留在旧分支快照。**该 Git 网络错误和本机 422 没有已证实的因果关系。** 暂停重复 Git Pull；不要清理目录或修改 remote/全局 Git 安全选项。
+
+源码中 `c1.db.Database.call` 的结构化 `C1_DIAGNOSTIC` 包含 `component,method,sqlstate,code`，而 `LiveGateway.step` 的定期错误统计包含 `component,code,phase,elapsedMs`。请求处理 `Application.handle` 在 `except (ValueError,KeyError,TypeError,InputRejected)` 返回 `422 INVALID_REQUEST`；其中 `RuntimeLedgerClosed(ValueError)`、`LedgerRejected(ValueError)` 均可能被误分类。控制器对 `runtime_ledger_begin` 的异常同样做固定码封装。这缩小了诊断方向，却**不证明 Runtime Ledger checkpoint 已损坏**，亦不证明当前 `DB_UNAVAILABLE` 7 次与新的 GET 相关。
+
+**安全下一步：** 对最新 application/controller/automatic-business 日志每个读取尾部 ≤512KiB，解析 `C1_DIAGNOSTIC ` 后的 JSON，只输出严格字符集过滤后的 `component / method / sqlstate / code / phase` 分组和数量，不输出原始日志、短码、SQL 内容或敏感配置。若结构化代码仍不能缩小范围，再走正式受控、本机只读 runtime ledger checkpoint 审计；不启动第二控制器、不读取并替代 signer journal 的独占写锁、不触碰既有数据库或 source pin。
