@@ -82,6 +82,10 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     if(key && !control.retainKey){delete journal[key];saveJournal();}
     return data;
   }
+  function verifiedItems(value,scope){
+    if(!value||!Array.isArray(value.items))throw fail('READ_RESPONSE_INVALID','The '+scope+' response is incomplete. No records have been changed; check the original service before retrying.');
+    return value.items;
+  }
   async function setup(){
     const [connection,identity]=await Promise.all([request('GET','/v1/connection'),request('GET','/v1/identity/setup')]);
     return {...connection,walletLoginEnabled:identity.walletLoginEnabled===true && identity.walletLoginChainId===10143 && identity.walletLoginOrigin===origin(),walletLoginOrigin:identity.walletLoginOrigin};
@@ -110,7 +114,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     if(provider()?.request){try{await checkWallet(provider(),current.wallet);}catch{walletChanged();return anonymous;}checkEpoch(generation);}
     const data=await request('GET','/v1/store-registrations');checkEpoch(generation);
     const stores=await listStores();checkEpoch(generation);
-    const registrations=await Promise.all((data.items||[]).map(r=>withListing(r,stores)));checkEpoch(generation);
+    const registrations=await Promise.all(verifiedItems(data,'kitchen registration').map(r=>withListing(r,stores)));checkEpoch(generation);
     const priority=r=>['PENDING','UNKNOWN'].includes(r.state)?0:r.state==='CONFIRMED'?1:2;
     const registration=[...registrations].sort((a,b)=>priority(a)-priority(b))[0]||null;
     const owned=registrations.filter(r=>r.state==='CONFIRMED' && (r.listingConfirmed || r.businessReady)).map(r=>r.storeId.replace(/^0x/,''));
@@ -227,8 +231,8 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     signature=null;return value;
   }
   async function getPublicLedger(){const value=await request('GET','/v1/ledger');if(!Array.isArray(value?.items))throw fail('LEDGER_INVALID','The public ledger response needs verification.');return value;}
-  async function listStores(){const value=await request('GET','/v1/stores');return value.items||[];}
-  async function getStoreMeals(id){if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose a verified store.');return (await request('GET','/v1/stores/'+id+'/meals')).items||[];}
+  async function listStores(){const value=await request('GET','/v1/stores');return verifiedItems(value,'public kitchens');}
+  async function getStoreMeals(id){if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose a verified store.');return verifiedItems(await request('GET','/v1/stores/'+id+'/meals'),'public meals');}
   async function getOwnerOverview(id){requireCurrentLogin();const generation=epoch;if(!/^[0-9a-f]{64}$/.test(id))throw fail('INVALID_STORE','Choose your store.');const result=await request('GET','/v1/stores/'+id+'/workbench');checkEpoch(generation);return result;}
   function checkedMerchantVoucher(value,storeId){
     if(value?.store!==storeId||!ID.test(value.voucherId??value.voucher??value.id)||!['R','H','S','X'].includes(value.state))throw fail('VOUCHER_MISMATCH','The kitchen voucher could not be verified.');
@@ -372,7 +376,7 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const value=await request('POST','/v1/support/intents',{reviewId},{},{epoch:scope.generation,retainKey:true});checkEpoch(scope.generation);return value;
   }
   async function getSupportIntent(id){const scope=await supportScope();const result=await request('GET','/v1/intents/'+intentReference(id));checkEpoch(scope.generation);return result;}
-  async function getSupportOrders(){const scope=await supportScope();const result=await request('GET','/v1/my/orders');checkEpoch(scope.generation);return result.items||[];}
+  async function getSupportOrders(){const scope=await supportScope();const result=await request('GET','/v1/my/orders');checkEpoch(scope.generation);return verifiedItems(result,'my contributions');}
   function preparedSupport(data,address){
     const m=data.material;if(m?.kind!=='fund'||m.expectedAccount?.toLowerCase()!==address||m.binding?.chainId!==10143)throw fail('PAYMENT_ACCOUNT_MISMATCH','This contribution belongs to another wallet or network.');
     const wallet={chainId:10143,account:address};
@@ -492,8 +496,8 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     const scope=await supportScope(),data=await request('GET','/v1/intents/'+intentReference(id));checkEpoch(scope.generation);
     if(data.action!=='issue'||(data.intentId??data.id)!==id)throw fail('CLAIM_INTENT_MISMATCH','The original claim response could not be verified.');return data;
   }
-  async function getClaimIntents(){const scope=await supportScope(),data=await request('GET','/v1/my/claims');checkEpoch(scope.generation);return data.items||[];}
-  async function getMyVouchers(){const scope=await supportScope(),data=await request('GET','/v1/my/vouchers');checkEpoch(scope.generation);return data.items||[];}
+  async function getClaimIntents(){const scope=await supportScope(),data=await request('GET','/v1/my/claims');checkEpoch(scope.generation);return verifiedItems(data,'my claims');}
+  async function getMyVouchers(){const scope=await supportScope(),data=await request('GET','/v1/my/vouchers');checkEpoch(scope.generation);return verifiedItems(data,'my meals');}
   async function getVoucher(id){
     const scope=await supportScope(),data=await request('GET','/v1/vouchers/'+reference(id));checkEpoch(scope.generation);
     if((data.voucherId??data.id)!==id)throw fail('VOUCHER_MISMATCH','The original voucher could not be verified.');return data;
