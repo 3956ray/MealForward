@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<title>留膳 · 产品体验测试指南</title>
+<style>
+:root{--paper:#faf9f5;--ink:#253c32;--green:#234c3d;--orange:#d86b3f;--muted:#68756e;--line:#dfe4da;--soft:#eef1e8}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Segoe UI",sans-serif;line-height:1.65}
+a{color:var(--green)}.wrap{max-width:1050px;margin:auto;padding:30px 32px 96px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:1px solid var(--line);padding-bottom:20px}
+.brand{font-family:Georgia,serif;font-weight:700;font-size:24px;text-decoration:none}.back{font-size:14px;text-decoration:underline;text-underline-offset:4px}
+.hero{padding:58px 0 36px}.eyebrow{font-size:12px;letter-spacing:.19em;color:#a75938;font-weight:700}.hero h1{font-size:clamp(36px,5.2vw,68px);font-family:Georgia,"Songti SC",serif;line-height:1.2;letter-spacing:-.025em;font-weight:500;max-width:850px;margin:20px 0}.hero p{font-size:17px;max-width:730px;color:var(--muted)}
+.notice{background:#f2f2e9;border:1px solid #d8dfcf;border-left:4px solid var(--orange);border-radius:10px;padding:18px 20px;margin:23px 0 42px}.notice strong{display:block;font-size:16px;margin-bottom:4px}.notice p{margin:0;color:var(--muted);font-size:14px}
+h2{font-size:28px;letter-spacing:-.02em;margin:36px 0 15px;font-family:Georgia,"Songti SC",serif}.step{border-top:1px solid var(--line);padding:26px 0;display:grid;grid-template-columns:80px 1fr;gap:12px}.num{font-family:Georgia,serif;font-size:30px;color:#a75938}.step h3{font-size:18px;margin:0 0 8px}.step p{margin:0 0 9px;color:var(--muted)}.tags{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.tags span{background:var(--soft);border-radius:99px;padding:4px 12px;font-size:12px}
+code{font-family:ui-monospace,monospace;font-size:12px;background:#e8eae2;padding:3px 5px;border-radius:4px;overflow-wrap:anywhere}.action{display:inline-flex;background:var(--green);color:white;border-radius:5px;padding:11px 17px;text-decoration:none;font-size:14px;margin:16px 0}
+.table{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:22px}.table>div{display:grid;grid-template-columns:160px 1fr;border-bottom:1px solid var(--line);gap:15px;padding:14px 18px;font-size:14px}.table>div:last-child{border-bottom:0}.table strong{color:var(--green)}.foot{border-top:1px solid var(--line);margin-top:55px;padding:25px 0;color:var(--muted);font-size:13px}
+@media(max-width:650px){.wrap{padding:21px 18px 66px}.hero{padding:32px 0 20px}.step{grid-template-columns:45px 1fr;gap:8px}.table>div{grid-template-columns:1fr;gap:2px}.top{align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="brand" href="/#home">留膳 · MealForward</a><a class="back" href="/#home">← 返回体验网站</a></header>
+<main>
+<section class="hero">
+<div class="eyebrow">PRODUCT EXPERIENCE LAB / 2026.10.16</div>
+<h1>一餐的旅程。<br>由你来实际检验。</h1>
+<p>这是留膳网站的交互验收入口。我们希望你先验证页面能不能让支持者、领取者与店主自然完成任务，而不是反复学习钱包、Intent 或 Journal 等技术术语。</p>
+</section>
+<aside class="notice" role="note"><strong>重要：这是模拟环境，不是真实链上测试。</strong><p>本页面中全部餐馆、账户、USDC、餐券、二维码、核销与结算都是浏览器本地演示数据。不需要 MetaMask，不会调用 CP30 实库，也不会产生真实交易或用户记录。不同浏览器及无痕窗口之间不共享数据。</p></aside>
+<h2>测试前准备</h2>
+<p>使用一个普通浏览器标签页打开网站。页面底部有 <b>Demo controls</b>，可以将时间设为午餐时间、指定下一次原操作的结果为 Final/Pending/UNKNOWN，或明确重置演示数据。若测试二维码，请先点 <b>Set demo lunch time</b>。</p>
+<div class="table">
+<div><strong>支持者</strong><span>选择 <code>visitor@mealforward.invalid</code> 登录</span></div>
+<div><strong>领取者</strong><span>选择 <code>neighbor@mealforward.invalid</code> 登录</span></div>
+<div><strong>青禾餐馆店主</strong><span>选择 <code>qinghe.owner@mealforward.invalid</code> 登录</span></div>
+<div><strong>另外两家店主</strong><span><code>shiguang.owner@mealforward.invalid</code> 与 <code>nuanxiang.owner@mealforward.invalid</code></span></div>
+</div>
+<h2>逐条验收</h2>
+<section class="step"><div class="num">01</div><div>
+<h3>支持者：选餐并完成一笔模拟资助</h3>
+<p>进入 Kitchens，点任一可资助餐品的 <b>Support a meal</b>，选择份数并核对单价与总额。按 <b>Review support</b>，使用演示账号登录，按引导连接 Demo wallet 并确认。打开原操作，点 <b>Check original operation</b>，再到 <b>My meals → Support orders</b> 检查订单。</p>
+<div class="tags"><span>数量与合计正确</span><span>审批≠付款</span><span>原订单可恢复</span></div>
+<p>预期：订单只在被明确模拟为 Final 时显示成功，不能在 Pending 或 UNKNOWN 时伪造付款成功。</p>
+</div></section>
+<section class="step"><div class="num">02</div><div>
+<h3>领取者：领取一餐并查看私密餐券</h3>
+<p>登录 <code>neighbor@mealforward.invalid</code>，选择有余额的餐品并按 <b>Claim a meal</b>，确认领取。进入原操作按 <b>Check original operation</b>，在 <b>My meals → My vouchers</b> 查找餐券并打开。测试 <b>Show verification code</b>，注意它是短时动态凭证。</p>
+<div class="tags"><span>领取限制</span><span>餐券版本/到期</span><span>二维码有效期</span></div>
+<p>预期：在明确确认以前没有可用新券，超时凭证不会永久有效。此演示的领取身份是虚构邮箱；真实 CP31 钱包/无注册体验尚需独立验收。</p>
+</div></section>
+<section class="step"><div class="num">03</div><div>
+<h3>店主：查看餐馆、编辑与发布餐品</h3>
+<p>切换到 <code>qinghe.owner@mealforward.invalid</code>，进入 <b>Kitchen workspace → Meals</b>。点 <b>Add meal</b> 新建草稿，设置名称、描述、价格、服务时段和图片；保存后发布，并确认公开菜单展示的版本与旧订单完全独立。</p>
+<div class="tags"><span>草稿不对外公开</span><span>发布和上架</span><span>历史版本冻结</span></div>
+<p>预期：过去已经资助/领取的餐仍保留原价与原服务时段。这里是固定店主的菜单体验，不会真实部署合约或创建新餐馆。</p>
+</div></section>
+<section class="step"><div class="num">04</div><div>
+<h3>店主：核销、确认交餐和结算</h3>
+<p>进入 <b>Kitchen workspace → Verify &amp; hand over</b>。本地演示允许你先以该店主演示账号自行领取一张模拟券，再使用其 <b>Use demo voucher code</b> / 粘贴验证码演示 Check、Lock 和 Report；或直接到 <b>Payouts</b> 测试已有样例的店主结算。将下一次模拟结果设为 Final，然后检查餐账变化。</p>
+<div class="tags"><span>Check 不会消费</span><span>Lock ≠ Report</span><span>Report ≠ Settle</span></div>
+<p>预期：交餐确认与结算分离，资金状态只有原操作 Final 时才更新。注意：浏览器本地演示不能证明不同真实账户间共享餐券或链上收款。</p>
+</div></section>
+<section class="step"><div class="num">05</div><div>
+<h3>异常恢复与隐私</h3>
+<p>使用页面底部 <b>Demo controls → Next original-operation result</b> 选择 <b>Pending</b> 或 <b>UNKNOWN</b>，重复支持/领取的查看操作；再尝试刷新、重新登录及进入公开 Meal ledger，检查是否把未知操作当作成功，以及是否泄露私人验证码。</p>
+<div class="tags"><span>UNKNOWN 不重发</span><span>刷新不重置历史</span><span>公开账本不泄露隐私</span></div>
+<p>预期：不显示任何虚假的链上交易哈希、真实收款证明或领取者私人信息。</p>
+</div></section>
+<h2>反馈重点</h2>
+<div class="table">
+<div><strong>任务可完成性</strong><span>你是否知道接下来按什么、为何需要确认？哪一步卡住？</span></div>
+<div><strong>视觉和响应式</strong><span>桌面/手机排版、按钮尺寸、留白、图片、对比度以及错误提示是否清楚？</span></div>
+<div><strong>术语负担</strong><span>哪些技术词不该暴露给普通使用者？</span></div>
+<div><strong>状态真实性</strong><span>Pending/UNKNOWN 是否被误显示成最终完成？</span></div>
+<div><strong>问题记录</strong><span>提供页面地址的 # 路由、登录的演示角色、操作步骤、期望与实际结果、截图即可；不要提供真实私钥或钱包秘密。</span></div>
+</div>
+<a class="action" href="/#home">开始体验留膳 →</a>
+<footer class="foot">留一膳，待一人，是为善。 · MealForward Experience Sandbox · 仅用于产品流程测试</footer>
+</main>
+</div>
+</body>
+</html>
