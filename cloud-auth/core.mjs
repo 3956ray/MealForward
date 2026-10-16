@@ -48,19 +48,23 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
       }
       if(path==='/v1/connection' && method==='GET')return json(res,200,{
         mode:'CP31_AUTH_PILOT_ONLY',registrationEnabled:false,assetDecimals:6,assetSymbol:'test USDC',
-        transactionActionsEnabled:false,authPilot:true,serverTime:now
+        transactionActionsEnabled:false,authPilot:true,businessSourceConnected:false,
+        originalPrincipalCompatible:false,serverTime:now
       });
       if(path==='/v1/identity/setup' && method==='GET')return json(res,200,{
         walletLoginEnabled:true,walletLoginChainId:10143,walletLoginOrigin:origin,authPilot:true
       });
-      if(path==='/v1/stores' && method==='GET')return json(res,200,{items:[],authPilot:true});
+      if(path==='/v1/stores' && method==='GET')
+        return json(res,503,{error:'ORIGINAL_BUSINESS_NOT_CONNECTED',mode:'CP31_AUTH_PILOT_ONLY'});
+
       if(path==='/v1/me' && method==='GET'){
         const s=await active(req);
         return s?json(res,200,{walletAddress:s.wallet,stores:[],authPilot:true}):json(res,401,{error:'UNAUTHENTICATED'});
       }
       if(path==='/v1/store-registrations' && method==='GET'){
         if(!await active(req))throw issueError(401,'UNAUTHENTICATED');
-        return json(res,200,{items:[]});
+        // Even the authenticated pilot has no original CP30 registration data.
+        return json(res,503,{error:'ORIGINAL_BUSINESS_NOT_CONNECTED',mode:'CP31_AUTH_PILOT_ONLY'});
       }
       if(path==='/v1/auth/pre-session' && method==='POST'){
         const body=await readJson(req);
@@ -104,7 +108,10 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
         const preserve=req.headers['x-c1-preserve-session-cookie']==='1';
         return json(res,200,{ok:true},{...(preserve?{}:{'Set-Cookie':cookie(SESSION_COOKIE,'',0)})});
       }
-      if(path.startsWith('/v1/'))return json(res,503,{error:'AUTH_PILOT_NO_BUSINESS_WRITES',mode:'CP31_AUTH_PILOT_ONLY'});
+      if(path.startsWith('/v1/'))return json(res,503,{
+        error:method==='GET'?'ORIGINAL_BUSINESS_NOT_CONNECTED':'AUTH_PILOT_NO_BUSINESS_WRITES',
+        mode:'CP31_AUTH_PILOT_ONLY'
+      });
       return json(res,404,{error:'NOT_FOUND'});
     }catch(err){
       // Never put raw body, signature, cookie, URL query, database error or stack in logs.
