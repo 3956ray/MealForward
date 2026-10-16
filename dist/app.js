@@ -231,12 +231,23 @@ async function loadLiveContext(generation=live.generation){
  catch(err){if(['SERVICE_UNAVAILABLE','CONNECTION_UNAVAILABLE'].includes(err?.code))live.backendOffline=true;throw err;}
 }
 async function loadLiveCatalog(generation=live.generation){
+ live.stores=[];live.meals={};
+ if(isAuthOnlyMode()){
+  live.catalogError='Original CP30 business records are not connected to this identity pilot.';
+  return;
+ }
+ live.catalogError='';
  const response=await currentLiveResult(live.api.listStores(),generation),stores=Array.isArray(response)?response:response.items??[];
  const results=await currentLiveResult(Promise.allSettled(stores.map(store=>live.api.getStoreMeals(store.id))),generation);
- live.stores=stores;results.forEach((result,i)=>{if(result.status==='fulfilled')live.meals[stores[i].id]=Array.isArray(result.value)?result.value:result.value.items??[];});
- live.catalogError=results.some(r=>r.status==='rejected')?'Some menus could not be refreshed. Previously loaded meals may be out of date.':'';
+ if(results.some(r=>r.status==='rejected')){
+  live.catalogError='Some current menus could not be verified. Earlier meal selections are unavailable until the source is healthy.';
+  return;
+ }
+ live.stores=stores;
+ live.meals=Object.fromEntries(stores.map((store,i)=>[store.id,Array.isArray(results[i].value)?results[i].value:results[i].value.items]));
 }
 async function loadPublicLedger(generation=live.generation){
+ if(isAuthOnlyMode()){live.publicLedger=[];live.publicLedgerError='Original CP30 business ledger is not connected.';return;}
  if(!live.api||live.publicLedgerLoading)return;
  live.publicLedgerLoading=true;live.publicLedgerError='';if(location.hash==='#ledger')renderLive();
  try{const result=await currentLiveResult(live.api.getPublicLedger(),generation);live.publicLedger=result.items;}
@@ -279,7 +290,15 @@ async function startLive(){
  document.querySelector('#signout-button').removeAttribute('data-action');document.querySelector('#signout-button').dataset.liveAction='logout';
  const generation=live.generation;
  try{const adapter=await currentLiveResult(import('./live-api.mjs'),generation);live.api=adapter.liveApi;live.parseVoucherCode=adapter.parseVoucherCode;}catch{if(generation!==live.generation)return;live.error='The connection adapter is unavailable.';live.loading=false;renderLive();return;}
- await liveTask(async generation=>{const results=await currentLiveResult(Promise.allSettled([loadLiveContext(generation),loadLiveCatalog(generation)]),generation);if(results[0].status==='rejected'){live.blocked=true;live.error=liveMessage(results[0].reason);}if(results[1].status==='rejected')live.catalogError=liveMessage(results[1].reason);if(live.context.store)await loadLiveKitchen(generation);});if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#ledger')await loadPublicLedger();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
+ await liveTask(async generation=>{
+  // Wait for the origin-bound identity-mode handshake before touching business
+  // reads. The separate Auth Pilot must never make a pretend catalog request.
+  try{await loadLiveContext(generation);}
+  catch(error){live.blocked=true;live.error=liveMessage(error);}
+  try{await loadLiveCatalog(generation);}
+  catch(error){live.catalogError=liveMessage(error);}
+  if(live.context.store)await loadLiveKitchen(generation);
+ });if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#ledger')await loadPublicLedger();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
 }
 document.addEventListener('click',event=>{
  if(!LIVE_MODE)return;const target=event.target.closest('[data-live-action]');if(!target||target.disabled)return;
