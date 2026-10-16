@@ -30,7 +30,6 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      GITHUB_ACTIONS: "true"
       MF_G2_DISPOSABLE_ONLY: ack-fresh-gha-postgres-17
       PGHOST: 127.0.0.1
       PGPORT: "5432"
