@@ -776,7 +776,7 @@ function takeVerificationLink(){
  if(!location.hash.startsWith('#verify?'))return null;
  const input=location.origin+'/'+location.hash;
  // Immediately remove the private code from the address bar. It must never be
- // persisted to localStorage, sessionStorage, a URL redirect or a log.
+ // persisted or copied into another URL, a telemetry event or a log.
  history.replaceState(null,'',location.pathname+location.search+'#merchant/verify');
  if(input.length>512){live.pendingVerification=null;return null;}
  // Maximum QR lifetime is 120 seconds. The server remains authoritative.
