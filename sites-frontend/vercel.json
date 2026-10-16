@@ -1,0 +1,6 @@
+{
+  "buildCommand": "node build-experience-preview.mjs",
+  "outputDirectory": "preview-dist",
+  "framework": null,
+  "installCommand": "echo no-dependencies"
+}
