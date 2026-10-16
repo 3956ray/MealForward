@@ -47,6 +47,12 @@ const css = [
   '.sandbox-disclosure p strong{font-weight:650;font-size:16px}.sandbox-disclosure p span{color:#596a5b}',
   '.sandbox-tag{font-size:11px;letter-spacing:.08em;font-weight:700;color:#8c4d2f}',
   '.sandbox-disclosure>a{font-size:14px;font-weight:600;color:#234c3d;text-decoration:underline;text-underline-offset:4px;white-space:nowrap}',
+  '.verification-sandbox-help{padding:18px 20px;margin:22px 0;border:1px solid #dfe4da;border-radius:12px;background:#f3f3e9}',
+  '.verification-sandbox-help h3{font-size:17px;font-weight:700;margin:0 0 8px;color:#234c3d}',
+  '.verification-sandbox-help p{font-size:14px;line-height:1.65;color:#566860;margin:0 0 16px}',
+  '.verification-sandbox-help .button{min-height:44px;margin-bottom:10px}',
+  '.verification-sandbox-help .notice{margin-top:9px}',
+  '@media(max-width:650px){.verification-sandbox-help{padding:15px;margin:20px 0}.verification-sandbox-help .button{width:100%}}',
   '@media(max-width:780px){.sandbox-disclosure{margin:0 18px 20px;padding:14px 16px;flex-direction:column;align-items:flex-start;gap:10px}.sandbox-disclosure p{display:block}.sandbox-disclosure p span{display:block}.demo-bar{font-size:11px;gap:6px;flex-wrap:wrap;height:auto;min-height:34px;padding:6px 10px}.demo-bar a{margin-left:2px}}'
 ].join('\n');
 await writeFile(cssPath, (await readFile(cssPath, 'utf8')) + '\n' + css + '\n');
