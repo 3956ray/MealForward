@@ -154,6 +154,29 @@ function readLiveDraft(){
  live.draft.windows=live.draft.windows.map((_,i)=>[form.elements.namedItem('start-'+i)?.value??'',form.elements.namedItem('end-'+i)?.value??'']);
  const photo=data.get('photo');if(photo?.size)live.draft.photo=photo;
 }
+function isAuthOnlyMode(){return live.context?.setup?.authPilot===true||live.context?.setup?.mode==='CP31_AUTH_PILOT_ONLY';}
+function maskUnavailableBusinessOnPilot(route,session){
+ if(!isAuthOnlyMode())return;
+ // This is a real MetaMask identity server, but it has NO original CP30 meals.
+ // Never render demo data, zero-value pseudo-business records or live fund buttons.
+ const permitted=['','home','stores','how','about'];
+ if(!permitted.includes(route)){
+  main.innerHTML='<section class="container page"><div class="eyebrow">CP31 · G0 IDENTITY GATE</div><h1>MetaMask sign-in test only</h1><p>The isolated server verifies wallets and sessions; original kitchens, orders, vouchers, QR redemption and payouts are not connected.</p><p>Nothing here proves a payment, meal issue or settlement. Continue testing wallet identity, refresh, switching accounts and logout.</p><a class="button outline" href="#home">Back to sign-in test</a></section>';
+ } else if(route!=='about'){
+  const grid=main.querySelector('.store-grid');
+  if(grid)grid.innerHTML='<section class="empty"><h2>No CP30 business data connected</h2><p>The wallet-login pilot is not the original kitchen database. An empty response here does not mean there are no real kitchens.</p></section>';
+  const strip=main.querySelector('.summary-strip');
+  if(strip)strip.innerHTML='<div class="summary-intro">Identity-only test</div><div class="summary-item"><strong>G0</strong><small>MetaMask session<br>verification</small></div><div class="summary-item"><strong>—</strong><small>Original kitchens<br>not connected</small></div>';
+  const actions=main.querySelector('.hero-ctas');
+  if(actions)actions.innerHTML='<button class="button" data-live-action="account">'+(session?'Switch wallet in MetaMask':'Test MetaMask sign-in')+'</button><a class="button outline" href="#about">About this test</a>';
+  const teaser=main.querySelector('.ledger-teaser');
+  if(teaser)teaser.innerHTML='<p>No public meal ledger is connected to the auth-only service.</p>';
+  const steps=main.querySelector('.how-steps');
+  if(steps)steps.innerHTML='<div><div class="step-number">01</div><h3>Connect MetaMask</h3><p>Use the selected account on Monad Testnet 10143.</p></div><div><div class="step-number">02</div><h3>Verify session</h3><p>Sign in, refresh, switch wallet and sign out.</p></div><div><div class="step-number">03</div><h3>Business gated</h3><p>Real funding and voucher records require the separate G1 connector.</p></div>';
+ }
+ document.querySelector('#workspace-link').hidden=true;
+ main.insertAdjacentHTML('afterbegin','<section class="container" role="status"><p class="notice">G0 identity pilot only · No original meal, contribution, voucher, QR handover or payout data is connected. No blockchain transaction is required to test sign-in.</p></section>');
+}
 function renderLive(scroll=false){
  startSettlementClock();
  const [route,id]=location.hash.slice(1).split('/'),ctx=live.context,session=ctx.session,workspace=document.querySelector('#workspace-link');
@@ -185,6 +208,7 @@ function renderLive(scroll=false){
   main.querySelector('.ledger-teaser p').textContent='Public accounting from the connected service. No recipient identities are shown.';main.querySelector('.ledger-teaser a').href='#ledger';main.querySelector('.ledger-teaser a').textContent='View meal ledger';
   if(['stores','how'].includes(route)&&scroll)requestAnimationFrame(()=>main.querySelector('#'+route)?.scrollIntoView());
  }
+ maskUnavailableBusinessOnPilot(route,session);
  if(session)main.insertAdjacentHTML('afterbegin',`<div class="container"><button class="text-button" id="switch-wallet-button" data-live-action="switch-wallet" ${live.busy?'disabled':''}>Switch in MetaMask / Sign in again</button></div>`);
  if(live.signingIn)main.insertAdjacentHTML('afterbegin','<p class="notice container" role="status">Confirm the login signature in MetaMask. First-time connections may require wallet permission.</p>');
  if(route!=='register'&&live.error&&!live.backendOffline)main.insertAdjacentHTML('beforeend',`<p class="error page-error" role="alert">${e(live.error)}</p>`);
