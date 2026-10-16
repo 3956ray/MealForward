@@ -20,12 +20,14 @@ function fixture({loggedIn=false,mode='CP31_AUTH_PILOT_ONLY'}={}){
   '/v1/connection':{mode,authPilot:true,registrationEnabled:false,assetDecimals:6,transactionActionsEnabled:false},
   '/v1/identity/setup':{walletLoginEnabled:true,walletLoginChainId:10143,walletLoginOrigin:origin,authPilot:true},
   '/v1/me':{walletAddress:wallet,stores:[],authPilot:true},
-  '/v1/stores':{items:[],authPilot:true},
+  '/v1/stores':{error:'ORIGINAL_BUSINESS_NOT_CONNECTED'},
   '/v1/store-registrations':{items:[]}
  };
  const fetchImpl=async(path,options)=>{
   calls.push([options.method,path]);
   if(path==='/v1/me'&&!loggedIn)return unauthorized;
+  if(path==='/v1/stores'||path==='/v1/store-registrations')
+    return {status:503,ok:false,json:async()=>({error:'ORIGINAL_BUSINESS_NOT_CONNECTED'})};
   if(Object.hasOwn(data,path))return ok(data[path]);
   return {status:503,ok:false,json:async()=>({error:'AUTH_PILOT_NO_BUSINESS_WRITES'})};
  };
@@ -60,7 +62,7 @@ test('anonymous authenticating origin remains anonymous; none of the original st
  assert.equal(data.setup.transactionActionsEnabled,false);
  assert.equal(data.session,null);
  assert.equal(data.store,null);
- assert.deepEqual(await h.api.listStores(),[]);
+ await assert.rejects(h.api.listStores(),{code:'ORIGINAL_BUSINESS_NOT_CONNECTED'});
  assert.ok(h.calls.every(([method])=>method==='GET'));
 });
 
@@ -72,6 +74,8 @@ test('authenticated pilot session preserves exact wallet address without assigni
  assert.deepEqual(data.session.stores,[]);
  assert.deepEqual(data.registrations,[]);
  assert.equal(data.store,null);
+ assert.ok(!h.calls.some(([,path])=>path==='/v1/stores'||path==='/v1/store-registrations'),
+  'Authenticated SIWE identity test must not query fake CP30 business data');
  assert.ok(h.calls.every(([method])=>method==='GET'));
 });
 

@@ -128,6 +128,12 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     // Ask for a fresh wallet login rather than render actions that cannot commit.
     if(!current || !csrf)return anonymous;
     if(provider()?.request){try{await checkWallet(provider(),current.wallet);}catch{walletChanged();return anonymous;}checkEpoch(generation);}
+    if(config.authPilot===true){
+      // Real wallet identity was verified; original CP30 principal and business
+      // rows are NOT installed here. Never query or manufacture those records.
+      current.stores=[];
+      return {...anonymous,session:current};
+    }
     const data=await request('GET','/v1/store-registrations');checkEpoch(generation);
     const stores=await listStores();checkEpoch(generation);
     const registrations=await Promise.all(verifiedItems(data,'kitchen registration').map(r=>withListing(r,stores)));checkEpoch(generation);

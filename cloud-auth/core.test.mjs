@@ -42,7 +42,17 @@ test('public setup is marked auth-only, no user is silently authenticated',async
   const id=await f.call('GET','/v1/identity/setup');assert.equal(id.body.walletLoginEnabled,true);
   assert.equal((await f.call('GET','/v1/me')).status,401);
   assert.equal((await f.call('POST','/v1/support/intents',{})).status,503);
-  assert.equal((await f.call('GET','/v1/stores')).body.items.length,0);
+  const catalog=await f.call('GET','/v1/stores');
+  assert.equal(catalog.status,503);
+  assert.equal(catalog.body.error,'ORIGINAL_BUSINESS_NOT_CONNECTED');
+  for(const path of ['/v1/ledger','/v1/my/orders','/v1/my/claims','/v1/my/vouchers']){
+    const result=await f.call('GET',path);
+    assert.equal(result.status,503);
+    assert.equal(result.body.error,'ORIGINAL_BUSINESS_NOT_CONNECTED');
+    assert.equal(result.body.mode,'CP31_AUTH_PILOT_ONLY');
+  }
+  assert.equal(c.body.businessSourceConnected,false);
+  assert.equal(c.body.originalPrincipalCompatible,false);
  }finally{await f.stop()}
 });
 
