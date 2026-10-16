@@ -1,0 +1,32 @@
+name: MealForward CP31 G1 read-only source contract
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-read-dto-validation-20261017
+  pull_request:
+    paths:
+      - "sites-frontend/**"
+      - ".github/workflows/cp31-g1-read-contract.yml"
+permissions:
+  contents: read
+jobs:
+  g1-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax and isolation checks
+        run: |
+          node --check sites-frontend/dist/app.js
+          node --check sites-frontend/dist/live-api.mjs
+          node --check sites-frontend/dist/g1-read-contract.mjs
+          node --check sites-frontend/dist/ledger-view.mjs
+      - name: G1 SQL-shaped read DTOs and G0 regression suite
+        run: |
+          cd sites-frontend
+          node --test g1-read-contract.test.mjs live-read-contract.test.mjs auth-only-gate.test.mjs login-meal-resume.test.mjs verification-login-resume.test.mjs onboarding-wallet.test.mjs onboarding.test.mjs live-publish.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs support-ui.test.mjs claim-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs meal-publish-ui.test.mjs ledger-view.test.mjs
