@@ -282,6 +282,7 @@ if __name__ == "__main__":
             "status": "G2_FRESH_PG17_MIGRATIONS_BLOCKED",
             "reason": str(exc)[:100] if isinstance(exc, ValueError) else type(exc).__name__,
             "sqlstate": getattr(exc, "sqlstate", None),
+            "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
             "originalRuntimeTouched": False,
         }), file=sys.stderr)
         sys.exit(1)
