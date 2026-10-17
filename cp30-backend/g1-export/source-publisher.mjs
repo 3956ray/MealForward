@@ -97,7 +97,7 @@ const signedResult=(doc,publicKey,expectedKeyId,expectedAudience,now,previous)=>
  * Never accept a bare send() 201 as final acknowledgement.
  */
 export function makeG1SourcePublisher({
- pool,readPublicSource,signer,transport,publicKey,
+ pool,readPublicSource,signer,transport,independentCheckpoint,publicKey,
  expectedKeyId,expectedAudience,expectedPublicKeyFingerprint,
  clock=()=>Math.floor(Date.now()/1000)
 }={}){
@@ -105,13 +105,26 @@ export function makeG1SourcePublisher({
   typeof readPublicSource!=='function'||
   typeof signer?.signPublicEnvelope!=='function'||
   typeof transport?.send!=='function'||
-  typeof transport?.readBack!=='function'||typeof clock!=='function')
+  typeof transport?.readBack!=='function'||
+  typeof independentCheckpoint?.current!=='function'||
+  typeof clock!=='function')
   deny('G1_PUBLISHER_NOT_CONFIGURED');
  const key=exactTrust({publicKey,expectedKeyId,expectedAudience,
   expectedPublicKeyFingerprint});
  const assertRoot=row=>{
   queryValue(row);
   if(row.key_id!==expectedKeyId||row.audience!==expectedAudience)deny();
+ };
+ // This independent checkpoint reader must have strictly read-only rights.
+ // No source publisher should be given independent anchor writer credentials.
+ const confirmIndependent=async(sequence,digest,asOf)=>{
+  let checkpoint;
+  try{checkpoint=await independentCheckpoint.current()}catch{deny()}
+  if(!fields(checkpoint,['sequence','receiptDigest','sourceAsOf'])||
+   checkpoint.sequence!==sequence||
+   checkpoint.receiptDigest!==digest||
+   (asOf===null?checkpoint.sourceAsOf!==null:
+      checkpoint.sourceAsOf!==asOf))deny();
  };
  async function transactional(work){
   let db,began=false;
@@ -138,6 +151,10 @@ export function makeG1SourcePublisher({
     return {prepared:false,pending:true,sequence:row.pending_sequence,
      receiptDigest:row.pending_receipt_digest};
    }
+   // Detect a publisher database rollback before signing another sequence:
+   // the independent receiver checkpoint must still match last durable ACK.
+   await confirmIndependent(row.last_ack_sequence,row.last_ack_digest,
+    row.last_ack_source_as_of===null?null:Number(row.last_ack_source_as_of));
    const now=clock();
    if(!timeOk(now))deny();
    const next=(BigInt(row.last_ack_sequence)+1n).toString();
@@ -204,6 +221,9 @@ export function makeG1SourcePublisher({
       remote.asOf!==checked.data.asOf||
       canonicalPublicJson(remote.data)!==canonicalPublicJson(checked.data))
     deny();
+   // Network response is NOT an authority. A forged read-back cannot ACK.
+   await confirmIndependent(checked.sequence,checked.receiptDigest,
+    checked.data.asOf);
    const saved=await db.query('UPDATE '+TABLE+' SET '+
     'last_ack_sequence=$1::numeric,last_ack_digest=$2,'+
     'last_ack_source_as_of=$3::bigint,last_ack_at=now(),'+
