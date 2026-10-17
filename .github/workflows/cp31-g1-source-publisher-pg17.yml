@@ -57,10 +57,11 @@ jobs:
         run: |
           cd cp30-backend/g1-export
           node --check source-publisher.mjs
+          node --check source-publisher-transport.mjs
           node --check source-publisher-pg.test.mjs
           node --check independent-anchor.mjs
           node --check public-cache.mjs
       - name: Test real PostgreSQL signed publisher outbox and remote anchor
         run: |
           cd cp30-backend/g1-export
-          node --test public-envelope.test.mjs source-publisher-pg.test.mjs
+          node --test public-envelope.test.mjs source-publisher-pg.test.mjs source-publisher-transport.test.mjs
