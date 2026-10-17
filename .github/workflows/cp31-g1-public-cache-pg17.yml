@@ -47,10 +47,10 @@ jobs:
             -e POSTGRES_DB=mealforward_g1_anchor_cache_ci_only \
             -p 127.0.0.1:5434:5432 postgres:17.11
           for i in $(seq 1 40); do
-            if docker exec mf-g1-anchored-cache-ci pg_isready -U postgres -d mealforward_g1_anchor_cache_ci_only; then exit 0; fi
+            if docker exec mf-g1-anchored-cache-ci pg_isready -U postgres -d mealforward_g1_anchor_cache_ci_only; then break; fi
             sleep 1
           done
-          exit 1
+          docker exec mf-g1-anchored-cache-ci pg_isready -U postgres -d mealforward_g1_anchor_cache_ci_only
           docker run -d --rm --name mf-g1-independent-anchor-ci \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=g1-anchor-ci-only \
