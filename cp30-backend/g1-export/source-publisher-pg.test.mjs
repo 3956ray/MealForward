@@ -56,7 +56,7 @@ const configure=({signerKey=privateKey}={})=>makeG1SourcePublisher({
  publicKey,expectedKeyId:TRUST,expectedAudience:AUDIENCE,
  expectedPublicKeyFingerprint:FINGERPRINT,clock:()=>now,
  readPublicSource:async()=>{sourceReads++;return structuredClone(sourceData)},
- signer:{signPublicEnvelope:async bytes=>{
+ signer:{purpose:'G1_PUBLIC_DATA_ONLY_V1',signPublicEnvelope:async bytes=>{
   signs++;return sign(null,bytes,signerKey);
  }},
  transport:{
@@ -125,6 +125,27 @@ after(async()=>{
  await Promise.all([outboxPool,cachePool,anchorPool].filter(Boolean).map(p=>p.end()));
 });
 
+
+test('publisher refuses mixed-purpose signers and anchor-writer capabilities',()=>{
+ const config={
+  pool:outboxPool,
+  publicKey,expectedKeyId:TRUST,expectedAudience:AUDIENCE,
+  expectedPublicKeyFingerprint:FINGERPRINT,clock:()=>now,
+  readPublicSource:async()=>sourceData,
+  transport:{send:async()=>{},readBack:async()=>{}}
+ };
+ assert.throws(()=>makeG1SourcePublisher({
+  ...config,
+  signer:{signPublicEnvelope:async bytes=>sign(null,bytes,privateKey)},
+  independentCheckpoint:{current:()=>anchor.current()}
+ }),{code:'G1_PUBLISHER_NOT_CONFIGURED'});
+ assert.throws(()=>makeG1SourcePublisher({
+  ...config,
+  signer:{purpose:'G1_PUBLIC_DATA_ONLY_V1',
+   signPublicEnvelope:async bytes=>sign(null,bytes,privateKey)},
+  independentCheckpoint:anchor
+ }),{code:'G1_PUBLISHER_NOT_CONFIGURED'});
+});
 test('source signer prepares exact signed payload in outbox BEFORE any network call',async()=>{
  const created=await publisher.prepareNext();
  assert.equal(created.prepared,true);
