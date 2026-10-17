@@ -11,6 +11,7 @@ import pg from 'pg';
 import {makeG1SourcePublisher} from './source-publisher.mjs';
 import {makeG1PublicSnapshotCache} from './public-cache.mjs';
 import {makeIndependentG1PublicAnchor} from './independent-anchor.mjs';
+import {verifyPublicG1Envelope} from './public-envelope.mjs';
 
 const OUTBOX_URL='postgres://postgres:g1-source-ci-only@127.0.0.1:5435/mealforward_g1_source_ci_only';
 const CACHE_URL='postgres://postgres:g1-anchored-cache-ci-only@127.0.0.1:5434/mealforward_g1_anchor_cache_ci_only';
@@ -51,6 +52,7 @@ const inspect=async()=> {
 };
 const configure=({signerKey=privateKey}={})=>makeG1SourcePublisher({
  pool:outboxPool,
+ independentCheckpoint:{current:()=>anchor.current()},
  publicKey,expectedKeyId:TRUST,expectedAudience:AUDIENCE,
  expectedPublicKeyFingerprint:FINGERPRINT,clock:()=>now,
  readPublicSource:async()=>{sourceReads++;return structuredClone(sourceData)},
@@ -276,6 +278,46 @@ test('source reader leakage or signer key mismatch never creates pending or send
  const invalid=configure({signerKey:stranger.privateKey});
  await reject(invalid.prepareNext());
  assert.equal((await inspect()).outbox.pending_sequence,null);
+});
+
+
+test('a forged receiver read-back cannot ACK without independent anchor advance',async()=>{
+ await publisher.prepareNext();
+ const doc=(await inspect()).outbox.pending_signed_envelope;
+ const checked=verifyPublicG1Envelope(doc,{
+  publicKey,expectedKeyId:TRUST,expectedAudience:AUDIENCE,
+  now,previousSequence:'0'
+ });
+ // Simulate a transport or cache fabricating a successful read-back;
+ // independent checkpoint still remains at seq=0, so publishing MUST reject.
+ sendImpl=async()=>({accepted:true,sequence:'1'});
+ readImpl=async()=>({
+  status:'G1_PUBLIC_SNAPSHOT_VERIFIED',sequence:checked.sequence,
+  receiptDigest:checked.receiptDigest,expiresAt:checked.expiresAt,
+  asOf:checked.data.asOf,authenticatedPublicSource:true,
+  independentlyAnchored:true,chainFinalityIndependentlyVerified:false,
+  data:structuredClone(checked.data)
+ });
+ await reject(publisher.dispatchPending());
+ const stopped=await inspect();
+ assert.equal(stopped.outbox.last_ack_sequence,'0');
+ assert.equal(stopped.outbox.pending_sequence,'1');
+ assert.equal(stopped.anchor.last_sequence,'0');
+ sendImpl=doc=>cache.ingest(doc);readImpl=()=>cache.current();
+ assert.equal((await publisher.dispatchPending()).sequence,'1');
+});
+
+test('privileged outbox restore to zero fails BEFORE signing a new same-sequence payload',async()=>{
+ await publisher.prepareNext();await publisher.dispatchPending();
+ assert.equal((await anchor.current()).sequence,'1');
+ await outboxPool.query('DELETE FROM mf_g1_publisher.outbox');
+ await outboxPool.query('INSERT INTO mf_g1_publisher.outbox(singleton,key_id,audience) VALUES(1,$1,$2)',[TRUST,AUDIENCE]);
+ const oldSignCount=signs,oldSourceReads=sourceReads;
+ await reject(publisher.prepareNext());
+ assert.equal(signs,oldSignCount);
+ assert.equal(sourceReads,oldSourceReads);
+ assert.equal((await inspect()).outbox.pending_sequence,null);
+ assert.equal((await anchor.current()).sequence,'1');
 });
 
 test('outbox SQL role cannot change trust root or replace signed pending material',async()=>{
