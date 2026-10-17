@@ -44,4 +44,5 @@ jobs:
           cd cp30-backend/g1-export
           node --check public-envelope.mjs
           node --check public-cache.mjs
+          node --check public-http.mjs
           node --test public-envelope.test.mjs public-cache-pg.test.mjs
