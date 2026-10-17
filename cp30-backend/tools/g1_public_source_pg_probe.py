@@ -205,8 +205,9 @@ def security_probe(db):
            if not as_reader(stmt).get("sqlstate")=="42501":
               raise AssertionError("G1_READER_PERMISSION_ESCALATION_"+label)
 
-        temporary("UPDATE c1_runtime_private.state SET pending=%s WHERE ns=%s",
-                  ("33333333-3333-4333-8333-333333333333",NS),
+        temporary("UPDATE c1_runtime_private.state SET pending=%s,pending_xid=123,"
+                  "pending_sequence=2,pending_digest=%s WHERE ns=%s",
+                  ("33333333-3333-4333-8333-333333333333","4"*64,NS),
                   "pending","G1_SOURCE_NOT_READY")
         temporary("UPDATE c1_private.transaction_guard SET execution_pending='synthetic' WHERE ns=%s",
                   (NS,),"execution","G1_SOURCE_NOT_READY")
