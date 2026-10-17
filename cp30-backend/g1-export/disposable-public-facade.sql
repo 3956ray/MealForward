@@ -67,9 +67,9 @@ BEGIN
  SELECT * INTO cfg FROM c1_g1_export.binding WHERE singleton=true AND enabled=true;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='G1_SOURCE_NOT_AUTHORIZED';END IF;
  SELECT now,halt INTO d FROM c1_private.deployment WHERE ns=cfg.ns;
- SELECT security_pending,execution_pending INTO guardrow
+ SELECT ns,security_pending,execution_pending INTO guardrow
  FROM c1_private.transaction_guard WHERE ns=cfg.ns;
- SELECT pending,revision INTO runtime FROM c1_runtime_private.state WHERE ns=cfg.ns;
+ SELECT ns,pending,revision INTO runtime FROM c1_runtime_private.state WHERE ns=cfg.ns;
  IF d.now IS NULL OR guardrow IS NULL OR runtime IS NULL
  OR d.halt IS DISTINCT FROM false
  OR guardrow.security_pending IS NOT NULL OR guardrow.execution_pending IS NOT NULL
