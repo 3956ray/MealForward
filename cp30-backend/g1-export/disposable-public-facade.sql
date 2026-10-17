@@ -60,7 +60,9 @@ DECLARE
   meals jsonb='[]'::jsonb;
   first_meal text;
   snap_menu jsonb;
-  claimed_count integer;
+  menu_size integer;
+  service_window jsonb;
+  start_min integer;end_min integer;previous_end integer;
 BEGIN
  SELECT * INTO cfg FROM c1_g1_export.binding WHERE singleton=true AND enabled=true;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='G1_SOURCE_NOT_AUTHORIZED';END IF;
@@ -107,11 +109,13 @@ BEGIN
    END IF;
    snap_menu=s.snapshot->'menu';
    IF jsonb_typeof(snap_menu)<>'object'
-      OR jsonb_object_length(snap_menu)>3
       OR jsonb_typeof(s.rows->'units')<>'array'
-      OR jsonb_array_length(s.rows->'units')>10000
       OR jsonb_typeof(s.rows->'accounting'->'totals')<>'object' THEN
     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_INVALID_PROJECTION';
+   END IF;
+   SELECT count(*) INTO menu_size FROM jsonb_object_keys(snap_menu);
+   IF menu_size>3 OR jsonb_array_length(s.rows->'units')>10000 THEN
+    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_MVP_CAPACITY';
    END IF;
 
    -- Reject malformed financial rows before numeric conversion, and never
@@ -178,6 +182,103 @@ BEGIN
        OR jsonb_array_length(window_data) NOT BETWEEN 1 AND 2 THEN
        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_CATALOG_TERMS_INCONSISTENT';
      END IF;
+     previous_end=0;
+     FOR service_window IN SELECT value FROM jsonb_array_elements(window_data) LOOP
+       IF jsonb_typeof(service_window)<>'array' OR jsonb_array_length(service_window)<>2
+       OR jsonb_typeof(service_window->0)<>'number'
+       OR jsonb_typeof(service_window->1)<>'number'
+       OR (service_window->>0) !~ '^[0-9]{1,4}
+     mealcounts='{}'::jsonb;mealamounts='{}'::jsonb;
+     FOR key IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
+       SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
+         INTO n,total FROM jsonb_array_elements(s.rows->'units')
+         WHERE value->>'bucket'=key AND value->>'meal_id'=k;
+       mealcounts=mealcounts||jsonb_build_object(key,n::text);
+       mealamounts=mealamounts||jsonb_build_object(key,total::text);
+     END LOOP;
+     SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
+       INTO n,total FROM jsonb_array_elements(s.rows->'units')
+       WHERE value->>'meal_id'=k;
+     mealcounts=mealcounts||jsonb_build_object('F',n::text);
+     mealamounts=mealamounts||jsonb_build_object('F',total::text);
+     meal_financed=mealamounts||jsonb_build_object('counts',mealcounts,
+       'liability',((mealamounts->>'A')::numeric+(mealamounts->>'R')::numeric+
+                    (mealamounts->>'H')::numeric)::text);
+     meals=meals||jsonb_build_array(jsonb_build_object(
+       'id',meal,'meal',meal,'mealId',k,'store',s.store,'version',v,
+       'name',pname,'description',description,'windows',window_data,
+       'listed',(j->>'listed')::boolean,'published',true,
+       'eligible',mealcounts->>'A','supported',mealcounts->>'F',
+       'unitPrice',unitprice,'assetDecimals',6,'assetSymbol','USDC',
+       'financial',meal_financed,'collectionTimeZone','Asia/Shanghai'));
+   END LOOP;
+ END LOOP;
+ RETURN jsonb_build_object(
+   'mode','G1_PUBLIC_SOURCE_PROJECTION_ONLY',
+   'source','CP30_ORIGINAL_POSTGRES',
+   'businessTransactionsAllowed',false,
+   'asOf',clock_now,
+   'stores',jsonb_build_object('items',kitchens),
+   'ledger',jsonb_build_object('items',ledgers),
+   'meals',jsonb_build_object('items',meals));
+END
+$g1$;
+RESET ROLE;
+REVOKE ALL ON FUNCTION c1_g1_export.public_snapshot() FROM PUBLIC;
+GRANT USAGE ON SCHEMA c1_g1_export TO c1_g1_export_client;
+GRANT EXECUTE ON FUNCTION c1_g1_export.public_snapshot() TO c1_g1_export_client;
+-- NO LOGIN role is created, no SQL original runtime upgrade or network access.
+
+       OR (service_window->>1) !~ '^[0-9]{1,4}
+     mealcounts='{}'::jsonb;mealamounts='{}'::jsonb;
+     FOR key IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
+       SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
+         INTO n,total FROM jsonb_array_elements(s.rows->'units')
+         WHERE value->>'bucket'=key AND value->>'meal_id'=k;
+       mealcounts=mealcounts||jsonb_build_object(key,n::text);
+       mealamounts=mealamounts||jsonb_build_object(key,total::text);
+     END LOOP;
+     SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
+       INTO n,total FROM jsonb_array_elements(s.rows->'units')
+       WHERE value->>'meal_id'=k;
+     mealcounts=mealcounts||jsonb_build_object('F',n::text);
+     mealamounts=mealamounts||jsonb_build_object('F',total::text);
+     meal_financed=mealamounts||jsonb_build_object('counts',mealcounts,
+       'liability',((mealamounts->>'A')::numeric+(mealamounts->>'R')::numeric+
+                    (mealamounts->>'H')::numeric)::text);
+     meals=meals||jsonb_build_array(jsonb_build_object(
+       'id',meal,'meal',meal,'mealId',k,'store',s.store,'version',v,
+       'name',pname,'description',description,'windows',window_data,
+       'listed',(j->>'listed')::boolean,'published',true,
+       'eligible',mealcounts->>'A','supported',mealcounts->>'F',
+       'unitPrice',unitprice,'assetDecimals',6,'assetSymbol','USDC',
+       'financial',meal_financed,'collectionTimeZone','Asia/Shanghai'));
+   END LOOP;
+ END LOOP;
+ RETURN jsonb_build_object(
+   'mode','G1_PUBLIC_SOURCE_PROJECTION_ONLY',
+   'source','CP30_ORIGINAL_POSTGRES',
+   'businessTransactionsAllowed',false,
+   'asOf',clock_now,
+   'stores',jsonb_build_object('items',kitchens),
+   'ledger',jsonb_build_object('items',ledgers),
+   'meals',jsonb_build_object('items',meals));
+END
+$g1$;
+RESET ROLE;
+REVOKE ALL ON FUNCTION c1_g1_export.public_snapshot() FROM PUBLIC;
+GRANT USAGE ON SCHEMA c1_g1_export TO c1_g1_export_client;
+GRANT EXECUTE ON FUNCTION c1_g1_export.public_snapshot() TO c1_g1_export_client;
+-- NO LOGIN role is created, no SQL original runtime upgrade or network access.
+ THEN
+         RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_INVALID_SERVICE_WINDOW';
+       END IF;
+       start_min=(service_window->>0)::integer;end_min=(service_window->>1)::integer;
+       IF start_min<previous_end OR end_min>1440 OR start_min>=end_min THEN
+         RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_INVALID_SERVICE_WINDOW';
+       END IF;
+       previous_end=end_min;
+     END LOOP;
      -- No arbitrary body keys survive; only a fixed public allowlist.
      mealcounts='{}'::jsonb;mealamounts='{}'::jsonb;
      FOR key IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
