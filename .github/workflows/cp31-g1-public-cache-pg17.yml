@@ -1,0 +1,47 @@
+name: MealForward G1 public snapshot cache replay gate
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-snapshot-cache-pg17-20261017
+  pull_request:
+    paths:
+      - "cp30-backend/g1-export/**"
+      - ".github/workflows/cp31-g1-public-cache-pg17.yml"
+permissions:
+  contents: read
+jobs:
+  isolated-public-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_G1_CACHE_DISPOSABLE_ONLY: ack-fresh-public-cache-pg17
+      DATABASE_URL: postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_cache_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start new disposable PostgreSQL 17.11 database on loopback
+        run: |
+          docker run -d --rm --name mf-g1-cache-ci \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=g1-cache-ci-only \
+            -e POSTGRES_DB=mealforward_g1_cache_ci_only \
+            -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-cache-ci pg_isready -U postgres -d mealforward_g1_cache_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install only pinned standalone public-cache dependency
+        run: |
+          cd cp30-backend/g1-export
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Syntax checks and real PostgreSQL signed-cache regression
+        run: |
+          cd cp30-backend/g1-export
+          node --check public-envelope.mjs
+          node --check public-cache.mjs
+          node --test public-envelope.test.mjs public-cache-pg.test.mjs
