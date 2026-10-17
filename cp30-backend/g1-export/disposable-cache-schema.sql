@@ -33,6 +33,30 @@ CREATE TABLE mf_g1_public_cache.snapshots(
  )
 );
 INSERT INTO mf_g1_public_cache.snapshots(source_id) VALUES ('cp30-public-v1');
+-- Independently enforce append-only sequence at the PostgreSQL level.
+-- The application role can UPDATE a restricted set of cache columns, but
+-- cannot reset/rewrite the currently accepted sequence or expire backwards.
+CREATE FUNCTION mf_g1_public_cache.enforce_sequence_monotone()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,pg_temp
+AS $guard$
+BEGIN
+ IF NEW.source_id IS DISTINCT FROM OLD.source_id
+    OR NEW.sequence<=OLD.sequence
+    OR NEW.envelope->>'sequence' IS DISTINCT FROM NEW.sequence::text
+    OR NEW.expires_at-NEW.issued_at>120
+    OR (OLD.issued_at IS NOT NULL AND NEW.issued_at<OLD.issued_at)
+    OR (OLD.accepted_at IS NOT NULL AND NEW.accepted_at<OLD.accepted_at) THEN
+  RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_SNAPSHOT_SEQUENCE_MONOTONE_REQUIRED';
+ END IF;
+ RETURN NEW;
+END
+$guard$;
+REVOKE ALL ON FUNCTION mf_g1_public_cache.enforce_sequence_monotone() FROM PUBLIC;
+CREATE TRIGGER g1_sequence_monotone
+BEFORE UPDATE ON mf_g1_public_cache.snapshots
+FOR EACH ROW EXECUTE FUNCTION mf_g1_public_cache.enforce_sequence_monotone();
+
 GRANT USAGE ON SCHEMA mf_g1_public_cache TO mf_g1_cache_app;
 GRANT SELECT ON mf_g1_public_cache.snapshots TO mf_g1_cache_app;
 GRANT UPDATE (sequence,envelope,digest,issued_at,expires_at,accepted_at)
