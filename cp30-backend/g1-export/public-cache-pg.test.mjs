@@ -75,10 +75,11 @@ const inspect=async()=>{
 };
 async function reset(){
  clockValue=FIXED_NOW;
- await pool.query('UPDATE mf_g1_public_cache.active SET '+
-  'last_sequence=0,source_as_of=NULL,signed_issued_at=NULL,'+
-  'signed_expires_at=NULL,receipt_digest=NULL,signed_envelope=NULL,accepted_at=NULL '+
-  'WHERE singleton=1');
+ // Test administrator alone can recreate a fresh isolated row. The
+ // deployed writer role lacks DELETE and INSERT, and the update trigger
+ // refuses sequence resets even if its credentials are stolen.
+ await pool.query('DELETE FROM mf_g1_public_cache.active WHERE singleton=1');
+ await pool.query('INSERT INTO mf_g1_public_cache.active(singleton,key_id,audience) VALUES(1,$1,$2)',[KEY_ID,AUDIENCE]);
 }
 
 before(async()=>{
@@ -198,8 +199,15 @@ test('monotone funded/settled monetary state and store identity enforced',async(
 });
 test('missing trust-root row and tampered saved signed JSON never served',async()=>{
  await cache.ingest(envelope());
- await pool.query("UPDATE mf_g1_public_cache.active SET signed_envelope=jsonb_set(signed_envelope,"+
+ // Privileged fixture corruption (requires disabling an owner-only trigger).
+ // This proves GET verifies cryptography even against a tampered DB backup.
+ await pool.query('ALTER TABLE mf_g1_public_cache.active DISABLE TRIGGER mf_g1_cache_monotone');
+ try{
+  await pool.query("UPDATE mf_g1_public_cache.active SET signed_envelope=jsonb_set(signed_envelope,"+
    "'{data,meals,items,0,name}',to_jsonb('FORGED'::text)) WHERE singleton=1");
+ }finally{
+  await pool.query('ALTER TABLE mf_g1_public_cache.active ENABLE TRIGGER mf_g1_cache_monotone');
+ }
  await unavailable(cache.current());
  await rejected(cache.ingest(envelope({sequence:'2',issuedAt:FIXED_NOW+1,
   expiresAt:FIXED_NOW+91,asOf:FIXED_NOW-1})));
@@ -242,4 +250,29 @@ test('reader/writer NOLOGIN SQL roles cannot access original or mutate public ca
  }finally{await client.query('ROLLBACK');client.release()}
  const names=await pool.query("SELECT nspname FROM pg_namespace WHERE nspname LIKE 'c1\\_%' ESCAPE '\\'");
  assert.equal(names.rowCount,0);
+});
+test('writer cannot change trust roots, delete cache row or rewind accepted sequence',async()=>{
+ await cache.ingest(envelope());
+ const writer=await pool.connect();
+ try{
+  await writer.query('BEGIN');
+  await writer.query('SET LOCAL ROLE mf_g1_cache_writer');
+  await assert.rejects(writer.query("UPDATE mf_g1_public_cache.active SET key_id='unauthorized-root' WHERE singleton=1"),{code:'42501'});
+ }finally{await writer.query('ROLLBACK');writer.release()}
+ const reader=await pool.connect();
+ try{
+  await reader.query('BEGIN');
+  await reader.query('SET LOCAL ROLE mf_g1_cache_writer');
+  await assert.rejects(reader.query('DELETE FROM mf_g1_public_cache.active WHERE singleton=1'),{code:'42501'});
+ }finally{await reader.query('ROLLBACK');reader.release()}
+ const fresh=await pool.connect();
+ try{
+  await fresh.query('BEGIN');
+  await fresh.query('SET LOCAL ROLE mf_g1_cache_writer');
+  await assert.rejects(fresh.query("UPDATE mf_g1_public_cache.active SET last_sequence=0,"+
+    "signed_envelope=NULL,receipt_digest=NULL,source_as_of=NULL,"+
+    "signed_issued_at=NULL,signed_expires_at=NULL,accepted_at=NULL WHERE singleton=1"),{code:'P0001'});
+ }finally{await fresh.query('ROLLBACK');fresh.release()}
+ assert.equal((await inspect()).last_sequence,'1');
+ assert.equal((await cache.current()).sequence,'1');
 });
