@@ -72,7 +72,7 @@ before(async()=>{
  if(process.env.GITHUB_ACTIONS!=='true'||
     process.env.MF_G1_CACHE_DISPOSABLE_ONLY!=='ack-fresh-public-cache-pg17'||
     process.env.MF_G1_ANCHOR_DISPOSABLE_ONLY!=='ack-separate-pg17'||
-    process.env.DATABASE_URL!==CACHE_URL||process.env.ANCHOR_DATABASE_URL!==ANCHOR_URL)
+    process.env.ANCHOR_CACHE_DATABASE_URL!==CACHE_URL||process.env.ANCHOR_DATABASE_URL!==ANCHOR_URL)
   throw Error('REFUSE_NON_DISPOSABLE_OR_SHARED_SOURCE_DB');
  cachePool=new pg.Pool({connectionString:CACHE_URL,max:18,connectionTimeoutMillis:4000});
  anchorPool=new pg.Pool({connectionString:ANCHOR_URL,max:18,connectionTimeoutMillis:4000});
