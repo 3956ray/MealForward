@@ -6,7 +6,7 @@
  * A trusted public key and persistent previous sequence MUST be supplied
  * by the eventual reviewed deployment. No private keys, DB queries or HTTP.
  */
-import {createPublicKey,createHash,verify as verifyEd25519} from 'node:crypto';
+import {KeyObject,createPublicKey,createHash,verify as verifyEd25519} from 'node:crypto';
 
 const CONTEXT='MealForward CP31 G1 PUBLIC DATA ENVELOPE V1\n';
 const HEX64=/^[0-9a-f]{64}$/;
@@ -142,7 +142,12 @@ export function verifyPublicG1Envelope(envelope,{
    issuedAt:envelope.issuedAt,expiresAt:envelope.expiresAt,
    sequence:envelope.sequence,data};
  let key;
- try{key=createPublicKey(publicKey)}catch{deny()}
+ try{
+  if(publicKey instanceof KeyObject){
+   if(publicKey.type!=='public')deny();
+   key=publicKey;
+  }else key=createPublicKey(publicKey);
+ }catch{deny()}
  if(key.asymmetricKeyType!=='ed25519')deny();
  if(!verifyEd25519(null,publicEnvelopeSigningBytes(unsigned),key,signature))deny();
  const hash=createHash('sha256').update(publicEnvelopeSigningBytes(unsigned)).digest('hex');
