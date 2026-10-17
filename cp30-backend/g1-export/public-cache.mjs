@@ -15,12 +15,36 @@ const uint=/^(0|[1-9][0-9]{0,77})$/;
 
 export function createG1PublicCache({
  pool,publicKey,keyId,audience,clock=()=>Math.floor(Date.now()/1000),
- enabled=false
+ enabled=false,expectedDatabase,expectedRole
 }={}){
  if(!pool||typeof pool.connect!=='function'||typeof pool.query!=='function')throw Error('G1_RESTRICTED_DB_POOL_REQUIRED');
  if(!publicKey||typeof keyId!=='string'||typeof audience!=='string')throw Error('G1_PINNED_SOURCE_KEY_REQUIRED');
  const config={publicKey,expectedKeyId:keyId,expectedAudience:audience};
  const available=enabled===true;
+ if(available&&(
+   typeof expectedDatabase!=='string'||!/^[a-z][a-z0-9_]{4,62}$/.test(expectedDatabase)||
+   typeof expectedRole!=='string'||!/^[a-z][a-z0-9_]{4,62}$/.test(expectedRole)
+ ))throw Error('G1_EXACT_RESTRICTED_DB_IDENTITY_REQUIRED');
+ const assertRestrictedDatabase=async client=>{
+  if(!available)throw noData();
+  // Verify the SAME checked-out connection that will execute SQL. The
+  // trust root must be in a separate database with no original CP30 schema.
+  const r=await client.query(
+   'SELECT current_database() AS db, current_user AS role_name,'+
+   'p.rolcanlogin,p.rolsuper,p.rolcreatedb,p.rolcreaterole,p.rolbypassrls,'+
+   "has_database_privilege(current_user,current_database(),'CREATE') AS db_create,"+
+   "has_schema_privilege(current_user,'public','CREATE') AS public_create,"+
+   "EXISTS(SELECT 1 FROM pg_namespace WHERE nspname~'^c1_') AS original_present,"+
+   'EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=p.oid) AS member_of_other_role '+
+   'FROM pg_roles p WHERE p.rolname=current_user'
+  );
+  if(r.rowCount!==1)throw noData();
+  const x=r.rows[0];
+  if(x.db!==expectedDatabase||x.role_name!==expectedRole||
+     x.rolcanlogin!==true||x.rolsuper||x.rolcreatedb||x.rolcreaterole||
+     x.rolbypassrls||x.db_create||x.public_create||
+     x.original_present||x.member_of_other_role)throw noData();
+ };
  const now=()=>{const value=clock();if(!Number.isSafeInteger(value)||value<0)throw invalid();return value;};
 
  async function accept(envelope){
@@ -28,6 +52,7 @@ export function createG1PublicCache({
   const client=await pool.connect();
   try{
    await client.query('BEGIN');
+   await assertRestrictedDatabase(client);
    const read=await client.query(
     'SELECT sequence FROM mf_g1_public_cache.snapshots WHERE source_id=$1 FOR UPDATE',
     [ROW]);
@@ -60,9 +85,14 @@ export function createG1PublicCache({
 
  async function read(){
   if(!available)throw noData();
-  const r=await pool.query(
-   'SELECT sequence,envelope,digest FROM mf_g1_public_cache.snapshots WHERE source_id=$1',
-   [ROW]);
+  const client=await pool.connect();
+  let r;
+  try{
+   await assertRestrictedDatabase(client);
+   r=await client.query(
+    'SELECT sequence,envelope,digest FROM mf_g1_public_cache.snapshots WHERE source_id=$1',
+    [ROW]);
+  }finally{client.release()}
   if(r.rowCount!==1||!r.rows[0].envelope)throw noData();
   const {sequence,envelope,digest}=r.rows[0];
   const seq=String(sequence);
@@ -85,12 +115,16 @@ export function createG1PublicCache({
  }
 
  async function health(){
+  if(!available)return false;
+  const client=await pool.connect().catch(()=>null);
+  if(!client)return false;
   try{
-   if(!available)return false;
-   const r=await pool.query(
+   await assertRestrictedDatabase(client);
+   const r=await client.query(
     'SELECT count(*)::int AS n FROM mf_g1_public_cache.snapshots WHERE source_id=$1',[ROW]);
    return r.rows[0].n===1;
   }catch{return false}
+  finally{client.release()}
  }
  return Object.freeze({accept,read,health,enabled:available});
 }
