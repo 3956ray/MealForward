@@ -288,7 +288,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_BLOCKED",
-            "reason": str(exc)[:100] if isinstance(exc, ValueError) else type(exc).__name__,
+            "reason": str(exc)[:100] if isinstance(exc, (ValueError, AssertionError)) else type(exc).__name__,
             "sqlstate": getattr(exc, "sqlstate", None),
             "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
             "ciDiagnostic": (getattr(getattr(exc, "diag", None), "message_primary", None) or "")[:160],
