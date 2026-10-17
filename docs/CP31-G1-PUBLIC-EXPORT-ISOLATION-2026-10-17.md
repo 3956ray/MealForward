@@ -86,6 +86,35 @@ cannot establish that the actual original chain finalized any transaction.
 - **No cross-origin user wallet principal bridge.** The Auth Pilot Session
   continues to be independent and cannot grant access to CP30 private data.
 
+
+## Public transport authenticity candidate (also offline-only)
+
+The branch additionally provides
+`cp30-backend/g1-export/public-envelope.mjs` and
+`public-envelope.test.mjs`. They implement a strictly bounded **Ed25519
+public snapshot receiver** with deterministic canonical JSON bytes, domain
+separation, an exact authorized key ID + pinned Render audience, a maximum
+120-second signed validity window, source snapshot freshness, a strictly
+increasing sequence checked against the caller's previous sequence, and a
+full public-field allowlist with integer base-unit accounting conservation.
+
+The receiver marks a successfully signed response with
+`authenticatedPublicSource=true` and explicitly
+`chainFinalityIndependentlyVerified=false`: a signature authenticates the
+producer, **not** the accuracy of finality claims or whether food was served.
+The verifier never issues wallet transactions, fetches data, signs messages
+or reads private DB tables. The eventual cloud cache **must** persist the
+last accepted sequence transactionally and pin its own trusted Ed25519 public
+key, otherwise replay/rollback protection is incomplete.
+
+CI generated disposable in-memory Ed25519 key pairs only. **No production
+signer private key, cloud verification key, direct DB login, upload endpoint,
+cache mutation or original runtime activation has been provisioned.**
+
+[PG17 SQL + Ed25519 public envelope test run](https://github.com/3956ray/MealForward/actions/runs/38999514612):
+the real disposable PG17 public facade PASS plus **12/12 Node signature,
+authenticity, replay, age, tampering, private-data and accounting tests PASS**.
+
 ## Next safe engineering increment
 
 Build an independently reviewable, authenticated **public snapshot transport**
