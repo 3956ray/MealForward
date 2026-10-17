@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - "cp30-backend/g1-export/**"
-      - "cloud-auth/g1-cache-pg.ci.mjs"
+      - "cp30-backend/g1-export/**"
       - ".github/workflows/cp31-g1-public-cache.yml"
 permissions:
   contents: read
@@ -35,13 +35,13 @@ jobs:
           docker exec -i mf-g1-cache psql -U postgres -d mf_g1_cache_ci_only -v ON_ERROR_STOP=1 < cp30-backend/g1-export/disposable-cache-schema.sql
       - name: Install exact existing login dependencies for real pg client
         run: |
-          cd cloud-auth
+          cd cp30-backend/g1-export
           npm install --ignore-scripts --no-audit --no-fund
       - name: Validate source-only receiver syntax and Ed25519 envelope
         run: |
           node --check cp30-backend/g1-export/public-cache.mjs
           node --check cp30-backend/g1-export/public-envelope.mjs
-          node --check cloud-auth/g1-cache-pg.ci.mjs
+          node --check cp30-backend/g1-export/g1-cache-pg.ci.mjs
           node --test cp30-backend/g1-export/public-envelope.test.mjs
       - name: Exercise real PG17 concurrent signed HTTP snapshots and durable restart
-        run: node --test cloud-auth/g1-cache-pg.ci.mjs
+        run: node --test cp30-backend/g1-export/g1-cache-pg.ci.mjs

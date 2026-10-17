@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import {generateKeyPairSync,sign} from 'node:crypto';
 import pg from 'pg';
-import {publicEnvelopeSigningBytes} from '../cp30-backend/g1-export/public-envelope.mjs';
-import {createG1PublicCache,makeG1PublicCacheHandler} from '../cp30-backend/g1-export/public-cache.mjs';
+import {publicEnvelopeSigningBytes} from './public-envelope.mjs';
+import {createG1PublicCache,makeG1PublicCacheHandler} from './public-cache.mjs';
 
 const URL='postgres://mf_g1_cache_app:g1-disposable-only@127.0.0.1:5432/mf_g1_cache_ci_only';
 const ADMIN_URL='postgres://postgres:g1-disposable-only@127.0.0.1:5432/mf_g1_cache_ci_only';

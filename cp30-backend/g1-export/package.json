@@ -1,0 +1,15 @@
+{
+  "name": "mealforward-g1-source-public-cache-offline",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0-ci",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:pg": "node --test g1-cache-pg.ci.mjs"
+  },
+  "dependencies": {
+    "pg": "8.16.3"
+  }
+}
