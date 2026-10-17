@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-g2-pg17-disposable-ci-20261017
+      - codex/mealforward-g1-wallet-ab-sql-pg17-20261017
   pull_request:
     paths:
       - "cp30-backend/**"
