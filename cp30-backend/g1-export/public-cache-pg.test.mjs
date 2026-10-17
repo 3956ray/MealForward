@@ -12,7 +12,7 @@ import {
 } from './public-cache.mjs';
 import {publicEnvelopeSigningBytes} from './public-envelope.mjs';
 
-const URL='postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_cache_ci_only';
+const CI_PG_URL='postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_cache_ci_only';
 const KEY_ID='mealforward-g1-public-export-v1';
 const AUDIENCE='https://mealforward-cp31-auth-laodao.onrender.com';
 const STORE='a'.repeat(64);
@@ -84,9 +84,9 @@ async function reset(){
 before(async()=>{
  if(process.env.GITHUB_ACTIONS!=='true'||
     process.env.MF_G1_CACHE_DISPOSABLE_ONLY!=='ack-fresh-public-cache-pg17'||
-    process.env.DATABASE_URL!==URL)
+    process.env.DATABASE_URL!==CI_PG_URL)
   throw Error('REFUSE_NON_DISPOSABLE_G1_POSTGRES');
- pool=new pg.Pool({connectionString:URL,max:18,connectionTimeoutMillis:5000});
+ pool=new pg.Pool({connectionString:CI_PG_URL,max:18,connectionTimeoutMillis:5000});
  const version=Number((await pool.query('SHOW server_version_num')).rows[0].server_version_num);
  assert.ok(version>=170000&&version<180000);
  const existing=await pool.query("SELECT nspname FROM pg_namespace WHERE nspname LIKE 'c1\\_%' ESCAPE '\\' OR nspname='mf_g1_public_cache'");
@@ -140,7 +140,7 @@ test('sequence must be contiguous, never allow gaps, duplicates or rollback',asy
 });
 test('restart/new pool still refuses old envelope via durable PG high-watermark',async()=>{
  await cache.ingest(envelope());
- const rebooted=new pg.Pool({connectionString:URL,max:4});
+ const rebooted=new pg.Pool({connectionString:CI_PG_URL,max:4});
  try{
    const newApp=make(rebooted);
    assert.equal((await newApp.current()).sequence,'1');
