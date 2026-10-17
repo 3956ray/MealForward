@@ -4,6 +4,7 @@ on:
     branches:
       - codex/mealforward-g2-pg17-disposable-ci-20261017
       - codex/mealforward-g1-wallet-ab-sql-pg17-20261017
+      - codex/mealforward-g1-public-export-role-20261017
   pull_request:
     paths:
       - "cp30-backend/**"
@@ -43,3 +44,8 @@ jobs:
         run: python -B cp30-backend/tools/live-runtime-hotfix-parity-source-check.py
       - name: Run source migrations 001 through 045 in disposable PG17
         run: python -B cp30-backend/tools/g2-disposable-pg17-ci.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify signed public-source envelope fail-closed security
+        run: node --test cp30-backend/g1-export/public-envelope.test.mjs

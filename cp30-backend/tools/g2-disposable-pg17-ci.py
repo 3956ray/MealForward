@@ -19,6 +19,7 @@ import sys
 import psycopg
 from psycopg import sql
 from g1_wallet_ab_pg_probe import check_source_wallet_scope
+from g1_public_source_pg_probe import security_probe
 
 ROOT = Path(__file__).resolve().parents[1]
 DATABASE = "mf_g2_disposable_ci_20261017"
@@ -258,6 +259,7 @@ def run():
             # intentionally populated synthetic checkpoint in this test DB.
             result["initializedRuntime045Rejected"] = verify_initialized_runtime_rejects_045(db)
             result.update(check_source_wallet_scope(db))
+            result.update(security_probe(db))
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_PASS",
             "pgMajor": 17,
@@ -286,9 +288,11 @@ if __name__ == "__main__":
     except Exception as exc:
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_BLOCKED",
-            "reason": str(exc)[:100] if isinstance(exc, ValueError) else type(exc).__name__,
+            "reason": str(exc)[:100] if isinstance(exc, (ValueError, AssertionError)) else type(exc).__name__,
             "sqlstate": getattr(exc, "sqlstate", None),
             "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
+            "ciDiagnostic": (getattr(getattr(exc, "diag", None), "message_primary", None) or "")[:160],
+            "ciStatementPosition": getattr(getattr(exc, "diag", None), "statement_position", None),
             "originalRuntimeTouched": False,
         }), file=sys.stderr)
         sys.exit(1)
