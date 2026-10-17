@@ -1,0 +1,41 @@
+name: MealForward G0 PostgreSQL SIWE concurrency gate
+on:
+  push:
+    branches:
+      - codex/mealforward-g0-pg17-auth-race-security-20261017
+  pull_request:
+    paths:
+      - "cloud-auth/**"
+      - ".github/workflows/cp31-g0-pg17-race.yml"
+permissions:
+  contents: read
+jobs:
+  real-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MF_G0_PG_DISPOSABLE_ONLY: ack-local-ci-auth-postgres-17
+      DATABASE_URL: postgres://postgres:gha-g0-ci-only@127.0.0.1:5432/mealforward_g0_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Launch disposable PG17 on runner loopback
+        run: |
+          docker run -d --rm --name mf-g0-disposable             -e POSTGRES_USER=postgres             -e POSTGRES_PASSWORD=gha-g0-ci-only             -e POSTGRES_DB=mealforward_g0_ci_only             -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g0-disposable pg_isready -U postgres -d mealforward_g0_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install existing pinned Auth Pilot dependencies
+        run: |
+          cd cloud-auth
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify real PG challenge/session boundaries and existing sign-in tests
+        run: |
+          cd cloud-auth
+          npm test
