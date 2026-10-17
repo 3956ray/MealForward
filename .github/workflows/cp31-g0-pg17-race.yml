@@ -40,3 +40,4 @@ jobs:
         run: |
           cd cloud-auth
           npm test
+          node --test pg-security.ci.mjs
