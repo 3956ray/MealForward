@@ -182,19 +182,17 @@ test('lower signed sequence can never overwrite latest committed snapshot',async
  assert.equal(String((await pgRow()).sequence),'4');
 });
 test('expired cache disappears from public reads but retains durable replay floor',async()=>{
- const originalNow=now;
- try{
-  now+=121;
-  assert.equal((await call('GET','/v1/stores')).status,503);
-  assert.equal((await call('GET','/v1/ledger')).status,503);
-  assert.equal((await call('POST','/internal/g1/public-snapshot',signed(4))).status,409);
-  assert.equal(String((await pgRow()).sequence),'4');
-  const newer=signed(5);
-  assert.equal((await call('POST','/internal/g1/public-snapshot',newer)).status,202);
-  assert.equal((await call('GET','/v1/stores')).status,200);
- }finally{now=originalNow}
+ now+=121;
+ assert.equal((await call('GET','/v1/stores')).status,503);
+ assert.equal((await call('GET','/v1/ledger')).status,503);
+ assert.equal((await call('POST','/internal/g1/public-snapshot',signed(4))).status,409);
+ assert.equal(String((await pgRow()).sequence),'4');
+ const newer=signed(5);
+ assert.equal((await call('POST','/internal/g1/public-snapshot',newer)).status,202);
+ assert.equal((await call('GET','/v1/stores')).status,200);
 });
 test('a damaged cached envelope cannot be served even if stored row remains valid',async()=>{
+ assert.equal((await call('GET','/v1/stores')).status,200);
  const original=await pgRow();
  try{
   const forged=structuredClone(original.envelope);
@@ -206,6 +204,7 @@ test('a damaged cached envelope cannot be served even if stored row remains vali
   await pool.query('UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
    [JSON.stringify(original.envelope),'cp30-public-v1']);
  }
+ assert.equal((await call('GET','/v1/stores')).status,200);
 });
 test('disabled candidate does not read or accept any snapshot',async()=>{
  const temp=await launch(pool,false);
