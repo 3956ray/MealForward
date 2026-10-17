@@ -12,7 +12,7 @@ import {makeG1PublicSnapshotCache} from './public-cache.mjs';
 import {makeIndependentG1PublicAnchor} from './independent-anchor.mjs';
 import {publicEnvelopeSigningBytes} from './public-envelope.mjs';
 
-const CACHE_URL='postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_anchor_cache_ci_only';
+const CACHE_URL='postgres://postgres:g1-anchored-cache-ci-only@127.0.0.1:5434/mealforward_g1_anchor_cache_ci_only';
 const ANCHOR_URL='postgres://postgres:g1-anchor-ci-only@127.0.0.1:5433/mealforward_g1_anchor_ci_only';
 const AUDIENCE='https://mealforward-cp31-auth-laodao.onrender.com';
 const KEY_ID='mealforward-g1-public-export-v1';
