@@ -9,7 +9,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 NAMESPACE = "g1_wallet_ab_probe"
-A, B = "wallet-a", "wallet-b"
+A, B = "a" * 64, "b" * 64
 TOKEN_A = "11" * 32
 TOKEN_B = "22" * 32
 CSRF_A = "33" * 32
