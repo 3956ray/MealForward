@@ -56,7 +56,8 @@ const call=async(method,path,payload,options={})=>{
 };
 async function launch(nextPool=pool,enabled=true){
  const c=createG1PublicCache({
-  pool:nextPool,publicKey,keyId,audience,clock:()=>now,enabled
+  pool:nextPool,publicKey,keyId,audience,clock:()=>now,enabled,
+  expectedDatabase:'mf_g1_cache_ci_only',expectedRole:'mf_g1_cache_app'
  });
  const h=makeG1PublicCacheHandler({cache:c,expectedAudience:audience,enabled});
  const s=http.createServer((req,res)=>h(req,res));
@@ -116,6 +117,18 @@ test('restricted cache role cannot create objects, delete snapshots or inspect s
  const schemas=await pool.query(
   "SELECT count(*)::int AS n FROM information_schema.schemata WHERE schema_name LIKE 'c1\\_%' ESCAPE '\\'");
  assert.equal(schemas.rows[0].n,0);
+});
+test('enabled receiver rejects unpinned database identity or a privileged PG connection',async()=>{
+ assert.throws(()=>createG1PublicCache({
+  pool,publicKey,keyId,audience,enabled:true
+ }),/G1_EXACT_RESTRICTED_DB_IDENTITY_REQUIRED/);
+ const privileged=createG1PublicCache({
+  pool:admin,publicKey,keyId,audience,clock:()=>now,enabled:true,
+  expectedDatabase:'mf_g1_cache_ci_only',expectedRole:'mf_g1_cache_app'
+ });
+ assert.equal(await privileged.health(),false);
+ await assert.rejects(privileged.accept(signed(1)),{code:'G1_PUBLIC_NOT_AVAILABLE'});
+ assert.equal(String((await pgRow()).sequence),'0');
 });
 test('no signed data means 503; health does not claim business connected',async()=>{
  const healthy=await call('GET','/health');
