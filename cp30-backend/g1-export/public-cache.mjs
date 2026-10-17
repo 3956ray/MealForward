@@ -60,10 +60,21 @@ function unchangedOrMonotone(previous,next){
 
 export function makeG1PublicSnapshotCache({
   pool,publicKey,expectedKeyId,expectedAudience,
-  expectedPublicKeyFingerprint,clock=()=>Math.floor(Date.now()/1000)
+  expectedPublicKeyFingerprint,anchor=null,testOnlyAllowUnanchored=false,
+  clock=()=>Math.floor(Date.now()/1000)
 }={}){
   if(typeof pool?.connect!=='function'||typeof pool?.query!=='function'||
      typeof clock!=='function')refuse('G1_CACHE_CONFIGURATION_REQUIRED');
+  // Production MUST have an independent durable high-watermark.
+  // Inherited pre-anchor fixture tests may use the old cache behavior only
+  // under an explicit one-run GitHub Actions disposable CI flag.
+  const allowUnanchored=testOnlyAllowUnanchored===true &&
+    process.env.GITHUB_ACTIONS==='true' &&
+    process.env.MF_G1_CACHE_DISPOSABLE_ONLY==='ack-fresh-public-cache-pg17';
+  const anchored=anchor&&typeof anchor.advance==='function'&&
+    typeof anchor.current==='function';
+  if(!anchored&&!allowUnanchored)
+    refuse('G1_CACHE_INDEPENDENT_ANCHOR_REQUIRED');
   const key=validateTrust({
     publicKey,expectedKeyId,expectedAudience,expectedPublicKeyFingerprint
   });
@@ -115,6 +126,21 @@ export function makeG1PublicSnapshotCache({
       // Deliberately require contiguous sequence: no silent missing snapshot.
       if(BigInt(checked.sequence)!==BigInt(prior.last_sequence)+1n)refuse();
       if(old)unchangedOrMonotone(old.data,checked.data);
+      // IMPORTANT ordering for cross-database crash safety:
+      //  1. cache row locked, old provenance verified
+      //  2. independent anchor commits exact signed digest
+      //  3. cache commits. If (3) fails, repeating THIS exact envelope may
+      //     reconcile a one-step anchor-ahead gap; other envelopes fail closed.
+      let anchorReceipt=null;
+      if(anchored){
+        anchorReceipt=await anchor.advance({
+          envelope,expectedPreviousSequence:prior.last_sequence,
+          expectedPreviousDigest:prior.receipt_digest,now:time
+        });
+        if(anchorReceipt.anchored!==true||
+          anchorReceipt.sequence!==checked.sequence||
+          anchorReceipt.receiptDigest!==checked.receiptDigest)refuse();
+      }
       const updated=await db.query('UPDATE '+CACHE_TABLE+' SET '+
         'last_sequence=$1::numeric,source_as_of=$2::bigint,'+
         'signed_issued_at=$3::bigint,signed_expires_at=$4::bigint,'+
@@ -127,6 +153,8 @@ export function makeG1PublicSnapshotCache({
       await db.query('COMMIT');began=false;
       return {
         accepted:true,sequence:checked.sequence,
+        independentlyAnchored:!!anchored,
+        anchorReconciled:anchorReceipt?.recoveryMatch===true,
         receiptDigest:checked.receiptDigest,expiresAt:checked.expiresAt,
         authenticatedPublicSource:true,chainFinalityIndependentlyVerified:false
       };
@@ -148,11 +176,20 @@ export function makeG1PublicSnapshotCache({
       // served as though it were a current original chain projection.
       const verified=verifyStored(rows.rows[0],time);
       assertPublicG1Snapshot(verified.data);
+      if(anchored){
+        // A restored old cache DB must never be served while the independent
+        // anchor remembers a higher sequence or a different original digest.
+        const checkpoint=await anchor.current();
+        if(checkpoint.sequence!==verified.sequence||
+           checkpoint.receiptDigest!==verified.receiptDigest||
+           checkpoint.sourceAsOf!==verified.data.asOf)refuse();
+      }
       return {
         status:'G1_PUBLIC_SNAPSHOT_VERIFIED',
         sequence:verified.sequence,receiptDigest:verified.receiptDigest,
         expiresAt:verified.expiresAt,asOf:verified.data.asOf,
         authenticatedPublicSource:true,
+        independentlyAnchored:!!anchored,
         chainFinalityIndependentlyVerified:false,
         data:verified.data
       };
