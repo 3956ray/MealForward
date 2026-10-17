@@ -28,17 +28,41 @@ export async function initializeSchema(pool){
     await c.query('COMMIT');
   }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release()}
 }
+// Serialize challenge admission on the parent pre-session row, then count
+// committed child challenges AFTER acquiring the lock. A single-statement
+// COUNT + INSERT can race under READ COMMITTED and exceed the three-challenge
+// bound. Reusing this helper in the rollback-only startup probe preserves
+// the exact SQL behavior without ever committing probe fixtures.
+async function insertChallengeLocked(client,{preHash,csrfHash,challenge,now}){
+  const parent=await client.query(`SELECT pre_hash FROM mf_cp31_auth_pilot.pre_sessions
+    WHERE pre_hash=$1 AND csrf_hash=$2 AND expires_at>$3 AND NOT used
+    FOR UPDATE`,[preHash,csrfHash,now]);
+  if(parent.rowCount!==1)return false;
+  const existing=await client.query(
+    'SELECT count(*)::int AS n FROM mf_cp31_auth_pilot.challenges WHERE pre_hash=$1',
+    [preHash]);
+  if(existing.rows[0].n>=3)return false;
+  const result=await client.query(`INSERT INTO mf_cp31_auth_pilot.challenges
+    (id,pre_hash,csrf_hash,payload,expires_at)
+    VALUES($1::uuid,$2,$3,$4::jsonb,$5::bigint)
+    ON CONFLICT DO NOTHING RETURNING id`,
+    [challenge.challengeId,preHash,csrfHash,JSON.stringify(challenge),challenge.expiresAt]);
+  return result.rowCount===1;
+}
+
 export function pgStore(pool){
   return {
     async health(){try{const q=await pool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1');return q.rowCount===1}catch{return false}},
     async createPre({preHash,csrfHash,expiresAt}){await pool.query('INSERT INTO mf_cp31_auth_pilot.pre_sessions(pre_hash,csrf_hash,expires_at) VALUES($1,$2,$3)',[preHash,csrfHash,expiresAt]);},
     async createChallenge({preHash,csrfHash,challenge,now}){
-      const r=await pool.query(`INSERT INTO mf_cp31_auth_pilot.challenges (id,pre_hash,csrf_hash,payload,expires_at)
-        SELECT $1::uuid,p.pre_hash,$3,$4::jsonb,$5::bigint FROM mf_cp31_auth_pilot.pre_sessions p
-        WHERE p.pre_hash=$2 AND p.csrf_hash=$3 AND p.expires_at>$6 AND NOT p.used
-          AND (SELECT count(*) FROM mf_cp31_auth_pilot.challenges x WHERE x.pre_hash=p.pre_hash)<3
-        ON CONFLICT DO NOTHING`,[challenge.challengeId,preHash,csrfHash,JSON.stringify(challenge),challenge.expiresAt,now]);
-      return r.rowCount===1;
+      const c=await pool.connect();
+      try{
+        await c.query('BEGIN');
+        const accepted=await insertChallengeLocked(c,{preHash,csrfHash,challenge,now});
+        await c.query('COMMIT');
+        return accepted;
+      }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e}
+      finally{c.release()}
     },
     async getChallenge({preHash,csrfHash,challengeId,now}){
       const r=await pool.query(`SELECT x.payload FROM mf_cp31_auth_pilot.challenges x JOIN mf_cp31_auth_pilot.pre_sessions p ON p.pre_hash=x.pre_hash
@@ -77,7 +101,7 @@ export async function probeAuthStorage(pool,makeChallenge,origin){
     stage='begin';await c.query('BEGIN');inTransaction=true;
     stage='pre_insert';await store.createPre({preHash,csrfHash,expiresAt:now+300});
     stage='challenge_insert';
-    const inserted=await store.createChallenge({preHash,csrfHash,challenge,now});
+    const inserted=await insertChallengeLocked(c,{preHash,csrfHash,challenge,now});
     if(!inserted)throw Error('PROBE_CHALLENGE_NOT_STORED');
     stage='challenge_read';
     const stored=await store.getChallenge({preHash,csrfHash,challengeId:challenge.challengeId,now});
