@@ -22,6 +22,7 @@ connecting to the original CP30 runtime or configuring a production signer.
 | `source-publisher-outbox.sql` | Dedicated, disposable PostgreSQL17 outbox, two NOLOGIN roles, immutable trust root, single persisted pending signed public envelope and monotonic ACK transition |
 | `source-publisher.mjs` | `prepareNext()` signs once and persists BEFORE attempting transport; `dispatchPending()` sends exactly the stored envelope and verifies independent receiver evidence before advancing ACK |
 | `source-publisher-pg.test.mjs` | Real PostgreSQL 17 tests with synthetic public data, freshly generated temporary Ed25519 signing key, receiver cache and separate anchor |
+| `source-publisher-transport.mjs` | Pinned HTTPS-only public source POST/GET adapter, local Ed25519 envelope validation, 5-second request abort, redirects/Cookies/Bearer forbidden and 64KB response cap |
 | `cp31-g1-source-publisher-pg17.yml` | Three new loopback-only `postgres:17.11` containers; no external source or signer |
 
 This does **not** install `source-publisher-outbox.sql` into an existing
@@ -117,6 +118,31 @@ failure-injected source ACK update, forged remote proof refusal, Ed25519
 tampering and SQL role restrictions. PostgreSQL is strictly runner-local and
 uses fixed dummy test-only passwords. EIP-191 wallet login, genuine CP30
 Journals and actual funded Testnet meals are not used.
+
+## Outbound HTTPS transport hardening
+
+The branch now includes a dedicated `source-publisher-transport.mjs`
+candidate. It does not fetch anything on import and it does not open a
+server. Once wired by an explicitly authorized deployment, it only sends
+already verified, publicly allowlisted Ed25519 envelopes to one exact
+pinned `https://...onrender.com/v1/g1/public-snapshot` endpoint.
+
+It refuses redirects and a response whose final URL differs from the
+pinned endpoint. It sends neither Cookies nor bearer tokens, uses
+`credentials:omit`, no-store/no-referrer headers, 5-second abort
+signals, an outgoing 48KB JSON size cap and a 64KB response limit. It
+rejects unrecognized content-type, non-canonical/duplicate-key JSON,
+private fields, a foreign key or expired signed source before outgoing
+network traffic. A remote HTTP **409** may indicate an already-processed
+original; neither 201 nor 409 can advance Outbox ACK without successful
+anchored read-back.
+
+[CI on revised branch — **36/36 PASS**](https://github.com/3956ray/MealForward/actions/runs/39050190489):
+the previous 28 public publisher and real PG17 tests plus 8 HTTPS adapter
+protocol tests. These additional HTTPS tests use **injected mock fetch**
+responses, not real internet egress or an installed source publisher.
+The server-side receipt and source/anchor checks are exercised using the
+independent disposable PostgreSQL fixtures.
 
 ## Key rotation is deliberately a separate authorization gate
 
