@@ -19,6 +19,7 @@ jobs:
       DATABASE_URL: postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_cache_ci_only
       MF_G1_ANCHOR_DISPOSABLE_ONLY: ack-separate-pg17
       ANCHOR_DATABASE_URL: postgres://postgres:g1-anchor-ci-only@127.0.0.1:5433/mealforward_g1_anchor_ci_only
+      ANCHOR_CACHE_DATABASE_URL: postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_anchor_cache_ci_only
     steps:
       - uses: actions/checkout@v4
         with:
