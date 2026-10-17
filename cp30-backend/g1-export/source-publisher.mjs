@@ -103,10 +103,12 @@ export function makeG1SourcePublisher({
 }={}){
  if(typeof pool?.connect!=='function'||typeof pool?.query!=='function'||
   typeof readPublicSource!=='function'||
+  signer?.purpose!=='G1_PUBLIC_DATA_ONLY_V1'||
   typeof signer?.signPublicEnvelope!=='function'||
   typeof transport?.send!=='function'||
   typeof transport?.readBack!=='function'||
   typeof independentCheckpoint?.current!=='function'||
+  typeof independentCheckpoint?.advance==='function'||
   typeof clock!=='function')
   deny('G1_PUBLISHER_NOT_CONFIGURED');
  const key=exactTrust({publicKey,expectedKeyId,expectedAudience,
