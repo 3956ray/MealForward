@@ -67,7 +67,8 @@ function envelope({sequence='1',asOf=FIXED_NOW-2,issuedAt=FIXED_NOW,
 const make=(which=pool,key=publicKey,fingerprint=pinnedFingerprint)=>
  makeG1PublicSnapshotCache({
    pool:which,publicKey:key,expectedKeyId:KEY_ID,expectedAudience:AUDIENCE,
-   expectedPublicKeyFingerprint:fingerprint,clock:()=>clockValue
+   expectedPublicKeyFingerprint:fingerprint,
+   testOnlyAllowUnanchored:true,clock:()=>clockValue
  });
 const rejected=async promise=>assert.rejects(promise,{code:'G1_CACHE_REJECTED'});
 const unavailable=async promise=>assert.rejects(promise,{code:'G1_CACHE_NOT_READY'});
@@ -390,4 +391,11 @@ test('GET rejects an expired cached original; does not return stale amounts or v
   assert.equal(old.body.error,'G1_PUBLIC_SOURCE_NOT_READY');
   assert.equal(Object.hasOwn(old.body,'data'),false);
  }finally{await server.close()}
+});
+
+test('production cache never accepts an unanchored cache constructor',()=>{
+ assert.throws(()=>makeG1PublicSnapshotCache({
+  pool,publicKey,expectedKeyId:KEY_ID,expectedAudience:AUDIENCE,
+  expectedPublicKeyFingerprint:pinnedFingerprint,clock:()=>clockValue
+ }),{code:'G1_CACHE_INDEPENDENT_ANCHOR_REQUIRED'});
 });

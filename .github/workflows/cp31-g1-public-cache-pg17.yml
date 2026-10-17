@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-g1-snapshot-cache-pg17-20261017
+      - codex/mealforward-g1-independent-anchor-20261017
   pull_request:
     paths:
       - "cp30-backend/g1-export/**"
@@ -16,6 +17,9 @@ jobs:
     env:
       MF_G1_CACHE_DISPOSABLE_ONLY: ack-fresh-public-cache-pg17
       DATABASE_URL: postgres://postgres:g1-cache-ci-only@127.0.0.1:5432/mealforward_g1_cache_ci_only
+      MF_G1_ANCHOR_DISPOSABLE_ONLY: ack-separate-pg17
+      ANCHOR_DATABASE_URL: postgres://postgres:g1-anchor-ci-only@127.0.0.1:5433/mealforward_g1_anchor_ci_only
+      ANCHOR_CACHE_DATABASE_URL: postgres://postgres:g1-anchored-cache-ci-only@127.0.0.1:5434/mealforward_g1_anchor_cache_ci_only
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +39,28 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Start second physically isolated anchor PostgreSQL 17.11
+        run: |
+          docker run -d --rm --name mf-g1-anchored-cache-ci \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=g1-anchored-cache-ci-only \
+            -e POSTGRES_DB=mealforward_g1_anchor_cache_ci_only \
+            -p 127.0.0.1:5434:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-anchored-cache-ci pg_isready -U postgres -d mealforward_g1_anchor_cache_ci_only; then break; fi
+            sleep 1
+          done
+          docker exec mf-g1-anchored-cache-ci pg_isready -U postgres -d mealforward_g1_anchor_cache_ci_only
+          docker run -d --rm --name mf-g1-independent-anchor-ci \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=g1-anchor-ci-only \
+            -e POSTGRES_DB=mealforward_g1_anchor_ci_only \
+            -p 127.0.0.1:5433:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-independent-anchor-ci pg_isready -U postgres -d mealforward_g1_anchor_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
       - name: Install only pinned standalone public-cache dependency
         run: |
           cd cp30-backend/g1-export
@@ -46,3 +72,5 @@ jobs:
           node --check public-cache.mjs
           node --check public-http.mjs
           node --test public-envelope.test.mjs public-cache-pg.test.mjs
+          node --check independent-anchor.mjs
+          node --test independent-anchor-pg.test.mjs
