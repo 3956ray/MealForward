@@ -140,9 +140,14 @@ export function makeG1PublicCacheHandler({cache,enabled=false,expectedAudience}=
    }
    if(req.method==='GET'&&u.pathname==='/health'){
     const ok=await cache.health();
+    // DB health must not be mistaken for a currently usable original
+    // snapshot. A fresh or expired cache can be healthy yet have no data.
+    let publicSnapshotUsable=false;
+    if(ok){try{await cache.read();publicSnapshotUsable=true}catch{}}
     respond(res,ok?200:503,{
      status:ok?'ready':'not_ready',mode:'G1_SIGNED_PUBLIC_CACHE_ONLY',
-     privateBusinessConnected:false,walletTransactionsAllowed:false
+     publicSnapshotUsable,privateBusinessConnected:false,
+     chainFinalityIndependentlyVerified:false,walletTransactionsAllowed:false
     });
     return;
    }
