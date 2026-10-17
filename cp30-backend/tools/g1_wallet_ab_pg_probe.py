@@ -142,7 +142,16 @@ def check_source_wallet_scope(db):
             ).fetchone()[0]
             if allowed:
                 raise AssertionError("DIRECT_API_PRIVATE_SELECT")
+        # The existing runtime c1_live_api role CAN execute a mixed read/write
+        # SECURITY DEFINER dispatcher. It must NEVER be handed to a proposed
+        # cloud "read-only" bridge, even though private table SELECT is denied.
+        if not db.execute(
+            "SELECT has_function_privilege('c1_live_api', "
+            "'c1_runtime_internal.live_api(text,jsonb)', 'EXECUTE')"
+        ).fetchone()[0]:
+            raise AssertionError("MIXED_DISPATCHER_SOURCE_GRANT_CHANGED")
         result = {
+            "mixedApiDispatcherUnsuitableForCloudRead": True,
             "g1SourceWalletAb": True,
             "clientWalletOverrideIgnored": True,
             "csrfMutationBoundToCurrentSession": True,
