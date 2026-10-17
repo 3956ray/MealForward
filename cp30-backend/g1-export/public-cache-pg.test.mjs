@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,sign,createHash} from 'node:crypto';
 import pg from 'pg';
+import http from 'node:http';
+import {makeG1PublicCacheHttpHandler} from './public-http.mjs';
 import {
   makeG1PublicSnapshotCache
 } from './public-cache.mjs';
@@ -277,4 +279,115 @@ test('writer cannot change trust roots, delete cache row or rewind accepted sequ
  }finally{await fresh.query('ROLLBACK');fresh.release()}
  assert.equal((await inspect()).last_sequence,'1');
  assert.equal((await cache.current()).sequence,'1');
+});
+
+/* HTTP adapter tests use a single loopback Node server and the SAME disposable
+ * PostgreSQL fixture. No Render, original CP30, wallet RPC or real user data.
+ */
+async function serve(){
+ const server=http.createServer(makeG1PublicCacheHttpHandler({cache,origin:AUDIENCE}));
+ server.requestTimeout=8000;
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const port=server.address().port;
+ async function request(method='GET',path='/v1/g1/public-snapshot',body=null,extraHeaders={}){
+  const raw=body===null?null:typeof body==='string'?body:JSON.stringify(body);
+  const headers={
+   'Host':new URL(AUDIENCE).host,
+   ...(method==='POST'?{'Content-Type':'application/json'}:{}),
+   ...(raw===null?{}:{'Content-Length':Buffer.byteLength(raw)}),
+   ...extraHeaders
+  };
+  return new Promise((resolve,reject)=>{
+   const req=http.request({hostname:'127.0.0.1',port,method,path,headers},res=>{
+    const data=[];
+    res.on('data',chunk=>data.push(chunk));
+    res.on('end',()=>{
+     try{resolve({status:res.statusCode,body:JSON.parse(Buffer.concat(data).toString('utf8')),headers:res.headers})}
+     catch(e){reject(e)}
+    });
+   });
+   req.on('error',reject);req.setTimeout(6000,()=>req.destroy(Error('LOCAL_TEST_TIMEOUT')));
+   req.end(raw===null?undefined:raw);
+  });
+ }
+ return {request,close:()=>new Promise((ok,bad)=>server.close(err=>err?bad(err):ok()))};
+}
+
+test('loopback HTTP POST signed snapshot commits; public GET returns ONLY authenticated public data',async()=>{
+ const server=await serve();
+ try{
+  const written=await server.request('POST',undefined,envelope());
+  assert.equal(written.status,201);
+  assert.equal(written.body.accepted,true);
+  assert.equal(written.body.chainFinalityIndependentlyVerified,false);
+  const visible=await server.request();
+  assert.equal(visible.status,200);
+  assert.equal(visible.body.sequence,'1');
+  assert.deepEqual(visible.body.data,publicSnapshot(FIXED_NOW-2));
+  assert.equal(visible.headers['cache-control'],'no-store');
+  assert.equal(visible.headers['access-control-allow-origin'],undefined);
+  assert.equal(Object.hasOwn(visible.body,'signature'),false);
+ }finally{await server.close()}
+});
+test('loopback HTTP parallel replay of one signed original commits only once',async()=>{
+ const server=await serve();
+ try{
+  const original=envelope();
+  const values=await Promise.all(Array.from({length:10},
+   ()=>server.request('POST',undefined,original)));
+  assert.equal(values.filter(x=>x.status===201).length,1);
+  assert.equal(values.filter(x=>x.status===409).length,9);
+  assert.equal((await server.request()).body.sequence,'1');
+  assert.equal((await inspect()).last_sequence,'1');
+ }finally{await server.close()}
+});
+test('HTTP pinned host/origin and forbidden Cookies cannot grant source authority',async()=>{
+ const server=await serve();
+ try{
+  const signed=envelope();
+  assert.equal((await server.request('POST',undefined,signed,{'Host':'evil.onrender.com'})).status,403);
+  assert.equal((await server.request('POST',undefined,signed,{'Origin':'https://evil.onrender.com'})).status,403);
+  assert.equal((await server.request('POST',undefined,signed,{'Cookie':'__Host-session=private'})).status,403);
+  assert.equal((await server.request('POST',undefined,signed,{'Authorization':'Bearer private'})).status,403);
+  assert.equal((await server.request('GET','/v1/my/vouchers')).status,404);
+  assert.equal((await server.request('POST','/v1/support/intents',signed)).status,404);
+  assert.equal((await server.request('PUT')).status,405);
+  assert.equal((await inspect()).last_sequence,'0');
+ }finally{await server.close()}
+});
+test('HTTP rejects invalid content type, JSON duplicate keys and >48KB input before DB',async()=>{
+ const server=await serve();
+ try{
+  assert.equal((await server.request('POST',undefined,envelope(),{'Content-Type':'text/plain'})).status,415);
+  const doc=JSON.stringify(envelope());
+  const duplicate='{"v":1,'+doc.slice(1);
+  assert.equal((await server.request('POST',undefined,duplicate)).status,400);
+  assert.equal((await server.request('POST',undefined,envelope(),{'Content-Encoding':'gzip'})).status,415);
+  const large=JSON.stringify({message:'a'.repeat(49000)});
+  assert.equal((await server.request('POST',undefined,large)).status,413);
+  assert.equal((await inspect()).last_sequence,'0');
+ }finally{await server.close()}
+});
+test('invalid or tampered signed HTTP payload never provides a public GET record',async()=>{
+ const server=await serve();
+ try{
+  const bad=envelope();
+  bad.data.ledger.items[0].financial.F='999';
+  assert.equal((await server.request('POST',undefined,bad)).status,409);
+  const absent=await server.request();
+  assert.equal(absent.status,503);
+  assert.equal(absent.body.error,'G1_PUBLIC_SOURCE_NOT_READY');
+  assert.equal(Object.hasOwn(absent.body,'data'),false);
+ }finally{await server.close()}
+});
+test('GET rejects an expired cached original; does not return stale amounts or vouchers',async()=>{
+ const server=await serve();
+ try{
+  assert.equal((await server.request('POST',undefined,envelope())).status,201);
+  clockValue=FIXED_NOW+91;
+  const old=await server.request();
+  assert.equal(old.status,503);
+  assert.equal(old.body.error,'G1_PUBLIC_SOURCE_NOT_READY');
+  assert.equal(Object.hasOwn(old.body,'data'),false);
+ }finally{await server.close()}
 });
