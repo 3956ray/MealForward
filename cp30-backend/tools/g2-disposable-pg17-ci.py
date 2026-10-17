@@ -292,6 +292,7 @@ if __name__ == "__main__":
             "sqlstate": getattr(exc, "sqlstate", None),
             "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
             "ciDiagnostic": (getattr(getattr(exc, "diag", None), "message_primary", None) or "")[:160],
+            "ciStatementPosition": getattr(getattr(exc, "diag", None), "statement_position", None),
             "originalRuntimeTouched": False,
         }), file=sys.stderr)
         sys.exit(1)
