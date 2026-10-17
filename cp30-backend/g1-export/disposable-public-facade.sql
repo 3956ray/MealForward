@@ -16,7 +16,7 @@ REVOKE ALL ON SCHEMA c1_g1_export FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA c1_g1_export FROM PUBLIC;
 GRANT USAGE ON SCHEMA c1_private,c1_live_private,c1_runtime_private TO c1_g1_export_owner;
 GRANT SELECT ON c1_private.deployment,c1_private.transaction_guard,
-  c1_private.store_registrations TO c1_g1_export_owner;
+  c1_private.store_registrations,c1_private.confirmed_store_registrations TO c1_g1_export_owner;
 GRANT SELECT ON c1_runtime_private.state TO c1_g1_export_owner;
 GRANT SELECT ON c1_live_private.stores,c1_live_private.catalog_versions
   TO c1_g1_export_owner;
@@ -41,7 +41,7 @@ DECLARE
   cfg c1_g1_export.binding%ROWTYPE;
   d record; guardrow record; runtime record;
   clock_now bigint=extract(epoch FROM statement_timestamp())::bigint;
-  s record;r record;
+  s record;r record;confirmed record;
   store_count integer;
   stime bigint;
   k text;j jsonb;
@@ -92,7 +92,12 @@ BEGIN
    END IF;
    SELECT state,record INTO r FROM c1_private.store_registrations
      WHERE ns=cfg.ns AND id=s.registration_id;
-   IF r IS NULL OR r.state<>'CONFIRMED'
+   SELECT id,escrow,evidence INTO confirmed
+     FROM c1_private.confirmed_store_registrations
+     WHERE ns=cfg.ns AND public_store=s.store;
+   IF r IS NULL OR confirmed IS NULL OR r.state<>'CONFIRMED'
+   OR confirmed.id IS DISTINCT FROM s.registration_id
+   OR confirmed.escrow IS DISTINCT FROM s.profile->'binding'->>'escrow'
    OR r.record->'verifiedEvidence' IS DISTINCT FROM s.profile->'registrationEvidence'
    OR r.record->>'escrow' IS DISTINCT FROM s.profile->'binding'->>'escrow'
    THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_UNVERIFIED_REGISTRATION';END IF;
