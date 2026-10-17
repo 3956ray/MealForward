@@ -238,8 +238,10 @@ test('reader/writer NOLOGIN SQL roles cannot access original or mutate public ca
   "has_table_privilege('mf_g1_cache_reader','mf_g1_public_cache.active','SELECT') r, "+
   "has_table_privilege('mf_g1_cache_reader','mf_g1_public_cache.active','UPDATE') u, "+
   "has_table_privilege('mf_g1_cache_writer','mf_g1_public_cache.active','UPDATE') w, "+
+  "has_column_privilege('mf_g1_cache_writer','mf_g1_public_cache.active','last_sequence','UPDATE') seq, "+
+  "has_column_privilege('mf_g1_cache_writer','mf_g1_public_cache.active','key_id','UPDATE') root, "+
   "has_table_privilege('mf_g1_cache_writer','mf_g1_public_cache.active','INSERT') i");
- assert.deepEqual(privs.rows[0],{r:true,u:false,w:true,i:false});
+ assert.deepEqual(privs.rows[0],{r:true,u:false,w:false,seq:true,root:false,i:false});
  const client=await pool.connect();
  try{
    await client.query('BEGIN');
