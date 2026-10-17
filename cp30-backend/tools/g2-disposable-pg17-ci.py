@@ -18,6 +18,7 @@ import sys
 
 import psycopg
 from psycopg import sql
+from g1_wallet_ab_pg_probe import check_source_wallet_scope
 
 ROOT = Path(__file__).resolve().parents[1]
 DATABASE = "mf_g2_disposable_ci_20261017"
@@ -250,6 +251,7 @@ def run():
             # Do not modify an installed ledger. Prove 045 rejects the
             # intentionally populated synthetic checkpoint in this test DB.
             result["initializedRuntime045Rejected"] = verify_initialized_runtime_rejects_045(db)
+            result.update(check_source_wallet_scope(db))
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_PASS",
             "pgMajor": 17,
