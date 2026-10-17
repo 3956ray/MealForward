@@ -246,6 +246,12 @@ def run():
                     error = ValueError("MIGRATION_FAILED_" + path.name)
                     error.sqlstate = exc.sqlstate
                     raise error from None
+            # Mirror the exact post-migration function EXECUTE grants from the
+            # reviewed local initializer. The original files/ACLs are untouched;
+            # this SQL only targets the disposable CI database.
+            for owner in ("c1_api_code_owner","c1_auth_code_owner","c1_projection_code_owner"):
+                db.execute(sql.SQL("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA c1_private TO {}")
+                    .format(sql.Identifier(owner)))
             result = verify_source_schema(db)
             db.commit()
             # Do not modify an installed ledger. Prove 045 rejects the
