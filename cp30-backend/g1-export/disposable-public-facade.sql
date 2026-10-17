@@ -46,7 +46,7 @@ DECLARE
   stime bigint;
   k text;j jsonb;
   body jsonb;terms jsonb;
-  meal text; v text; pname text; description text; unitprice text;
+  meal_id_local text; v text; pname text; description text; unitprice text;
   window_data jsonb;
   u jsonb;
   storecounts jsonb;storeamounts jsonb;mealcounts jsonb;mealamounts jsonb;
@@ -163,14 +163,14 @@ BEGIN
      IF k !~ '^0x[0-9a-f]{64}$' OR j->>'currentVersion' !~ '^[1-9][0-9]{0,77}$'
        OR jsonb_typeof(j->'listed')<>'boolean'
      THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_INVALID_PUBLISHED_MENU';END IF;
-     meal=substring(k FROM 3);
+     meal_id_local=substring(k FROM 3);
      v=j->>'currentVersion';
      SELECT c.body,c.terms INTO body,terms
        FROM c1_live_private.catalog_versions AS c
-       WHERE c.ns=cfg.ns AND c.store=s.store AND c.meal=meal
+       WHERE c.ns=cfg.ns AND c.store=s.store AND c.meal=meal_id_local
          AND c.version=v AND c.state='LIVE';
      IF NOT FOUND THEN
-       IF meal=s.meal AND v=coalesce(s.profile->'firstMeal'->>'version','1') THEN
+       IF meal_id_local=s.meal AND v=coalesce(s.profile->'firstMeal'->>'version','1') THEN
          body=s.profile->'firstMeal';
          terms=j->'terms';
        ELSE
@@ -220,7 +220,7 @@ BEGIN
        'liability',((mealamounts->>'A')::numeric+(mealamounts->>'R')::numeric+
                     (mealamounts->>'H')::numeric)::text);
      meals=meals||jsonb_build_array(jsonb_build_object(
-       'id',meal,'meal',meal,'mealId',k,'store',s.store,'version',v,
+       'id',meal_id_local,'meal',meal_id_local,'mealId',k,'store',s.store,'version',v,
        'name',pname,'description',description,'windows',window_data,
        'listed',(j->>'listed')::boolean,'published',true,
        'eligible',mealcounts->>'A','supported',mealcounts->>'F',
