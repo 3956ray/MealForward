@@ -53,7 +53,7 @@ DECLARE
   counts jsonb;amounts jsonb;
   unit_bucket text;unit_price numeric;
   n bigint;total numeric;
-  key text;
+  bucket_name text;
   financed jsonb; meal_financed jsonb;
   kitchens jsonb='[]'::jsonb;
   ledgers jsonb='[]'::jsonb;
@@ -134,20 +134,20 @@ BEGIN
    END LOOP;
 
    storecounts='{}'::jsonb;storeamounts='{}'::jsonb;
-   FOR key IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
+   FOR bucket_name IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
      SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
        INTO n,total FROM jsonb_array_elements(s.rows->'units')
-       WHERE value->>'bucket'=key;
-     storecounts=storecounts||jsonb_build_object(key,n::text);
-     storeamounts=storeamounts||jsonb_build_object(key,total::text);
+       WHERE value->>'bucket'=bucket_name;
+     storecounts=storecounts||jsonb_build_object(bucket_name,n::text);
+     storeamounts=storeamounts||jsonb_build_object(bucket_name,total::text);
    END LOOP;
    SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
      INTO n,total FROM jsonb_array_elements(s.rows->'units');
    storecounts=storecounts||jsonb_build_object('F',n::text);
    storeamounts=storeamounts||jsonb_build_object('F',total::text);
-   FOR key IN SELECT unnest(ARRAY['F','A','R','H','S','X']) LOOP
-     IF s.rows->'accounting'->'totals'->'counts'->>key IS DISTINCT FROM storecounts->>key
-       OR s.rows->'accounting'->'totals'->>key IS DISTINCT FROM storeamounts->>key
+   FOR bucket_name IN SELECT unnest(ARRAY['F','A','R','H','S','X']) LOOP
+     IF s.rows->'accounting'->'totals'->'counts'->>bucket_name IS DISTINCT FROM storecounts->>bucket_name
+       OR s.rows->'accounting'->'totals'->>bucket_name IS DISTINCT FROM storeamounts->>bucket_name
      THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_LEDGER_ACCOUNTING_MISMATCH';END IF;
    END LOOP;
    financed=storeamounts||jsonb_build_object('counts',storecounts,
@@ -159,7 +159,7 @@ BEGIN
      'escrow',s.profile->'binding'->>'escrow'));
    ledgers=ledgers||jsonb_build_array(jsonb_build_object(
      'store',s.store,'funded',storecounts->>'F','financial',financed));
-   FOR k,j IN SELECT key,value FROM jsonb_each(snap_menu) LOOP
+   FOR k,j IN SELECT item.key,item.value FROM jsonb_each(snap_menu) AS item LOOP
      IF k !~ '^0x[0-9a-f]{64}$' OR j->>'currentVersion' !~ '^[1-9][0-9]{0,77}$'
        OR jsonb_typeof(j->'listed')<>'boolean'
      THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='G1_INVALID_PUBLISHED_MENU';END IF;
@@ -204,12 +204,12 @@ BEGIN
      END LOOP;
      -- No arbitrary body keys survive; only a fixed public allowlist.
      mealcounts='{}'::jsonb;mealamounts='{}'::jsonb;
-     FOR key IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
+     FOR bucket_name IN SELECT unnest(ARRAY['A','R','H','S','X']) LOOP
        SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
          INTO n,total FROM jsonb_array_elements(s.rows->'units')
-         WHERE value->>'bucket'=key AND value->>'meal_id'=k;
-       mealcounts=mealcounts||jsonb_build_object(key,n::text);
-       mealamounts=mealamounts||jsonb_build_object(key,total::text);
+         WHERE value->>'bucket'=bucket_name AND value->>'meal_id'=k;
+       mealcounts=mealcounts||jsonb_build_object(bucket_name,n::text);
+       mealamounts=mealamounts||jsonb_build_object(bucket_name,total::text);
      END LOOP;
      SELECT count(*)::bigint,coalesce(sum((value->>'price')::numeric),0)
        INTO n,total FROM jsonb_array_elements(s.rows->'units')
