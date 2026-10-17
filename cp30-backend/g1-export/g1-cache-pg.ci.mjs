@@ -110,6 +110,9 @@ test('restricted cache role cannot create objects, delete snapshots or inspect s
   "UPDATE mf_g1_public_cache.snapshots SET source_id='wrong'",
   "CREATE TABLE public.unauthorized(id integer)"
  ])await assert.rejects(pool.query(q),{code:'42501'});
+ await assert.rejects(pool.query(
+  "UPDATE mf_g1_public_cache.snapshots SET envelope='{}'::jsonb WHERE source_id='cp30-public-v1'"
+ ),{code:'P0001'});
  const schemas=await pool.query(
   "SELECT count(*)::int AS n FROM information_schema.schemata WHERE schema_name LIKE 'c1\\_%' ESCAPE '\\'");
  assert.equal(schemas.rows[0].n,0);
@@ -197,12 +200,20 @@ test('a damaged cached envelope cannot be served even if stored row remains vali
  try{
   const forged=structuredClone(original.envelope);
   forged.data.meals.items[0].unitPrice='1';
-  await pool.query('UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
+  // The ordinary cache application role cannot modify a snapshot at the
+  // same sequence. Exercise the independent read-time signature defense by
+  // simulating a PRIVILEGED DB administrator in this disposable CI fixture.
+  await assert.rejects(pool.query(
+   'UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
+   [JSON.stringify(forged),'cp30-public-v1']),{code:'P0001'});
+  await admin.query('ALTER TABLE mf_g1_public_cache.snapshots DISABLE TRIGGER g1_sequence_monotone');
+  await admin.query('UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
    [JSON.stringify(forged),'cp30-public-v1']);
   assert.equal((await call('GET','/v1/stores')).status,503);
  }finally{
-  await pool.query('UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
+  await admin.query('UPDATE mf_g1_public_cache.snapshots SET envelope=$1::jsonb WHERE source_id=$2',
    [JSON.stringify(original.envelope),'cp30-public-v1']);
+  await admin.query('ALTER TABLE mf_g1_public_cache.snapshots ENABLE TRIGGER g1_sequence_monotone');
  }
  assert.equal((await call('GET','/v1/stores')).status,200);
 });
