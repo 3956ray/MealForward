@@ -1,0 +1,47 @@
+name: MealForward G1 atomic public cache integration
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-public-cache-atomic-20261017
+  pull_request:
+    paths:
+      - "cp30-backend/g1-export/**"
+      - "cp30-backend/g1-export/**"
+      - ".github/workflows/cp31-g1-public-cache.yml"
+permissions:
+  contents: read
+jobs:
+  pg-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_G1_CACHE_DISPOSABLE_ONLY: g1-fresh-runner-postgres-17
+      G1_CACHE_TEST_DB_URL: postgres://mf_g1_cache_app:g1-disposable-only@127.0.0.1:5432/mf_g1_cache_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start isolated PostgreSQL 17.11, never an original runtime
+        run: |
+          docker run -d --rm --name mf-g1-cache             -e POSTGRES_USER=postgres             -e POSTGRES_PASSWORD=g1-disposable-only             -e POSTGRES_DB=mf_g1_cache_ci_only             -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-cache pg_isready -U postgres -d mf_g1_cache_ci_only; then break; fi
+            sleep 1
+          done
+          docker exec mf-g1-cache psql -U postgres -d mf_g1_cache_ci_only -v ON_ERROR_STOP=1 -c "CREATE ROLE mf_g1_cache_app LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD 'g1-disposable-only'"
+          docker exec -i mf-g1-cache psql -U postgres -d mf_g1_cache_ci_only -v ON_ERROR_STOP=1 < cp30-backend/g1-export/disposable-cache-schema.sql
+      - name: Install exact existing login dependencies for real pg client
+        run: |
+          cd cp30-backend/g1-export
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Validate source-only receiver syntax and Ed25519 envelope
+        run: |
+          node --check cp30-backend/g1-export/public-cache.mjs
+          node --check cp30-backend/g1-export/public-envelope.mjs
+          node --check cp30-backend/g1-export/g1-cache-pg.ci.mjs
+          node --test cp30-backend/g1-export/public-envelope.test.mjs
+      - name: Exercise real PG17 concurrent signed HTTP snapshots and durable restart
+        run: node --test cp30-backend/g1-export/g1-cache-pg.ci.mjs
