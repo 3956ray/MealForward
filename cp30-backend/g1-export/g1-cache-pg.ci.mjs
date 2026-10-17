@@ -121,6 +121,8 @@ test('no signed data means 503; health does not claim business connected',async(
  const healthy=await call('GET','/health');
  assert.equal(healthy.status,200);
  assert.equal(healthy.body.walletTransactionsAllowed,false);
+ assert.equal(healthy.body.publicSnapshotUsable,false);
+ assert.equal(healthy.body.chainFinalityIndependentlyVerified,false);
  assert.equal((await call('GET','/v1/stores')).status,503);
  assert.equal((await call('GET','/v1/ledger')).status,503);
  assert.equal((await call('GET','/v1/my/vouchers')).status,503);
@@ -146,6 +148,7 @@ test('twelve concurrent copies of one valid signed upload accept exactly once',a
  assert.equal(requests.filter(x=>x.status===202).length,1);
  assert.equal(requests.filter(x=>x.status===409).length,11);
  assert.equal(String((await pgRow()).sequence),'1');
+ assert.equal((await call('GET','/health')).body.publicSnapshotUsable,true);
  assert.equal((await call('GET','/v1/stores')).body.items[0].name,'Community Kitchen');
  assert.equal((await call('GET','/v1/ledger')).body.items[0].financial.F,'7000000');
  assert.equal((await call('GET','/v1/stores/'+store+'/meals')).body.items[0].id,meal);
@@ -161,17 +164,27 @@ test('bad signature/tampering and signed private content cannot replace accepted
  assert.equal((await call('POST','/internal/g1/public-snapshot',signed(2,leaked))).status,403);
  assert.equal(String((await pgRow()).sequence),'1');
 });
-test('new receiver connection after restart still rejects replay and accepts higher sequence',async()=>{
+test('re-created HTTP listener and fresh PG pool preserve sequence across service reinitialization',async()=>{
+ // Rebuild the HTTP listener AND DB pool, not merely the cache object.
+ await close(server);
  const second=new pg.Pool({connectionString:URL,max:3,connectionTimeoutMillis:5000});
  try{
-  const fresh=createG1PublicCache({pool:second,publicKey,keyId,audience,clock:()=>now,enabled:true});
-  await assert.rejects(fresh.accept(signed(1)),{code:'G1_PUBLIC_REPLAY'});
-  const next=data();next.stores.items[0].name='Second snapshot';
-  const r=await fresh.accept(signed(2,next));
-  assert.equal(r.sequence,'2');
-  assert.equal((await fresh.read()).data.stores.items[0].name,'Second snapshot');
+  const restarted=await launch(second,true);
+  server=restarted.server;origin=restarted.origin;cache=restarted.cache;
+  const stale=await call('POST','/internal/g1/public-snapshot',signed(1));
+  assert.equal(stale.status,409);
+  const later=data();later.stores.items[0].name='Second snapshot';
+  const accepted=await call('POST','/internal/g1/public-snapshot',signed(2,later));
+  assert.equal(accepted.status,202);
+  assert.equal(accepted.body.sequence,'2');
+  assert.equal((await call('GET','/v1/stores')).body.items[0].name,'Second snapshot');
   assert.equal(String((await pgRow()).sequence),'2');
- }finally{await second.end()}
+ }finally{
+  if(server.listening)await close(server);
+  await second.end();
+  const restored=await launch(pool,true);
+  server=restored.server;origin=restored.origin;cache=restored.cache;
+ }
 });
 test('lower signed sequence can never overwrite latest committed snapshot',async()=>{
  const less=signed(1),current=await pgRow();
