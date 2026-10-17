@@ -33,6 +33,14 @@ The test checks no synthetic deployment row survives.
   stale identity revision, wallet-principal revision mismatch, recipient-key
   mismatch, expired wallet principal, expired external Session, altered global
   credential epoch and Session idle timeout all fail closed.
+- **Important dispatcher separation:** the existing `c1_live_api`
+  role *does* have EXECUTE on the original mixed read/write
+  `c1_runtime_internal.live_api(text,jsonb)` SECURITY DEFINER dispatcher.
+  A new G1 cloud **read-only** data source must **not reuse this role or its
+  credentials**, even though it lacks direct SELECT on the private tables.
+  Original controller/ledger admission still guards mutations, but the role
+  is not a narrowly read-only DB principal. Prefer a separately reviewed
+  non-mutating projection/export path with dedicated privileges.
 - The `c1_live_api` role has **no direct SELECT** on
   `c1_private.sessions`, `c1_private.wallet_principals`,
   or `c1_live_private.claims`. The caller never bypasses the original
