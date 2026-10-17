@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-g0-pg17-auth-race-security-20261017
+      - codex/mealforward-cp31-auth-pilot
   pull_request:
     paths:
       - "cloud-auth/**"
