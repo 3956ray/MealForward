@@ -18,6 +18,7 @@ import sys
 
 import psycopg
 from psycopg import sql
+from g1_wallet_ab_pg_probe import check_source_wallet_scope
 
 ROOT = Path(__file__).resolve().parents[1]
 DATABASE = "mf_g2_disposable_ci_20261017"
@@ -245,11 +246,18 @@ def run():
                     error = ValueError("MIGRATION_FAILED_" + path.name)
                     error.sqlstate = exc.sqlstate
                     raise error from None
+            # Mirror the exact post-migration function EXECUTE grants from the
+            # reviewed local initializer. The original files/ACLs are untouched;
+            # this SQL only targets the disposable CI database.
+            for owner in ("c1_api_code_owner","c1_auth_code_owner","c1_projection_code_owner"):
+                db.execute(sql.SQL("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA c1_private TO {}")
+                    .format(sql.Identifier(owner)))
             result = verify_source_schema(db)
             db.commit()
             # Do not modify an installed ledger. Prove 045 rejects the
             # intentionally populated synthetic checkpoint in this test DB.
             result["initializedRuntime045Rejected"] = verify_initialized_runtime_rejects_045(db)
+            result.update(check_source_wallet_scope(db))
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_PASS",
             "pgMajor": 17,
@@ -280,6 +288,7 @@ if __name__ == "__main__":
             "status": "G2_FRESH_PG17_MIGRATIONS_BLOCKED",
             "reason": str(exc)[:100] if isinstance(exc, ValueError) else type(exc).__name__,
             "sqlstate": getattr(exc, "sqlstate", None),
+            "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
             "originalRuntimeTouched": False,
         }), file=sys.stderr)
         sys.exit(1)
