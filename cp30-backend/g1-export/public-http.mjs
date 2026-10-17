@@ -14,8 +14,7 @@ const headers=Object.freeze({
   'Cache-Control':'no-store',
   'X-Content-Type-Options':'nosniff',
   'Referrer-Policy':'no-referrer',
-  'Content-Security-Policy':"default-src 'none'",
-  'Access-Control-Allow-Origin':'null'
+  'Content-Security-Policy':"default-src 'none'"
 });
 const exactOrigin=s=>typeof s==='string'&&
  /^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(s);
