@@ -291,6 +291,7 @@ if __name__ == "__main__":
             "reason": str(exc)[:100] if isinstance(exc, ValueError) else type(exc).__name__,
             "sqlstate": getattr(exc, "sqlstate", None),
             "constraint": getattr(getattr(exc, "diag", None), "constraint_name", None),
+            "ciDiagnostic": (getattr(getattr(exc, "diag", None), "message_primary", None) or "")[:160],
             "originalRuntimeTouched": False,
         }), file=sys.stderr)
         sys.exit(1)
