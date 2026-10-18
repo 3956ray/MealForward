@@ -24,6 +24,8 @@ jobs:
         run: |
           cd staging-monad
           npm run build
+      - name: Check user-mediated Monad deployment UI code gates
+        run: node --test staging-monad/chain-e2e-page.test.mjs
       - name: Upload reviewable deploy artifact only, no secret
         uses: actions/upload-artifact@v4
         with:
