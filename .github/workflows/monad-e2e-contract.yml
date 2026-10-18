@@ -1,0 +1,38 @@
+name: MealForward real Monad E2E harness contract
+on:
+  push:
+    branches:
+      - codex/mealforward-monad-real-e2e-20261018
+  pull_request:
+    paths:
+      - "monad-e2e/**"
+      - ".github/workflows/monad-e2e-contract.yml"
+permissions:
+  contents: read
+jobs:
+  test-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact solc 0.8.28 ethers 6.15.0 and isolated Hardhat
+        run: |
+          cd monad-e2e
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Compile isolated Solidity contract with pinned optimizer
+        run: |
+          cd monad-e2e
+          node scripts/build.mjs
+      - name: Test actual Fund Claim Check Lock Report Settle on local chain ID 10143
+        run: |
+          cd monad-e2e
+          node scripts/contract-test.mjs
+      - name: Emit built ABI and bytecode for signed-wallet browser frontend
+        run: |
+          cd monad-e2e
+          MF_EMIT_COMPILED_ARTIFACT=true node scripts/build.mjs
