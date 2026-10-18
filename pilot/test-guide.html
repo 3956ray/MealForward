@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#183b33"><title>留膳 · 真人测试清单</title><link rel="stylesheet" href="/src/styles.css"></head>
+<body class="guide-page"><div class="topline"><span class="live-dot"></span><strong>留膳 · 测试验收</strong><span class="topright">Monad Testnet · 仅限模拟代币</span></div>
+<header class="site-header"><a class="logo" href="/"><span class="logo-mark">膳</span><span>留膳 <small>MEALFORWARD</small></span></a><nav><a href="/">返回测试站</a></nav></header>
+<main class="guide">
+<p class="eyebrow">MVP · REAL TESTNET ACCEPTANCE</p><h1>把一餐，完整地走一遍。</h1>
+<p class="lede">这份清单需要在真实 MetaMask 和 Monad Testnet 上执行交易；验收依据是区块链交易回执，而不是页面显示“成功”。建议使用三个独立测试钱包（商家 M、资助者 D、领取者 R），先各领取少量测试 MON 支付 Gas。</p>
+<div class="warning"><strong>请先确认：</strong>所有钱包都连接 Monad Testnet（Chain ID 10143）；页面只接受名为 mMEAL 的免费测试信用代币，不接触原 CP30 的 7 USDC、旧合约或管理员私钥。任何网站都不应要求你提供助记词。</div>
+<section class="guide-section"><h2>测试流程与勾选清单</h2>
+<label><input type="checkbox"> <b>0 · 网络检查</b> — 使用 M 钱包连接 Monad Testnet，确认地址及余额。没有 MON 时去官方测试网 Faucet 领取。</label>
+<label><input type="checkbox"> <b>1 · 创建独立测试合约</b> — M 钱包在测试站点按「部署独立 Pilot」，确认一笔部署交易，等待页面显示合约地址和成功回执。复制分享链接。</label>
+<label><input type="checkbox"> <b>2 · 商家建立餐品</b> — M 钱包输入「清和食堂」，设置 5 mMEAL/餐，确认 Register Kitchen 交易；应该显示厨房编号。</label>
+<label><input type="checkbox"> <b>3 · 资助者真实资助</b> — D 钱包打开分享链接，领取免费 100 mMEAL（Faucet），先 Approve，再 Fund 1 餐；检查 3 个独立交易回执，餐馆可领取数量应增加 1。</label>
+<label><input type="checkbox"> <b>4 · 领取者真实领取</b> — R 钱包打开同一链接，点击「领取一餐」，确认 Claim 交易。我的餐券显示原链上 Voucher ID；刷新后仍能找到同一餐券。</label>
+<label><input type="checkbox"> <b>5 · 生成授权二维码</b> — R 钱包在 My Meals 点击生成二维码，MetaMask 只请求一次消息签名（不是转账）；将二维码给 M 钱包的商家端扫描，或复制完整授权码。</label>
+<label><input type="checkbox"> <b>6 · 商家验券与锁券</b> — M 钱包粘贴或扫描授权码，检查 Voucher ID 和商家身份，然后显式确认 Reserve 交易。重复使用同一授权应被拒绝。</label>
+<label><input type="checkbox"> <b>7 · 确认真实交餐</b> — 仅在你真的模拟了交餐确认后，由 M 点击「已交餐」，确认 Handover 交易；Reserve 本身不代表已经交餐。</label>
+<label><input type="checkbox"> <b>8 · 结算</b> — 等待至少 30 秒链上时间，由 M 点击 Settle，确认真实 Monad Testnet 交易；状态变为 Settled，M 钱包 mMEAL 余额增加原餐价。</label>
+<label><input type="checkbox"> <b>9 · 恢复与权限</b> — 三个钱包分别刷新、重开网页、重新打开分享链接，检查链上状态不丢失；错误网络、其他商家钱包、重复 Claim、错误签名和重复 Settle 必须被拒绝。</label>
+</section>
+<section class="guide-section"><h2>判断是否通过</h2>
+<p>至少保留<strong>合约部署地址、Kitchen ID、Fund 交易、Claim 交易、Reserve 交易、Handover 交易、Settle 交易</strong>。每一步可从页面打开测试网 Explorer，不需要粘贴私钥或签名到聊天。</p>
+<p>此 Pilot 是<strong>独立测试链合约原型</strong>，验证真实钱包与链上状态机，不等于原 CP30 业务服务已经恢复，也不能证明线下真实交餐。通过后再进行原 CP30 数据和部署的正式合并评审。</p>
+</section>
+<a class="primary-link" href="/">开始执行测试 →</a>
+</main>
+<footer><strong>一膳之微，亦可为善。</strong><a href="/">返回留膳测试站</a></footer>
+</body></html>
