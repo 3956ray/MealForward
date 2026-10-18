@@ -1,0 +1,38 @@
+name: MealForward isolated real on-chain pilot
+on:
+  push:
+    branches:
+      - codex/mealforward-live-pilot-monad-20261018
+  pull_request:
+    paths:
+      - "pilot/**"
+      - ".github/workflows/mealforward-real-pilot.yml"
+permissions:
+  contents: read
+jobs:
+  genuine-local-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated Pilot dependencies
+        run: cd pilot && npm install --no-audit --no-fund
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Compile testnet-only Solidity artifacts and build mobile-first web
+        run: cd pilot && npm run build
+      - name: Execute actual local EVM chain 10143 business lifecycle
+        run: cd pilot && node tests/chain-e2e.mjs
+      - name: Confirm website artifacts and safety labels
+        run: |
+          test -f pilot/dist/index.html
+          test -f pilot/dist/test-guide.html
+          test -f pilot/dist/qrcode.min.js
+          grep -q "不使用真实 USDC" pilot/dist/index.html
+          grep -q "三钱包" pilot/dist/test-guide.html
