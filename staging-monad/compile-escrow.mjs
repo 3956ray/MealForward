@@ -44,11 +44,12 @@ for(const critical of ['asset','owner','quoteAuthority','catalogAuthority','issu
  'fund','issue','lock','markHandover','report','settle','catalog','computeTermsHash']){
  if(!names.includes(critical))throw Error('REQUIRED_ABI_MISSING_'+critical);
 }
+const creationBytecodeSha256=crypto.createHash('sha256').update(Buffer.from(contract.evm.bytecode.object,'hex')).digest('hex');
 const artifact={
  contractName:'StoreEscrow',chainId:10143,
  originalPath:'cp30-contracts/contracts/StoreEscrow.sol',
  compiler:solc.version(),optimizerRuns:200,evmVersion:'cancun',
- sourceSha256:sourceDigest,
+ sourceSha256:sourceDigest,creationBytecodeSha256,
  bytecode:'0x'+contract.evm.bytecode.object,
  runtimeBytecode:'0x'+contract.evm.deployedBytecode.object,
  abi
@@ -58,7 +59,7 @@ const outPath=path.join(dir,'StoreEscrow.json');
 fs.writeFileSync(outPath,JSON.stringify(artifact,null,2)+'\n');
 console.log(JSON.stringify({
  status:'BUILD_ONLY_PASS',compiler:artifact.compiler,chainId:10143,
- sourceSha256:sourceDigest,constructor:abi.find(x=>x.type==='constructor')?.inputs?.map(x=>x.name),
+ sourceSha256:sourceDigest,creationBytecodeSha256,constructor:abi.find(x=>x.type==='constructor')?.inputs?.map(x=>x.name),
  bytecodeBytes:contract.evm.bytecode.object.length/2,
  deployedBytecodeBytes:contract.evm.deployedBytecode.object.length/2,
  artifact:'staging-monad/artifacts/StoreEscrow.json',
