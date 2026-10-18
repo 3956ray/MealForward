@@ -3,6 +3,7 @@ import {
   getAddress,isAddress,formatUnits,parseUnits,parseEventLogs
 } from 'viem';
 import contracts from './contract.generated.json';
+import {matchesDeployedRuntime} from './runtime-verify.js';
 
 const CHAIN=defineChain({
  id:10143,
@@ -74,7 +75,7 @@ function statusBadge(done,disabled){
  return '<span class="pill '+(done?'ok':disabled?'block':'wait')+'">'+(done?'✓ 链上确认':disabled?'等待上一步':'待测试')+'</span>';
 }
 function progress(){
- const k=selectedKitchen();const v=selectedVoucher();
+ const k=selectedKitchen();const v=selectedVoucher()||state.scanned;
  return [
   {label:'部署隔离 Pilot',detail:'Monad Testnet 合约',done:!!state.token},
   {label:'建立真实餐馆',detail:'商家钱包注册',done:state.kitchens.length>0},
@@ -130,7 +131,8 @@ function kitchenHtml(){
  const donate='<div class="card half">'+cardHeader('2','支持者资助一份餐食','资助由捐赠钱包执行。领取免费的 mMEAL 后先 Approve，再 Fund；这是两次不同的链上交易。')+
  (!state.account?'<div class="notice warning">先连接 MetaMask 查看当前钱包余额。</div>':
  '<div class="token-panel"><span class="token-amount">'+htmlEscape(fmt(state.balance))+'</span><span>mMEAL 可用</span><span class="pill">'+(state.minted?'已领过免费信用':'尚未领取免费信用')+'</span></div>')+
- (k?'<p>选择餐馆：<strong>'+htmlEscape(k.name)+'</strong>，单价 '+htmlEscape(fmt(k.unitPrice))+' mMEAL。</p>':'<p>请先建立至少一家餐馆。</p>')+
+ (k?'<p>选择餐馆：<strong>'+htmlEscape(k.name)+'</strong>，单价 '+htmlEscape(fmt(k.unitPrice))+' mMEAL。</p>'+
+ (state.account?'<p class="notice"><strong>我的链上资助累计：</strong>'+htmlEscape(fmt(state.contributions[k.id]||0n))+' mMEAL（来自合约，不是浏览器模拟订单）</p>':''):'<p>请先建立至少一家餐馆。</p>')+
  '<label class="field-label" for="fund-quantity">资助份数 (每次 1–5)</label><select id="fund-quantity" class="field">'+[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(state.qty===n?'selected':'')+'>'+n+' 份</option>').join('')+'</select>'+
  (k?'<p class="subtle">合计 '+htmlEscape(fmt(k.unitPrice*BigInt(state.qty)))+' mMEAL；当前授权额度 '+htmlEscape(fmt(state.allowance))+' mMEAL。</p>':'')+
  '<div class="tile-actions">'+
@@ -207,9 +209,13 @@ function render(){
 }
 async function readPilot(address){
  const code=await publicClient.getCode({address});
- if(!code||code==='0x')throw Error('合约地址没有部署代码。请检查网络和链接是否正确。');
+ if(!matchesDeployedRuntime(code,contracts.MealForwardPilot))
+  throw Error('合约代码与审核过的免费测试 Pilot 不一致，拒绝连接。请不要向陌生合约授权任何代币。');
  const token=await publicClient.readContract({address,abi,functionName:'credit'});
  if(!isAddress(token))throw Error('无法确认 Pilot 测试信用代币地址。');
+ const creditCode=await publicClient.getCode({address:token});
+ if(!matchesDeployedRuntime(creditCode,contracts.PilotMealCredit))
+  throw Error('此合约使用的不是审核过的免费 mMEAL 测试代币，拒绝 Approve。');
  const chain=await publicClient.getChainId();
  if(chain!==10143)throw Error('公共 RPC 链 ID 不正确。');
  return getAddress(token);
@@ -237,13 +243,17 @@ async function refresh(){
      publicClient.readContract({address:token,abi:tokenAbi,functionName:'allowance',args:[state.account,state.pilot]}),
      publicClient.readContract({address:token,abi:tokenAbi,functionName:'hasMinted',args:[state.account]}),
      ...kitchens.map(async k=>{
-      const voucherId=await publicClient.readContract({address:state.pilot,abi,functionName:'voucherOf',args:[BigInt(k.id),state.account]});
-      return [k.id,voucherId];
+      const [voucherId,donated]=await Promise.all([
+       publicClient.readContract({address:state.pilot,abi,functionName:'voucherOf',args:[BigInt(k.id),state.account]}),
+       publicClient.readContract({address:state.pilot,abi,functionName:'contributions',args:[BigInt(k.id),state.account]})
+      ]);
+      return [k.id,voucherId,donated];
      })
     ]);
     if(id!==refreshCounter)return;
     state.balance=results[0];state.allowance=results[1];state.minted=results[2];
     for(const pair of results.slice(3)){
+     state.contributions[pair[0]]=pair[2];
      if(pair[1]!==BYTES32){
       const v=await publicClient.readContract({address:state.pilot,abi,functionName:'getVoucher',args:[pair[1]]});
       state.vouchers[pair[0]]={id:pair[1],status:Number(v.status),recipient:v.recipient,kitchenId:Number(v.kitchenId),reservedAt:v.reservedAt,handoverAt:v.handedOverAt};
@@ -382,7 +392,9 @@ async function openCamera(){
   try{
    const found=await detector.detect(video);
    if(found?.[0]?.rawValue){
-    state.scanInput=found[0].rawValue;closeCamera();await verifyCode();return;
+    state.scanInput=found[0].rawValue;
+    const field=$('#merchant-code');if(field)field.value=state.scanInput;
+    closeCamera();await verifyCode();return;
    }
   }catch{}
   scanTimer=setTimeout(scan,420);
