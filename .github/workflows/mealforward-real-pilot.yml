@@ -27,6 +27,8 @@ jobs:
           version: stable
       - name: Compile testnet-only Solidity artifacts and build mobile-first web
         run: cd pilot && npm run build
+      - name: Reject unknown or malicious attached test contract bytecode
+        run: cd pilot && node --test tests/runtime-verify.mjs
       - name: Execute actual local EVM chain 10143 business lifecycle
         run: cd pilot && node tests/chain-e2e.mjs
       - name: Confirm website artifacts and safety labels
