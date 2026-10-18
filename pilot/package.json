@@ -1,0 +1,21 @@
+{
+  "name": "mealforward-monad-real-tx-pilot",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "compile": "node scripts/compile.mjs",
+    "build": "npm run compile && vite build",
+    "dev": "npm run compile && vite --host 127.0.0.1",
+    "test:contract": "npm run compile && node tests/chain-e2e.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.1"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "solc": "0.8.28",
+    "vite": "8.3.1"
+  }
+}
