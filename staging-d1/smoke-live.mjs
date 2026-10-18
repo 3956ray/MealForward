@@ -21,6 +21,12 @@ const homepage=await site.text();
 for(const landmark of ['STAGING · OFF-CHAIN ONLY','My Contributions','My Meals','data-role="merchant"','data-role="donor"','data-role="recipient"','id="settle"']){
  assert.ok(homepage.includes(landmark),'missing visible UI '+landmark);
 }
+const walletPage=await fetch(base+'/wallet-preflight',{redirect:'error'});
+assert.equal(walletPage.status,200);
+const walletHtml=await walletPage.text();
+for(const item of ['Monad Testnet 钱包预检','id="connect"','id="switch"','id="gas"','id="token"','不会调用 approve 或 transfer']){
+ assert.ok(walletHtml.includes(item),'wallet page missing '+item);
+}
 const health=requireSuccess(await request('/health'),'health');
 assert.equal(health.mode,'OFFCHAIN_PERSISTENT_D1');
 assert.equal(health.chainTransactions,false);
