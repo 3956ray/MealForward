@@ -82,6 +82,12 @@ assert.equal((await escrow.vouchers(1)).stage,4n);
 await assert.rejects(()=>escrow.settle(1),'30-second reporting delay enforced');
 await hre.network.provider.request({method:'evm_increaseTime',params:[31]});
 await hre.network.provider.request({method:'evm_mine',params:[]});
+const timeInfo=await provider.getBlock('latest');
+console.log(JSON.stringify({diagnostics:'SETTLE_PRECHECK',reportedAt:String((await escrow.vouchers(1)).reportedAt),
+ currentTimestamp:String(timeInfo.timestamp),
+ earlySettlementSelector:ethers.id('EarlySettlement()').slice(0,10),
+ transferFailedSelector:ethers.id('TransferFailed()').slice(0,10),
+ wrongStageSelector:ethers.id('WrongStage()').slice(0,10)}));
 const originalOwnerBalance=await usdc.balanceOf(merchantAddress);
 const final=await (await escrow.settle(1)).wait();
 assert.equal(final.status,1);
