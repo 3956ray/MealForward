@@ -1,0 +1,12 @@
+{
+  "name": "mealforward-monad-isolated-escrow-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node compile-escrow.mjs"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "solc": "0.8.28"
+  }
+}
