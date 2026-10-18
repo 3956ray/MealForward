@@ -34,11 +34,37 @@ const stringify=obj=>JSON.stringify(obj,(_k,v)=>typeof v==='bigint'?v.toString()
 async function sha256(data){const digest=await crypto.subtle.digest('SHA-256',data);return hex(new Uint8Array(digest)).slice(2)}
 async function library(){if(!viem)viem=await import('https://esm.sh/viem@2.57.1?bundle');return viem}
 async function rpc(method,params=[]){if(!window.ethereum)throw Error('請先使用 MetaMask 瀏覽器／擴充套件');return ethereum.request({method,params})}
-async function chain(){if(Number(BigInt(await rpc('eth_chainId')))!==CHAIN)throw Error('網路不是 Monad Testnet 10143，拒絕發送');if(!account)throw Error('請先連接錢包');const a=await rpc('eth_accounts');if(a[0]?.toLowerCase()!==account.toLowerCase())throw Error('錢包地址已變更，請重新確認');return account}
+async function chain(){if(Number(BigInt(await rpc('eth_chainId')))!==CHAIN)throw Error('網路不是 Monad Testnet 10143，拒絕發送');if(!account)throw Error('請先連接錢包');if(state.wallet&&state.wallet.toLowerCase()!==account.toLowerCase())throw Error('此流程綁定先前測試錢包，請勿切換角色');const a=await rpc('eth_accounts');if(a[0]?.toLowerCase()!==account.toLowerCase())throw Error('錢包地址已變更，請重新確認');return account}
 async function balances(){await chain();const [m,u]=await Promise.all([rpc('eth_getBalance',[account,'latest']),rpc('eth_call',[{to:TOKEN,data:'0x70a08231'+account.slice(2).toLowerCase().padStart(64,'0')},'latest'])]);$('balance').textContent='MON '+(Number(BigInt(m))/1e18).toFixed(6)+' · 測試 USDC '+(Number(BigInt(u))/1e6).toFixed(6);return{mon:BigInt(m),usdc:BigInt(u)}}
 async function read(name,args=[],contract=state.contract){await chain();if(!art||!contract)throw Error('需先部署／載入新合約');const v=await library(),data=v.encodeFunctionData({abi:art.abi,functionName:name,args});const out=await rpc('eth_call',[{to:contract,data},'latest']);return v.decodeFunctionResult({abi:art.abi,functionName:name,data:out})}
 async function send(data,to,step){await chain();if(state.txs?.[step])throw Error('此步已有成功鏈上交易，請勿重複提交');const tx=await rpc('eth_sendTransaction',[{from:account,...(to?{to}:{}),data}]);state.pending={step,hash:tx};save();log(step+' TX '+tx+' 已提交；待鏈上確認，不要再次點擊同一操作');return confirm(tx,step)}
-async function confirm(tx,step){for(let i=0;i<65;i++){const r=await rpc('eth_getTransactionReceipt',[tx]);if(r){if(r.transactionHash?.toLowerCase()!==tx.toLowerCase())throw Error('Receipt TX 不匹配');if(r.status!=='0x1')throw Error(step+' 的鏈上交易失敗：'+tx);log('鏈上 Receipt 成功 '+step+' / '+tx+' / block '+Number(BigInt(r.blockNumber)));if(state.pending?.hash===tx)delete state.pending;state.txs={...(state.txs||{}),[step]:tx};save();return r}await new Promise(f=>setTimeout(f,1800))}throw Error('等待 Receipt 超時；已保留原交易 Hash，請先查原交易，不要重新發送')}
+async function recoverReceipt(r,step){
+ if(step==='deploy'){
+  if(!r.contractAddress)throw Error('部署 Receipt 缺少合約地址');
+  state.contract=r.contractAddress;
+ }
+ if(['issue','lock','mark','settle'].includes(step)){
+  if(!art)throw Error('請重新載入已核對的 StoreEscrow Artifact 才能恢復事件');
+  const v=await library();
+  const expected={issue:'Issued',lock:'Locked',mark:'HandoverMarked',settle:'Settled'}[step];
+  let event=null;
+  for(const l of r.logs||[]){
+   if(l.address.toLowerCase()!==state.contract?.toLowerCase())continue;
+   try{event=v.decodeEventLog({abi:art.abi,eventName:expected,data:l.data,topics:l.topics}).args;break}catch{}
+  }
+  if(!event)throw Error(step+' Receipt 缺少已審核的 '+expected+' event');
+  if(step==='issue'){state.voucherId=event.voucherId;state.generation=String(event.generation)}
+  if(step==='lock')state.lockId=event.lockId;
+  if(step==='mark')state.markerId=event.markerId;
+  if(step==='settle'){
+   if(event.receiver.toLowerCase()!==account.toLowerCase()||BigInt(event.amount)!==PRICE)
+    throw Error('Settled event 收款地址或金額不匹配');
+   state.settledReceiptVerified=true;
+  }
+  log('真實鏈上事件 '+expected+' 已核對');
+ }
+}
+async function confirm(tx,step){for(let i=0;i<65;i++){const r=await rpc('eth_getTransactionReceipt',[tx]);if(r){if(r.transactionHash?.toLowerCase()!==tx.toLowerCase())throw Error('Receipt TX 不匹配');if(r.status!=='0x1')throw Error(step+' 的鏈上交易失敗：'+tx);await recoverReceipt(r,step);log('鏈上 Receipt 成功 '+step+' / '+tx+' / block '+Number(BigInt(r.blockNumber)));if(state.pending?.hash===tx)delete state.pending;state.txs={...(state.txs||{}),[step]:tx};save();return r}await new Promise(f=>setTimeout(f,1800))}throw Error('等待 Receipt 超時；已保留原交易 Hash，請先查原交易，不要重新發送')}
 async function action(label,fn){try{if(state.pending)throw Error('前一筆交易仍待核實，請點「重新核實 Receipt」，勿重發');await chain();await fn()}catch(e){log('未完成 '+label+'：'+e.message)}}
 async function artifact(file){const raw=await file.text(),json=JSON.parse(raw);if(json.contractName!=='StoreEscrow'||json.chainId!==CHAIN||json.sourceSha256!==SOURCE_SHA||json.creationBytecodeSha256!==BYTE_SHA||!json.compiler.startsWith('0.8.28+')||!/^0x[0-9a-fA-F]+$/.test(json.bytecode)||!Array.isArray(json.abi))throw Error('合約來源／版本不符合審核指紋');const bytes=new Uint8Array((json.bytecode.length-2)/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(json.bytecode.slice(2+i*2,4+i*2),16);if(await sha256(bytes)!==BYTE_SHA)throw Error('BYTECODE SHA256 不匹配');if((json.runtimeBytecode.length-2)/2>24576)throw Error('運行時代碼超過 EVM 限制');art=json;$('artifactStatus').textContent='PASS · 原 StoreEscrow 版本固定、ABI '+json.abi.length+' 項、bytecode SHA-256 已核對';log('已載入來源驗證通過的原始合約');}
 $('artifact').onchange=async e=>{try{await artifact(e.target.files[0])}catch(x){art=null;$('artifactStatus').textContent='無法使用此 Artifact：'+x.message;log(x.message)}};
@@ -48,13 +74,13 @@ $('deploy').onclick=()=>action('Deploy',async()=>{if(!art)throw Error('先下載
 const tokenAbi=[{type:'function',name:'approve',inputs:[{name:'spender',type:'address'},{name:'value',type:'uint256'}],outputs:[{type:'bool'}],stateMutability:'nonpayable'}];
 $('approve').onclick=()=>action('Approve',async()=>{if(!state.contract)throw Error('先部署合約');const v=await library();const data=v.encodeFunctionData({abi:tokenAbi,functionName:'approve',args:[state.contract,PRICE]});await send(data,TOKEN,'approve');await balances()});
 $('fund').onclick=()=>action('Fund',async()=>{if(!state.contract)throw Error('先部署合約');if(!state.txs?.approve)throw Error('請先 Approve');const v=await library(),info=await read('catalog',[state.mealId,1n]);if(BigInt(info[0])!==PRICE)throw Error('實際合約餐價與預期不符');const quote={quoteId:opId(),payer:account,mealId:state.mealId,currentVersion:1n,termsHash:info[1],quantity:1n,unitPrice:PRICE,amount:PRICE,deadline:BigInt(Math.floor(Date.now()/1000)+600)};const typed={domain:{name:'MealForward C0 Funding',version:'1',chainId:CHAIN,verifyingContract:state.contract},primaryType:'FundingQuote',types:{FundingQuote:[{name:'quoteId',type:'bytes32'},{name:'payer',type:'address'},{name:'mealId',type:'bytes32'},{name:'currentVersion',type:'uint256'},{name:'termsHash',type:'bytes32'},{name:'quantity',type:'uint256'},{name:'unitPrice',type:'uint256'},{name:'amount',type:'uint256'},{name:'deadline',type:'uint256'}]},message:quote};const signature=await rpc('eth_signTypedData_v4',[account,stringify(typed)]);const data=v.encodeFunctionData({abi:art.abi,functionName:'fund',args:[quote,signature]});await send(data,state.contract,'fund');await balances()});
-$('issue').onclick=()=>action('Issue',async()=>{if(!state.txs?.fund)throw Error('先完成 Fund Receipt');const v=await library(),c=await read('nextCandidate',[state.mealId]);if(!c.available)throw Error('當前沒有可領取的鏈上 Unit');const generation=BigInt(c.nextGeneration),deadline=BigInt(Math.floor(Date.now()/1000)+600);const data=v.encodeFunctionData({abi:art.abi,functionName:'issue',args:[opId(),state.mealId,Number(c.unitSeq),generation,c.termsHash,deadline]});const r=await send(data,state.contract,'issue');let issuance=null;for(const x of r.logs){if(x.address.toLowerCase()!==state.contract.toLowerCase())continue;try{const decoded=v.decodeEventLog({abi:art.abi,eventName:'Issued',data:x.data,topics:x.topics});issuance=decoded.args;break}catch{}}if(!issuance?.voucherId)throw Error('Issue Receipt 未找到 Issued event，不應繼續');state.voucherId=issuance.voucherId;state.generation=generation.toString();save();log('真 Voucher ID '+state.voucherId)});
+$('issue').onclick=()=>action('Issue',async()=>{if(!state.txs?.fund)throw Error('先完成 Fund Receipt');const v=await library(),c=await read('nextCandidate',[state.mealId]);if(!c.available)throw Error('當前沒有可領取的鏈上 Unit');const generation=BigInt(c.nextGeneration),deadline=BigInt(Math.floor(Date.now()/1000)+600);const data=v.encodeFunctionData({abi:art.abi,functionName:'issue',args:[opId(),state.mealId,Number(c.unitSeq),generation,c.termsHash,deadline]});await send(data,state.contract,'issue');log('真 Voucher ID '+state.voucherId)});
 async function op(name,args,key){if(!state.voucherId)throw Error('沒有已確認的真 Voucher ID');const v=await library(),data=v.encodeFunctionData({abi:art.abi,functionName:name,args});await send(data,state.contract,key);}
-$('lock').onclick=()=>action('Lock',async()=>{if(!state.txs?.issue)throw Error('先真實 Issue');const lockId=opId();await op('lock',[lockId,state.voucherId,BigInt(state.generation),BigInt(Math.floor(Date.now()/1000)+600)],'lock');state.lockId=lockId;save()});
-$('mark').onclick=()=>action('MarkHandover',async()=>{if(!state.txs?.lock||!state.lockId)throw Error('先 Lock');const markerId=opId();await op('markHandover',[markerId,state.voucherId,BigInt(state.generation),state.lockId,BigInt(Math.floor(Date.now()/1000)+600)],'mark');state.markerId=markerId;save()});
+$('lock').onclick=()=>action('Lock',async()=>{if(!state.txs?.issue)throw Error('先真實 Issue');const lockId=opId();await op('lock',[lockId,state.voucherId,BigInt(state.generation),BigInt(Math.floor(Date.now()/1000)+600)],'lock')});
+$('mark').onclick=()=>action('MarkHandover',async()=>{if(!state.txs?.lock||!state.lockId)throw Error('先 Lock');const markerId=opId();await op('markHandover',[markerId,state.voucherId,BigInt(state.generation),state.lockId,BigInt(Math.floor(Date.now()/1000)+600)],'mark')});
 $('report').onclick=()=>action('Report',async()=>{if(!state.txs?.mark||!state.markerId)throw Error('先 MarkHandover');await op('report',[opId(),state.voucherId,BigInt(state.generation),state.lockId,state.markerId],'report')});
 $('settle').onclick=()=>action('Settle',async()=>{if(!state.txs?.report)throw Error('先 Report');const before=await balances();await op('settle',[opId(),state.voucherId,BigInt(state.generation)],'settle');const after=await balances();if(after.usdc-before.usdc!==PRICE)throw Error('真實收款 USDC 餘額增量與 7 不符，需審查 TX');log('鏈上 settle 後收到 +7 測試 USDC；同一測試帳戶兼任 payer/owner')});
-$('receipt').onclick=async()=>{try{await chain();if(!state.pending)throw Error('沒有未核實的交易');await confirm(state.pending.hash,state.pending.step);log('已確認原 TX，若需要券 ID 請從 receipt 事件恢復，勿重發新操作')}catch(e){log(e.message)}};
+$('receipt').onclick=async()=>{try{await chain();if(!state.pending)throw Error('沒有未核實的交易');await confirm(state.pending.hash,state.pending.step);log('已恢復原交易事件與狀態，勿重發新操作')}catch(e){log(e.message)}};
 $('copy').onclick=async()=>{const summary={mode:'real Monad Testnet single-wallet smoke',chainId:CHAIN,wallet:account,contract:state.contract,txs:state.txs,voucherId:state.voucherId,generation:state.generation,pending:state.pending};await navigator.clipboard.writeText(JSON.stringify(summary,null,2));log('已複製無私鑰的 E2E 摘要')};
 window.ethereum?.on?.('accountsChanged',()=>{account=null;$('wallet').textContent='帳戶已變更，請重新連接';log('錢包帳戶變更，暫停發交易')});
 window.ethereum?.on?.('chainChanged',()=>{account=null;$('wallet').textContent='網路已變更，請重新連接';log('Chain 變更，暫停發交易')});
