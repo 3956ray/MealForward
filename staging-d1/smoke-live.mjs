@@ -15,6 +15,12 @@ const requireSuccess=(result,label,status=200)=>{
  assert.equal(result.status,status,label+':'+JSON.stringify(result.body));
  return result.body;
 };
+const site=await fetch(base+'/',{redirect:'error'});assert.equal(site.status,200);
+assert.match(site.headers.get('content-type')||'',/text\/html/);
+const homepage=await site.text();
+for(const landmark of ['STAGING · OFF-CHAIN ONLY','My Contributions','My Meals','data-role="merchant"','data-role="donor"','data-role="recipient"','id="settle"']){
+ assert.ok(homepage.includes(landmark),'missing visible UI '+landmark);
+}
 const health=requireSuccess(await request('/health'),'health');
 assert.equal(health.mode,'OFFCHAIN_PERSISTENT_D1');
 assert.equal(health.chainTransactions,false);
@@ -56,4 +62,20 @@ const overview=requireSuccess(await request('/api/overview','GET',null,recipient
 assert.equal(overview.vouchers.find(v=>v.id===voucher.id)?.state,'SETTLED');
 assert.equal(overview.orders.find(o=>o.id===order.id)?.remaining,0);
 assert.equal(overview.kitchens.find(k=>k.id===kitchen.id)?.owner,merchant.id);
+// Concurrency negative E2E: exactly one claim for one available meal.
+const raceKitchen=requireSuccess(await request('/api/kitchens','POST',{
+ name:'CI Race Kitchen',mealName:'One Remaining Meal',price:5
+},merchant.token),'race-kitchen',201);
+const raceOrder=requireSuccess(await request('/api/orders','POST',{
+ kitchenId:raceKitchen.id,quantity:1
+},donor.token),'race-order',201);
+const claimants=await Promise.all(Array.from({length:6},()=>identity('recipient')));
+const racing=await Promise.all(claimants.map(x=>request('/api/vouchers','POST',{
+ orderId:raceOrder.id
+},x.token)));
+assert.equal(racing.filter(x=>x.status===201).length,1,'D1 issued too many vouchers');
+const afterRace=requireSuccess(await request('/api/overview','GET',null,donor.token),'race-read');
+assert.equal(afterRace.orders.find(x=>x.id===raceOrder.id)?.remaining,0);
+assert.equal(afterRace.vouchers.filter(x=>x.order_id===raceOrder.id).length,1);
+
 console.log(JSON.stringify({status:'PASS',mode:'OFFCHAIN_ONLY',stages:['Kitchen','Fund simulated','Issue simulated','Check','Lock','Report','Settle simulated'],persistentD1:true,walletFunded:false,realChainTransactions:0}));
