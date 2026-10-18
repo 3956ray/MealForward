@@ -1,0 +1,40 @@
+name: MealForward Pilot real browser and public reachability
+on:
+  push:
+    branches:
+      - codex/mealforward-live-pilot-monad-20261018
+  pull_request:
+    paths:
+      - "pilot/**"
+      - ".github/workflows/mealforward-pilot-browser.yml"
+permissions:
+  contents: read
+jobs:
+  browser-mobile-first:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and build Pilot static site
+        run: cd pilot && npm install --no-audit --no-fund && npm run build
+      - name: Install disposable Chromium browser for Playwright
+        run: |
+          cd pilot
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Mobile, desktop, mock wallet and QR rendering smoke
+        run: cd pilot && node tests/browser-smoke.mjs
+      - name: Check public production Pilot and test guide without login
+        run: |
+          set -euo pipefail
+          URL=https://mealforward-real-testnet-pilot.vercel.app
+          for path in / /test-guide.html /qrcode.min.js; do
+            code="$(curl -L -sS --retry 3 --retry-all-errors --max-time 15 -o /tmp/mf-pilot-public -w '%{http_code}' "$URL$path")"
+            test "$code" = "200" || { echo "PUBLIC_PILOT_HTTP_UNAVAILABLE $path HTTP_$code"; exit 1; }
+          done
+          echo "PUBLIC_PILOT_STATIC_HTTP_PASS"
