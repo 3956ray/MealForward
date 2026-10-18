@@ -1,0 +1,22 @@
+name: MealForward Monad Testnet real read-only readiness
+on:
+  push:
+    branches:
+      - codex/mealforward-real-monad-e2e-preflight-20261018
+permissions:
+  contents: read
+jobs:
+  monad-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify live Monad Testnet chain and Circle USDC (GET-state calls only)
+        run: node staging-d1/monad-live-rpc-preflight.mjs
+      - name: Verify staging public wallet-check page and existing offchain flow
+        run: node staging-d1/smoke-live.mjs
