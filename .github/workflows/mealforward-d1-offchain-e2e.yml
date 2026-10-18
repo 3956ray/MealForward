@@ -1,0 +1,22 @@
+name: MealForward D1 isolated offchain E2E live smoke
+on:
+  push:
+    branches:
+      - codex/mealforward-d1-offchain-e2e-20261018
+permissions:
+  contents: read
+jobs:
+  offchain-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check Worker staging syntax
+        run: node --check staging-d1/worker.mjs
+      - name: Verify offchain Cloudflare Worker D1 staging HTTPS full flow
+        run: node staging-d1/smoke-live.mjs
