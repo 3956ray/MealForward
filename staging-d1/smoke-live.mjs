@@ -21,6 +21,21 @@ const homepage=await site.text();
 for(const landmark of ['STAGING · OFF-CHAIN ONLY','My Contributions','My Meals','data-role="merchant"','data-role="donor"','data-role="recipient"','id="settle"']){
  assert.ok(homepage.includes(landmark),'missing visible UI '+landmark);
 }
+const chainPage=await fetch(base+'/chain-check',{redirect:'error'});
+assert.equal(chainPage.status,200,'chain preflight page should be public');
+assert.match(chainPage.headers.get('content-type')||'',/text\/html/);
+const chainHtml=await chainPage.text();
+for(const label of ['Monad Testnet','0x534b2f3A21130d7a60830c2Df862319e593943A3','eth_getBalance','eth_call','eth_getCode']){
+ assert.ok(chainHtml.includes(label),'missing read-only chain preflight '+label);
+}
+assert.equal(chainHtml.includes('eth_sendTransaction'),true,'Explicit no-send warning must be visible');
+const realE2ePage=await fetch(base+'/chain-e2e',{redirect:'error'});
+assert.equal(realE2ePage.status,200,'wallet-mediated isolated contract smoke should be reachable');
+assert.match(realE2ePage.headers.get('content-type')||'',/text\/html/);
+const e2eMarkup=await realE2ePage.text();
+for(const required of ['MONAD TESTNET','EIP-712','StoreEscrow','Issued','Settled','eth_sendTransaction','7 Testnet USDC']){
+ assert.ok(e2eMarkup.includes(required),'real contract smoke UI missing '+required);
+}
 const health=requireSuccess(await request('/health'),'health');
 assert.equal(health.mode,'OFFCHAIN_PERSISTENT_D1');
 assert.equal(health.chainTransactions,false);

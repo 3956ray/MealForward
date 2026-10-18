@@ -1,0 +1,34 @@
+name: MealForward Monad isolated original StoreEscrow compilation
+on:
+  push:
+    branches:
+      - codex/mealforward-real-monad-e2e-preflight-20261018
+permissions:
+  contents: read
+jobs:
+  source-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned isolated Solidity dependencies (no project full install)
+        run: |
+          cd staging-monad
+          npm install --ignore-scripts --no-audit --no-fund
+      - name: Compile original StoreEscrow ABI & creation bytecode, without RPC or wallets
+        run: |
+          cd staging-monad
+          npm run build
+      - name: Check user-mediated Monad deployment UI code gates
+        run: node --test staging-monad/chain-e2e-page.test.mjs
+      - name: Upload reviewable deploy artifact only, no secret
+        uses: actions/upload-artifact@v4
+        with:
+          name: monad-testnet-StoreEscrow-solc-0_8_28
+          path: staging-monad/artifacts/StoreEscrow.json
+          retention-days: 14
