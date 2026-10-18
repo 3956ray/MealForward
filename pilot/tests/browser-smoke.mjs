@@ -72,9 +72,9 @@ async function test(){
  },account);
  profile.on('pageerror',e=>errors.push(e.message));
  await profile.goto(URL+'/',{waitUntil:'networkidle'});
- await profile.getByRole('button',{name:/0x1111111/}).waitFor();
- await profile.getByRole('button',{name:/连接 MetaMask|0x1111111/}).click();
- await profile.getByRole('button',{name:/0x1111111/}).waitFor();
+ await profile.getByRole('button',{name:/0x11111/}).waitFor();
+ await profile.getByRole('button',{name:/连接 MetaMask|0x11111/}).click();
+ await profile.getByRole('button',{name:/0x11111/}).waitFor();
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({browser:'WALLET_UI_STUB',status:'PASS',accountOnlyNoSigning:true}));
 }
