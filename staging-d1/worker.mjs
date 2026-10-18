@@ -21,6 +21,7 @@ async function bodyOf(request){
 export default {async fetch(request,env){
  const url=new URL(request.url),path=url.pathname,db=env.DB;
  if(path==='/'&&request.method==='GET')return new Response(__HTML__,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'DENY','x-content-type-options':'nosniff'}});
+ if(path==='/wallet-preflight'&&request.method==='GET')return new Response(__WALLET_PREFLIGHT_HTML__,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'DENY','x-content-type-options':'nosniff'}});
  if(path==='/health'&&request.method==='GET'){try{await db.prepare('SELECT COUNT(*) n FROM kitchens').first();return response({status:'READY',mode:'OFFCHAIN_PERSISTENT_D1',chainTransactions:false});}catch{return failure('DATABASE_UNAVAILABLE',503)}}
  if(!path.startsWith('/api/'))return failure('NOT_FOUND',404);
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return failure('ORIGIN_REJECTED',403);
