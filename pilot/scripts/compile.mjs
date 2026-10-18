@@ -33,7 +33,7 @@ for(const name of ['MealForwardPilot','PilotMealCredit']){
  const runtime='0x'+o.evm.deployedBytecode.object;
  if(bytecode.length<100||bytecode.length>95000)throw Error('Unexpected pilot bytecode size: '+name);
  if(runtime.length<100||runtime.length>49000)throw Error('Unexpected deployed bytecode size: '+name);
- artifacts[name]={abi:o.abi,bytecode,runtimeSize:(runtime.length-2)/2};
+ artifacts[name]={abi:o.abi,bytecode,runtimeTemplate:runtime,immutableReferences:o.evm.deployedBytecode.immutableReferences||{},runtimeSize:(runtime.length-2)/2};
 }
 fs.mkdirSync('src',{recursive:true});
 fs.writeFileSync('src/contract.generated.json',JSON.stringify(artifacts,null,2)+'\n');
