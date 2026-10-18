@@ -20,6 +20,7 @@ async function bodyOf(request){
 }
 export default {async fetch(request,env){
  const url=new URL(request.url),path=url.pathname,db=env.DB;
+ if(path==='/chain-e2e'&&request.method==='GET')return new Response(__CHAIN_E2E_HTML__,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'DENY','x-content-type-options':'nosniff'}});
  if(path==='/chain-check'&&request.method==='GET')return new Response(__CHAIN_CHECK_HTML__,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'DENY','x-content-type-options':'nosniff'}});
  if(path==='/'&&request.method==='GET')return new Response(__HTML__,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'DENY','x-content-type-options':'nosniff'}});
  if(path==='/health'&&request.method==='GET'){try{await db.prepare('SELECT COUNT(*) n FROM kitchens').first();return response({status:'READY',mode:'OFFCHAIN_PERSISTENT_D1',chainTransactions:false});}catch{return failure('DATABASE_UNAVAILABLE',503)}}
