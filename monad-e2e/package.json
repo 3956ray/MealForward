@@ -1,0 +1,17 @@
+{
+  "name": "mealforward-monad-isolated-e2e",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/contract-test.mjs"
+  },
+  "dependencies": {
+    "solc": "0.8.28",
+    "ethers": "6.15.0",
+    "hardhat": "2.26.3"
+  }
+}
