@@ -27,7 +27,7 @@ test('uses actual Circle USDC on Monad testnet, never D1 simulated checkout',()=
  assert.match(source,/eth_chainId/);
  assert.match(source,/await rpc\('eth_getTransactionReceipt'/);
  assert.match(source,/decodeEventLog.*Issued/);
- assert.match(source,/Fund.*EIP-712/);
+ assert.match(source,/primaryType:'FundingQuote'/);
  assert.ok(!source.includes('/api/orders'),'testnet smoke must not mutate D1 fake ledger');
 });
 test('ABI and bytecode pins correspond to reviewed source-only build',()=>{
@@ -45,5 +45,5 @@ test('real lifecycle includes user-initiated issuer/merchant steps with receipt 
  assert.match(source,/await op\('markHandover'/);
  assert.match(source,/await op\('report'/);
  assert.match(source,/await op\('settle'/);
- assert.match(html,/單錢包/);
+ assert.match(html,/同一個/);
 });
