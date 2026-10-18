@@ -1,0 +1,26 @@
+name: MealForward independent Monad Testnet read-only gate
+on:
+  push:
+    branches:
+      - codex/mealforward-d1-offchain-e2e-20261018
+  pull_request:
+    paths:
+      - "monad-e2e/**"
+      - ".github/workflows/mealforward-monad-preflight.yml"
+permissions:
+  contents: read
+jobs:
+  network-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript syntax
+        run: node --check monad-e2e/preflight.mjs
+      - name: Public read-only Monad chain ID, block availability
+        run: node monad-e2e/preflight.mjs
