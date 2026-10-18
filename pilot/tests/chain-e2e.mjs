@@ -12,6 +12,7 @@ import {
  http,parseEther,parseUnits,decodeEventLog
 } from 'viem';
 import {privateKeyToAccount,generatePrivateKey} from 'viem/accounts';
+import {matchesDeployedRuntime} from '../src/runtime-verify.js';
 
 const chain=defineChain({
  id:10143,name:'Pilot Local Monad Testnet',
@@ -71,6 +72,8 @@ async function main(){
  const contract=deployed.contractAddress;
  assert.ok(contract&&contract!==nil);
  const token=await pc.readContract({address:contract,abi,functionName:'credit'});
+ assert.equal(matchesDeployedRuntime(await pc.getCode({address:contract}),artifacts.MealForwardPilot),true,'Reviewed Pilot code hash mismatch');
+ assert.equal(matchesDeployedRuntime(await pc.getCode({address:token}),artifacts.PilotMealCredit),true,'Reviewed free test token code hash mismatch');
  const tokenName=await pc.readContract({address:token,abi:tokenAbi,functionName:'name'});
  assert.match(tokenName,/NO VALUE/);
  const eoaTokenBalance=()=>pc.readContract({address:token,abi:tokenAbi,functionName:'balanceOf',args:[merchant.address]});
@@ -139,7 +142,7 @@ async function main(){
  assert.equal(await pc.readContract({address:token,abi:tokenAbi,functionName:'balanceOf',args:[contract]}),0n);
  await assertReject(pc.simulateContract({address:contract,abi,functionName:'settle',args:[voucherId],account:merchant.address}), 'settled voucher cannot be paid again');
  log('merchant handover, 30s delay, final settlement and token delta; no double pay');
- console.log(JSON.stringify({status:'PILOT_REAL_EVM_E2E_PASS',chainId:await pc.getChainId(),accounts:4,transactions:7,contract,token,finalVoucherStatus:Number(final.status)}));
+ console.log(JSON.stringify({status:'PILOT_REAL_EVM_E2E_PASS',chainId:await pc.getChainId(),accounts:4,confirmedTransactions:9,contract,token,finalVoucherStatus:Number(final.status)}));
 }
 try{await main()}catch(e){console.error('PILOT_REAL_EVM_E2E_FAIL:',e?.shortMessage||e?.message||e);process.exitCode=1;}
 finally{if(node){node.kill('SIGTERM');await sleep(250).catch(()=>{});if(node.exitCode===null)node.kill('SIGKILL');}}
