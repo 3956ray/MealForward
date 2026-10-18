@@ -26,7 +26,8 @@ test('uses actual Circle USDC on Monad testnet, never D1 simulated checkout',()=
  assert.match(source,/PRICE=7000000n/);
  assert.match(source,/eth_chainId/);
  assert.match(source,/await rpc\('eth_getTransactionReceipt'/);
- assert.match(source,/decodeEventLog.*Issued/);
+ assert.match(source,/decodeEventLog/);
+ assert.match(source,/issue:'Issued'/);
  assert.match(source,/primaryType:'FundingQuote'/);
  assert.ok(!source.includes('/api/orders'),'testnet smoke must not mutate D1 fake ledger');
 });
