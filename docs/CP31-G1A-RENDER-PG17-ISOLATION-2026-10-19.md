@@ -49,3 +49,18 @@ If the free Render allocation cannot host the required separately authenticated 
 These test rows are deliberately synthetic and contain no original Fund, Issue, QR or Settle success. A real Sites integration is only accepted once an approved original CP30 **read-only source** exists, permission is checked against an original wallet principal, and `/v1/stores`, `/v1/ledger`, `/v1/my/orders`, `/v1/my/vouchers` show the authentic ledger, not probe data. That production data source and original Mac `PREPARED #3560` recovery remain separately gated. See existing PRs #18/#19 and Issue #17.
 
 **No human wallet retest is needed for this code-only G1-A gate.**
+
+
+## Final CI checkpoint: full Render server entrypoint proven, not a cloud deployment
+
+At code commit 9d0d6b89e2f66446f24b9c40e61c3bc9f1fae30c, GitHub Actions https://github.com/3956ray/MealForward/actions/runs/39258512575 passed:
+
+- **9/9 real PostgreSQL 17.11 G1-A integration tests**. The ninth test launches the actual cloud-auth/server.mjs Node process on an isolated local port with the exact Render-style origin, genuine EIP-191 signatures from two ephemeral wallets, real backend Challenge/Session PostgreSQL reads, same-origin Sites static response and separate restricted G1-A read login. Distinct A/B orders remain isolated, and all original /v1/my/* and /v1/ledger business reads correctly remain 503 in Auth Pilot.
+- **30/30 G0 Session/CSRF and optional gateway tests**.
+- **12/12 signed-public G1 HTTP/source-to-Sites contract tests**.
+- Separate CI job verified the **existing deployed Render Auth Pilot** still responds as Auth-only and rejects original business data routes, using anonymous GET only.
+- Independent publisher Outbox, public cache and G2 isolated PostgreSQL migration jobs on the same integrated PR revision also returned SUCCESS.
+
+Additional role hardening: PostgreSQL session_user must be the genuine dedicated reader login (not a privileged owner using SET ROLE), and the user must lack database CREATE, public schema CREATE, original CP30 namespace, G0 Session table SELECT, and even Auth Pilot schema USAGE. Catalog OID lookups avoid accidentally requiring the forbidden schema USAGE. A preexisting NOLOGIN role inheriting pg_read_all_data fails before schema installation.
+
+None of these tests installed a cloud schema or moved funds. A Render service marked READY without a real separately permissioned PG data-source deployment must not be treated as finished G1 human acceptance.
