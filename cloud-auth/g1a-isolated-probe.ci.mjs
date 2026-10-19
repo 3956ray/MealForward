@@ -166,3 +166,29 @@ test('original CP30 private schema never exists and auth session storage still w
  assert.equal((await call('GET','/v1/me',null,{cookie:A})).body.walletAddress,accountA.address.toLowerCase());
  assert.equal((await call('GET','/v1/me',null,{cookie:B})).body.walletAddress,accountB.address.toLowerCase());
 });
+
+
+test('live read route halts if an administrator mistakenly grants access to Auth Pilot schema',async()=>{
+ await admin.query('GRANT USAGE ON SCHEMA mf_cp31_auth_pilot TO mf_g1_probe_reader');
+ try{
+  const result=await call('GET','/__g1_probe/my/orders',null,{cookie:A});
+  assert.equal(result.status,503);
+  assert.equal(result.body.error,'G1_TEST_READ_SOURCE_UNAVAILABLE');
+ }finally{
+  await admin.query('REVOKE USAGE ON SCHEMA mf_cp31_auth_pilot FROM mf_g1_probe_reader');
+ }
+ const restored=await call('GET','/__g1_probe/my/orders',null,{cookie:A});
+ assert.equal(restored.status,200);
+});
+test('live read route halts if original CP30 schema later appears on the same database',async()=>{
+ await admin.query('CREATE SCHEMA c1_private');
+ try{
+  const result=await call('GET','/__g1_probe/my/orders',null,{cookie:A});
+  assert.equal(result.status,503);
+  assert.equal(result.body.error,'G1_TEST_READ_SOURCE_UNAVAILABLE');
+ }finally{
+  await admin.query('DROP SCHEMA c1_private');
+ }
+ const recovered=await call('GET','/__g1_probe/my/orders',null,{cookie:A});
+ assert.equal(recovered.status,200);
+});
