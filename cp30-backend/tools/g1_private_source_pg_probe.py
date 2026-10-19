@@ -112,8 +112,8 @@ def prove_private_wallet_ab(db):
             "VALUES(true,%s,true,120)", (NS,)
         )
         db.execute(
-            "INSERT INTO c1_private.deployment (ns,manifest,now,clock_floor,heartbeat) "
-            "VALUES (%s,'{}'::jsonb,%s,%s,%s)", (NS, now, now, now)
+            "INSERT INTO c1_private.deployment (ns,manifest,now,clock_floor,heartbeat,halt) "
+            "VALUES (%s,'{}'::jsonb,%s,%s,%s,false)", (NS, now, now, now)
         )
         db.execute("INSERT INTO c1_private.transaction_guard(ns) VALUES(%s)", (NS,))
         db.execute(
