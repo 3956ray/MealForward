@@ -5,6 +5,8 @@ wallets, original-session digests, fund/issue intents and two original-format
 vouchers. No Render Auth Pilot session accepted as original principal; no
 Mac PG, funded 7 USDC, signer, Journal, RPC, or public server involved.
 """
+import base64
+import hashlib
 import json
 import os
 import time
@@ -13,6 +15,7 @@ from pathlib import Path
 
 import psycopg
 from psycopg.types.json import Jsonb
+from g1_private_http_sql_gate import probe_real_sql_to_http
 
 ROOT = Path(__file__).resolve().parents[1]
 DDL = ROOT / "g1-export" / "disposable-private-read-facade.sql"
@@ -20,7 +23,8 @@ NS = "g1_private_source_fixture"
 STORE = "f" * 64
 MEAL = "e" * 64
 A, B = "a" * 64, "b" * 64
-TOKENS = (("1" * 64), ("2" * 64))
+RAW_TOKENS = tuple(base64.urlsafe_b64encode(bytes([n])*32).decode().rstrip("=") for n in (17,34))
+TOKENS = tuple(hashlib.sha256(raw.encode("utf8")).hexdigest() for raw in RAW_TOKENS)
 CSRF = (("3" * 64), ("4" * 64))
 KEYS = (bytes.fromhex("aa" * 32), bytes.fromhex("bb" * 32))
 VOUCHERS = ("0x" + "a" * 64, "0x" + "b" * 64)
@@ -272,8 +276,15 @@ def prove_private_wallet_ab(db):
             "UPDATE c1_g1_private_read.binding SET enabled=false WHERE ns=%s",
             (NS,),"G1_PRIVATE_SOURCE_NOT_AUTHORIZED")
 
+        # Real SQL -> test-only loopback -> production Node HTTP GET adapter.
+        # This runs within the SAME uncommitted synthetic fixture transaction.
+        live_http = probe_real_sql_to_http(as_client, RAW_TOKENS)
+        if live_http["sourceKind"] != "CP30_ORIGINAL_SQL":
+            raise AssertionError("G1_C_MOCK_SOURCE_NOT_ALLOWED")
+
         result = {
             "originalCp30WalletScope": True,
+            "g1LiveOriginalSqlHttp": True,
             "distinctWallets": 2,
             "scopedOriginalOrders": True,
             "scopedOriginalClaimIntents": True,
