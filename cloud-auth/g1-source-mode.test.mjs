@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createLiveApi} from '../dist/live-api.mjs';
+import {createLiveApi} from '../sites-frontend/dist/live-api.mjs';
 
-const src=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
+const src=readFileSync(new URL('../sites-frontend/dist/app.js',import.meta.url),'utf8');
 const start=src.indexOf('async function loadLiveCatalog('),end=src.indexOf('function requireLiveOwner(',start);
 assert.ok(start>0&&end>start,'G1 catalog loaders missing');
 const declarations=src.slice(start,end);
