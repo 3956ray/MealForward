@@ -105,6 +105,17 @@ def prove_private_wallet_ab(db):
             "'c1_g1_private_read.my_items(text,text)','EXECUTE')"
         ).fetchone()[0] is not True:
             raise AssertionError("PRIVATE_CLIENT_FUNCTION_MISSING")
+        if db.execute(
+            "SELECT count(*) FROM pg_auth_members "
+            "WHERE member='c1_g1_private_read_client'::regrole"
+        ).fetchone()[0]:
+            raise AssertionError("PRIVATE_CLIENT_ROLE_MEMBERSHIP_UNEXPECTED")
+        func = db.execute(
+            "SELECT provolatile,prosecdef FROM pg_proc "
+            "WHERE oid='c1_g1_private_read.my_items(text,text)'::regprocedure"
+        ).fetchone()
+        if func != ("s", True):
+            raise AssertionError("PRIVATE_READ_NOT_STABLE_DEFENDER")
 
         denied("orders", TOKENS[0], "G1_PRIVATE_SOURCE_NOT_AUTHORIZED")
         db.execute(
@@ -250,6 +261,10 @@ def prove_private_wallet_ab(db):
         temporary_deny(
             "UPDATE c1_private.deployment SET halt=true WHERE ns=%s",
             (NS,),"G1_PRIVATE_SOURCE_NOT_READY")
+        temporary_deny(
+            "UPDATE c1_live_private.stores SET snapshot=%s WHERE ns=%s",
+            (Jsonb({"timestamp": str(now-10000), "menu": {}}),NS),
+            "G1_PRIVATE_SOURCE_NOT_READY")
         temporary_deny(
             "UPDATE c1_private.deployment SET now=now-10000 WHERE ns=%s",
             (NS,),"G1_PRIVATE_SOURCE_NOT_READY")
