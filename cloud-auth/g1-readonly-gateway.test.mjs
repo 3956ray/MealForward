@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
+import {createServer,request as requestHttp} from 'node:http';
 import {createHash} from 'node:crypto';
 import {makePilotHandler} from './core.mjs';
 import {makeG1RenderReadGateway} from './g1-readonly-gateway.mjs';
@@ -53,14 +53,17 @@ async function serve(cache,fn){
  });
  const server=createServer(route);
  await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
- const base='http://127.0.0.1:'+server.address().port;
- const request=async(p,{method='GET',headers={}}={})=>{
-  const result=await fetch(base+p,{
-   method,headers:{host,...headers},redirect:'manual'
+ const request=(p,{method='GET',headers={}}={})=>new Promise((resolve,reject)=>{
+  const req=requestHttp({
+   hostname:'127.0.0.1',port:server.address().port,path:p,
+   method,headers:{host,...headers}
+  },async res=>{
+   let body='';for await(const part of res)body+=part.toString('utf8');
+   try{resolve({status:res.statusCode,body:JSON.parse(body),headers:res.headers});}
+   catch(error){reject(error);}
   });
-  const text=await result.text();
-  return {status:result.status,body:JSON.parse(text),headers:result.headers};
- };
+  req.on('error',reject);req.end();
+ });
  try{return await fn({request,token});}
  finally{await new Promise(ok=>server.close(ok))}
 }
