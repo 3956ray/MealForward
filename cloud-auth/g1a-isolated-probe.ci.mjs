@@ -102,9 +102,10 @@ before(async()=>{
  const rows=await reader.query("SELECT scope FROM mf_g1_probe.provenance");
  assert.equal(rows.rows[0].scope,'ISOLATED_SYNTHETIC_READ_TEST');
  const attestation=await reader.query(
-  "SELECT current_database() AS db,current_user AS login,"+
+  "SELECT current_database() AS db,current_user AS login,session_user AS authenticated_login,"+
   "(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated,"+
-  "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
+  "has_database_privilege(current_user,current_database(),'CREATE') AS creates_database,"+
+    "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
   "has_schema_privilege(current_user,'mf_cp31_auth_pilot','USAGE') AS auth_schema_usage,"+
   "EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='mf_cp31_auth_pilot' AND c.relname='sessions' AND has_table_privilege(current_user,c.oid,'SELECT')) AS auth_session_select,"+
   "has_table_privilege(current_user,'mf_g1_probe.orders','UPDATE') AS can_update_probe,"+
