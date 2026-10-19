@@ -40,8 +40,8 @@ test('real Auth Pilot never fetches inaccessible business rows during session se
 
 test('auth-only catalog reset never tries to fake or fetch meals',async()=>{
  const live={stores:[{id:'stale'}],meals:{stale:[{listed:true,eligible:true}]},catalogError:'',context:{setup:{authPilot:true}}};
- const loader=new Function('live','isAuthOnlyMode','currentLiveResult',
-  declarations+';return {loadLiveCatalog,loadPublicLedger}')(live,()=>true,()=>{throw Error('Forbidden CP30 API request')});
+ const loader=new Function('live','isAuthOnlyMode','currentLiveResult','location','renderLive',
+  declarations+';return {loadLiveCatalog,loadPublicLedger}')(live,()=>true,()=>{throw Error('Forbidden CP30 API request')},{hash:''},()=>{});
  await loader.loadLiveCatalog();
  await loader.loadPublicLedger();
  assert.deepEqual(live.stores,[]);
