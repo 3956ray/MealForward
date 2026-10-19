@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createLiveApi,guardAuthOnlyRequest,isAuthOnlyBackend} from '../dist/live-api.mjs';
+import {createLiveApi,guardAuthOnlyRequest,isAuthOnlyBackend} from '../sites-frontend/dist/live-api.mjs';
 
 const wallet='0x'+'a'.repeat(40),origin='https://mealforward-cp31-auth-laodao.onrender.com';
 const ok=data=>({status:200,ok:true,json:async()=>data});
@@ -86,7 +86,7 @@ test('auth pilot cannot issue a business review or claim when a valid wallet ses
  assert.ok(!h.calls.some(([method])=>method==='POST'));
 });
 
-const src=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
+const src=readFileSync(new URL('../sites-frontend/dist/app.js',import.meta.url),'utf8');
 const start=src.indexOf('function isAuthOnlyMode('),end=src.indexOf('function renderLive(');
 if(start<0||end<=start)throw Error('Identity-only interface boundary missing');
 const helpers=src.slice(start,end);
