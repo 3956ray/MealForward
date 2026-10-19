@@ -141,15 +141,16 @@ export function publicRpc(url='https://testnet-rpc.monad.xyz'){
  return {async send(method,params=[]){
   ensure(['eth_chainId','eth_getTransactionByHash','eth_getTransactionReceipt','eth_blockNumber',
    'eth_getBlockByNumber','eth_getCode','eth_call'].includes(method),'READ_ONLY_RPC_ONLY');
+  const callId=++id;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
   try{
    const response=await fetch(dest.toString(),{
     method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({jsonrpc:'2.0',id:++id,method,params}),signal:controller.signal
+    body:JSON.stringify({jsonrpc:'2.0',id:callId,method,params}),signal:controller.signal
    });
    ensure(response.ok,'RPC_HTTP_'+response.status);
    const decoded=await response.json();
-   ensure(decoded.jsonrpc==='2.0'&&decoded.id===id&&!decoded.error,'RPC_BAD_RESPONSE_'+method);
+   ensure(decoded.jsonrpc==='2.0'&&decoded.id===callId&&!decoded.error,'RPC_BAD_RESPONSE_'+method);
    return decoded.result;
   }finally{clearTimeout(timer)}
  }};
