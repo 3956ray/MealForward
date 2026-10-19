@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-g1-read-dto-validation-20261017
+      - codex/mealforward-g1-public-sites-adapter-20261019
   pull_request:
     paths:
       - "sites-frontend/**"
