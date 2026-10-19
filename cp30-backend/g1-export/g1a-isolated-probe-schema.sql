@@ -32,6 +32,11 @@ BEGIN
     AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
   ) THEN RAISE EXCEPTION 'G1_PROBE_ROLE_NOT_RESTRICTED';
   END IF;
+  IF EXISTS(
+    SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member
+    WHERE r.rolname='mf_g1_probe_reader'
+  ) THEN RAISE EXCEPTION 'G1_PROBE_ROLE_INHERITS_OTHER_ROLES';
+  END IF;
 END
 $role$;
 CREATE SCHEMA mf_g1_probe;
