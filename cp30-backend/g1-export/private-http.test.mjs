@@ -6,7 +6,7 @@ import {makeG1OriginalPrivateHttpHandler} from './private-http.mjs';
 
 const origin='https://mealforward-g1-original-source-review.example';
 const host=new URL(origin).host;
-const tokenA='a'.repeat(43),tokenB='b'.repeat(43);
+const tokenA='p'.repeat(43),tokenB='q'.repeat(43);
 const hash=x=>createHash('sha256').update(x,'utf8').digest('hex');
 const store='f'.repeat(64);
 const voucherA='0x'+'a'.repeat(64),voucherB='0x'+'b'.repeat(64);
