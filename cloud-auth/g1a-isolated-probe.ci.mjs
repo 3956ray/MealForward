@@ -82,6 +82,13 @@ before(async()=>{
  await admin.query('DROP SCHEMA c1_private');
  const stillFresh=await admin.query("SELECT to_regnamespace('mf_g1_probe') IS NULL AS fresh");
  assert.equal(stillFresh.rows[0].fresh,true);
+ // An apparently safe preexisting NOLOGIN role can inherit pg_read_all_data.
+ // The provisioning transaction MUST refuse this before creating a schema.
+ await admin.query('CREATE ROLE mf_g1_probe_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
+ await admin.query('GRANT pg_read_all_data TO mf_g1_probe_reader');
+ await assert.rejects(()=>admin.query(schema),/G1_PROBE_ROLE_INHERITS_OTHER_ROLES/);
+ assert.equal((await admin.query("SELECT to_regnamespace('mf_g1_probe') IS NULL AS fresh")).rows[0].fresh,true);
+ await admin.query('REVOKE pg_read_all_data FROM mf_g1_probe_reader');
  await admin.query(schema);
  await assert.rejects(()=>admin.query(schema),/G1_PROBE_MUST_START_FRESH/);
  // Generate a disposable, non-committed-away login solely inside this docker.
