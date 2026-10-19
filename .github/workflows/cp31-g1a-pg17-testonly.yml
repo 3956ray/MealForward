@@ -1,0 +1,71 @@
+name: MealForward G1-A Render PG17 isolated read schema / wallet A-B security
+on:
+  push:
+    branches:
+      - codex/mealforward-g1a-isolated-pg-read-20261019
+permissions:
+  contents: read
+jobs:
+  pg17-wallet-private-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_G1_PG_DISPOSABLE_ONLY: "i-acknowledge-g1-test-only-pg17"
+      DATABASE_URL: postgres://postgres:g1-only-ci-pg17@127.0.0.1:5432/mealforward_g1_read_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start fresh PostgreSQL 17 (loopback-only, disposable)
+        run: |
+          docker run -d --rm --name mf-g1a-disposable \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=g1-only-ci-pg17 \
+            -e POSTGRES_DB=mealforward_g1_read_ci_only \
+            -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 45); do
+            if docker exec mf-g1a-disposable pg_isready -U postgres -d mealforward_g1_read_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned real SIWE/PG dependencies
+        run: cd cloud-auth && npm install --ignore-scripts --no-audit --no-fund
+      - name: Ensure new modules are syntactically valid
+        run: |
+          node --check cloud-auth/g1a-isolated-probe-read.mjs
+          node --check cloud-auth/g1a-isolated-probe.ci.mjs
+      - name: Real signed wallet A/B isolation and role grants
+        run: node --test cloud-auth/g1a-isolated-probe.ci.mjs
+      - name: Original G0 SIWE / session / CSRF and optional gateway regressions
+        run: cd cloud-auth && npm test
+      - name: Full source-to-Sites HTTP contract denial and exact DTOs
+        run: node --test cloud-auth/g1-readonly-gateway.test.mjs cp30-backend/g1-export/public-sites-read.test.mjs
+      - name: Reject any accidental deployment of real-business route in this probe
+        run: |
+          node --input-type=module -e "
+          import fs from 'node:fs';
+          const data=fs.readFileSync('cloud-auth/g1a-isolated-probe-read.mjs','utf8');
+          if(data.includes('eth_sendTransaction')||data.includes('/v1/my/orders')||
+             data.includes('FINAL_SUCCEEDED')||data.includes('function fund(')){
+              throw Error('G1A_TEST_MUST_NEVER_EXECUTE_REAL_FINANCE');
+          }
+          "
+
+  existing-render-auth-only-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      MF_G1_PUBLIC_SMOKE_ALLOWED: "yes"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify existing Render Auth Pilot remains live and its true business routes return 503
+        run: python -B cloud-auth/g1-live-public-smoke.py

@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import pg from 'pg';
 import {makePilotHandler} from './core.mjs';
 import {makeG1RenderReadGateway} from './g1-readonly-gateway.mjs';
+import {makeG1IsolatedProbeReader} from './g1a-isolated-probe-read.mjs';
 import {makeChallenge,verifyChallenge} from './siwe.mjs';
 import {pgStore,initializeSchema,probeAuthStorage} from './db.mjs';
 
@@ -28,13 +29,34 @@ if(databaseUrl){
 }
 if(!store){store={health:async()=>false};}
 const auth=makePilotHandler({store,origin,siwe:{makeChallenge,verifyChallenge}});
-// Until an independently signed + anchored original public data source exists,
-// publicCache MUST remain null. Render Auth sessions are not CP30 principals.
-const gateway=makeG1RenderReadGateway({authHandler:auth,publicCache:null,origin});
+// An isolated, test-only namespace can be activated only with an independent
+// read-login credential. It NEVER upgrades a SIWE session into the original
+// CP30 wallet principal, and it never enables real /v1/my/* business routes.
+let probeHandler=null;
+const probeMode=process.env.MF_G1A_PROBE_MODE;
+if(probeMode!==undefined&&probeMode!==''){
+  const readerUrl=process.env.MF_G1A_READONLY_DATABASE_URL;
+  if(probeMode!=='isolated-synthetic-read-only'||!ready||
+     typeof readerUrl!=='string'||!readerUrl||readerUrl===databaseUrl)
+    throw Error('G1A_TEST_PROBE_CONFIGURATION_REJECTED');
+  const probePool=new pg.Pool({
+    connectionString:readerUrl,max:2,connectionTimeoutMillis:4000,
+    idleTimeoutMillis:10000
+  });
+  probeHandler=makeG1IsolatedProbeReader({
+    authStore:store,readPool:probePool,origin,enabled:true
+  });
+}
+// No independently signed + anchored ORIGINAL source is connected:
+// publicCache remains null. Existing authenticated wallet sessions are
+// not original CP30 business principals.
+const gateway=makeG1RenderReadGateway({
+ authHandler:auth,publicCache:null,probeHandler,origin
+});
 const server=http.createServer(async(req,res)=>{
   try{
     const u=new URL(req.url,origin),p=u.pathname;
-    if(p==='/health'||p.startsWith('/v1/')){
+    if(p==='/health'||p.startsWith('/v1/')||p.startsWith('/__g1_probe/')){
       if(!ready && p!=='/health'){
         res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'AUTH_PILOT_DATABASE_NOT_READY'}));return;
       }
