@@ -19,6 +19,7 @@ import sys
 import psycopg
 from psycopg import sql
 from g1_wallet_ab_pg_probe import check_source_wallet_scope
+from g1_private_source_pg_probe import prove_private_wallet_ab
 from g1_public_source_pg_probe import security_probe
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -259,6 +260,7 @@ def run():
             # intentionally populated synthetic checkpoint in this test DB.
             result["initializedRuntime045Rejected"] = verify_initialized_runtime_rejects_045(db)
             result.update(check_source_wallet_scope(db))
+            result.update(prove_private_wallet_ab(db))
             result.update(security_probe(db))
         print(json.dumps({
             "status": "G2_FRESH_PG17_MIGRATIONS_PASS",

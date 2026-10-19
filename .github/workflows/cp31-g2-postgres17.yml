@@ -4,6 +4,7 @@ on:
     branches:
       - codex/mealforward-g2-pg17-disposable-ci-20261017
       - codex/mealforward-g1-wallet-ab-sql-pg17-20261017
+      - codex/mealforward-g1-private-source-ab-20261019
       - codex/mealforward-g1-public-export-role-20261017
   pull_request:
     paths:
@@ -49,3 +50,5 @@ jobs:
           node-version: "22"
       - name: Verify signed public-source envelope fail-closed security
         run: node --test cp30-backend/g1-export/public-envelope.test.mjs
+      - name: Verify original CP30 private-session same-origin HTTP DTO bridge
+        run: node --test cp30-backend/g1-export/private-http.test.mjs
