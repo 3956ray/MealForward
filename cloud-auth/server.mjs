@@ -5,6 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import pg from 'pg';
 import {makePilotHandler} from './core.mjs';
+import {makeG1RenderReadGateway} from './g1-readonly-gateway.mjs';
 import {makeChallenge,verifyChallenge} from './siwe.mjs';
 import {pgStore,initializeSchema,probeAuthStorage} from './db.mjs';
 
@@ -12,7 +13,7 @@ const origin=process.env.PUBLIC_ORIGIN;
 if(!/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin||''))throw Error('PUBLIC_ORIGIN_MUST_BE_EXACT_RENDER_URL');
 const port=Number(process.env.PORT||10000);
 if(!Number.isSafeInteger(port)||port<=0||port>=65536)throw Error('INVALID_PORT');
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist');
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../sites-frontend/dist');
 const assets=Object.freeze({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp','.svg':'image/svg+xml','.ico':'image/x-icon'});
 const databaseUrl=process.env.DATABASE_URL;
 let ready=false,store=null;
@@ -27,6 +28,9 @@ if(databaseUrl){
 }
 if(!store){store={health:async()=>false};}
 const auth=makePilotHandler({store,origin,siwe:{makeChallenge,verifyChallenge}});
+// Until an independently signed + anchored original public data source exists,
+// publicCache MUST remain null. Render Auth sessions are not CP30 principals.
+const gateway=makeG1RenderReadGateway({authHandler:auth,publicCache:null,origin});
 const server=http.createServer(async(req,res)=>{
   try{
     const u=new URL(req.url,origin),p=u.pathname;
@@ -34,7 +38,7 @@ const server=http.createServer(async(req,res)=>{
       if(!ready && p!=='/health'){
         res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'AUTH_PILOT_DATABASE_NOT_READY'}));return;
       }
-      await auth(req,res);return;
+      await gateway(req,res);return;
     }
     if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end();return}
     const file=p==='/'?'/index.html':p;
