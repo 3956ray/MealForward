@@ -58,11 +58,16 @@ export function makeG1IsolatedProbeReader({
     "SELECT current_database() AS db,current_user AS login,"+
     "(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated,"+
     "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
+    "has_schema_privilege(current_user,'mf_cp31_auth_pilot','USAGE') AS auth_schema_usage,"+
+    "has_table_privilege(current_user,'mf_cp31_auth_pilot.sessions','SELECT') AS auth_session_select,"+
+    "has_table_privilege(current_user,'mf_g1_probe.orders','UPDATE') AS can_update_probe,"+
     "to_regnamespace('c1_private') IS NOT NULL AS original_private_present"
    );
    const a=att.rows[0];
    if(att.rowCount!==1||!TEST_DATABASES.has(a.db)||a.login!==EXPECTED_ROLE||
-      a.elevated!==false||a.creates_public!==false||a.original_private_present!==false)
+      a.elevated!==false||a.creates_public!==false||
+      a.auth_schema_usage!==false||a.auth_session_select!==false||
+      a.can_update_probe!==false||a.original_private_present!==false)
     deny('G1_READER_PRIVILEGE_OR_DATABASE_MISMATCH');
    const scope=await conn.query(
     'SELECT scope,actual_original_cp30_connected,funded_or_settled_on_chain FROM mf_g1_probe.provenance WHERE singleton=1'
