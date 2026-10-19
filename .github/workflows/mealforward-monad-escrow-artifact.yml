@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-real-monad-e2e-preflight-20261018
+      - codex/mealforward-monad-deployment-proof-20261019
 permissions:
   contents: read
 jobs:
@@ -26,6 +27,8 @@ jobs:
           npm run build
       - name: Check user-mediated Monad deployment UI code gates
         run: node --test staging-monad/chain-e2e-page.test.mjs
+      - name: Verify independent deployment manifest/runtime proof guardrails
+        run: node --test staging-monad/runtime-proof.test.mjs staging-monad/verify-deployment.test.mjs
       - name: Upload reviewable deploy artifact only, no secret
         uses: actions/upload-artifact@v4
         with:

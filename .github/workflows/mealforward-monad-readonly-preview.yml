@@ -1,0 +1,43 @@
+name: MealForward Monad read-only Vercel pilot preview gate
+on:
+  push:
+    branches:
+      - codex/mealforward-monad-deployment-proof-20261019
+  pull_request:
+    paths:
+      - "pilot/**"
+permissions:
+  contents: read
+jobs:
+  static-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated static preview dependencies
+        working-directory: pilot
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Fail closed if preview wallet can sign or transact
+        working-directory: pilot
+        run: npm test
+      - name: Build Vite read-only preview
+        working-directory: pilot
+        run: npm run build
+      - name: Check output and no server write endpoints
+        run: |
+          test -s pilot/dist/index.html
+          test ! -d pilot/api
+          if grep -R -E "eth_sendRawTransaction|eth_sendTransaction|eth_signTypedData" pilot/dist; then
+            echo "FAILED: wallet signing method leaked into preview"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mealforward-monad-readonly-preview
+          path: pilot/dist
+          retention-days: 7

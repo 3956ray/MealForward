@@ -30,7 +30,7 @@ const input={
  settings:{
   optimizer:{enabled:true,runs:200},
   evmVersion:'cancun',
-  outputSelection:{'*':{'*':['abi','evm.bytecode.object','evm.deployedBytecode.object']}}
+  outputSelection:{'*':{'*':['abi','evm.bytecode.object','evm.deployedBytecode.object','evm.deployedBytecode.immutableReferences']}}
  }
 };
 const output=JSON.parse(solc.compile(JSON.stringify(input),{import:findImports}));
@@ -52,6 +52,7 @@ const artifact={
  sourceSha256:sourceDigest,creationBytecodeSha256,
  bytecode:'0x'+contract.evm.bytecode.object,
  runtimeBytecode:'0x'+contract.evm.deployedBytecode.object,
+ immutableReferences:contract.evm.deployedBytecode.immutableReferences||{},
  abi
 };
 const dir=path.join(root,'artifacts');fs.mkdirSync(dir,{recursive:true});
