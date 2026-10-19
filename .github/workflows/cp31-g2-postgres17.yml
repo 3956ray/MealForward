@@ -5,6 +5,7 @@ on:
       - codex/mealforward-g2-pg17-disposable-ci-20261017
       - codex/mealforward-g1-wallet-ab-sql-pg17-20261017
       - codex/mealforward-g1-private-source-ab-20261019
+      - codex/mealforward-g1-live-sql-http-gate-20261019
       - codex/mealforward-g1-public-export-role-20261017
   pull_request:
     paths:
@@ -43,11 +44,11 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input --only-binary=:all: "psycopg[binary]==3.3.6"
       - name: Verify original SQL pinned source
         run: python -B cp30-backend/tools/live-runtime-hotfix-parity-source-check.py
-      - name: Run source migrations 001 through 045 in disposable PG17
-        run: python -B cp30-backend/tools/g2-disposable-pg17-ci.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Run source migrations 001 through 045 in disposable PG17
+        run: python -B cp30-backend/tools/g2-disposable-pg17-ci.py
       - name: Verify signed public-source envelope fail-closed security
         run: node --test cp30-backend/g1-export/public-envelope.test.mjs
       - name: Verify original CP30 private-session same-origin HTTP DTO bridge
