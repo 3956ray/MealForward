@@ -19,5 +19,8 @@ jobs:
           node-version: "22"
       - name: Verify live Monad Testnet chain and Circle USDC (GET-state calls only)
         run: node staging-d1/monad-live-rpc-preflight.mjs
-      - name: Verify staging public wallet-check page and existing offchain flow
+      # The legacy Cloudflare D1 Worker currently does NOT serve /chain-check.
+      # Its separate public smoke must not be silently reported as PASS for this preview.
+      - name: Legacy Cloudflare D1 deployed-site smoke (older branch only)
+        if: github.ref == 'refs/heads/codex/mealforward-real-monad-e2e-preflight-20261018'
         run: node staging-d1/smoke-live.mjs
