@@ -56,3 +56,18 @@ jobs:
             if(source.includes(forbidden))throw Error('Unapproved fund/signer entry: '+forbidden);
           }
           "
+
+  existing-auth-pilot-https-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      MF_G1_PUBLIC_SMOKE_ALLOWED: "yes"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read only live Render Auth Pilot origin and fail-closed business routes
+        run: python -B cloud-auth/g1-live-public-smoke.py
