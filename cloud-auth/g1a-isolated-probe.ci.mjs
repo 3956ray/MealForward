@@ -99,7 +99,7 @@ before(async()=>{
   "(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated,"+
   "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
   "has_schema_privilege(current_user,'mf_cp31_auth_pilot','USAGE') AS auth_schema_usage,"+
-  "has_table_privilege(current_user,'mf_cp31_auth_pilot.sessions','SELECT') AS auth_session_select,"+
+  "EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='mf_cp31_auth_pilot' AND c.relname='sessions' AND has_table_privilege(current_user,c.oid,'SELECT')) AS auth_session_select,"+
   "has_table_privilege(current_user,'mf_g1_probe.orders','UPDATE') AS can_update_probe,"+
   "to_regnamespace('c1_private') IS NOT NULL AS original_private_present"
  );
