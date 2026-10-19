@@ -94,6 +94,18 @@ before(async()=>{
  });
  const rows=await reader.query("SELECT scope FROM mf_g1_probe.provenance");
  assert.equal(rows.rows[0].scope,'ISOLATED_SYNTHETIC_READ_TEST');
+ const attestation=await reader.query(
+  "SELECT current_database() AS db,current_user AS login,"+
+  "(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated,"+
+  "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
+  "has_schema_privilege(current_user,'mf_cp31_auth_pilot','USAGE') AS auth_schema_usage,"+
+  "has_table_privilege(current_user,'mf_cp31_auth_pilot.sessions','SELECT') AS auth_session_select,"+
+  "has_table_privilege(current_user,'mf_g1_probe.orders','UPDATE') AS can_update_probe,"+
+  "to_regnamespace('c1_private') IS NOT NULL AS original_private_present"
+ );
+ // Print only role/permission booleans and CI database name; NEVER credentials,
+ // wallets, Cookie values, signatures or private table contents.
+ console.log('G1A_RESTRICTED_READER_ATTESTATION',JSON.stringify(attestation.rows[0]));
  const insertOrder='INSERT INTO mf_g1_probe.orders(id,owner_wallet,store_id,meal_id,quantity,amount_base_units) VALUES($1,$2,$3,$4,1,7000000)';
  const insertVoucher='INSERT INTO mf_g1_probe.vouchers(id,owner_wallet,store_id,meal_id) VALUES($1,$2,$3,$4)';
  for(const [account,entry] of [[accountA,dataRows.A],[accountB,dataRows.B]]){
