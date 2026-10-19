@@ -1,0 +1,19 @@
+# Design review
+
+Visual system: warm ivory, forest green, restrained clay-orange, Chinese serif display paired with readable sans body, a bowl brand mark, a “留一份” circular stamp and meal-ticket language. Photography communicates everyday nourishment. No invented testimonials, live blockchain claims or real-world beneficiaries.
+
+The review covers the requested twenty criteria: user goal, flow, information architecture, navigation, visual hierarchy, typography, spacing, layout, color, components, interaction, microinteraction, motion, feedback, empty/loading/error states, responsive behavior, accessibility, performance, consistency, originality.
+
+| Surface | Goal and flow | Hierarchy/layout/typography | Interaction and state feedback | Responsive/accessibility/performance | Distinctive detail |
+|---|---|---|---|---|---|
+| Home & stores | Primary support, secondary claim, explore three stores | Editorial split hero, sparse summary, three food cards | Meal filters, store links, availability and sold count | Desktop and 390px screenshot reviewed; reduced motion, alt text, bundled compressed images, lazy cards | Bowl mark, arch image,留一份 stamp |
+| Store details | Inspect meal, original price and windows before support/claim | Food and facts grouped; rules progressively below | Disabled availability handled with explanatory feedback; version shown | Responsive column stack, named actions | Neighborhood tone and original-version explanation |
+| Support checkout | Select quantity, choose NFT consent, connect, authorize, fund | Meal line, quantity, total, consent, single CTA | Preserve quantity on wallet connection; staged pending/final feedback; cancellation before simulated completion | Native modal focus containment, labels, error alert | Clear “留下一餐” action and confirmation |
+| Orders & thanks | Original payer sees report, pending and refunds | Four meaningful counts, concise original price and settlement | Restore wallet, confirm only free refunds, stop unaccepted NFT task | Responsive metrics, empty state, no recipient identity | Plain gratitude sample, no fake letter |
+| Claim & recovery | One meal without wallet, recover original coupon | Email then rules then consent/CTA | Invalid email and cooldown errors; success keeps original expiry; old token revoked | Native type=email, local digest, no email transmission | Nonjudgmental wording |
+| Coupon & credential | Present one short-time credential inside window | Ticket-like store band and original expiry | Real QR and same copy string; visible countdown; unavailable-window feedback | Original price/version; focusable dialog; min expiry across window and coupon | Meal-ticket visual |
+| Merchant | Authenticate store, check/lock/report and personally settle | Task panels for verification, money, menu and safety | Connecting is distinct from auth; single lock; two-step report/settle; drafts and versions; separate delist/pause | Native store select, stack panels, camera capability fallback | Operational clarity without decorative metrics |
+| Public ledger | Understand every portion and money bucket | Five meaningful totals plus horizontally scrollable table | Local observation time, activity list, transparent simulated state | Semantic table, mobile contained overflow | F=A+R+H+S+X and privacy boundary |
+| About & NFT sample | Understand limits, public history and privacy | Two-column context, progressive FAQ, one calm card | Details disclosures; orders link holds private progress | Responsive text measures, source/asset notes | Public gratitude never claims live minting |
+
+Corrections from review: preserved checkout selection during wallet connection; checked image loading and mobile overflow; enlarged mobile targets; clarified simulated state consistently; retained lock responsibility after expiry. All flows remain local prototypes; production backend, wallet, OTP, chain and scalability need separate engineering verification.

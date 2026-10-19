@@ -1,0 +1,31 @@
+name: MealForward CP31 G0/G1 identity-only gate
+on:
+  push:
+    branches:
+      - codex/mealforward-g0-g1-readonly-20261016
+  pull_request:
+    paths:
+      - "sites-frontend/**"
+      - ".github/workflows/cp31-g0-g1-readonly.yml"
+permissions:
+  contents: read
+jobs:
+  g0-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: |
+          node --check sites-frontend/dist/app.js
+          node --check sites-frontend/dist/live-api.mjs
+          node --check sites-frontend/auth-only-gate.test.mjs
+      - name: Verify G0 identity-only behavior and G1 read contracts
+        run: |
+          cd sites-frontend
+          node --test auth-only-gate.test.mjs live-read-contract.test.mjs login-meal-resume.test.mjs verification-login-resume.test.mjs onboarding-wallet.test.mjs live-api.test.mjs live-support.test.mjs live-claim.test.mjs live-redemption.test.mjs live-settlement.test.mjs claim-ui.test.mjs support-ui.test.mjs verification-ui.test.mjs settlement-ui.test.mjs ledger-view.test.mjs

@@ -1,0 +1,30 @@
+name: MealForward G1 signed public Sites API contract
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-public-sites-adapter-20261019
+permissions:
+  contents: read
+jobs:
+  source-only-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Ed25519 source projection security checks
+        run: node --test cp30-backend/g1-export/public-envelope.test.mjs
+      - name: G1 frontend Sites DTO + signed public adapter HTTP cross-contract checks
+        run: node --test cp30-backend/g1-export/public-sites-read.test.mjs
+      - name: Safety check no wallet writes or CP30 live API dispatcher imported
+        run: |
+          node --input-type=module -e "
+          import fs from 'node:fs';
+          const src=fs.readFileSync('cp30-backend/g1-export/public-sites-read.mjs','utf8');
+          for(const item of ['eth_sendTransaction','eth_sendRawTransaction','privateKey','live_gateway','/v1/my/orders']) {
+            if (src.includes(item)) { console.error('Forbidden source '+item);process.exit(1); }
+          }"
