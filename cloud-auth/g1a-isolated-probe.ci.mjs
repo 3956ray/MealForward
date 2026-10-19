@@ -6,6 +6,8 @@
 import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import pg from 'pg';
@@ -211,4 +213,101 @@ test('live read route halts if original CP30 schema later appears on the same da
  }
  const recovered=await call('GET','/__g1_probe/my/orders',null,{cookie:A});
  assert.equal(recovered.status,200);
+});
+
+
+test('REAL Render server.mjs startup serves same-origin Sites, G0 SIWE, PG17 wallet A/B and private API denial',async()=>{
+ const gate=net.createServer();
+ await new Promise(ok=>gate.listen(0,'127.0.0.1',ok));
+ const port=gate.address().port;
+ await new Promise(ok=>gate.close(ok));
+ const trustedOrigin='https://mealforward-g1a-ci.onrender.com';
+ const host=new URL(trustedOrigin).host;
+ const child=spawn(process.execPath,['cloud-auth/server.mjs'],{
+  cwd:new URL('..',import.meta.url).pathname.replace(/\/cloud-auth\/$/,'/'),
+  env:{...process.env,PORT:String(port),PUBLIC_ORIGIN:trustedOrigin,
+   CP31_EMPTY_TEST_DB_INIT:'yes',DATABASE_URL:EXPECTED,
+   MF_G1A_PROBE_MODE:'isolated-synthetic-read-only',
+   MF_G1A_READONLY_DATABASE_URL:'postgres://mf_g1_probe_login:'+readPass+
+      '@127.0.0.1:5432/'+DATABASE},
+  stdio:['ignore','pipe','pipe']
+ });
+ // Never surface child output or connection strings in test assertions/logs.
+ child.stdout.on('data',()=>{});
+ child.stderr.on('data',()=>{});
+ async function httpCall(method,path,body,headers={}){
+  return new Promise((resolve,reject)=>{
+   const payload=method==='POST'?JSON.stringify(body??{}):null;
+   const req=http.request({
+    hostname:'127.0.0.1',port,path,method,
+    headers:{Host:host,
+     ...(method==='POST'?{Origin:trustedOrigin,'Content-Type':'application/json'}:{}),
+     ...headers}
+   },async res=>{
+    let text='';for await(const part of res)text+=part.toString('utf8');
+    let data;
+    if((res.headers['content-type']||'').includes('application/json'))
+     try{data=JSON.parse(text);}catch{reject(Error('NON_JSON_RESPONSE'));return}
+    else data=text;
+    resolve({status:res.statusCode,body:data,cookie:res.headers['set-cookie']?.[0]?.split(';',1)[0]});
+   });
+   req.on('error',reject);
+   if(payload)req.write(payload);
+   req.end();
+  });
+ }
+ async function signInReal(account){
+  const pre=await httpCall('POST','/v1/auth/pre-session',{}, {'X-C1-Bootstrap':'1'});
+  assert.equal(pre.status,200);
+  const challenge=await httpCall('POST','/v1/identity/wallet/challenge',
+   {address:account.address.toLowerCase()},
+   {Cookie:pre.cookie,'X-C1-CSRF':pre.body.csrf});
+  assert.equal(challenge.status,200);
+  assert.equal(challenge.body.uri,trustedOrigin);
+  const signature=await account.signMessage({message:challenge.body.message});
+  const auth=await httpCall('POST','/v1/identity/wallet/login',
+   {challengeId:challenge.body.challengeId,signature},
+   {Cookie:pre.cookie,'X-C1-CSRF':pre.body.csrf});
+  assert.equal(auth.status,200);
+  return auth.cookie;
+ }
+ try{
+  let up=false;
+  for(let i=0;i<50;i++){
+   if(child.exitCode!==null)throw Error('CI_RENDER_CHILD_DID_NOT_BOOT');
+   try{
+    const health=await httpCall('GET','/health');
+    if(health.status===200){up=true;break;}
+   }catch{}
+   await new Promise(ok=>setTimeout(ok,180));
+  }
+  assert.equal(up,true,'CI Render server must pass genuine PG17 startup');
+  const homepage=await httpCall('GET','/');
+  assert.equal(homepage.status,200);
+  assert.equal(typeof homepage.body,'string');
+  assert.ok(homepage.body.length>500);
+  const context=await httpCall('GET','/v1/connection');
+  assert.equal(context.status,200);
+  assert.equal(context.body.authPilot,true);
+  assert.equal(context.body.transactionActionsEnabled,false);
+  const authA=await signInReal(accountA);
+  const authB=await signInReal(accountB);
+  const mineA=await httpCall('GET','/__g1_probe/my/orders',null,{Cookie:authA});
+  const mineB=await httpCall('GET','/__g1_probe/my/orders',null,{Cookie:authB});
+  assert.equal(mineA.status,200);assert.equal(mineB.status,200);
+  assert.equal(mineA.body.items[0]?.id,dataRows.A.order);
+  assert.equal(mineB.body.items[0]?.id,dataRows.B.order);
+  assert.equal(mineA.body.originalCp30Connected,false);
+  assert.equal((await httpCall('GET','/v1/my/orders',null,{Cookie:authA})).status,503);
+  assert.equal((await httpCall('GET','/v1/ledger')).status,503);
+  assert.equal((await httpCall('GET','/__g1_probe/my/vouchers',null,{Cookie:authB})).body.items[0]?.id,dataRows.B.voucher);
+  assert.equal((await httpCall('GET','/__g1_probe/my/orders')).status,401);
+ }finally{
+  child.kill('SIGTERM');
+  if(child.exitCode===null)await Promise.race([
+   new Promise(ok=>child.once('exit',ok)),
+   new Promise(ok=>setTimeout(ok,3000))
+  ]);
+  if(child.exitCode===null)child.kill('SIGKILL');
+ }
 });
