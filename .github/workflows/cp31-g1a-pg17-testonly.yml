@@ -54,3 +54,18 @@ jobs:
               throw Error('G1A_TEST_MUST_NEVER_EXECUTE_REAL_FINANCE');
           }
           "
+
+  existing-render-auth-only-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      MF_G1_PUBLIC_SMOKE_ALLOWED: "yes"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify existing Render Auth Pilot remains live and its true business routes return 503
+        run: python -B cloud-auth/g1-live-public-smoke.py
