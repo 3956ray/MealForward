@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 18
     env:
       MF_G0_PG_DISPOSABLE_ONLY: ack-local-ci-auth-postgres-17
-      DATABASE_URL: postgres://postgres:gha-g0-ci-only@127.0.0.1:5432/mealforward_g1_http_ci_only
+      DATABASE_URL: postgres://postgres:gha-g0-ci-only@127.0.0.1:5432/mealforward_g0_ci_only
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,10 +24,10 @@ jobs:
           docker run -d --rm --name mf-g1-http-disposable \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=gha-g0-ci-only \
-            -e POSTGRES_DB=mealforward_g1_http_ci_only \
+            -e POSTGRES_DB=mealforward_g0_ci_only \
             -p 127.0.0.1:5432:5432 postgres:17.11
           for i in $(seq 1 40); do
-            if docker exec mf-g1-http-disposable pg_isready -U postgres -d mealforward_g1_http_ci_only; then exit 0; fi
+            if docker exec mf-g1-http-disposable pg_isready -U postgres -d mealforward_g0_ci_only; then exit 0; fi
             sleep 1
           done
           exit 1
