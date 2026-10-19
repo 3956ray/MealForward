@@ -24,8 +24,10 @@ const source={
  kind:'ORIGINAL_CP30_PRIVATE_SOURCE_V1',
  async readOriginalPrivate({section,originalSessionHash}){
   assert.ok(['orders','claims','vouchers'].includes(section));
-  assert.ok(raw.some(token=>hash(token)===originalSessionHash),
-   'The backend attempted a source lookup with an unknown Cookie digest');
+  // Unknown browser Cookies must travel to the genuine original CP30
+  // session authority, which returns UNAUTHENTICATED rather than a fake
+  // empty private list. Never bind a new source record by wallet string.
+  assert.match(originalSessionHash,/^[0-9a-f]{64}$/);
   const response=await fetch(bridge+'/__ci_original_source',{
    method:'POST',redirect:'error',signal:AbortSignal.timeout(4000),
    headers:{'Content-Type':'application/json'},
@@ -98,12 +100,16 @@ try{
   assert.equal((await get('/v1/my/orders',opts)).status,403);
  }
  assert.equal((await get('/v1/my/orders')).status,401);
+ // A token from a different SIWE/Render auth database cannot be used as an
+ // original CP30 session even if its cookie name and format are identical.
+ assert.equal((await get('/v1/my/orders',{token:'z'.repeat(43)})).status,401);
  assert.equal((await get('/v1/my/orders',{token:raw[0],method:'POST'})).status,405);
  assert.equal((await get('/v1/support/intents',{token:raw[0]})).status,404);
  assert.equal(readCount,6,'All and only six original SQL lookups allowed');
  process.stdout.write(JSON.stringify({
   status:'G1_C_REAL_SQL_HTTP_PASS',readCount,
   privateWalletsIsolated:true,originalSessionOnly:true,
+  unrelatedPilotStyleCookieDenied:true,
   cp30OriginalMigrations:true,frontEndDtoValidated:true,
   sourceKind:'CP30_ORIGINAL_SQL',businessWrites:0,
   onchainTransactions:0,sourceInciOnly:true
