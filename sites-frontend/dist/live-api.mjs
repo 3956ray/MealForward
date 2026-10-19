@@ -132,6 +132,14 @@ export function createLiveApi({fetchImpl=(...args)=>fetch(...args),storage=globa
     // Ask for a fresh wallet login rather than render actions that cannot commit.
     if(!current || !csrf)return anonymous;
     if(provider()?.request){try{await checkWallet(provider(),current.wallet);}catch{walletChanged();return anonymous;}checkEpoch(generation);}
+    // The existing Render SIWE Auth Pilot is an identity-only database.
+    // A real authenticated wallet must never be treated as an original
+    // CP30 merchant/recipient principal, or poll inaccessible business
+    // GETs before the source is separately bound and verified.
+    if(config.authPilot===true){
+      current.stores=[];
+      return {...anonymous,session:current};
+    }
     const data=await request('GET','/v1/store-registrations');checkEpoch(generation);
     const stores=await listStores();checkEpoch(generation);
     const registrations=await Promise.all(verifiedItems(data,'kitchen registration').map(r=>withListing(r,stores)));checkEpoch(generation);
