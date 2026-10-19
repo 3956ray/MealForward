@@ -247,6 +247,12 @@ async function loadLiveCatalog(generation=live.generation){
  live.stores=stores;
 }
 async function loadPublicLedger(generation=live.generation){
+ if(live.context?.setup?.authPilot===true||live.context?.setup?.mode==='CP31_AUTH_PILOT_ONLY'){
+  live.publicLedger=[];live.publicLedgerLoading=false;
+  live.publicLedgerError='Original CP30 public ledger is not connected to this wallet-login pilot.';
+  if(location.hash==='#ledger')renderLive();
+  return;
+ }
  if(!live.api||live.publicLedgerLoading)return;
  live.publicLedgerLoading=true;live.publicLedgerError='';if(location.hash==='#ledger')renderLive();
  try{const result=await currentLiveResult(live.api.getPublicLedger(),generation);live.publicLedger=result.items;}
@@ -289,7 +295,20 @@ async function startLive(){
  document.querySelector('#signout-button').removeAttribute('data-action');document.querySelector('#signout-button').dataset.liveAction='logout';
  const generation=live.generation;
  try{const adapter=await currentLiveResult(import('./live-api.mjs'),generation);live.api=adapter.liveApi;live.parseVoucherCode=adapter.parseVoucherCode;}catch{if(generation!==live.generation)return;live.error='The connection adapter is unavailable.';live.loading=false;renderLive();return;}
- await liveTask(async generation=>{const results=await currentLiveResult(Promise.allSettled([loadLiveContext(generation),loadLiveCatalog(generation)]),generation);if(results[0].status==='rejected'){live.blocked=true;live.error=liveMessage(results[0].reason);}if(results[1].status==='rejected')live.catalogError=liveMessage(results[1].reason);if(live.context.store)await loadLiveKitchen(generation);});if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#ledger')await loadPublicLedger();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
+ await liveTask(async generation=>{
+  // G1: establish the server-authored backend mode BEFORE any business
+  // catalog request. Parallel execution races with the previous wallet or
+  // with an Auth-only source that deliberately returns business GET 503.
+  try{await loadLiveContext(generation);}
+  catch(error){
+   live.blocked=true;live.error=liveMessage(error);
+   live.stores=[];live.meals={};live.catalogError='The original business source has not been verified.';
+   return;
+  }
+  try{await loadLiveCatalog(generation);}
+  catch(error){live.stores=[];live.meals={};live.catalogError=liveMessage(error);}
+  if(live.context.store)await loadLiveKitchen(generation);
+ });if(location.hash==='#contributions')await loadSupportOrders();if(location.hash==='#mine')await loadClaimRecords();if(location.hash==='#ledger')await loadPublicLedger();if(location.hash==='#merchant/payouts')await loadPayouts();if(verificationLink)openVerificationEntry(verificationLink);
 }
 document.addEventListener('click',event=>{
  if(!LIVE_MODE)return;const target=event.target.closest('[data-live-action]');if(!target||target.disabled)return;
