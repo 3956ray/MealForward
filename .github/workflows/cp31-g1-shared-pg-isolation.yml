@@ -1,0 +1,35 @@
+name: MealForward G1 shared PG17 isolation feasibility
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-shared-pg-isolation-20261019
+permissions:
+  contents: read
+jobs:
+  disposable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_G0_PG_DISPOSABLE_ONLY: ack-local-ci-auth-postgres-17
+      DATABASE_URL: postgres://postgres:gha-g0-ci-only@127.0.0.1:5432/mealforward_g0_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Start fresh PostgreSQL 17.11 isolated test container
+        run: |
+          docker run -d --rm --name mf-g1-shared-ci -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=gha-g0-ci-only -e POSTGRES_DB=mealforward_g0_ci_only -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-shared-ci pg_isready -U postgres -d mealforward_g0_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install existing reviewed dependency pins
+        run: cd cloud-auth && npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify independent schema and role ACL against existing Auth schema
+        run: node --test cloud-auth/g1-disposable-schema-probe.test.mjs
+      - name: Rerun SIWE client/auth protocol regressions
+        run: cd cloud-auth && npm test
