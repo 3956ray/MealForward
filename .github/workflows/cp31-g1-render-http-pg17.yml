@@ -1,0 +1,58 @@
+name: MealForward G1 same-origin Render backend integration
+on:
+  push:
+    branches:
+      - codex/mealforward-g1-render-readonly-20261019
+permissions:
+  contents: read
+jobs:
+  http-pg17-read-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      MF_G0_PG_DISPOSABLE_ONLY: ack-local-ci-auth-postgres-17
+      DATABASE_URL: postgres://postgres:gha-g0-ci-only@127.0.0.1:5432/mealforward_g1_http_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Launch fresh isolated PG17 for authentication and session SQL
+        run: |
+          docker run -d --rm --name mf-g1-http-disposable \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=gha-g0-ci-only \
+            -e POSTGRES_DB=mealforward_g1_http_ci_only \
+            -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-g1-http-disposable pg_isready -U postgres -d mealforward_g1_http_ci_only; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install reviewed Auth Pilot dependencies (no project-wide scripts)
+        run: cd cloud-auth && npm install --ignore-scripts --no-audit --no-fund
+      - name: Check integrated source and auth/server syntax
+        run: |
+          node --check cloud-auth/server.mjs
+          node --check cloud-auth/g1-readonly-gateway.mjs
+          node --check sites-frontend/dist/app.js
+          node --check sites-frontend/dist/live-api.mjs
+          node --check cp30-backend/g1-export/public-sites-read.mjs
+      - name: Regress existing SIWE EIP-191 Session CSRF identity and UI
+        run: cd cloud-auth && npm test
+      - name: Real disposable PG17 challenge admission and session security
+        run: node --test cloud-auth/pg-security.ci.mjs
+      - name: Same-origin HTTP G0+G1 public source plus zero private CP30 access
+        run: node --test cloud-auth/g1-readonly-gateway.test.mjs cp30-backend/g1-export/public-sites-read.test.mjs
+      - name: Guard against any money-writing route in Render source module
+        run: |
+          node --input-type=module -e "
+          import fs from 'node:fs';
+          const files=['cloud-auth/g1-readonly-gateway.mjs','cloud-auth/server.mjs'];
+          const source=files.map(f=>fs.readFileSync(f,'utf8')).join('\n');
+          for(const forbidden of ['eth_sendTransaction','eth_sendRawTransaction','new Wallet(','source-publisher.signPublicEnvelope(']) {
+            if(source.includes(forbidden))throw Error('Unapproved fund/signer entry: '+forbidden);
+          }
+          "
