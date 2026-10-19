@@ -55,8 +55,9 @@ export function makeG1IsolatedProbeReader({
    // Permission attestation is done on this SAME checked-out connection.
    // The auth database OWNER credential must never be accepted here.
    const att=await conn.query(
-    "SELECT current_database() AS db,current_user AS login,"+
+    "SELECT current_database() AS db,current_user AS login,session_user AS authenticated_login,"+
     "(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated,"+
+    "has_database_privilege(current_user,current_database(),'CREATE') AS creates_database,"+
     "has_schema_privilege(current_user,'public','CREATE') AS creates_public,"+
     "has_schema_privilege(current_user,'mf_cp31_auth_pilot','USAGE') AS auth_schema_usage,"+
     "EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='mf_cp31_auth_pilot' AND c.relname='sessions' AND has_table_privilege(current_user,c.oid,'SELECT')) AS auth_session_select,"+
@@ -65,7 +66,8 @@ export function makeG1IsolatedProbeReader({
    );
    const a=att.rows[0];
    if(att.rowCount!==1||!TEST_DATABASES.has(a.db)||a.login!==EXPECTED_ROLE||
-      a.elevated!==false||a.creates_public!==false||
+      a.authenticated_login!==EXPECTED_ROLE||a.elevated!==false||
+      a.creates_database!==false||a.creates_public!==false||
       a.auth_schema_usage!==false||a.auth_session_select!==false||
       a.can_update_probe!==false||a.original_private_present!==false)
     deny('G1_READER_PRIVILEGE_OR_DATABASE_MISMATCH');
