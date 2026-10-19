@@ -27,6 +27,11 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='mf_g1_probe_reader') THEN
     CREATE ROLE mf_g1_probe_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
   END IF;
+  IF EXISTS(
+    SELECT 1 FROM pg_roles WHERE rolname='mf_g1_probe_reader'
+    AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+  ) THEN RAISE EXCEPTION 'G1_PROBE_ROLE_NOT_RESTRICTED';
+  END IF;
 END
 $role$;
 CREATE SCHEMA mf_g1_probe;
