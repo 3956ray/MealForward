@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-real-monad-e2e-preflight-20261018
+      - codex/mealforward-monad-deployment-proof-20261019
 permissions:
   contents: read
 jobs:
