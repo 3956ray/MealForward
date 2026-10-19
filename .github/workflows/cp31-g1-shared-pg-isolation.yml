@@ -32,4 +32,4 @@ jobs:
       - name: Verify independent schema and role ACL against existing Auth schema
         run: node --test cloud-auth/g1-disposable-schema-probe.test.mjs
       - name: Rerun SIWE client/auth protocol regressions
-        run: cd cloud-auth && npm test
+        run: cd cloud-auth && node --test core.test.mjs db-probe.test.mjs g1-readonly-gateway.test.mjs g1-source-mode.test.mjs siwe.test.mjs ui-gate.test.mjs
