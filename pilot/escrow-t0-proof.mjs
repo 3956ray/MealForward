@@ -190,11 +190,17 @@ export async function verifyDeployment({rpc,artifact,manifest}={}){
  strict(price===PRICE&&HEX32.test(hash),'CATALOG_TERMS_MISMATCH');
  strict(eq((await call('computeTermsHash',[plan.terms]))[0],hash),'TERMS_HASH_MISMATCH');
  const stored=(await call('getTerms',[manifest.mealId,1n]))[0];
- for(const field of ['mealId','bodyDigest','imageDigest'])
-  if(field in stored)strict(eq(stored[field],plan.terms[field]),'TERMS_FIELD_MISMATCH_'+field);
- for(const field of ['unitPrice','version','windowCount','startMinute0',
-  'endMinute0','startMinute1','endMinute1'])
-  if(field in stored)strict(BigInt(stored[field])===BigInt(plan.terms[field]),'TERMS_FIELD_MISMATCH_'+field);
+ strict(stored&&typeof stored==='object','STORED_TERMS_MISSING');
+ strict(eq(stored.termsHash,hash),'STORED_TERMS_HASH_MISMATCH');
+ for(const field of ['bodyDigest','imageDigest']){
+  strict(typeof stored[field]==='string'&&
+   eq(stored[field],plan.terms[field]),'TERMS_FIELD_MISMATCH_'+field);
+ }
+ for(const field of ['unitPrice','windowCount','startMinute0',
+  'endMinute0','startMinute1','endMinute1']){
+  strict(stored[field]!==undefined&&BigInt(stored[field])===BigInt(plan.terms[field]),
+   'TERMS_FIELD_MISMATCH_'+field);
+ }
  const usdcDecimals=VIEW.decodeFunctionResult(
   'decimals',await readData(rpc,'eth_call',[{
    to:TEST_USDC,data:VIEW.encodeFunctionData('decimals')
