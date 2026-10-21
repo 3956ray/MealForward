@@ -1,0 +1,52 @@
+name: MealForward T1-C disposable PostgreSQL17 immutable intent crash recovery
+on:
+  push:
+    branches:
+      - codex/mealforward-t1c-durable-intents-20261021
+permissions:
+  contents: read
+jobs:
+  original-intent-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_T1C_DISPOSABLE_ONLY: ack-fresh-t1c-postgres17
+      DATABASE_URL: postgres://postgres:t1c-disposable-only@127.0.0.1:5432/mf_t1c_disposable_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Provision a fresh isolated PostgreSQL 17.11 (never user Render or old Mac)
+        run: |
+          docker run -d --rm --name mf-t1c-fresh-pg17 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1c-disposable-only \
+            -e POSTGRES_DB=mf_t1c_disposable_ci \
+            -p 127.0.0.1:5432:5432 postgres:17.11
+          for i in $(seq 1 50); do
+            if docker exec mf-t1c-fresh-pg17 pg_isready -U postgres -d mf_t1c_disposable_ci; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned test-only Postgres/Ethers (no third-party scripts)
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify all source modules parse
+        working-directory: t1-intents
+        run: npm run check
+      - name: Run 12 real PostgreSQL concurrency and crash/receipt proofs
+        working-directory: t1-intents
+        run: npm test
+      - name: Assert zero wallet signing or transaction dispatch in server ledger
+        run: |
+          test ! -d t1-intents/api
+          if grep -E "eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|personal_sign|privateKeyToAccount|new Wallet\\(" t1-intents/core.mjs t1-intents/receipt.mjs; then
+            echo "UNAUTHORIZED_WALLET_WRITE_CAPABILITY"
+            exit 1
+          fi
