@@ -16,10 +16,10 @@ import {
 } from './core.mjs';
 import {ERC20,ESCROW_ABI} from './receipt.mjs';
 
-const URL='postgres://postgres:t1c-disposable-only@127.0.0.1:5432/mf_t1c_disposable_ci';
+const DSN='postgres://postgres:t1c-disposable-only@127.0.0.1:5432/mf_t1c_disposable_ci';
 const ALLOW=process.env.GITHUB_ACTIONS==='true'&&
  process.env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
- process.env.DATABASE_URL===URL;
+ process.env.DATABASE_URL===DSN;
 const STOP=/UNKNOWN|CONFLICT|NOT_FOUND|DENIED|MISMATCH|EXPIRED|REQUIRED|IMMUTABLE|ILLEGAL/;
 const A='0x'+'1'.repeat(40),B='0x'+'2'.repeat(40),FOREIGN='0x'+'3'.repeat(40);
 const BLOCK='0x'+('7'.repeat(64));
@@ -109,7 +109,7 @@ async function newBound({session='A',quantity=1,key=randomUUID()}={}){
 }
 before(async()=>{
  assert.ok(ALLOW,'DISPOSABLE_GITHUB_PG17_REQUIRED');
- pool=new pg.Pool({connectionString:URL,max:12});
+ pool=new pg.Pool({connectionString:DSN,max:12});
  const res=await pool.query('SHOW server_version_num');
  assert.ok(Number(res.rows[0].server_version_num)>=170000&&
   Number(res.rows[0].server_version_num)<180000);
