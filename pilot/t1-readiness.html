@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>留膳 · T1 真实资助前置验收</title>
+<meta name="color-scheme" content="light">
+<style>
+:root{--ink:#16382a;--green:#2f7451;--mute:#66786c;--border:#dce5dc;--bg:#f5f7f3}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif}
+header{background:#143024;color:#f5faf5;padding:40px 22px 45px}
+header>div,main,footer{max-width:850px;margin:auto}
+.eyebrow{font-size:11px;letter-spacing:.15em;color:#a6cbb5;font-weight:700}
+h1{font-size:clamp(28px,5vw,46px);letter-spacing:-.045em;line-height:1.15;margin:12px 0}
+header p{line-height:1.75;color:#d3e0d4;max-width:690px}
+main{padding:24px 20px 55px}
+article{background:white;padding:24px;margin:16px 0;border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 26px rgba(13,46,26,.035)}
+h2{font-size:19px;margin:0 0 10px}
+p{line-height:1.7}
+.muted{color:var(--mute)}
+.note{font-size:12px;color:var(--mute)}
+.warning{padding:17px 19px;background:#fff7e5;border:1px solid #e9d5a5;border-radius:12px;color:#624b18;line-height:1.7}
+.warning strong{display:block;margin-bottom:4px}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0}
+button{border:1px solid var(--green);background:var(--green);color:white;border-radius:9px;padding:12px 18px;font:inherit;font-weight:650;font-size:14px;cursor:pointer;min-height:44px}
+button.secondary{background:white;color:var(--green)}
+button:focus-visible,a:focus-visible{outline:3px solid #6aaa7c;outline-offset:3px}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3eb;padding:15px 17px;border-radius:9px;font:13px/1.7 ui-monospace,Menlo,monospace;min-height:44px}
+.status[data-state=ok]{background:#e8f5ea;color:#165c35}
+.status[data-state=error]{background:#fff0ed;color:#982f22}
+code{overflow-wrap:anywhere}
+a{color:var(--green)}
+header a{color:#d4f2dc}
+footer{padding:0 20px 44px;color:var(--mute);font-size:12px}
+@media(max-width:600px){main{padding:16px 13px 36px}article{padding:18px}header{padding:28px 17px}button{width:100%}.row{flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div>
+<div class="eyebrow">MEALFORWARD · MONAD TESTNET · T1 READINESS</div>
+<h1>一份餐之前，<br>先证明每一步可信。</h1>
+<p>沿用你已部署并独立核验的 StoreEscrow。本轮验证真实钱包余额、USDC Allowance 和 Quote Authority 的钱包控制权，不发起任何 ERC-20 授权、付款或结算。</p>
+<p><a href="/deploy-t0.html">← 查看 T0 已完成的部署页</a></p>
+</div></header>
+<main>
+<div class="warning">
+<strong>此页面不允许付款</strong>
+本轮只读链上数据，或由 Quote 钱包本人主动签署一条独立的权限控制挑战。挑战采用不同于 FundingQuote 的 EIP-712 Domain，无法用于授权 Fund。请勿输入助记词、私钥或历史 CP30 资料。
+</div>
+<article>
+<h2>01 · 固定真实测试合约</h2>
+<p>Chain ID：<strong>10143</strong> · 合约地址：<code>0xcF0C8827C8610EEFF1ecbd9719E559d805FafE58</code>。</p>
+<p class="muted">餐品「暖心盖饭」，7 Test USDC/份；累计资助上限 10 份。点击后会重新读取合约状态、资产、价格和可用容量。</p>
+<div class="row"><button class="secondary" id="connect">连接 MetaMask 测试钱包</button><button class="secondary" id="contract">只读核对合约状态</button></div>
+<div class="status" id="walletInfo">尚未连接钱包。</div>
+<p class="status" id="chainInfo">等待真实合约状态查询。</p>
+</article>
+<article>
+<h2>02 · 资助者钱包资产准备</h2>
+<p class="muted">切换到你未来准备资助的测试钱包，检查是否有足够测试 MON（Gas）、7 Test USDC，以及当前已授权的 Allowance。**这里只读现有额度，不会要求新增授权。**</p>
+<div class="row"><button id="donor" class="secondary">读取当前钱包 MON / USDC / Allowance</button></div>
+<div class="status" id="donorInfo">尚未检查资助者测试资产。</div>
+</article>
+<article>
+<h2>03 · Quote Authority 钱包控制证明</h2>
+<p>只有合约注册的 Quote Authority 钱包能为 T1 资助报价提供有效 EIP-712 授权。当前地址为：</p>
+<p><code>0xcc5C1ce846c0302ab27a4811cf2e0E6FC7282952</code></p>
+<p class="muted">请在 MetaMask 中选择这一个地址，并重新连接。按钮会显示一条 <strong>非 FundingQuote</strong> 的 EIP-712 控制权挑战（5 分钟有效），由你本人决定是否签署；本页面只在本地恢复签名地址，不存储或上传原签名。</p>
+<div class="row"><button id="quote">本人签署无付款效力的 EIP-712 控制证明</button></div>
+<div class="status" id="quoteInfo">Quote Authority 钱包控制权尚未验证。</div>
+</article>
+<article>
+<h2>04 · 资金 Intent 安全门禁</h2>
+<p class="muted">即使前面全部通过，也不能立即执行真实 Fund。下一阶段必须先把资助 Intent、同一 Quote ID、UNKNOWN 交易恢复和 Receipt / ERC-20 余额对账写入独立的持久化后端，才能启用用户亲自批准的 Approve 和 Fund。</p>
+<div class="status" data-state="error">FUNDS_DISABLED：此页面没有 Approve / Fund / Issue / Settle 功能。原合约链上 180 秒结算延迟仍未实现，资金结算安全需单独复审。</div>
+</article>
+<article>
+<h2>测试操作状态</h2>
+<div id="actionStatus" role="status" aria-live="polite" class="status"></div>
+</article>
+</main>
+<footer>留一膳，待一人，是为善。 · 此测试只适用于新合约，不触碰原 Mac CP30 Journal 和旧 USDC。</footer>
+<script type="module" src="./t1-readiness.mjs"></script>
+</body>
+</html>

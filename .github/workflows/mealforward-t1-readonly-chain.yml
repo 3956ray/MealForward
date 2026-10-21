@@ -1,0 +1,35 @@
+name: MealForward T1-A live escrow accounting and EIP712 read-only
+on:
+  push:
+    branches:
+      - codex/mealforward-t1-real-readiness-20261021
+permissions:
+  contents: read
+jobs:
+  t1-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build reviewed original T0 contract artifact
+        working-directory: staging-monad
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Verify original T0 deployment has not changed
+        working-directory: staging-monad
+        run: node attest-live-t0.mjs
+      - name: Audit real Monad escrow buckets, balances, capacity, roles and FundingQuote EIP712
+        working-directory: staging-monad
+        run: node t1-chain-readiness.mjs
+      - name: Upload public, no-write T1-A result (never wallet secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mealforward-t1-a-readonly-chain-proof
+          path: staging-monad/artifacts/T1-A-chain-readiness.json
+          retention-days: 14
