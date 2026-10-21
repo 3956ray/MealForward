@@ -123,10 +123,10 @@ CREATE TRIGGER t1c_attempt_immutable BEFORE UPDATE ON mf_t1c.wallet_attempts FOR
 EXECUTE FUNCTION mf_t1c.enforce_immutable_attempt();
 
 CREATE FUNCTION mf_t1c.deny_audit_rewrite() RETURNS trigger
-LANGUAGE plpgsql SET search_path=pg_catalog AS $
+LANGUAGE plpgsql SET search_path=pg_catalog AS $audit$
 BEGIN
  RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='T1C_AUDIT_APPEND_ONLY';
-END $;
+END $audit$;
 CREATE TRIGGER t1c_append_only BEFORE UPDATE OR DELETE ON mf_t1c.audit_events
 FOR EACH ROW EXECUTE FUNCTION mf_t1c.deny_audit_rewrite();
 
