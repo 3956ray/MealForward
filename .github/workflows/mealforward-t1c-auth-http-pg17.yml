@@ -1,0 +1,48 @@
+name: MealForward T1-C real SIWE authenticated HTTP + isolated PG17
+on:
+  push:
+    branches:
+      - codex/mealforward-t1c-auth-http-gate-20261021
+permissions:
+  contents: read
+jobs:
+  siwe-private-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      MF_T1C_DISPOSABLE_ONLY: ack-fresh-t1c-postgres17
+      MF_T1C_HTTP_DISPOSABLE_ONLY: ack-original-siwe-pg17
+      DATABASE_URL: postgres://postgres:t1c-disposable-only@127.0.0.1:5433/mf_t1c_http_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Start entirely fresh test-only PG17.11 — never live Render/Auth data
+        run: |
+          docker run -d --rm --name mf-t1c-http-auth-disposable \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1c-disposable-only \
+            -e POSTGRES_DB=mf_t1c_http_ci \
+            -p 127.0.0.1:5433:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-t1c-http-auth-disposable pg_isready -U postgres -d mf_t1c_http_ci; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install exact approved SIWE viem and funding-core dependencies without scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Source typecheck and no transaction broadcaster
+        working-directory: t1-intents
+        run: |
+          npm run check
+          test ! -f server-deploy-live.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|privateKeyToAccount' http-auth-gateway.mjs; then
+            exit 1
+          fi
+      - name: Real EIP-191 SIWE, CSRF, PG17 private wallet A/B HTTP integration
+        working-directory: t1-intents
+        run: npm run test:http
