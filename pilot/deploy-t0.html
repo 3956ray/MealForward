@@ -91,6 +91,10 @@ footer a{color:var(--green)}
 <article>
 <h2>05 · 原交易只读证明</h2>
 <p>验证原 Tx Input 是否与审核过的构造参数完全一致、实际字节码是否吻合、五类合约权限是否一致、餐品价格及条款是否正确，以及至少两个区块的深度。</p>
+<p class="note">如果钱包已广播但页面或网络中断，可从 MetaMask 的交易历史复制**原交易 Hash**，在此恢复。恢复只读取交易并逐字比对原构造参数，不会另发部署。</p>
+<label for="recoverHash">原交易 Hash 恢复（仅在 UNKNOWN 状态可用）</label>
+<input id="recoverHash" placeholder="0x... 从 MetaMask 复制原 Tx Hash" spellcheck="false" autocomplete="off">
+<div class="actions"><button class="secondary" id="recover" disabled>只读找回同一笔部署交易</button></div>
 <label>保存的原部署 Transaction Hash</label>
 <div class="mono" id="tx">尚无部署交易</div>
 <div class="actions">
