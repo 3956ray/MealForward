@@ -358,7 +358,8 @@ test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+In
    child.once('exit',code=>{
     if(!text.includes('T1_C_SAFE_READONLY_PROCESS_READY')){
      clearTimeout(clock);
-     reject(Error('T1_READONLY_SERVER_NOT_STARTED_'+code));
+     reject(Error('T1_READONLY_SERVER_NOT_STARTED_'+code+'_'+
+      (stderr.match(/T1_C_READONLY_BOOT_FAIL_CLOSED_[A-Z_]+/)||['UNSPECIFIED_STAGE'])[0]));
     }
    });
   });
