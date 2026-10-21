@@ -28,6 +28,16 @@ export const QUOTE_PROOF_TYPES=Object.freeze({
   {name:'expiresAt',type:'uint256'}
  ]
 });
+// MetaMask eth_signTypedData_v4 does NOT infer the EIP712Domain structure
+// from `domain`. Without this declaration MetaMask signs the EMPTY domain,
+// while ethers verifyTypedData verifies the FULL domain and recovers another
+// address. This was the cause of the first T1-B ROLE_SIGNER_MISMATCH.
+export const METAMASK_EIP712_DOMAIN_TYPES=Object.freeze([
+ {name:'name',type:'string'},
+ {name:'version',type:'string'},
+ {name:'chainId',type:'uint256'},
+ {name:'verifyingContract',type:'address'}
+]);
 const stop=(ok,reason)=>{if(!ok)throw Error(reason)};
 const same=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
 export function newQuoteProof({now=Math.floor(Date.now()/1000),random=()=>hexlify(randomBytes(32))}={}){
@@ -41,6 +51,27 @@ export function newQuoteProof({now=Math.floor(Date.now()/1000),random=()=>hexlif
   expectedAuthority:QUOTE,
   expiresAt:now+300
  });
+}
+/**
+ * Build the EXACT JSON payload MetaMask hashes using EIP-712 V4.
+ * Ethers' `verifyTypedData` accepts only the non-domain custom types,
+ * but MetaMask requires the explicit EIP712Domain entry in the RPC JSON.
+ * Never return an authorization for Fund; T1RoleControl is not FundingQuote.
+ */
+export function buildMetaMaskQuoteControlPayload(message){
+ stop(message?.role==='QUOTE_AUTHORITY_CONTROL_ONLY','WRONG_ROLE_PROOF_KIND');
+ stop(same(message.expectedAuthority,QUOTE),'WRONG_QUOTE_AUTHORITY');
+ stop(/^0x[0-9a-fA-F]{64}$/.test(message.challengeId),'BAD_CHALLENGE');
+ stop(Number.isSafeInteger(message.expiresAt),'BAD_CHALLENGE_EXPIRY');
+ return {
+  domain:QUOTE_PROOF_DOMAIN,
+  primaryType:'T1RoleControl',
+  types:{
+   EIP712Domain:METAMASK_EIP712_DOMAIN_TYPES,
+   T1RoleControl:QUOTE_PROOF_TYPES.T1RoleControl
+  },
+  message
+ };
 }
 export function verifyQuoteControlProof({
  message,signature,now=Math.floor(Date.now()/1000)
@@ -58,7 +89,14 @@ export function verifyRoleControlSignature({
   message.expiresAt>now&&message.expiresAt<=now+300,
   'ROLE_PROOF_EXPIRED_OR_TOO_LONG');
  const address=getAddress(verifyTypedData(QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,message,signature));
- stop(same(address,expectedAuthority),'ROLE_SIGNER_MISMATCH');
+ if(!same(address,expectedAuthority)){
+  // This is only the public address recovered against the intended domain.
+  // Never persist, log or share the raw signature.
+  const error=Error('ROLE_SIGNER_MISMATCH');
+  error.expectedAuthority=expectedAuthority;
+  error.recoveredSigner=address;
+  throw error;
+ }
  return {
   status:'QUOTE_EOA_CONTROL_PROOF_PASS',
   authority:expectedAuthority,
