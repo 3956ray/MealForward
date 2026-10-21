@@ -45,17 +45,23 @@ export function newQuoteProof({now=Math.floor(Date.now()/1000),random=()=>hexlif
 export function verifyQuoteControlProof({
  message,signature,now=Math.floor(Date.now()/1000)
 }={}){
+ return verifyRoleControlSignature({message,signature,now,expectedAuthority:QUOTE});
+}
+/** Pure cryptographic primitive; production UI always fixes expectedAuthority=QUOTE. */
+export function verifyRoleControlSignature({
+ message,signature,now=Math.floor(Date.now()/1000),expectedAuthority
+}={}){
  stop(message?.role==='QUOTE_AUTHORITY_CONTROL_ONLY','WRONG_ROLE_PROOF_KIND');
- stop(same(message.expectedAuthority,QUOTE),'WRONG_QUOTE_AUTHORITY');
+ stop(same(message.expectedAuthority,expectedAuthority),'WRONG_QUOTE_AUTHORITY');
  stop(/^0x[0-9a-fA-F]{64}$/.test(message.challengeId),'BAD_CHALLENGE');
  stop(Number.isSafeInteger(message.expiresAt)&&
   message.expiresAt>now&&message.expiresAt<=now+300,
   'ROLE_PROOF_EXPIRED_OR_TOO_LONG');
  const address=getAddress(verifyTypedData(QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,message,signature));
- stop(same(address,QUOTE),'ROLE_SIGNER_MISMATCH');
+ stop(same(address,expectedAuthority),'ROLE_SIGNER_MISMATCH');
  return {
   status:'QUOTE_EOA_CONTROL_PROOF_PASS',
-  authority:QUOTE,
+  authority:expectedAuthority,
   mode:'harmless_t1_role_challenge_not_funding_quote',
   domainHash:TypedDataEncoder.hashDomain(QUOTE_PROOF_DOMAIN),
   expiresAt:message.expiresAt,
