@@ -13,6 +13,7 @@
  * No funding, no wallet broadcaster, no Quote signer, no historical Journal.
  */
 import http from 'node:http';
+import {readFile} from 'node:fs/promises';
 import pg from 'pg';
 import {fileURLToPath} from 'node:url';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
@@ -139,7 +140,39 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
    mode:'read_only'
   });
-  server=http.createServer((req,res)=>handler(req,res));
+  // Public UI is a fixed allowlist of THREE immutable local files; no
+  // arbitrary filesystem path, storage directory, SSR or API secrets.
+  const staticFiles=new Map(await Promise.all([
+   ['/', 'index.html','text/html; charset=utf-8'],
+   ['/ui.css','ui.css','text/css; charset=utf-8'],
+   ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
+  ].map(async([path,filename,type])=>[
+    path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
+  ])));
+  server=http.createServer((req,res)=>{
+   const u=new URL(req.url||'/',cfg.origin);
+   const item=staticFiles.get(u.pathname);
+   if(item&&req.method==='GET'){
+    if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
+     (req.headers.origin&&req.headers.origin!==cfg.origin)||
+     (req.headers['sec-fetch-site']&&
+       !['same-origin','none'].includes(req.headers['sec-fetch-site']))){
+     res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
+    }
+    res.writeHead(200,{
+     'Content-Type':item.type,
+     'Content-Length':item.bytes.length,
+     'Cache-Control':'no-store',
+     'X-Content-Type-Options':'nosniff',
+     'Referrer-Policy':'no-referrer',
+     'X-Frame-Options':'DENY',
+     'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; script-src 'self'; style-src 'self'"
+    });
+    res.end(item.bytes);
+    return;
+   }
+   return handler(req,res);
+  });
   await new Promise((resolve,reject)=>{
    server.once('error',reject);
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
