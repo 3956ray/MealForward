@@ -336,7 +336,7 @@ test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+In
   T1C_AUTH_DB_URL:DSN.replace('postgres:t1c-disposable-only',
    'mf_t1c_ci_auth:t1c-ci-auth-only-local'),
   T1C_INTENT_DB_URL:DSN.replace('postgres:t1c-disposable-only',
-   'mf_t1c_ci_intent:t1c-ci-intent-only-local')
+   'mf_t1c_ci_intent_ro:t1c-ci-intent-ro-only-local')
  };
  const launch=async()=>{
   const child=spawn(process.execPath,[
