@@ -6,6 +6,7 @@ on:
       - codex/mealforward-g1-wallet-ab-sql-pg17-20261017
       - codex/mealforward-g1-private-source-ab-20261019
       - codex/mealforward-g1-live-sql-http-gate-20261019
+      - codex/mealforward-g1-public-source-http-pipeline-20261021
       - codex/mealforward-g1-public-export-role-20261017
   pull_request:
     paths:
@@ -19,6 +20,9 @@ jobs:
     timeout-minutes: 15
     env:
       MF_G2_DISPOSABLE_ONLY: ack-fresh-gha-postgres-17
+      MF_G1_D_DISPOSABLE_ONLY: ack-three-isolated-pg17-public-sql
+      MF_G1_D_CACHE_DB: postgres://postgres:g1-d-cache-only@127.0.0.1:5434/mealforward_g1_d_cache_ci
+      MF_G1_D_ANCHOR_DB: postgres://postgres:g1-d-anchor-only@127.0.0.1:5433/mealforward_g1_d_anchor_ci
       PGHOST: 127.0.0.1
       PGPORT: "5432"
       PGUSER: postgres
@@ -39,6 +43,17 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Start independently isolated G1 public cache and anchor PG17 containers
+        run: |
+          docker run -d --rm --name mf-g1-d-cache             -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=g1-d-cache-only             -e POSTGRES_DB=mealforward_g1_d_cache_ci             -p 127.0.0.1:5434:5432 postgres:17.11
+          docker run -d --rm --name mf-g1-d-anchor             -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=g1-d-anchor-only             -e POSTGRES_DB=mealforward_g1_d_anchor_ci             -p 127.0.0.1:5433:5432 postgres:17.11
+          for service in mf-g1-d-cache mf-g1-d-anchor; do
+            for i in $(seq 1 40); do
+              if docker exec "$service" pg_isready -U postgres; then break; fi
+              if test "$i" -eq 40; then exit 1; fi
+              sleep 1
+            done
+          done
       - name: Install pinned PostgreSQL adapter
         run: |
           python -m pip install --disable-pip-version-check --no-input --only-binary=:all: "psycopg[binary]==3.3.6"
@@ -47,6 +62,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install isolated G1 public signer/outbox/cache PostgreSQL connector
+        run: cd cp30-backend/g1-export && npm install --ignore-scripts --no-audit --no-fund
+
       - name: Run source migrations 001 through 045 in disposable PG17
         run: python -B cp30-backend/tools/g2-disposable-pg17-ci.py
       - name: Verify signed public-source envelope fail-closed security
