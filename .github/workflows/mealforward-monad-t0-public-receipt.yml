@@ -1,0 +1,29 @@
+name: MealForward T0 public chain deployment attestation
+on:
+  push:
+    branches:
+      - codex/mealforward-t0-public-receipt-attestation-20261021
+permissions:
+  contents: read
+jobs:
+  independent-public-rpc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build original immutable reviewed StoreEscrow using pinned compiler
+        working-directory: staging-monad
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Verify T0 original deployment TX, constructor and roles independently
+        working-directory: staging-monad
+        run: node attest-live-t0.mjs
+      - name: Recheck original immutable runtime proof regression tests
+        working-directory: staging-monad
+        run: npm run test:proof
