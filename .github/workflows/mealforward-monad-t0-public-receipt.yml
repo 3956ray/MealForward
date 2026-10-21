@@ -27,3 +27,9 @@ jobs:
       - name: Recheck original immutable runtime proof regression tests
         working-directory: staging-monad
         run: npm run test:proof
+      - name: Preserve public-only T0 attestation and all role/constructor fields
+        uses: actions/upload-artifact@v4
+        with:
+          name: mealforward-t0-independent-public-proof
+          path: staging-monad/artifacts/T0-public-attestation.json
+          retention-days: 30
