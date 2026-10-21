@@ -113,6 +113,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
  const authPool=new pg.Pool(opts(cfg.authUrl));
  const intentPool=new pg.Pool(opts(cfg.intentUrl));
  let server=null;
+ let bootStage='ROLE_CHECK';
  try{
   const [authRole,intentRole]=await Promise.all([
    roleAudit(authPool),roleAudit(intentPool)
@@ -120,6 +121,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   strict(authRole===cfg.expectedAuthRole&&intentRole===cfg.expectedIntentRole,
    'UNREVIEWED_DATABASE_LOGIN_ROLE');
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
+  bootStage='SCHEMA_CHECK';
   const [authSchema,intentSchema]=await Promise.all([
    authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
    intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
@@ -128,6 +130,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    'T1_C_SCHEMA_NOT_READY');
   // These negative proofs are mandatory on every process restart. A
   // shared superuser connection would fail before any HTTP handler listens.
+  bootStage='GRANT_CHECK';
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
@@ -135,6 +138,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    mustBeDenied(intentPool,'INSERT INTO mf_t1c.intents DEFAULT VALUES'),
    mustBeDenied(intentPool,'UPDATE mf_t1c.intents SET quantity=quantity WHERE false')
   ]);
+  bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,authStore:pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
@@ -142,6 +146,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   });
   // Public UI is a fixed allowlist of THREE immutable local files; no
   // arbitrary filesystem path, storage directory, SSR or API secrets.
+  bootStage='ASSET_LOAD';
   const staticFiles=new Map(await Promise.all([
    ['/', 'index.html','text/html; charset=utf-8'],
    ['/ui.css','ui.css','text/css; charset=utf-8'],
@@ -173,6 +178,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    }
    return handler(req,res);
   });
+  bootStage='HTTP_LISTEN';
   await new Promise((resolve,reject)=>{
    server.once('error',reject);
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
@@ -187,8 +193,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
  }catch{
   if(server?.listening)await new Promise(resolve=>server.close(resolve));
   await Promise.allSettled([authPool.end(),intentPool.end()]);
-  // No DSNs, query text or stack can leak into startup logs.
-  throw Error('T1_C_READONLY_BOOT_FAIL_CLOSED');
+  // Only a fixed stage label is observable; never reveal credentials,
+  // database names, SQL text, stack or wallet sessions in logs.
+  throw Error('T1_C_READONLY_BOOT_FAIL_CLOSED_'+bootStage);
  }
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
@@ -208,8 +215,10 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   };
   process.on('SIGTERM',stop);
   process.on('SIGINT',stop);
- }catch{
-  process.stderr.write('T1_C_READONLY_BOOT_FAIL_CLOSED\n');
+ }catch(e){
+  const safe=/^T1_C_READONLY_BOOT_FAIL_CLOSED_[A-Z_]{3,40}$/.test(e.message||'')?
+   e.message:'T1_C_READONLY_BOOT_FAIL_CLOSED';
+  process.stderr.write(safe+'\n');
   process.exitCode=1;
  }
 }
