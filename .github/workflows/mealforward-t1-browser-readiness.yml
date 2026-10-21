@@ -1,0 +1,54 @@
+name: MealForward T1 safe browser readiness and role-control proof
+on:
+  push:
+    branches:
+      - codex/mealforward-t1-real-readiness-20261021
+  pull_request:
+    paths:
+      - "pilot/**"
+      - "staging-monad/t1-chain-readiness.mjs"
+      - ".github/workflows/mealforward-t1-browser-readiness.yml"
+permissions:
+  contents: read
+jobs:
+  t1-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Recompile pinned original T0 StoreEscrow
+        working-directory: staging-monad
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Install browser ethers and Vite without build scripts
+        working-directory: pilot
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify T0 original UI and T1 no-money role control tests
+        working-directory: pilot
+        run: npm test
+      - name: Build static readonly T0 + T1 pages
+        working-directory: pilot
+        run: npm run build
+      - name: Check exact deployed files and T1 no-funds guard
+        run: |
+          test -s pilot/dist/index.html
+          test -s pilot/dist/deploy-t0.html
+          test -s pilot/dist/t1-readiness.html
+          test ! -d pilot/api
+          node --check pilot/t1-proof.mjs
+          node --check pilot/t1-readiness.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|personal_sign' pilot/t1-readiness.mjs; then
+            echo "FAILED: T1 funding/signing transaction primitive present"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mealforward-t1-no-funds-verified-static-site
+          path: pilot/dist
+          retention-days: 7
