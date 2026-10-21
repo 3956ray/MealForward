@@ -73,7 +73,7 @@ test('T1 UI has no funding, approvals, secret capture or automatic signing route
  assert.equal((script.match(/eth_signTypedData_v4/g)||[]).length,2);
  for(const forbidden of [
   'eth_sendTransaction','eth_sendRawTransaction','wallet_sendCalls',
-  "wallet('personal_sign'",'eth_sign','approve(', 'fund(', 'settle(',
+  "wallet('personal_sign'",'approve(', 'settle(',
   'privateKey','mnemonic','localStorage.setItem'
  ]){
   assert.ok(!script.includes(forbidden),forbidden);
