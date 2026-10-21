@@ -27,6 +27,7 @@ const ESCROW_ABI=new Interface([
  'function quoteAuthority() view returns (address)',
  'function asset() view returns (address)',
  'function listed(bytes32) view returns (bool)',
+ 'function currentVersion(bytes32) view returns (uint256)',
  'function paused() view returns (bool)',
  'function closed() view returns (bool)',
  'function catalog(bytes32,uint256) view returns (uint256,bytes32)',
@@ -94,12 +95,13 @@ $('contract').addEventListener('click',guard(async()=>{
   read(CONTRACT,ESCROW_ABI,'listed',[MEAL]).then(x=>x[0]),
   read(CONTRACT,ESCROW_ABI,'paused').then(x=>x[0]),
   read(CONTRACT,ESCROW_ABI,'closed').then(x=>x[0]),
-  read(CONTRACT,ESCROW_ABI,'catalog',[MEAL,1n]).then(x=>x[0]).then(()=>1n),
+  read(CONTRACT,ESCROW_ABI,'currentVersion',[MEAL]).then(x=>x[0]),
   read(CONTRACT,ESCROW_ABI,'catalog',[MEAL,1n]),
   read(CONTRACT,ESCROW_ABI,'availableUnits').then(x=>x[0]),
   read(CONTRACT,ESCROW_ABI,'lifetimeFundedUnits').then(x=>x[0]),
   read(TOKEN,TOKEN_ABI,'balanceOf',[CONTRACT]).then(x=>x[0])
  ]);
+ if(version!==1n)throw Error('原餐品版本已经变化，停止');
  const result=validateFundingReadOnlyState({
   chainId:CHAIN,escrow:CONTRACT,asset,quoteAuthority:quote,
   listed,paused,closed,unitPrice:menu[0],termsHash:menu[1],
