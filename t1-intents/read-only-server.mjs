@@ -76,7 +76,7 @@ function validateConfig(env){
  return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
-  expectedIntentRole:testing?'mf_t1c_ci_intent':PROD_ROLE_INTENT};
+  expectedIntentRole:testing?'mf_t1c_ci_intent_ro':PROD_ROLE_INTENT};
 }
 async function roleAudit(pool){
  const query=await pool.query(
