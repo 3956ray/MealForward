@@ -11,7 +11,7 @@
 import {readFile} from 'node:fs/promises';
 import {AbiCoder,Interface} from 'ethers';
 import {
- verifyDeployment,validateArtifact,publicRpc
+ verifyDeployment,validateArtifact
 } from './verify-deployment.mjs';
 import {
  validateManifest,REVIEWED_SOURCE_SHA256,
@@ -28,6 +28,86 @@ const REPORT={
 };
 const strict=(value,code)=>{if(!value)throw Error(code)};
 const same=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
+
+
+const ENDPOINTS=Object.freeze([
+ 'https://rpc.ankr.com/monad_testnet',
+ 'https://testnet-rpc.monad.xyz'
+]);
+const READONLY_METHODS=new Set([
+ 'eth_chainId','eth_getTransactionByHash','eth_getTransactionReceipt',
+ 'eth_blockNumber','eth_getBlockByNumber','eth_getCode','eth_call'
+]);
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+/**
+ * Serializes queries and fails over between two literal published public
+ * Monad Testnet RPC endpoints. Never accepts arbitrary endpoint, headers,
+ * private credentials, or a write/signing RPC.
+ */
+export function makeReadOnlyPublicRpc({fetchImpl=fetch}={}){
+ let last=Promise.resolve(),cursor=0,id=0,lastSent=0;
+ const verified=new Set(),used=new Set();
+ const raw=async(index,method,params)=>{
+  const now=Date.now(),wait=Math.max(0,450-(now-lastSent));
+  if(wait)await sleep(wait);
+  lastSent=Date.now();
+  const controller=new AbortController();
+  const t=setTimeout(()=>controller.abort(),12000);
+  try{
+   const response=await fetchImpl(ENDPOINTS[index],{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:++id,method,params}),
+    redirect:'error',signal:controller.signal
+   });
+   if(!response.ok){
+    const error=Error(response.status===429?'PUBLIC_RPC_RATE_LIMITED':
+      'PUBLIC_RPC_HTTP_'+response.status);
+    error.retryable=response.status===429||response.status===502||response.status===503||response.status===504;
+    throw error;
+   }
+   const decoded=await response.json();
+   if(decoded.jsonrpc!=='2.0'||decoded.error||
+      decoded.result===undefined||decoded.result===null){
+    const error=Error('PUBLIC_RPC_INVALID_'+method);
+    error.retryable=Boolean(decoded.error?.code===-32005);
+    throw error;
+   }
+   return decoded.result;
+  }finally{clearTimeout(t)}
+ };
+ const perform=async(method,params)=>{
+  for(let attempt=0;attempt<5;attempt++){
+   const index=(cursor+attempt)%ENDPOINTS.length;
+   try{
+    if(!verified.has(index)){
+     const chain=await raw(index,'eth_chainId',[]);
+     if(BigInt(chain)!==10143n)throw Error('RPC_PROVIDER_WRONG_CHAIN');
+     verified.add(index);
+    }
+    const data=method==='eth_chainId'?'0x279f':await raw(index,method,params);
+    used.add(ENDPOINTS[index]);
+    cursor=index;
+    return data;
+   }catch(error){
+    if(error?.message==='RPC_PROVIDER_WRONG_CHAIN')throw error;
+    if(!error?.retryable)throw error;
+    if(attempt===4)throw Error('PUBLIC_RPC_RETRY_EXHAUSTED_'+method);
+    await sleep(800+attempt*1400);
+   }
+  }
+  throw Error('PUBLIC_RPC_UNAVAILABLE');
+ };
+ return {
+  send(method,params=[]){
+   if(!READONLY_METHODS.has(method))return Promise.reject(Error('RPC_WRITE_DISALLOWED'));
+   const next=last.then(()=>perform(method,params));
+   last=next.catch(()=>{});
+   return next;
+  },
+  providersUsed(){return [...used]}
+ };
+}
 
 function getConstructorManifest(artifact,transaction){
  const abi=validateArtifact(artifact);
@@ -69,7 +149,7 @@ function getConstructorManifest(artifact,transaction){
  return manifest;
 }
 
-async function run({rpc=publicRpc(),artifactPath}={}){
+async function run({rpc=makeReadOnlyPublicRpc(),artifactPath}={}){
  strict(artifactPath,'COMPILED_SOURCE_ARTIFACT_REQUIRED');
  const artifact=JSON.parse(await readFile(artifactPath,'utf8'));
  strict(artifact.sourceSha256===REVIEWED_SOURCE_SHA256 &&
@@ -123,7 +203,8 @@ async function run({rpc=publicRpc(),artifactPath}={}){
   historicalCp30Accessed:false,
   onchain180SecondCooldownEnforced:false,
   fundIssueSettleTested:false,
-  writesSent:0
+  writesSent:0,
+  publicRpcEndpointsUsed:typeof rpc.providersUsed==='function'?rpc.providersUsed():[]
  });
 }
 
