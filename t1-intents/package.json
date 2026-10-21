@@ -5,10 +5,12 @@
   "version": "0.1.0",
   "scripts": {
     "test": "node --test --test-concurrency=1 *.test.mjs",
-    "check": "node --check core.mjs && node --check receipt.mjs"
+    "check": "node --check core.mjs && node --check receipt.mjs && node --check http-auth-gateway.mjs && node --check http-auth.test.mjs",
+    "test:http": "node --test --test-concurrency=1 http-auth.test.mjs"
   },
   "dependencies": {
     "pg": "8.16.3",
-    "ethers": "6.15.0"
+    "ethers": "6.15.0",
+    "viem": "2.57.1"
   }
 }
