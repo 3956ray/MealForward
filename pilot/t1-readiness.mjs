@@ -8,7 +8,7 @@ import {Interface,formatUnits} from 'ethers';
 import {
  CHAIN,TOKEN,CONTRACT,QUOTE,MEAL,PRICE,
  QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,newQuoteProof,
- verifyQuoteControlProof,validateFundingReadOnlyState
+ verifyQuoteControlProof,buildMetaMaskQuoteControlPayload,validateFundingReadOnlyState
 } from './t1-proof.mjs';
 
 const $=id=>document.getElementById(id);
@@ -18,7 +18,7 @@ const status=(id,text,ok=null)=>{
  node.textContent=text;
  node.dataset.state=ok===true?'ok':ok===false?'error':'pending';
 };
-let walletAddress=null,busy=false;
+let walletAddress=null,busy=false,walletEpoch=0;
 const TOKEN_ABI=new Interface([
  'function balanceOf(address) view returns (uint256)',
  'function allowance(address,address) view returns (uint256)'
@@ -73,10 +73,26 @@ const guard=fn=>async()=>{
  if(busy)return;
  busy=true;
  try{await fn()}
- catch(error){status('actionStatus','未通过：'+String(error?.message||'UNKNOWN').slice(0,200),false)}
+ catch(error){
+  const code=String(error?.message||'UNKNOWN').slice(0,200);
+  if(code==='ROLE_SIGNER_MISMATCH'){
+   // Display ONLY public addresses. No signature, raw EIP-712 body or
+   // private material is stored or sent anywhere.
+   status('quoteInfo',[
+    '签名验证不匹配；本次没有获得 Quote Authority 控制证明。',
+    '预期链上 Quote Authority：'+(error.expectedAuthority||QUOTE),
+    '按当前指定 EIP-712 Domain 反推地址：'+(error.recoveredSigner||'不可用'),
+    '不要提交此签名，也不要 Approve / Fund。请确认 MetaMask 选择的是对应测试钱包。'
+   ].join('\n'),false);
+  }else if(code==='ACCOUNT_CHANGED_DURING_SIGNATURE'){
+   status('quoteInfo','签名过程中 MetaMask 账户或网络改变，原挑战作废，请重新连接。',false);
+  }
+  status('actionStatus','未通过：'+code,false);
+ }
  finally{busy=false}
 };
 function invalidate(reason){
+ walletEpoch++;
  walletAddress=null;
  status('walletInfo',reason,false);
  status('donorInfo','已清除旧钱包余额视图；需要重新连接。');
@@ -87,6 +103,9 @@ $('connect').addEventListener('click',guard(async()=>{
  if(!a?.[0]||!/^0x[0-9a-f]{40}$/i.test(a[0]))throw Error('MetaMask 没有返回有效钱包地址');
  await assertChain();
  walletAddress=a[0];
+ walletEpoch++;
+ status('donorInfo','新连接钱包尚未读取余额，之前账户的余额不再适用。');
+ status('quoteInfo','此账户还没有 Quote Authority 签名证明。');
  status('walletInfo','已连接 '+walletAddress+' · Chain ID 10143',true);
  status('actionStatus','此页面不会发起链上资金交易。',true);
 }));
@@ -154,12 +173,15 @@ $('quote').addEventListener('click',guard(async()=>{
  const code=await wallet('eth_getCode',[QUOTE,'latest']);
  if(code!=='0x')throw Error('当前 Quote 地址为合约钱包，原 StoreEscrow 只接受 ECDSA EOA 报价签名');
  const message=newQuoteProof();
- const payload={domain:QUOTE_PROOF_DOMAIN,primaryType:'T1RoleControl',
-  types:QUOTE_PROOF_TYPES,message};
+ // Explicit MetaMask V4 EIP712Domain structure; the previous request
+ // omitted it, resulting in a signature against an empty domain.
+ const payload=buildMetaMaskQuoteControlPayload(message);
+ const signedWalletEpoch=walletEpoch;
  // The only signature call, on explicit user click. It is NOT a
  // FundingQuote and cannot be passed to the original StoreEscrow fund().
  const sig=await wallet('eth_signTypedData_v4',[account,JSON.stringify(payload)]);
  await currentAccount();
+ if(signedWalletEpoch!==walletEpoch)throw Error('ACCOUNT_CHANGED_DURING_SIGNATURE');
  const report=verifyQuoteControlProof({message,signature:sig});
  status('quoteInfo',[
   'PASS：Quote Authority 的 EOA 控制证明。',
