@@ -1,0 +1,152 @@
+/**
+ * Deploy-ready, STRICTLY READ-ONLY MONEY Testnet T1-C HTTPS service.
+ *
+ * THIS DOES NOT bootstrap/create/migrate PostgreSQL. Operators must separately
+ * provision a new isolated PG17 instance and two disjoint least-privilege
+ * identities. The historic CP30 Mac and already-accepted G0 Render database
+ * MUST NEVER be passed as either connection.
+ *
+ * HTTP endpoints: original CP31 G0 SIWE login/logout and authenticated
+ * GET /v1/t1/intents/:id. POST /v1/t1/intents/* remains blocked,
+ * even with a valid donor wallet or valid Quote Authority signature.
+ *
+ * No funding, no wallet broadcaster, no Quote signer, no historical Journal.
+ */
+import http from 'node:http';
+import pg from 'pg';
+import {fileURLToPath} from 'node:url';
+import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
+import {pgStore} from './auth/db.mjs';
+import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+
+const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
+const PRIVILEGE_DENIAL='42501';
+const ALLOWED_PUBLIC=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
+const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
+
+function validateConfig(env){
+ const testing=env.GITHUB_ACTIONS==='true'&&
+  env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
+  env.MF_T1C_HTTP_DISPOSABLE_ONLY==='ack-original-siwe-pg17';
+ strict(env.T1C_SERVER_MODE==='READ_ONLY_NO_FUNDS',
+  'FINANCIAL_WRITE_MODE_FORBIDDEN');
+ strict(env.T1C_FUNDING_ENABLED!== 'true'&&
+  env.T1C_QUOTE_SIGNER_ENABLED!== 'true',
+  'T1C_WALLET_WRITE_FLAG_FORBIDDEN');
+ const origin=env.PUBLIC_ORIGIN;
+ strict(typeof origin==='string'&&(
+  ALLOWED_PUBLIC.test(origin)||(testing&&ALLOWED_TEST.test(origin))
+ ),'ORIGIN_MUST_BE_EXACT_PINNED_HTTPS');
+ strict(typeof env.T1C_AUTH_DB_URL==='string'&&
+  typeof env.T1C_INTENT_DB_URL==='string'&&
+  env.T1C_AUTH_DB_URL!==env.T1C_INTENT_DB_URL,
+ 'TWO_DISTINCT_DATABASE_PRINCIPALS_REQUIRED');
+ const originAuth=new URL(env.T1C_AUTH_DB_URL);
+ const originIntent=new URL(env.T1C_INTENT_DB_URL);
+ for(const item of [originAuth,originIntent]){
+  strict(['postgres:','postgresql:'].includes(item.protocol)&&
+   item.username&&item.password&&item.hostname&&item.pathname!=='/',
+   'DATABASE_DSN_NOT_REVIEWABLE');
+ }
+ strict(originAuth.username!==originIntent.username,
+  'SAME_PG_ROLE_REJECTED');
+ const port=Number(env.PORT);
+ strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
+ return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
+  intentUrl:env.T1C_INTENT_DB_URL};
+}
+async function roleAudit(pool){
+ const query=await pool.query(
+  'SELECT current_user AS role,rolsuper,rolcreaterole,rolcreatedb,rolbypassrls '+
+  'FROM pg_roles WHERE rolname=current_user'
+ );
+ strict(query.rowCount===1,'MISSING_DATABASE_PRINCIPAL');
+ const row=query.rows[0];
+ strict(!row.rolsuper&&!row.rolcreaterole&&!row.rolcreatedb&&!row.rolbypassrls,
+  'SUPERUSER_OR_DDL_ROLE_FORBIDDEN');
+ return row.role;
+}
+async function mustBeDenied(pool,query){
+ try{
+  await pool.query(query);
+ }catch(error){
+  if(error.code===PRIVILEGE_DENIAL)return;
+  throw Error('ISOLATION_PRIVILEGE_CHECK_FAILED');
+ }
+ throw Error('ISOLATION_PRIVILEGE_ESCALATION');
+}
+
+export async function startT1ReadOnlyServer({env=process.env}={}){
+ const cfg=validateConfig(env);
+ const opts=url=>({
+  connectionString:url,max:8,connectionTimeoutMillis:5000,
+  idleTimeoutMillis:20000
+ });
+ const authPool=new pg.Pool(opts(cfg.authUrl));
+ const intentPool=new pg.Pool(opts(cfg.intentUrl));
+ let server=null;
+ try{
+  const [authRole,intentRole]=await Promise.all([
+   roleAudit(authPool),roleAudit(intentPool)
+  ]);
+  strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
+  const [authSchema,intentSchema]=await Promise.all([
+   authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
+   intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
+  ]);
+  strict(authSchema.rowCount===1&&intentSchema.rows[0]?.ready===true,
+   'T1_C_SCHEMA_NOT_READY');
+  // These negative proofs are mandatory on every process restart. A
+  // shared superuser connection would fail before any HTTP handler listens.
+  await Promise.all([
+   mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
+   mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
+   mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events')
+  ]);
+  const handler=makeT1CAuthenticatedGateway({
+   sessionPool:authPool,intentPool,authStore:pgStore(authPool),
+   siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
+   mode:'read_only'
+  });
+  server=http.createServer((req,res)=>handler(req,res));
+  await new Promise((resolve,reject)=>{
+   server.once('error',reject);
+   server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
+  });
+  return {
+   server,origin:cfg.origin,authRole,intentRole,fundingEnabled:false,
+   async close(){
+    await new Promise(resolve=>server.close(resolve));
+    await Promise.all([authPool.end(),intentPool.end()]);
+   }
+  };
+ }catch{
+  if(server?.listening)await new Promise(resolve=>server.close(resolve));
+  await Promise.allSettled([authPool.end(),intentPool.end()]);
+  // No DSNs, query text or stack can leak into startup logs.
+  throw Error('T1_C_READONLY_BOOT_FAIL_CLOSED');
+ }
+}
+if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
+ try{
+  const runtime=await startT1ReadOnlyServer();
+  process.stdout.write(JSON.stringify({
+   status:'T1_C_SAFE_READONLY_PROCESS_READY',
+   fundingEnabled:false,origin:runtime.origin,
+   distinctDatabasePrincipals:true
+  })+'\n');
+  let shuttingDown=false;
+  const stop=async()=>{
+   if(shuttingDown)return;
+   shuttingDown=true;
+   await runtime.close().catch(()=>{});
+   process.exit(0);
+  };
+  process.on('SIGTERM',stop);
+  process.on('SIGINT',stop);
+ }catch{
+  process.stderr.write('T1_C_READONLY_BOOT_FAIL_CLOSED\n');
+  process.exitCode=1;
+ }
+}
+export {validateConfig};
