@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {Wallet} from 'ethers';
+import {Wallet,TypedDataEncoder,verifyTypedData} from 'ethers';
+import {
+ signTypedData,recoverTypedSignature,SignTypedDataVersion,TypedDataUtils
+} from '@metamask/eth-sig-util';
 import {
  CHAIN,CONTRACT,TOKEN,QUOTE,PRICE,
  QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,
- newQuoteProof,verifyQuoteControlProof,
+ newQuoteProof,buildMetaMaskQuoteControlPayload,verifyQuoteControlProof,
  verifyRoleControlSignature,validateFundingReadOnlyState
 } from '../t1-proof.mjs';
 
@@ -41,6 +44,40 @@ test('harmless challenge proof verifies real EIP712 EOA signature locally withou
   signature,now:when+1,expectedAuthority:fakeWallet.address
  }),/WRONG_ROLE_PROOF_KIND/);
 });
+test('regression: actual MetaMask V4 must include EIP712Domain or ethers recovers wrong signer',()=>{
+ const key=Wallet.createRandom(); // CI-only ephemeral key, never logged or persisted.
+ const now=1790000000;
+ const message=newQuoteProof({now,random:()=>('0x'+'6'.repeat(64))});
+ const payload=buildMetaMaskQuoteControlPayload(message);
+ assert.equal(payload.primaryType,'T1RoleControl');
+ assert.deepEqual(payload.types.EIP712Domain,[
+  {name:'name',type:'string'},
+  {name:'version',type:'string'},
+  {name:'chainId',type:'uint256'},
+  {name:'verifyingContract',type:'address'}
+ ]);
+ assert.equal(payload.domain.chainId,CHAIN);
+ const v4=SignTypedDataVersion.V4;
+ const privateKey=Buffer.from(key.privateKey.slice(2),'hex');
+ const signature=signTypedData({privateKey,data:payload,version:v4});
+ // Compare the EXACT on-wire MetaMask V4 hash to ethers' intended full-domain hash.
+ const metamaskHash='0x'+Buffer.from(TypedDataUtils.eip712Hash(payload,v4)).toString('hex');
+ const ethersHash=TypedDataEncoder.hash(QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,message);
+ assert.equal(metamaskHash.toLowerCase(),ethersHash.toLowerCase());
+ assert.equal(verifyTypedData(QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,message,signature),key.address);
+ assert.equal(recoverTypedSignature({data:payload,signature,version:v4}).toLowerCase(),key.address.toLowerCase());
+ // Reproduce the exact bug in the first T1-B deployment:
+ // MetaMask sanitizes a missing domain declaration into EIP712Domain:[],
+ // whereas ethers verifies the full domain, resulting in signer mismatch.
+ const legacy={...payload,types:{T1RoleControl:QUOTE_PROOF_TYPES.T1RoleControl}};
+ const buggySig=signTypedData({privateKey,data:legacy,version:v4});
+ assert.equal(recoverTypedSignature({data:legacy,signature:buggySig,version:v4}).toLowerCase(),key.address.toLowerCase());
+ assert.notEqual(
+  verifyTypedData(QUOTE_PROOF_DOMAIN,QUOTE_PROOF_TYPES,message,buggySig).toLowerCase(),
+  key.address.toLowerCase()
+ );
+ assert.notEqual('0x'+Buffer.from(TypedDataUtils.eip712Hash(legacy,v4)).toString('hex'),ethersHash);
+});
 test('real new StoreEscrow 7 test USDC and registered Quote role cannot be overridden via client inputs',()=>{
  assert.equal(validateFundingReadOnlyState(validState).status,'REAL_T1_ONCHAIN_READONLY_PASS');
  for(const [key,bad,expected] of [
@@ -69,6 +106,9 @@ test('T1 UI has no funding, approvals, secret capture or automatic signing route
  assert.match(script,/eth_signTypedData_v4/);
  assert.match(script,/QUOTE_PROOF_DOMAIN/);
  assert.match(script,/verifyQuoteControlProof/);
+ assert.match(script,/buildMetaMaskQuoteControlPayload\(message\)/);
+ assert.match(script,/signedWalletEpoch!==walletEpoch/);
+ assert.match(script,/ROLE_SIGNER_MISMATCH/);
  assert.match(proof,/fundingAuthorized:false/);
  assert.equal((script.match(/eth_signTypedData_v4/g)||[]).length,2);
  for(const forbidden of [
