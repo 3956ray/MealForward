@@ -261,6 +261,46 @@ test('existing CP30/private funding endpoints remain closed even with genuine te
 });
 
 
+test('Cloud Supabase origin must be exact approved project + named roles + session TLS pooler',()=>{
+ const pass='example-ci-only-secret';
+ const base={
+  PORT:'10000',PUBLIC_ORIGIN:'https://mealforward-t1c-readonly-laodao.onrender.com',
+  T1C_SERVER_MODE:'READ_ONLY_NO_FUNDS',
+  T1C_AUTH_DB_URL:'postgres://mf_t1c_auth_runtime.ketfrukrcuosrqynnsay:'+pass+
+   '@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres',
+  T1C_INTENT_DB_URL:'postgres://mf_t1c_intent_runtime.ketfrukrcuosrqynnsay:'+pass+
+   '@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres'
+ };
+ // The test-specific environment must not disable production project checks.
+ const oldActions=process.env.GITHUB_ACTIONS;
+ const oldLabel=process.env.MF_T1C_DISPOSABLE_ONLY;
+ const oldHttp=process.env.MF_T1C_HTTP_DISPOSABLE_ONLY;
+ try{
+  delete process.env.GITHUB_ACTIONS;
+  delete process.env.MF_T1C_DISPOSABLE_ONLY;
+  delete process.env.MF_T1C_HTTP_DISPOSABLE_ONLY;
+  const v=validateConfig(base);
+  assert.equal(v.expectedAuthRole,'mf_t1c_auth_runtime');
+  assert.equal(v.expectedIntentRole,'mf_t1c_intent_runtime');
+  const reject=(over,pattern)=>assert.throws(()=>validateConfig({...base,...over}),pattern);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(
+   'ketfrukrcuosrqynnsay','qygnwgovbwltffsytnje'
+  )},/WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(':5432/',':6543/')},
+   /ONLY_PINNED_SUPABASE_SESSION_POOLER/);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(
+   'aws-0-ap-southeast-2.pooler.supabase.com','db.ketfrukrcuosrqynnsay.supabase.co'
+  )},/ONLY_PINNED_SUPABASE_SESSION_POOLER/);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL+'?sslmode=disable'},/DATABASE_DSN_NOT_REVIEWABLE/);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace('mf_t1c_auth_runtime','postgres')},
+   /WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
+  reject({T1C_FUNDING_ENABLED:'true'},/T1C_WALLET_WRITE_FLAG_FORBIDDEN/);
+ }finally{
+  if(oldActions===undefined)delete process.env.GITHUB_ACTIONS;else process.env.GITHUB_ACTIONS=oldActions;
+  if(oldLabel===undefined)delete process.env.MF_T1C_DISPOSABLE_ONLY;else process.env.MF_T1C_DISPOSABLE_ONLY=oldLabel;
+  if(oldHttp===undefined)delete process.env.MF_T1C_HTTP_DISPOSABLE_ONLY;else process.env.MF_T1C_HTTP_DISPOSABLE_ONLY=oldHttp;
+ }
+});
 test('cloud startup refuses unsafe database credentials and every money-enabled configuration',async()=>{
  const AUTH_DB=DSN.replace('postgres:t1c-disposable-only',
   'mf_t1c_ci_auth:t1c-ci-auth-only-local');
@@ -337,6 +377,23 @@ test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+In
  for(let iteration=0;iteration<2;iteration++){
   const child=await launch();
   try{
+   const home=await fetch(host+'/');
+   assert.equal(home.status,200);
+   assert.match(home.headers.get('content-security-policy'),/script-src 'self'/);
+   assert.match(await home.text(),/READ_ONLY_NO_FUNDS/);
+   const uiFile=await fetch(host+'/ui.mjs');
+   assert.equal(uiFile.status,200);
+   const script=await uiFile.text();
+   assert.match(script,/personal_sign/);
+   for(const forbidden of ['eth_sendTransaction','eth_sendRawTransaction',
+     'eth_signTypedData_v4','wallet_sendCalls','privateKeyToAccount']){
+     assert.ok(!script.includes(forbidden),'Forbidden financial action '+forbidden);
+   }
+   const css=await fetch(host+'/ui.css');
+   assert.equal(css.status,200);
+   assert.match(css.headers.get('content-type'),/text\/css/);
+   const blocked=await fetch(host+'/?wallet=other');
+   assert.equal(blocked.status,403);
    const ready=await fetchResult('/v1/t1/status');
    assert.equal(ready.status,200);
    assert.equal(ready.body.fundingEnabled,false);
@@ -347,6 +404,13 @@ test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+In
    assert.equal(old.body.intentId,persistedBIntent);
    assert.equal(old.body.stage,'PREPARED');
    assert.equal(old.body.fundingEnabled,false);
+   const my=await fetchResult('/v1/t1/my-intents',{
+    headers:{Cookie:authB.cookie}
+   });
+   assert.equal(my.status,200);
+   assert.equal(my.body.scope,'NEW_TESTNET_ORIGINAL_SIWE_ONLY');
+   assert.ok(my.body.items.some(i=>i.intentId===persistedBIntent));
+   assert.equal(my.body.fundingEnabled,false);
    assert.equal((await fetchResult('/v1/t1/intents/'+persistedBIntent,{
     headers:{Cookie:authA.cookie}
    })).status,401,'Revoked A cookie must never recover B original Intent');
