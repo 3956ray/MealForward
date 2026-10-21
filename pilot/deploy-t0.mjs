@@ -53,7 +53,6 @@ function enable(){
  $('deploy').disabled=busy||!prepared||!!pending||!artifact||!account;
  $('verify').disabled=busy||!pending||!artifact;
  $('copy').disabled=!verified;
- $('reset').disabled=busy||!pending;
  $('artifactStatus').textContent=artifact?
   '已验证原始 Source SHA-256、Creation Bytecode SHA-256、ABI 和 Immutable References。':
   '尚未载入经审查的 StoreEscrow Artifact';
@@ -189,11 +188,6 @@ $('copy').addEventListener('click',limit(async()=>{
  const text=JSON.stringify(verified,null,2);
  await navigator.clipboard.writeText(text);
  title('已复制非敏感部署 Manifest 和验证报告，不含任何私钥、签名或钱包 Cookie。',true);
-}));
-$('reset').addEventListener('click',limit(async()=>{
- if(!pending)throw Error('无待核验的交易');
- // Never turn a pending transaction into permission to deploy again.
- throw Error('此页面不允许删除待核实的原交易并重复部署。需使用原 Hash 完成核验或由人工复核失败证据。');
 }));
 window.ethereum?.on?.('accountsChanged',()=>{
  account=null;resetPreparation('钱包账户已变化；原待核实交易 Hash 仍保留。必须重新确认。');
