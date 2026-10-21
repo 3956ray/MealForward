@@ -23,6 +23,13 @@ const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
 const PRIVILEGE_DENIAL='42501';
 const ALLOWED_PUBLIC=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
 const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
+const PROJECT='ketfrukrcuosrqynnsay';
+const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
+const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
+// Only the project-approved Supabase IPv4 session pooler may hold the
+// real financial database identities. Never use a generic direct DB host,
+// user-supplied URL, transaction-mode pooler or old Render G0 database.
+const POOLER=/^aws-[0-9]+-ap-southeast-2\.pooler\.supabase\.com$/;
 
 function validateConfig(env){
  const testing=env.GITHUB_ACTIONS==='true'&&
@@ -45,15 +52,29 @@ function validateConfig(env){
  const originIntent=new URL(env.T1C_INTENT_DB_URL);
  for(const item of [originAuth,originIntent]){
   strict(['postgres:','postgresql:'].includes(item.protocol)&&
-   item.username&&item.password&&item.hostname&&item.pathname!=='/',
+   item.username&&item.password&&item.hostname&&item.pathname==='/postgres'&&
+   !item.hash&&!item.search,
    'DATABASE_DSN_NOT_REVIEWABLE');
+  // Reject IPv6 direct, generic postgres user, URLs outside the newly
+  // authorized Supabase project, and insecure pooler transaction port.
+  if(!testing)strict(POOLER.test(item.hostname)&&item.port==='5432',
+   'ONLY_PINNED_SUPABASE_SESSION_POOLER');
  }
  strict(originAuth.username!==originIntent.username,
   'SAME_PG_ROLE_REJECTED');
+ if(!testing){
+  strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
+   originIntent.username===PROD_ROLE_INTENT+'.'+PROJECT,
+   'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
+  strict(originAuth.hostname===originIntent.hostname,
+   'CROSS_PROJECT_POOLER_HOST_MISMATCH');
+ }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
  return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
-  intentUrl:env.T1C_INTENT_DB_URL};
+  intentUrl:env.T1C_INTENT_DB_URL,
+  expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
+  expectedIntentRole:testing?'mf_t1c_ci_intent':PROD_ROLE_INTENT};
 }
 async function roleAudit(pool){
  const query=await pool.query(
@@ -79,7 +100,12 @@ async function mustBeDenied(pool,query){
 export async function startT1ReadOnlyServer({env=process.env}={}){
  const cfg=validateConfig(env);
  const opts=url=>({
-  connectionString:url,max:8,connectionTimeoutMillis:5000,
+  connectionString:url,
+  ...(cfg.testing?{}:{
+   ssl:{rejectUnauthorized:true,servername:new URL(url).hostname}
+  }),
+  max:cfg.testing?8:2,
+  connectionTimeoutMillis:8000,
   idleTimeoutMillis:20000
  });
  const authPool=new pg.Pool(opts(cfg.authUrl));
@@ -89,6 +115,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   const [authRole,intentRole]=await Promise.all([
    roleAudit(authPool),roleAudit(intentPool)
   ]);
+  strict(authRole===cfg.expectedAuthRole&&intentRole===cfg.expectedIntentRole,
+   'UNREVIEWED_DATABASE_LOGIN_ROLE');
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
   const [authSchema,intentSchema]=await Promise.all([
    authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
@@ -101,7 +129,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
-   mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events')
+   mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
+   mustBeDenied(intentPool,'INSERT INTO mf_t1c.intents DEFAULT VALUES'),
+   mustBeDenied(intentPool,'UPDATE mf_t1c.intents SET quantity=quantity WHERE false')
   ]);
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,authStore:pgStore(authPool),
