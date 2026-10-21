@@ -142,6 +142,23 @@ export function makeT1CAuthenticatedGateway({
      originalCp30DataConnected:false
     });
    }
+   if(path==='/v1/t1/my-intents'&&req.method==='GET'){
+    const auth=await sessionPrincipal(req,false);
+    // This explicitly scopes every query by its independently verified
+    // SIWE cookie-derived wallet. User-provided wallet fields are denied.
+    const entries=await intentPool.query(
+     'SELECT intent_id,stage,quote_id,quantity,amount,created_at '+
+     'FROM mf_t1c.intents WHERE payer=$1 ORDER BY created_at DESC,intent_id DESC LIMIT 20',
+     [auth.wallet]
+    );
+    return respond(res,200,{
+     items:entries.rows.map(x=>({
+      intentId:x.intent_id,stage:x.stage,quoteId:x.quote_id,
+      quantity:Number(x.quantity),amount:String(x.amount)
+     })),
+     scope:'NEW_TESTNET_ORIGINAL_SIWE_ONLY',fundingEnabled:false
+    });
+   }
    const match=/^\/v1\/t1\/intents\/([0-9a-f-]{36})$/.exec(path);
    if(match){
     if(req.method!=='GET')throw err(405,'METHOD_NOT_ALLOWED');
