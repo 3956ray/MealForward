@@ -52,7 +52,8 @@ function validateConfig(env){
  const originIntent=new URL(env.T1C_INTENT_DB_URL);
  for(const item of [originAuth,originIntent]){
   strict(['postgres:','postgresql:'].includes(item.protocol)&&
-   item.username&&item.password&&item.hostname&&item.pathname==='/postgres'&&
+   item.username&&item.password&&item.hostname&&
+   item.pathname===(testing?'/mf_t1c_http_ci':'/postgres')&&
    !item.hash&&!item.search,
    'DATABASE_DSN_NOT_REVIEWABLE');
   // Reject IPv6 direct, generic postgres user, URLs outside the newly
