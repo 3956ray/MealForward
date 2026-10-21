@@ -21,7 +21,7 @@ const disabled=process.env.GITHUB_ACTIONS!=='true'||
  process.env.MF_T1C_DISPOSABLE_ONLY!=='ack-fresh-t1c-postgres17'||
  process.env.MF_T1C_HTTP_DISPOSABLE_ONLY!=='ack-original-siwe-pg17'||
  process.env.DATABASE_URL!==DSN;
-let adminPool,authPool,intentPool,server,origin,handler,clock=1792590000;
+let adminPool,authPool,intentPool,server,origin,handler,clock=Math.floor(Date.now()/1000);
 let walletA,walletB,authA,authB;
 
 async function request(path,{method='GET',cookie=null,csrf=null,body=null,originHeader=origin,extra={}}={}){
