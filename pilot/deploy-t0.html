@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>留膳 · Monad Testnet T0 全新合约部署</title>
+<style>
+:root{--ink:#153a2a;--mute:#67786d;--edge:#dae4dc;--green:#2e6b48;--bg:#f5f7f2;--card:#fff;--dark:#122a21}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif;margin:0;background:var(--bg);color:var(--ink)}
+header{background:var(--dark);color:#f6f9f4;padding:28px 24px 38px}
+header>div,main,footer{max-width:850px;margin:auto}
+.kicker{text-transform:uppercase;letter-spacing:.14em;font-size:11px;color:#a5cbb0}
+h1{font-size:clamp(28px,5vw,44px);line-height:1.18;letter-spacing:-.04em;margin:14px 0}
+header p{color:#d0ddcf;max-width:660px;line-height:1.8}
+main{padding:22px 20px 58px}
+article{border:1px solid var(--edge);background:var(--card);border-radius:16px;padding:22px;margin:16px 0;box-shadow:0 8px 25px rgba(14,35,24,.03)}
+h2{font-size:19px;margin:0 0 10px;letter-spacing:-.015em}
+p{line-height:1.7}
+small,.muted{color:var(--mute)}
+.notice{background:#fdf7e9;border:1px solid #e8d6a6;border-radius:12px;padding:15px 18px;line-height:1.65;font-size:14px;color:#654c19}
+.notice strong{display:block;margin-bottom:4px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.role{margin:10px 0}
+label{font-weight:600;display:block;font-size:13px;margin:12px 0 6px}
+input{width:100%;border:1px solid #bccfc1;background:#fff;color:var(--ink);font:inherit;font-size:13px;border-radius:8px;padding:12px 11px;min-height:43px}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+input[readonly]{background:#f0f5ef}
+input[type=file]{height:auto}
+button{background:var(--green);color:white;border:1px solid var(--green);padding:11px 16px;border-radius:9px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;min-height:44px}
+button.secondary{color:var(--green);background:white;border-color:#adc8b6}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 4px}
+pre{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;background:#eef3ec;color:#18352a;padding:16px;border-radius:10px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:440px;overflow:auto}
+#status{border:1px solid var(--edge);background:#fff;padding:16px;border-radius:11px;line-height:1.65;overflow-wrap:anywhere}
+#status[data-state=ok]{border-color:#79ac89;background:#f1f9f2}
+#status[data-state=fail]{border-color:#deafaa;background:#fff5f2;color:#992f22}
+.mono{font:12px/1.6 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}
+.note{font-size:12px;color:var(--mute);line-height:1.65}
+nav a,footer a{color:#d9efe0}
+footer{padding:12px 20px 42px;font-size:12px;color:#67786d}
+footer a{color:var(--green)}
+@media(max-width:600px){.fields{grid-template-columns:1fr}article{padding:17px}main{padding:12px 14px 38px}header{padding:27px 18px}button{width:100%}.actions{flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div>
+<div class="kicker">MEALFORWARD · MONAD TESTNET · ISOLATED T0</div>
+<h1>全新托管合约<br>部署与独立验证</h1>
+<p>这里只部署一个全新的 StoreEscrow 测试合约，不会动用原 CP30 资金、历史餐券或 Journal。五项关键合约权限必须使用不同测试钱包地址；部署由 Owner 在 MetaMask 中亲自批准。</p>
+<nav><a href="/">← 返回只读钱包预检</a></nav>
+</div></header>
+<main>
+<div class="notice"><strong>交易安全边界</strong>
+仅限 Monad Testnet Chain ID 10143、Circle 测试 USDC 与专用测试钱包。部署会消耗少量测试 MON Gas，但不会 Approve、Fund、Issue、Lock、Report 或 Settle。原 StoreEscrow 未链上强制 180 秒结算延迟，所以本页面不会开启任何资金动作。不要输入私钥、助记词或签名。
+</div>
+<article>
+<h2>01 · 核对原始合约</h2>
+<p class="muted">从 <a href="https://github.com/3956ray/MealForward/actions/workflows/mealforward-monad-escrow-artifact.yml" target="_blank" rel="noopener noreferrer">GitHub Actions 的 StoreEscrow 编译产物</a>下载并解压 <code>StoreEscrow.json</code>。本页面会实际计算 Creation Bytecode SHA-256，与已审查的 Solidity SHA 和编译设置核对，不接受任意部署代码。</p>
+<label for="artifact">StoreEscrow.json（不包含私钥）</label>
+<input id="artifact" type="file" accept="application/json,.json">
+<p id="artifactStatus" class="note">尚未载入编译产物</p>
+</article>
+<article>
+<h2>02 · 连接部署者钱包</h2>
+<p class="muted">此处不要求付款。你本人选择一个专用测试钱包作为新餐馆 Owner / Deployer；后续四个 Authority 需另外使用互不相同的测试地址。</p>
+<div class="actions"><button id="connect" class="secondary">连接 MetaMask 专用测试钱包</button></div>
+<label for="owner">Owner / Deployer（当前连接的钱包）</label>
+<input id="owner" readonly placeholder="请先连接钱包">
+</article>
+<article>
+<h2>03 · 设定独立权限</h2>
+<p class="muted">请填入四个与 Owner 不同、彼此也不同的测试钱包地址。此次页面只会调用 Owner 发送部署交易；不会读取其他钱包的密钥。</p>
+<div class="fields">
+<div><label for="quoteAuthority">Quote Authority · EIP-712 资助报价</label><input id="quoteAuthority" placeholder="0x..." autocomplete="off" spellcheck="false"></div>
+<div><label for="catalogAuthority">Catalog Authority · 餐品管理</label><input id="catalogAuthority" placeholder="0x..." autocomplete="off" spellcheck="false"></div>
+<div><label for="issuerAuthority">Issuer Authority · 领券发行</label><input id="issuerAuthority" placeholder="0x..." autocomplete="off" spellcheck="false"></div>
+<div><label for="operatorAuthority">Operator Authority · 商家核销</label><input id="operatorAuthority" placeholder="0x..." autocomplete="off" spellcheck="false"></div>
+</div>
+<p class="note">固定配置：商家「留膳社区厨房」、餐品「暖心盖饭」、7 Test USDC/份、UTC+8 全天服务窗口；图片哈希只使用明确标记的占位资料，不代表真实菜单照片。</p>
+<div class="actions"><button id="prepare" class="secondary" disabled>只读检查配置、生成并审查部署数据</button></div>
+</article>
+<article>
+<h2>04 · 本人批准唯一一笔 T0 部署</h2>
+<p>核对下方每一个 Authority 地址与 Gas 估计后才点击。MetaMask 会要求你确认一笔**新合约部署交易**，并不会为旧合约授权或付款。</p>
+<div class="actions"><button id="deploy" disabled>部署全新隔离 Escrow（需 MetaMask 批准）</button></div>
+<p class="note">若 MetaMask 已显示交易成功、但本页未返回 Hash，不要立即再按部署；请先在钱包历史记录中查找原交易。</p>
+</article>
+<article>
+<h2>05 · 原交易只读证明</h2>
+<p>验证原 Tx Input 是否与审核过的构造参数完全一致、实际字节码是否吻合、五类合约权限是否一致、餐品价格及条款是否正确，以及至少两个区块的深度。</p>
+<label>保存的原部署 Transaction Hash</label>
+<div class="mono" id="tx">尚无部署交易</div>
+<div class="actions">
+<button class="secondary" id="verify" disabled>只读验证原交易与合约</button>
+<button class="secondary" id="copy" disabled>复制公开 Manifest / 验证报告</button>
+</div>
+<p class="note">检验成功也不等于资金结算安全或独立最终性证明。钱包和链上状态不明时应继续查询原 Hash，不能盲目重发。</p>
+</article>
+<article>
+<h2>测试状态与证据</h2>
+<div role="status" aria-live="polite" id="status">尚未开始。请先验证编译产物。</div>
+<pre id="details">当前没有操作。不会要求私钥或发送任何自动交易。</pre>
+</article>
+</main>
+<footer>留一膳，待一人，是为善。 · <a href="https://github.com/3956ray/MealForward/pulls" target="_blank" rel="noopener noreferrer">查看源码与变更</a></footer>
+<script type="module" src="./deploy-t0.mjs"></script>
+</body></html>
