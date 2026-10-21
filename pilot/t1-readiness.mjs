@@ -56,11 +56,18 @@ async function currentAccount(){
   throw Error('当前账号已切换；请重新连接并核对');
  return walletAddress;
 }
+let readTail=Promise.resolve();
 async function read(to,abi,name,args=[]){
- const out=await wallet('eth_call',[{
-  to,data:abi.encodeFunctionData(name,args)
- },'latest']);
- return abi.decodeFunctionResult(name,out);
+ // MetaMask-backed read calls are serialized so the injected RPC cannot
+ // intermittently return 429 under a simultaneous ten-call burst.
+ const task=readTail.then(async()=>{
+  const out=await wallet('eth_call',[{
+   to,data:abi.encodeFunctionData(name,args)
+  },'latest']);
+  return abi.decodeFunctionResult(name,out);
+ });
+ readTail=task.catch(()=>{});
+ return task;
 }
 const guard=fn=>async()=>{
  if(busy)return;
@@ -101,6 +108,7 @@ $('contract').addEventListener('click',guard(async()=>{
   read(CONTRACT,ESCROW_ABI,'lifetimeFundedUnits').then(x=>x[0]),
   read(TOKEN,TOKEN_ABI,'balanceOf',[CONTRACT]).then(x=>x[0])
  ]);
+ await currentAccount();
  if(version!==1n)throw Error('原餐品版本已经变化，停止');
  const result=validateFundingReadOnlyState({
   chainId:CHAIN,escrow:CONTRACT,asset,quoteAuthority:quote,
@@ -126,6 +134,7 @@ $('donor').addEventListener('click',guard(async()=>{
   read(TOKEN,TOKEN_ABI,'balanceOf',[account]).then(x=>x[0]),
   read(TOKEN,TOKEN_ABI,'allowance',[account,CONTRACT]).then(x=>x[0])
  ]);
+ await currentAccount();
  const ready=usd>=PRICE&&mon>0n;
  status('donorInfo',[
   '测试付款地址：'+account,
