@@ -4,6 +4,7 @@ on:
     branches:
       - codex/mealforward-real-monad-e2e-preflight-20261018
       - codex/mealforward-monad-deployment-proof-20261019
+      - codex/mealforward-monad-role-separated-t0-20261021
 permissions:
   contents: read
 jobs:
