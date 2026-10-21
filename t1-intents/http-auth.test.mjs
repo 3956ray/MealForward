@@ -8,6 +8,10 @@
 import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {fileURLToPath} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import pg from 'pg';
 import {Wallet} from 'ethers';
@@ -15,6 +19,7 @@ import {randomUUID} from 'node:crypto';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {initializeSchema,pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+import {startT1ReadOnlyServer,validateConfig} from './read-only-server.mjs';
 
 const DSN='postgres://postgres:t1c-disposable-only@127.0.0.1:5433/mf_t1c_http_ci';
 const disabled=process.env.GITHUB_ACTIONS!=='true'||
@@ -22,7 +27,7 @@ const disabled=process.env.GITHUB_ACTIONS!=='true'||
  process.env.MF_T1C_HTTP_DISPOSABLE_ONLY!=='ack-original-siwe-pg17'||
  process.env.DATABASE_URL!==DSN;
 let adminPool,authPool,intentPool,server,origin,handler,clock=Math.floor(Date.now()/1000);
-let walletA,walletB,authA,authB;
+let walletA,walletB,authA,authB,persistedBIntent;
 
 async function request(path,{method='GET',cookie=null,csrf=null,body=null,originHeader=origin,extra={}}={}){
  const headers={
@@ -183,6 +188,7 @@ test('same browser-supplied key under different authenticated wallets creates di
  assert.equal(a.status,200);assert.equal(b.status,200);
  assert.notEqual(a.value.intentId,b.value.intentId);
  assert.notEqual(a.value.quoteId,b.value.quoteId);
+ persistedBIntent=b.value.intentId;
  assert.equal((await request('/v1/t1/intents/'+a.value.intentId,{cookie:authB.cookie})).status,404);
  assert.equal((await request('/v1/t1/intents/'+b.value.intentId,{cookie:authA.cookie})).status,404);
 });
@@ -252,4 +258,111 @@ test('existing CP30/private funding endpoints remain closed even with genuine te
  assert.equal((await request('/v1/support/intents',{
   method:'POST',body:{},cookie:authB.cookie,csrf:authB.csrf
  })).status,503);
+});
+
+
+test('cloud startup refuses unsafe database credentials and every money-enabled configuration',async()=>{
+ const AUTH_DB=DSN.replace('postgres:t1c-disposable-only',
+  'mf_t1c_ci_auth:t1c-ci-auth-only-local');
+ const INTENT_DB=DSN.replace('postgres:t1c-disposable-only',
+  'mf_t1c_ci_intent:t1c-ci-intent-only-local');
+ const good={...process.env,
+  PUBLIC_ORIGIN:'http://127.0.0.1:48129',
+  PORT:'48129',T1C_SERVER_MODE:'READ_ONLY_NO_FUNDS',
+  T1C_AUTH_DB_URL:AUTH_DB,T1C_INTENT_DB_URL:INTENT_DB
+ };
+ assert.throws(()=>validateConfig({...good,T1C_SERVER_MODE:'FUNDING_ENABLED'}),
+  /FINANCIAL_WRITE_MODE_FORBIDDEN/);
+ assert.throws(()=>validateConfig({...good,T1C_FUNDING_ENABLED:'true'}),
+  /T1C_WALLET_WRITE_FLAG_FORBIDDEN/);
+ assert.throws(()=>validateConfig({...good,T1C_AUTH_DB_URL:INTENT_DB}),
+  /TWO_DISTINCT_DATABASE_PRINCIPALS_REQUIRED/);
+ assert.throws(()=>validateConfig({...good,PUBLIC_ORIGIN:'https://attacker.example'}),
+  /ORIGIN_MUST_BE_EXACT_PINNED_HTTPS/);
+ await assert.rejects(()=>startT1ReadOnlyServer({
+  env:{...good,T1C_AUTH_DB_URL:DSN}
+ }),/T1_C_READONLY_BOOT_FAIL_CLOSED/);
+});
+test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+Intent after restart, refuses any funding',async()=>{
+ assert.ok(persistedBIntent,'A source-funded synthetic B intent must already exist');
+ const tcp=net.createServer();
+ await new Promise(resolve=>tcp.listen(0,'127.0.0.1',resolve));
+ const port=tcp.address().port;
+ await new Promise(resolve=>tcp.close(resolve));
+ const host='http://127.0.0.1:'+port;
+ const env={...process.env,
+  PUBLIC_ORIGIN:host,PORT:String(port),
+  T1C_SERVER_MODE:'READ_ONLY_NO_FUNDS',
+  T1C_AUTH_DB_URL:DSN.replace('postgres:t1c-disposable-only',
+   'mf_t1c_ci_auth:t1c-ci-auth-only-local'),
+  T1C_INTENT_DB_URL:DSN.replace('postgres:t1c-disposable-only',
+   'mf_t1c_ci_intent:t1c-ci-intent-only-local')
+ };
+ const launch=async()=>{
+  const child=spawn(process.execPath,[
+   fileURLToPath(new URL('./read-only-server.mjs',import.meta.url))
+  ],{env,stdio:['ignore','pipe','pipe']});
+  let text='',stderr='';
+  child.stderr.on('data',value=>{stderr+=value.toString().slice(0,400)});
+  await new Promise((resolve,reject)=>{
+   const clock=setTimeout(()=>{
+    child.kill('SIGTERM');
+    reject(Error('READONLY_SERVER_BOOT_TIMEOUT'));
+   },8000);
+   child.stdout.on('data',chunk=>{
+    text+=chunk.toString('utf8');
+    if(text.includes('T1_C_SAFE_READONLY_PROCESS_READY')){
+     clearTimeout(clock);resolve();
+    }
+   });
+   child.once('exit',code=>{
+    if(!text.includes('T1_C_SAFE_READONLY_PROCESS_READY')){
+     clearTimeout(clock);
+     reject(Error('T1_READONLY_SERVER_NOT_STARTED_'+code));
+    }
+   });
+  });
+  return child;
+ };
+ const stop=async child=>{
+  if(child.exitCode!==null)return;
+  const exit=once(child,'exit');
+  child.kill('SIGTERM');
+  await exit;
+ };
+ const fetchResult=async(path,init={})=>{
+  const response=await fetch(host+path,init);
+  return {status:response.status,body:await response.json()};
+ };
+ for(let iteration=0;iteration<2;iteration++){
+  const child=await launch();
+  try{
+   const ready=await fetchResult('/v1/t1/status');
+   assert.equal(ready.status,200);
+   assert.equal(ready.body.fundingEnabled,false);
+   const old=await fetchResult('/v1/t1/intents/'+persistedBIntent,{
+    headers:{Cookie:authB.cookie}
+   });
+   assert.equal(old.status,200);
+   assert.equal(old.body.intentId,persistedBIntent);
+   assert.equal(old.body.stage,'PREPARED');
+   assert.equal(old.body.fundingEnabled,false);
+   assert.equal((await fetchResult('/v1/t1/intents/'+persistedBIntent,{
+    headers:{Cookie:authA.cookie}
+   })).status,401,'Revoked A cookie must never recover B original Intent');
+   const closed=await fetchResult('/v1/t1/intents/prepare',{
+    method:'POST',headers:{
+     Cookie:authB.cookie,Origin:host,'X-C1-CSRF':authB.csrf,
+     'Content-Type':'application/json'
+    },
+    body:JSON.stringify({quantity:1,idempotencyKey:randomUUID()})
+   });
+   assert.equal(closed.status,503);
+   assert.equal(closed.body.error,'FUNDING_DISABLED');
+   assert.equal((await fetchResult('/v1/t1/intents/fund',{
+    method:'POST',headers:{Origin:host,'Content-Type':'application/json'},
+    body:'{}'
+   })).status,405);
+  }finally{await stop(child)}
+ }
 });
