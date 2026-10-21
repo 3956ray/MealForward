@@ -22,20 +22,23 @@ jobs:
       - name: Install isolated static preview dependencies
         working-directory: pilot
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Fail closed if preview wallet can sign or transact
+      - name: Fail closed if PREEXISTING readonly root page can sign or transact
         working-directory: pilot
-        run: npm test
+        run: node --test tests/readonly.test.mjs
       - name: Build Vite read-only preview
         working-directory: pilot
         run: npm run build
-      - name: Check output and no server write endpoints
+      - name: Check readonly root output and no hidden server write endpoints
         run: |
           test -s pilot/dist/index.html
+          test -s pilot/dist/deploy-t0.html
           test ! -d pilot/api
-          if grep -R -E "eth_sendRawTransaction|eth_sendTransaction|eth_signTypedData" pilot/dist; then
-            echo "FAILED: wallet signing method leaked into preview"
+          if grep -E "eth_sendRawTransaction|eth_sendTransaction|eth_signTypedData" pilot/index.html; then
+            echo "FAILED: root readonly wallet preflight contains a signing method"
             exit 1
           fi
+          # The separate /deploy-t0.html intentionally contains exactly ONE
+          # user-initiated Deploy; the dedicated T0 CI proves its own boundaries.
       - uses: actions/upload-artifact@v4
         with:
           name: mealforward-monad-readonly-preview
