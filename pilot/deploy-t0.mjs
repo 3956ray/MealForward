@@ -14,7 +14,7 @@ const H='https://testnet-rpc.monad.xyz';
 const KEY='mf-monad-t0-role-separated-public-receipt-v1';
 const TOKEN=new Interface(['function decimals() view returns (uint8)']);
 let artifact=null,account=null,prepared=null,pending=null,verified=null;
-let rpcSeq=0,busy=false;
+let rpcSeq=0,busy=false,storageBlocked=false;
 const title=(msg,ok)=>{const el=$('status');el.textContent=msg;el.dataset.state=ok===true?'ok':ok===false?'fail':'neutral';};
 const details=msg=>{$('details').textContent=msg};
 const matches=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
@@ -26,7 +26,8 @@ const limit=fn=>async()=>{
  }finally{busy=false;enable()}
 };
 async function wallet(method,params=[]){
- if(!window.ethereum?.request)throw Error('此页面需要 MetaMask；不能输入助记词或私钥');
+ if(!window.ethereum?.request||window.ethereum.isMetaMask!==true||window.ethereum.isPhantom===true)
+  throw Error('此页面仅支持 MetaMask，不能输入助记词或私钥');
  return window.ethereum.request({method,params});
 }
 async function publicRpc(method,params=[]){
@@ -49,15 +50,16 @@ async function publicRpc(method,params=[]){
 }
 const readRpc={send:publicRpc};
 function enable(){
- $('prepare').disabled=busy||!artifact||!account||!!pending;
- $('deploy').disabled=busy||!prepared||!!pending||!artifact||!account;
- $('verify').disabled=busy||!pending||!artifact;
+ $('prepare').disabled=busy||!artifact||!account||!!pending||storageBlocked;
+ $('deploy').disabled=busy||!prepared||!!pending||!artifact||!account||storageBlocked;
+ $('verify').disabled=busy||!pending?.txHash||!artifact;
+ $('recover').disabled=busy||!pending||!!pending.txHash||!artifact;
  $('copy').disabled=!verified;
  $('artifactStatus').textContent=artifact?
   '已验证原始 Source SHA-256、Creation Bytecode SHA-256、ABI 和 Immutable References。':
   '尚未载入经审查的 StoreEscrow Artifact';
  $('owner').value=account||'';
- $('tx').textContent=pending?.txHash||'尚无部署交易';
+ $('tx').textContent=pending?.txHash||(pending?'原钱包结果 UNKNOWN；请从 MetaMask 找回原 Hash':'尚无部署交易');
 }
 function resetPreparation(reason){
  prepared=null;verified=null;
@@ -67,15 +69,25 @@ function resetPreparation(reason){
 function loadSaved(){
  try{
   const raw=localStorage.getItem(KEY);
-  const value=raw?JSON.parse(raw):null;
-  if(!value||typeof value!=='object')return;
-  if(!/^0x[0-9a-f]{64}$/i.test(value.txHash)||
+  if(!raw)return;
+  const value=JSON.parse(raw);
+  if(!value||typeof value!=='object'||
+     !(value.txHash===null||/^0x[0-9a-f]{64}$/i.test(value.txHash))||
      !value.manifest||value.manifest.mode!=='role-separated-e2e'||
-     value.manifest.chainId!==CHAIN_ID||!matches(value.manifest.asset,TEST_USDC))return;
+     value.manifest.chainId!==CHAIN_ID||
+     !matches(value.manifest.asset,TEST_USDC)){
+   storageBlocked=true;
+   title('原交易记录损坏；阻止再次部署。请先查 MetaMask 历史，再人工排查。',false);
+   return;
+  }
   pending=value;
-  title('发现保存的原部署交易。请重新上传编译 Artifact，再点击“只读验证原交易”；不要重复部署。');
+  if(value.txHash)
+   title('已找回原部署 Hash；重新上传编译 Artifact，点击只读验证。不要重复部署。');
+  else
+   title('钱包操作结果 UNKNOWN：从 MetaMask 历史找到原 Hash，并在下方恢复。',false);
  }catch{
-  title('本地恢复记录无法读取。查看 MetaMask 历史交易后再决定是否操作。',false);
+  storageBlocked=true;
+  title('无法读取原部署记录；阻止再次部署，先检查 MetaMask 历史。',false);
  }
 }
 async function verifyNetwork(){
@@ -157,16 +169,63 @@ $('deploy').addEventListener('click',limit(async()=>{
   if(!matches($(name).value.trim(),prepared.manifest[name]))
    throw Error('角色地址在准备之后发生变化；必须重新审核');
  }
- // This is the ONE user-triggered transaction primitive on this page.
- const txHash=await wallet('eth_sendTransaction',[{from:account,data:prepared.data}]);
- if(!/^0x[0-9a-f]{64}$/i.test(txHash))throw Error('钱包没有返回有效部署 Hash');
- pending={txHash,manifest:prepared.manifest};
+ // Persist an UNKNOWN intent before opening MetaMask. A lost RPC reply
+ // must not enable a second deployment with a new Store/Meal identifier.
+ const reviewed=prepared;
+ const reserved={txHash:null,manifest:reviewed.manifest,stage:'AWAITING_WALLET_RESULT'};
+ localStorage.setItem(KEY,JSON.stringify(reserved));
+ pending=reserved;prepared=null;verified=null;enable();
+ let txHash;
+ try{
+  // The only user-triggered transaction primitive in this T0 page.
+  txHash=await wallet('eth_sendTransaction',[{from:account,data:reviewed.data}]);
+ }catch(error){
+  if(error?.code===4001){
+   // EIP-1193 explicit user rejection is the only unambiguous no-broadcast.
+   try{localStorage.removeItem(KEY);pending=null}
+   catch{storageBlocked=true}
+   title('MetaMask 已明确拒绝交易。请重新准备后再进行新部署。');
+   return;
+  }
+  title('钱包广播结果 UNKNOWN；禁止第二次部署，请从钱包历史找回原 Hash。',false);
+  details('原 Store ID：'+reviewed.manifest.storeId+
+   '\n不要另建 Store，也不要再次发送新交易。');
+  return;
+ }
+ if(!/^0x[0-9a-f]{64}$/i.test(txHash)){
+  title('钱包未返回有效 Hash；保留 UNKNOWN 状态并阻止重复部署。',false);
+  return;
+ }
+ pending={txHash,manifest:reviewed.manifest,stage:'TX_LOCATED'};
  try{localStorage.setItem(KEY,JSON.stringify(pending))}
- catch{title('已发送交易，但浏览器无法保存 Hash；务必复制当前 TX Hash。',false)}
- prepared=null;verified=null;
- enable();
- title('已提交原部署交易。请先点击“只读验证原交易”，绝对不要再次 Deploy。');
- details('部署交易 Hash（不含密钥）：'+txHash+'\n此刻尚不能认定已部署成功。等 Receipt 和至少两个区块确认。');
+ catch{
+  storageBlocked=true;
+  details('钱包返回原 TX Hash：'+txHash+'\n本地保存失败，请立即人工复制原 Hash。');
+  title('原交易已发送但保存 Hash 失败；绝不可重新部署。',false);
+  return;
+ }
+ title('已提交原部署交易；现在只可核验原 Hash，不要再次 Deploy。');
+ details('部署交易 Hash：'+txHash+'\n至少两个区块确认之后才算验证通过。');
+}));
+$('recover').addEventListener('click',limit(async()=>{
+ if(!pending||pending.txHash||!artifact)
+  throw Error('没有 UNKNOWN 原意图，或者尚未核验原始编译产物');
+ await verifyNetwork();
+ const hash=$('recoverHash').value.trim();
+ if(!/^0x[0-9a-f]{64}$/i.test(hash))throw Error('请输入 MetaMask 历史中的原交易 Hash');
+ const tx=await publicRpc('eth_getTransactionByHash',[hash]);
+ if(!tx)throw Error('Monad RPC 尚未查询到原交易，不能重复部署');
+ const plan=makeDeploymentPlan({
+  roles:pending.manifest,ownerSigner:pending.manifest.owner,
+  storeId:pending.manifest.storeId,mealId:pending.manifest.mealId,artifact
+ });
+ if(!matches(tx.hash,hash)||tx.to!==null||
+    !matches(tx.from,pending.manifest.owner)||!matches(tx.input??tx.data,plan.data))
+  throw Error('此 Hash 不属于原 Owner、原角色与原 Store/Meal 部署');
+ pending={txHash:hash,manifest:pending.manifest,stage:'TX_LOCATED'};
+ localStorage.setItem(KEY,JSON.stringify(pending));
+ title('已核对并绑定原始交易，后续只有只读核验，不会发第二笔交易。',true);
+ details('原始 TX Hash：'+hash);
 }));
 $('verify').addEventListener('click',limit(async()=>{
  if(!pending||!artifact)throw Error('没有可核验的原交易，或缺少固定编译产物');
