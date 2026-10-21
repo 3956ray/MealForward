@@ -63,9 +63,10 @@ async function jsonBody(req){
 }
 const exactly=(o,keys)=>Object.keys(o).sort().join(',')===[...keys].sort().join(',');
 export function makeT1CAuthenticatedGateway({
- pool,authStore,siwe,origin,clock=NOW,mode='read_only'
+ sessionPool,intentPool,authStore,siwe,origin,clock=NOW,mode='read_only'
 }={}){
- if(!pool?.query||!pool?.connect||!authStore?.getSession||
+ if(!sessionPool?.query||!intentPool?.query||!intentPool?.connect||
+  sessionPool===intentPool||!authStore?.getSession||
   typeof siwe?.makeChallenge!=='function'||
   typeof siwe?.verifyChallenge!=='function'||
   !ORIGIN.test(origin||'')||typeof clock!=='function')
@@ -81,7 +82,7 @@ export function makeT1CAuthenticatedGateway({
 
  const trusted=new WeakMap();
  const ledger=createT1IntentLedger({
-  pool,now:clock,resolveWallet:async secret=>{
+  pool:intentPool,now:clock,resolveWallet:async secret=>{
    const identity=trusted.get(secret);
    if(!identity)throw Error('UNVERIFIED_T1_WALLET_PRINCIPAL');
    return {verified:true,source:'TESTNET_WALLET_AUTHORITY',address:identity.wallet};
@@ -108,7 +109,7 @@ export function makeT1CAuthenticatedGateway({
   if(!token)throw err(401,'UNAUTHENTICATED');
   const csrf=req.headers['x-c1-csrf'];
   if(isWrite&&!COOKIE.test(csrf||''))throw err(403,'CSRF_REQUIRED');
-  const wallet=await pool.query(
+  const wallet=await sessionPool.query(
    'SELECT wallet FROM mf_cp31_auth_pilot.sessions '+
    'WHERE token_hash=$1 AND expires_at>$2 AND NOT revoked '+
    'AND ($3::boolean=false OR csrf_hash=$4)',
@@ -129,7 +130,7 @@ export function makeT1CAuthenticatedGateway({
     // authorization to create financial intents in a real environment.
     const [auth,db]=await Promise.all([
      authStore.health(),
-     pool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
+     intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
     ]);
     return respond(res,auth&&db.rows[0].ready?200:503,{
      status:auth&&db.rows[0].ready?'READY_NO_FUNDS':'UNAVAILABLE',
