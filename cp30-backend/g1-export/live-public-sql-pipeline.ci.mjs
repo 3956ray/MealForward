@@ -76,20 +76,20 @@ const httpCall=(port,path,{method='GET',body=null,headers={}}={})=>
 
 try{
  const identities=await Promise.all(pools.map(async pool=>{
-  const [name,version,port]=await Promise.all([
+  const [name,version,system]=await Promise.all([
    pool.query('SELECT current_database() AS name'),
    pool.query('SHOW server_version_num'),
-   pool.query('SELECT inet_server_port() AS port')
+   pool.query('SELECT system_identifier::text AS id FROM pg_control_system()')
   ]);
   assert.ok(Number(version.rows[0].server_version_num)>=170000);
   assert.ok(Number(version.rows[0].server_version_num)<180000);
-  return {name:name.rows[0].name,port:port.rows[0].port};
+  return {name:name.rows[0].name,system:system.rows[0].id};
  }));
  assert.equal(new Set(identities.map(x=>x.name)).size,3);
- assert.equal(new Set(identities.map(x=>x.port)).size,3);
- assert.equal(identities[0].port,5432);
- assert.equal(identities[1].port,5434);
- assert.equal(identities[2].port,5433);
+ // The containers each listen on their own internal 5432; checking port
+ // alone would incorrectly call one shared cluster "independent".
+ assert.equal(new Set(identities.map(x=>x.system)).size,3,
+  'Cache and anchor must be different PostgreSQL server clusters');
  const sourceSchema=await sourcePool.query(
   "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='c1_private') AS original");
  assert.equal(sourceSchema.rows[0].original,true);
