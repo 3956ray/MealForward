@@ -8,6 +8,8 @@ import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import pg from 'pg';
 import {Wallet,keccak256} from 'ethers';
 import {
@@ -250,6 +252,54 @@ test('verified Approve + signed quote may reserve Fund once, and receipt must pr
  assert.equal((await service().fetchOriginal({session:'A',intentId:a.intentId})).stage,'FUNDED');
  await assert.rejects(()=>ledger.reserve({session:'A',intentId:a.intentId,kind:'fund',transaction:tx}),
   /ORIGINAL_WALLET_ATTEMPT_UNKNOWN_OR_BLOCKED/);
+});
+test('genuine SECOND NODE PROCESS restores committed UNKNOWN and rejects duplicate wallet broadcast',async()=>{
+ const a=await newBound(),tx=approveTx(A,210);
+ await ledger.reserve({session:'A',intentId:a.intentId,kind:'approve',transaction:tx});
+ // Unlike a new JS instance, execFileSync starts a brand-new operating-system
+ // process and independent PG connection after original transaction commit.
+ const out=execFileSync(process.execPath,[
+  fileURLToPath(new URL('./recovery-second-process.ci.mjs',import.meta.url)),
+  a.intentId
+ ],{encoding:'utf8',env:process.env,timeout:12000});
+ const result=JSON.parse(out.trim());
+ assert.equal(result.status,'T1C_CROSS_PROCESS_UNKNOWN_NO_RETRY_PASS');
+ assert.equal(result.walletTxSubmitted,false);
+ assert.equal(result.anotherAttemptReserved,false);
+ assert.equal((await ledger.fetchOriginal({session:'A',intentId:a.intentId})).attempts.length,1);
+});
+test('expired immutable signed quote blocks future Approve and cannot be silently refreshed',async()=>{
+ const a=await newBound();
+ const previous=now;
+ try{
+  now+=2000;
+  await assert.rejects(()=>ledger.reserve({
+   session:'A',intentId:a.intentId,kind:'approve',transaction:approveTx(A,211)
+  }),/SIGNED_QUOTE_EXPIRED/);
+  await assert.rejects(()=>ledger.bindQuote({
+   session:'A',intentId:a.intentId,signature:a.signature
+  }),/QUOTE_ALREADY_BOUND_OR_IN_FLIGHT/);
+ }finally{now=previous}
+ const state=await ledger.fetchOriginal({session:'A',intentId:a.intentId});
+ assert.equal(state.stage,'QUOTE_BOUND');
+ assert.equal(state.attempts.length,0);
+});
+test('ERC20 allowance cannot be for foreign spender, wrong amount or native value',async()=>{
+ const a=await newBound();
+ const tx=approveTx(A,212);
+ await assert.rejects(()=>ledger.reserve({
+  session:'A',intentId:a.intentId,kind:'approve',
+  transaction:{...tx,data:erc20.encodeFunctionData('approve',[B,PRICE])}
+ }),/APPROVE_ALLOWANCE_NOT_EXACT/);
+ await assert.rejects(()=>ledger.reserve({
+  session:'A',intentId:a.intentId,kind:'approve',
+  transaction:{...tx,data:erc20.encodeFunctionData('approve',[ESCROW,PRICE*2n])}
+ }),/APPROVE_ALLOWANCE_NOT_EXACT/);
+ await assert.rejects(()=>ledger.reserve({
+  session:'A',intentId:a.intentId,kind:'approve',
+  transaction:{...tx,value:1n}
+ }),/TX_VALUE_MUST_BE_ZERO/);
+ assert.equal((await ledger.fetchOriginal({session:'A',intentId:a.intentId})).attempts.length,0);
 });
 test('wallet nonce is globally unique per payer even across different intents',async()=>{
  const a=await newBound(),b=await newBound();
