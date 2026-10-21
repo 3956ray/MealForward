@@ -131,7 +131,11 @@ test('tampered constructor, wrong token, wrong owner, reverted tx, wrong runtime
   [{decimals:18n},/WRONG_TEST_USDC_DECIMALS/],
   [{getterOverrides:{owner:()=>[address(99)]}},/MISMATCH_owner/],
   [{getterOverrides:{listed:()=>[false]}},/MEAL_NOT_LISTED/],
-  [{getterOverrides:{catalog:()=>[5000000n,hex(80)]}},/CATALOG_TERMS_MISMATCH/]
+  [{getterOverrides:{catalog:()=>[5000000n,hex(80)]}},/CATALOG_TERMS_MISMATCH/],
+  [{getterOverrides:{getTerms:()=>[{unitPrice:PRICE,termsHash:hex(81),
+   bodyDigest:baseline.terms.bodyDigest,imageDigest:baseline.terms.imageDigest,
+   windowCount:1n,startMinute0:0n,endMinute0:1440n,startMinute1:0n,endMinute1:0n}]}},
+   /STORED_TERMS_HASH_MISMATCH/]
  ];
  for(const [change,reason] of scenarios){
   const {rpc,m}=mockedRpc(change);
@@ -157,6 +161,12 @@ test('read-only preflight is unchanged and only one wallet-click deploy primitiv
  assert.match(script,/await verifyNetwork\(\)/);
  assert.match(script,/validateArtifact\(data\)/);
  assert.match(script,/if\(pending\)throw Error/);
+ assert.match(script,/localStorage\.setItem\(KEY,JSON\.stringify\(reserved\)\)/);
+ assert.match(script,/pending=reserved;prepared=null/);
+ assert.match(script,/error\?\.code===4001/);
+ assert.match(script,/tx\.to!==null/);
+ assert.match(html,/recoverHash/);
+ assert.match(html,/id="recover"/);
  assert.match(script,/originalCp30Touched:false|verified=\{manifest:m,evidence\}/);
  for(const unsafe of ['eth_signTypedData_v4','eth_sendRawTransaction',
   'personal_sign','mnemonicToAccount','privateKeyToAccount',
