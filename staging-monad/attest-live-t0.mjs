@@ -8,7 +8,7 @@
  * NEVER sends transactions, signs, connects a wallet, touches the original
  * Mac CP30 Journal/DB or modifies existing StoreEscrow assets.
  */
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 import {AbiCoder,Interface} from 'ethers';
 import {
  verifyDeployment,validateArtifact
@@ -200,6 +200,7 @@ async function run({rpc=makeReadOnlyPublicRpc(),artifactPath}={}){
    operatorAuthority:manifest.operatorAuthority
   },
   publicStoreId:manifest.storeId,publicMealId:manifest.mealId,
+  publicOriginalDeployManifest:manifest,
   historicalCp30Accessed:false,
   onchain180SecondCooldownEnforced:false,
   fundIssueSettleTested:false,
@@ -213,8 +214,12 @@ if(import.meta.url===new URL('file://'+process.argv[1]).href){
   const proof=await run({
    artifactPath:process.argv[2]??new URL('./artifacts/StoreEscrow.json',import.meta.url)
   });
-  // Public addresses / transaction hashes only. No personal data, secrets.
-  process.stdout.write(JSON.stringify(proof,null,2)+'\n');
+  // Public addresses / transaction hashes only. No personal data or keys.
+  const report=JSON.stringify(proof,null,2)+'\n';
+  await writeFile(new URL('./artifacts/T0-public-attestation.json',import.meta.url),report,{
+   encoding:'utf8',mode:0o600
+  });
+  process.stdout.write(report);
  }catch(e){
   // No stack or raw RPC response; no chance of echoing wallet secrets.
   process.stderr.write('T0_INDEPENDENT_ATTESTATION_BLOCKED: '+
