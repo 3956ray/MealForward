@@ -8,7 +8,8 @@ export default defineConfig({
   target:'es2022',outDir:'dist',emptyOutDir:true,
   rollupOptions:{input:{
    preflight:resolve(base,'index.html'),
-   deployment:resolve(base,'deploy-t0.html')
+   deployment:resolve(base,'deploy-t0.html'),
+   t1Readiness:resolve(base,'t1-readiness.html')
   }}
  }
 });
