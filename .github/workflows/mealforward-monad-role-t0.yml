@@ -1,0 +1,49 @@
+name: MealForward T0 role-separated Monad deploy safety and Vercel preview
+on:
+  push:
+    branches:
+      - codex/mealforward-monad-role-separated-t0-20261021
+  pull_request:
+    paths:
+      - "pilot/**"
+      - "staging-monad/**"
+      - ".github/workflows/mealforward-monad-role-t0.yml"
+permissions:
+  contents: read
+jobs:
+  reviewed-t0-deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Rebuild audited original StoreEscrow source in isolated compiler
+        working-directory: staging-monad
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Install browser verifier dependencies (no install scripts)
+        working-directory: pilot
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Prove immutable source, constructor, role separation, no fund routes
+        working-directory: pilot
+        run: npm test
+      - name: Build both existing readonly and isolated T0 deployment pages
+        working-directory: pilot
+        run: npm run build
+      - name: Check deployed page inputs without any API or funding backend
+        run: |
+          test -s pilot/dist/index.html
+          test -s pilot/dist/deploy-t0.html
+          test ! -d pilot/api
+          node --check pilot/deploy-t0.mjs
+          node --check pilot/escrow-t0-proof.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monad-role-separated-t0-reviewable-static
+          path: pilot/dist
+          retention-days: 7
