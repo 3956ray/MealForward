@@ -8,7 +8,7 @@ REVOKE ALL ON SCHEMA mf_t1c FROM PUBLIC;
 CREATE TABLE mf_t1c.intents (
  intent_id uuid PRIMARY KEY,
  chain_id integer NOT NULL DEFAULT 10143 CHECK (chain_id=10143),
- escrow text NOT NULL CHECK (escrow='0xcf0c8827c8610eeff1ecbd9719e559d805fafe58'),
+ escrow text NOT NULL DEFAULT '0xcf0c8827c8610eeff1ecbd9719e559d805fafe58' CHECK (escrow='0xcf0c8827c8610eeff1ecbd9719e559d805fafe58'),
  payer text NOT NULL CHECK (payer ~ '^0x[0-9a-f]{40}$'),
  idempotency_key uuid NOT NULL,
  quote_id text NOT NULL UNIQUE CHECK (quote_id ~ '^0x[0-9a-f]{64}$' AND quote_id <> '0x' || repeat('0',64)),
