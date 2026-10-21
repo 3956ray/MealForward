@@ -150,7 +150,7 @@ test('read-only preflight is unchanged and only one wallet-click deploy primitiv
  assert.match(index,/READ ONLY/);
  assert.match(index,/deploy-t0\.html/);
  assert.match(html,/Monad Testnet/);
- assert.match(html,/五个/);
+ assert.match(html,/五项/);
  assert.match(html,/部署全新隔离 Escrow/);
  assert.equal((script.match(/eth_sendTransaction/g)||[]).length,1);
  assert.match(script,/await checkActiveOwner\(\)/);
