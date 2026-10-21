@@ -12,6 +12,7 @@ from pathlib import Path
 
 import psycopg
 from psycopg.types.json import Jsonb
+from g1_public_http_sql_gate import prove_sql_public_pipeline
 
 ROOT=Path(__file__).resolve().parents[1]
 SCHEMA=ROOT/"g1-export/disposable-public-facade.sql"
@@ -229,8 +230,13 @@ def security_probe(db):
         temporary("UPDATE c1_g1_export.binding SET enabled=false",
                   (),"disabledagain","G1_SOURCE_NOT_AUTHORIZED")
 
+        pipeline=prove_sql_public_pipeline(db,as_reader)
+        if pipeline["status"]!="G1_D_REAL_SOURCE_TO_SITES_PASS":
+            raise AssertionError("G1_D_NOT_SOURCE_BOUND")
+
         result={
             "publicExportFacade":"PASS",
+            "g1RealSqlPublicPipeline":"PASS",
             "sourceRoleNoLogin":True,
             "mixedReadWriteDispatcherExecute":False,
             "clientDirectPrivateTableSelect":False,
