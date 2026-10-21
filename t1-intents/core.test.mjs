@@ -333,6 +333,20 @@ test('confirmed reverted original tx goes FINAL_FAILED and never signs or reserv
  await assert.rejects(()=>ledger.reserve({session:'A',intentId:a.intentId,kind:'approve',transaction:t}),
  /ORIGINAL_WALLET_ATTEMPT_UNKNOWN_OR_BLOCKED/);
 });
+test('audit events cannot be modified, deleted or truncated by accidental SQL calls',async()=>{
+ const a=await ledger.prepare({session:'A',idempotencyKey:randomUUID(),quantity:1});
+ const n=(await pool.query('SELECT count(*)::int AS n FROM mf_t1c.audit_events WHERE intent_id=$1',[a.intentId])).rows[0].n;
+ assert.equal(n,1);
+ const queries=[
+  ['UPDATE mf_t1c.audit_events SET event_type=$2 WHERE intent_id=$1',[a.intentId,'QUOTE_BOUND']],
+  ['DELETE FROM mf_t1c.audit_events WHERE intent_id=$1',[a.intentId]],
+  ['TRUNCATE TABLE mf_t1c.audit_events',[]]
+ ];
+ for(const [sql,params] of queries){
+  await assert.rejects(()=>pool.query(sql,params),/T1C_AUDIT_APPEND_ONLY/);
+ }
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM mf_t1c.audit_events WHERE intent_id=$1',[a.intentId])).rows[0].n,n);
+});
 test('this new service is not an externally reachable funding application',()=>{
  assert.equal(typeof ledger.reserve,'function');
  assert.equal('listen' in ledger,false);
