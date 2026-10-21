@@ -21,7 +21,7 @@ const disabled=process.env.GITHUB_ACTIONS!=='true'||
  process.env.MF_T1C_DISPOSABLE_ONLY!=='ack-fresh-t1c-postgres17'||
  process.env.MF_T1C_HTTP_DISPOSABLE_ONLY!=='ack-original-siwe-pg17'||
  process.env.DATABASE_URL!==DSN;
-let pool,server,origin,handler,clock=1792590000;
+let adminPool,authPool,intentPool,server,origin,handler,clock=1792590000;
 let walletA,walletB,authA,authB;
 
 async function request(path,{method='GET',cookie=null,csrf=null,body=null,originHeader=origin,extra={}}={}){
@@ -64,19 +64,22 @@ async function signIn(wallet){
 
 before(async()=>{
  assert.equal(disabled,false,'T1C_HTTP_DISPOSABLE_PG17_ONLY');
- pool=new pg.Pool({connectionString:DSN,max:22,connectionTimeoutMillis:3000});
- const v=await pool.query('SHOW server_version_num');
+ adminPool=new pg.Pool({connectionString:DSN,max:22,connectionTimeoutMillis:3000});
+ const v=await adminPool.query('SHOW server_version_num');
  assert.equal(Math.floor(Number(v.rows[0].server_version_num)/10000),17);
- assert.equal((await pool.query("SELECT to_regnamespace('mf_cp31_auth_pilot') IS NULL AS blank")).rows[0].blank,true);
- assert.equal((await pool.query("SELECT to_regnamespace('mf_t1c') IS NULL AS blank")).rows[0].blank,true);
- assert.equal((await pool.query("SELECT count(*)::int AS n FROM pg_namespace WHERE nspname LIKE 'c1\\_%' ESCAPE '\\'")).rows[0].n,0);
- await initializeSchema(pool);
- await pool.query(await readFile(new URL('./schema.sql',import.meta.url),'utf8'));
+ assert.equal((await adminPool.query("SELECT to_regnamespace('mf_cp31_auth_pilot') IS NULL AS blank")).rows[0].blank,true);
+ assert.equal((await adminPool.query("SELECT to_regnamespace('mf_t1c') IS NULL AS blank")).rows[0].blank,true);
+ assert.equal((await adminPool.query("SELECT count(*)::int AS n FROM pg_namespace WHERE nspname LIKE 'c1\\_%' ESCAPE '\\'")).rows[0].n,0);
+ await initializeSchema(adminPool);
+ await adminPool.query(await readFile(new URL('./schema.sql',import.meta.url),'utf8'));
+ await adminPool.query(await readFile(new URL('./ci-two-roles.sql',import.meta.url),'utf8'));
+ authPool=new pg.Pool({connectionString:DSN.replace('postgres:t1c-disposable-only','mf_t1c_ci_auth:t1c-ci-auth-only-local'),max:15});
+ intentPool=new pg.Pool({connectionString:DSN.replace('postgres:t1c-disposable-only','mf_t1c_ci_intent:t1c-ci-intent-only-local'),max:18});
  server=http.createServer((req,res)=>handler(req,res));
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  origin='http://127.0.0.1:'+server.address().port;
  handler=makeT1CAuthenticatedGateway({
-  pool,authStore:pgStore(pool),siwe:{makeChallenge,verifyChallenge},
+  sessionPool:authPool,intentPool,authStore:pgStore(authPool),siwe:{makeChallenge,verifyChallenge},
   origin,clock:()=>clock,mode:'disposable_ci'
  });
  walletA=Wallet.createRandom();
@@ -86,17 +89,33 @@ before(async()=>{
 });
 after(async()=>{
  if(server)await new Promise(resolve=>server.close(resolve));
- await pool?.end();
+ await Promise.all([authPool?.end(),intentPool?.end(),adminPool?.end()]);
 });
 test('disposable-only guard disallows a public Render origin or a deployable CI prepare switch',()=>{
  assert.throws(()=>makeT1CAuthenticatedGateway({
-  pool,authStore:pgStore(pool),siwe:{makeChallenge,verifyChallenge},
+  sessionPool:authPool,intentPool,authStore:pgStore(authPool),siwe:{makeChallenge,verifyChallenge},
   origin:'https://mealforward-t1-write.onrender.com',mode:'disposable_ci'
  }),/T1C_CI_MODE_FORBIDDEN/);
  assert.throws(()=>makeT1CAuthenticatedGateway({
-  pool,authStore:pgStore(pool),siwe:{makeChallenge,verifyChallenge},
+  sessionPool:authPool,intentPool,authStore:pgStore(authPool),siwe:{makeChallenge,verifyChallenge},
   origin,mode:'funds_enabled'
  }),/T1C_UNKNOWN_MODE/);
+});
+test('real PostgreSQL roles prohibit Auth credentials from financial intents and vice versa',async()=>{
+ const a=await authPool.query('SELECT current_user AS role');
+ const b=await intentPool.query('SELECT current_user AS role');
+ assert.equal(a.rows[0].role,'mf_t1c_ci_auth');
+ assert.equal(b.rows[0].role,'mf_t1c_ci_intent');
+ const dbRole=await adminPool.query(
+  "SELECT rolname,rolsuper,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname IN ('mf_t1c_ci_auth','mf_t1c_ci_intent') ORDER BY rolname"
+ );
+ assert.equal(dbRole.rowCount,2);
+ assert.ok(dbRole.rows.every(x=>!x.rolsuper&&!x.rolcreaterole&&!x.rolbypassrls));
+ await assert.rejects(()=>authPool.query('SELECT * FROM mf_t1c.intents'),e=>e.code==='42501');
+ await assert.rejects(()=>intentPool.query('SELECT * FROM mf_cp31_auth_pilot.sessions'),e=>e.code==='42501');
+ await assert.rejects(()=>authPool.query('TRUNCATE TABLE mf_cp31_auth_pilot.sessions'),e=>e.code==='42501');
+ await assert.rejects(()=>intentPool.query('DELETE FROM mf_t1c.intents'),e=>e.code==='42501');
+ await assert.rejects(()=>intentPool.query('TRUNCATE TABLE mf_t1c.audit_events'),e=>e.code==='42501');
 });
 test('real SIWE G0 A and B wallet sessions are distinct, private, expiring and server-authored',async()=>{
  const a=await request('/v1/me',{cookie:authA.cookie});
@@ -183,7 +202,7 @@ test('malformed cookie, duplicate cookie, cross-site origin, forged wallet and m
    method:'POST',body:{idempotencyKey:key,quantity:1},...args
   });
   assert.ok([401,403].includes(res.status));
-  assert.equal((await pool.query('SELECT count(*)::int AS n FROM mf_t1c.intents WHERE idempotency_key=$1',[key])).rows[0].n,0);
+  assert.equal((await intentPool.query('SELECT count(*)::int AS n FROM mf_t1c.intents WHERE idempotency_key=$1',[key])).rows[0].n,0);
  }
 });
 test('forged body fields cannot select a payer, change escrow, provide Quote signature, tx nonce or post a Fund',async()=>{
@@ -208,7 +227,7 @@ test('forged body fields cannot select a payer, change escrow, provide Quote sig
   assert.equal(r.status,405);
   assert.equal(r.value.error,'FUNDING_DISABLED');
  }
- assert.equal((await pool.query('SELECT count(*)::int AS n FROM mf_t1c.wallet_attempts')).rows[0].n,0);
+ assert.equal((await intentPool.query('SELECT count(*)::int AS n FROM mf_t1c.wallet_attempts')).rows[0].n,0);
 });
 test('revocation denies old cookie immediately; unrelated wallet B remains authorized',async()=>{
  const a=await request('/v1/auth/logout',{
