@@ -38,8 +38,9 @@ export async function verifyT1DCloudSetup({
   check((res.headers.get('cache-control')||'').includes('no-store'),
    'T1D_SETUP_CACHE_POLICY_MISSING');
   const ct=res.headers.get('content-type')||'';
-  const body=ct.startsWith('application/json')?await res.json():
-   method==='HEAD'?null:await res.text();
+  // HEAD can advertise application/json but has no body. Do not parse it.
+  const body=method==='HEAD'?null:
+   ct.startsWith('application/json')?await res.json():await res.text();
   return {status:res.status,body,headers:res.headers};
  }
  const health=await request('/health');
