@@ -55,3 +55,4 @@ jobs:
         run: |
           node testnet-writer-migration.ci.mjs
           node testnet-signed-quote.ci.mjs
+          node testnet-auth-only-http.ci.mjs
