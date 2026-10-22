@@ -5,6 +5,7 @@ on:
       - codex/mealforward-t1c-auth-http-gate-20261021
       - codex/mealforward-t1c-supabase-render-readonly-20261022
       - codex/mealforward-t1d-real-test-usdc-funding-20261022
+      - codex/mealforward-t1d-render-isolated-20261022
 permissions:
   contents: read
 jobs:
@@ -49,7 +50,7 @@ jobs:
         working-directory: t1-intents
         run: npm run test:http
       - name: Execute exact T1-D isolated NOLOGIN writer migration on fresh disposable PG17
-        if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022'
+        if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022' || github.ref_name == 'codex/mealforward-t1d-render-isolated-20261022'
         working-directory: t1-intents
         run: |
           node testnet-writer-migration.ci.mjs
