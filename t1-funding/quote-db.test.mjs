@@ -28,7 +28,8 @@ before(async()=>{
  assert.equal(empty.rows[0].empty,true);
  // Original Supabase private schema is built only on fresh PG, never old Mac.
  const original=await readFile(new URL('../t1-intents/schema.sql',import.meta.url),'utf8');
- const clean=original.replace(/,anon,authenticated,service_role/g,'');
+ const clean=original.replace(/REVOKE ALL ON SCHEMA mf_t1c FROM anon,authenticated,service_role;/g,'')
+  .replace(/,anon,authenticated,service_role/g,'');
  await pool.query(clean);
  const mod=await readFile(new URL('./006_quote_authorizations.sql',import.meta.url),'utf8');
  await pool.query(mod.replace(/,anon,authenticated,service_role/g,''));
