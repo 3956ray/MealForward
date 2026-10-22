@@ -30,8 +30,10 @@ const safeCode=e=>{
 };
 export async function diagnose(){
  if(!process.stdin.isTTY||!process.stdout.isTTY||
-  process.env.CI||process.env.GITHUB_ACTIONS||process.env.RENDER)
-  throw Error('LOCAL_INTERACTIVE_MAC_ONLY');
+  process.env.CI||process.env.GITHUB_ACTIONS||process.env.RENDER){
+  process.stdout.write('T1C_DIAGNOSTIC_FAILED_LOCAL_INTERACTIVE_MAC_ONLY\n');
+  return false;
+ }
  let phase='VALIDATE_URL';
  const url=process.env.T1C_SUPABASE_ADMIN_DSN;
  let client=null,connected=false;
