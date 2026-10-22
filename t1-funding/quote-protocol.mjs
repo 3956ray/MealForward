@@ -146,9 +146,8 @@ export function exactApproveTransaction(row,{nonce:txNonce,now=Math.floor(Date.n
   from:q.payer,
   to:getAddress(TOKEN),
   value:'0x0',chainId:'0x279f',nonce:nonce(txNonce),
-  data:erc20.encodeFunctionData('approve',[ESCROW,PRICE]),
-  gas:null // gas estimate is wallet-owned; no invisible approval/signing
- });
+  data:erc20.encodeFunctionData('approve',[ESCROW,PRICE])
+  // gas estimation stays with MetaMask; wallet must prompt the payer. });
 }
 export function exactFundTransaction(row,{
  signature,nonce:txNonce,now=Math.floor(Date.now()/1000),authorityOverride=null
@@ -160,8 +159,7 @@ export function exactFundTransaction(row,{
   from:q.payer,
   to:getAddress(ESCROW),
   value:'0x0',chainId:'0x279f',nonce:nonce(txNonce),
-  data:escrowAbi.encodeFunctionData('fund',[q,signature]),
-  gas:null
+  data:escrowAbi.encodeFunctionData('fund',[q,signature])
  });
 }
 export {DOMAIN_FIELDS};
