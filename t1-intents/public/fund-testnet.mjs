@@ -343,7 +343,7 @@ $('reload').addEventListener('click',guard(async()=>{
  id=originalId;
  quote=quoteFor(snapshot);
  quoteAccepted=false;
- signature=null; // No localStorage or reusable browser-only funding capability.
+ signature=null; // Never keep the raw authorization in persistent browser storage.
  if(snapshot.quoteDigest!==null&&
   ['QUOTE_BOUND','APPROVE_UNKNOWN','APPROVED'].includes(snapshot.stage)){
   const signed=await req('/v1/t1/fund/quote/'+originalId);
