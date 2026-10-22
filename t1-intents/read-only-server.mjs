@@ -148,18 +148,21 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    mustBeDenied(intentPool,'DELETE FROM mf_t1c.intents')
   ]);
   const perms=await intentPool.query(
-   'SELECT has_table_privilege(current_user,$1,$2) AS insert_allowed,'+
-   'has_table_privilege(current_user,$1,$3) AS update_allowed,'+
-   'has_table_privilege(current_user,$4,$2) AS audit_insert',
-   ['mf_t1c.intents','INSERT','UPDATE','mf_t1c.audit_events']
+   "SELECT has_table_privilege(current_user,'mf_t1c.intents','INSERT') AS insert_allowed,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','stage','UPDATE') AS stage_update,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','revision','UPDATE') AS revision_update,"+
+   "has_column_privilege(current_user,'mf_t1c.wallet_attempts','status','UPDATE') AS attempt_update,"+
+   "has_table_privilege(current_user,'mf_t1c.wallet_attempts','INSERT') AS attempt_insert,"+
+   "has_table_privilege(current_user,'mf_t1c.audit_events','INSERT') AS audit_insert"
   );
   const grant=perms.rows[0];
+  const allDml=grant.insert_allowed&&grant.stage_update&&grant.revision_update&&
+   grant.attempt_update&&grant.attempt_insert&&grant.audit_insert;
+  const anyDml=Object.values(grant).some(Boolean);
   if(cfg.funding){
-   strict(grant.insert_allowed&&grant.update_allowed&&grant.audit_insert,
-    'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
+   strict(allDml,'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
   }else{
-   strict(!grant.insert_allowed&&!grant.update_allowed&&!grant.audit_insert,
-    'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
+   strict(!anyDml,'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
   }
   let readOnlyRpc=null;
   if(cfg.funding){
