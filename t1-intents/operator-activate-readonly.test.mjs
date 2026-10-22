@@ -8,6 +8,9 @@ test('owner role activation pin accepts ONLY Supabase project original admin ses
  const value=validateAdminConnection(DSN);
  assert.equal(value.host,'aws-0-ap-southeast-2.pooler.supabase.com');
  assert.equal(value.project,'ketfrukrcuosrqynnsay');
+ assert.throws(()=>validateAdminConnection(
+  DSN.replace('dummy-test-password','[YOUR-PASSWORD]')
+ ),/T1C_REPLACE_PASSWORD_PLACEHOLDER/);
  assert.equal(value.origin,'https://mealforward-t1c-readonly-laodao.onrender.com');
  for(const wrong of [
   DSN.replace('aws-0','aws-1'),
