@@ -20,6 +20,9 @@ import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
+import {makeReadOnlyPublicRpc} from '../staging-monad/attest-live-t0.mjs';
+import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
+import {QUOTE} from './core.mjs';
 
 const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
 const PRIVILEGE_DENIAL='42501';
@@ -37,11 +40,18 @@ function validateConfig(env){
  const testing=env.GITHUB_ACTIONS==='true'&&
   env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
   env.MF_T1C_HTTP_DISPOSABLE_ONLY==='ack-original-siwe-pg17';
- strict(env.T1C_SERVER_MODE==='READ_ONLY_NO_FUNDS',
-  'FINANCIAL_WRITE_MODE_FORBIDDEN');
- strict(env.T1C_FUNDING_ENABLED!== 'true'&&
-  env.T1C_QUOTE_SIGNER_ENABLED!== 'true',
-  'T1C_WALLET_WRITE_FLAG_FORBIDDEN');
+ const requested=env.T1C_SERVER_MODE;
+ strict(['READ_ONLY_NO_FUNDS','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
+  'UNAPPROVED_FINANCIAL_MODE');
+ const funding=requested==='TESTNET_SINGLE_SEVEN_USDC_FUND';
+ if(funding){
+  strict(env.T1C_FUNDING_ENABLED==='true' &&
+   env.T1C_TESTNET_FUND_SCOPE==='ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
+   'TESTNET_SINGLE_FUND_POLICY_REQUIRED');
+ }else strict(env.T1C_FUNDING_ENABLED!=='true',
+  'NO_FUNDS_MODE_CANNOT_ENABLE_FUND');
+ strict(env.T1C_QUOTE_SIGNER_ENABLED!=='true',
+  'T1D_NO_PLATFORM_QUOTE_PRIVATE_KEY');
  const origin=env.PUBLIC_ORIGIN;
  strict(typeof origin==='string'&&(
   ALLOWED_PUBLIC.test(origin)||(testing&&ALLOWED_TEST.test(origin))
@@ -74,7 +84,7 @@ function validateConfig(env){
  }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
- return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
+ return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
   expectedIntentRole:testing?'mf_t1c_ci_intent_ro':PROD_ROLE_INTENT};
@@ -135,23 +145,50 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
    mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
-   mustBeDenied(intentPool,'INSERT INTO mf_t1c.intents DEFAULT VALUES'),
-   mustBeDenied(intentPool,'UPDATE mf_t1c.intents SET quantity=quantity WHERE false')
+   mustBeDenied(intentPool,'DELETE FROM mf_t1c.intents')
   ]);
+  const perms=await intentPool.query(
+   'SELECT has_table_privilege(current_user,$1,$2) AS insert_allowed,'+
+   'has_table_privilege(current_user,$1,$3) AS update_allowed,'+
+   'has_table_privilege(current_user,$4,$2) AS audit_insert',
+   ['mf_t1c.intents','INSERT','UPDATE','mf_t1c.audit_events']
+  );
+  const grant=perms.rows[0];
+  if(cfg.funding){
+   strict(grant.insert_allowed&&grant.update_allowed&&grant.audit_insert,
+    'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
+  }else{
+   strict(!grant.insert_allowed&&!grant.update_allowed&&!grant.audit_insert,
+    'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
+  }
+  let readOnlyRpc=null;
+  if(cfg.funding){
+   bootStage='REAL_T0_PREFLIGHT';
+   readOnlyRpc=makeReadOnlyPublicRpc();
+   const pre=await assertRealT0IsOpen({rpc:readOnlyRpc,payer:QUOTE});
+   strict(pre.chainId===10143&&pre.testnetOnly&&
+    pre.unitsFunded==='0'&&BigInt(pre.assets.balance)>=7000000n,
+    'T1D_REAL_T0_FUND_NOT_READY');
+  }
   bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,authStore:pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
-   mode:'read_only'
+   mode:cfg.funding?'testnet_fund':'read_only',rpc:readOnlyRpc
   });
   // Public UI is a fixed allowlist of THREE immutable local files; no
   // arbitrary filesystem path, storage directory, SSR or API secrets.
   bootStage='ASSET_LOAD';
-  const staticFiles=new Map(await Promise.all([
+  const exposedFiles=[
    ['/', 'index.html','text/html; charset=utf-8'],
    ['/ui.css','ui.css','text/css; charset=utf-8'],
    ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
-  ].map(async([path,filename,type])=>[
+  ];
+  if(cfg.funding)exposedFiles.push(
+   ['/fund-testnet.html','fund-testnet.html','text/html; charset=utf-8'],
+   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8']
+  );
+  const staticFiles=new Map(await Promise.all(exposedFiles.map(async([path,filename,type])=>[
     path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
   ])));
   server=http.createServer((req,res)=>{
@@ -184,7 +221,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
   });
   return {
-   server,origin:cfg.origin,authRole,intentRole,fundingEnabled:false,
+   server,origin:cfg.origin,authRole,intentRole,
+   fundingEnabled:cfg.funding,testnetOnly:true,
    async close(){
     await new Promise(resolve=>server.close(resolve));
     await Promise.all([authPool.end(),intentPool.end()]);
@@ -202,8 +240,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const runtime=await startT1ReadOnlyServer();
   process.stdout.write(JSON.stringify({
-   status:'T1_C_SAFE_READONLY_PROCESS_READY',
-   fundingEnabled:false,origin:runtime.origin,
+   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
+   fundingEnabled:runtime.fundingEnabled,origin:runtime.origin,
    distinctDatabasePrincipals:true
   })+'\n');
   let shuttingDown=false;
