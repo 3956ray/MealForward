@@ -31,3 +31,6 @@ jobs:
       - name: Execute real setup-only HTTP (every SIWE/fund route denied)
         working-directory: t1-intents
         run: npm run test:render:setup
+      - name: Verify owner-Mac-only database activation rejects CI and unsafe roles
+        working-directory: t1-intents
+        run: npm run test:t1d:operator
