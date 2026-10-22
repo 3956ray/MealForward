@@ -20,7 +20,7 @@ import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
-import {makeReadOnlyPublicRpc} from '../staging-monad/attest-live-t0.mjs';
+import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
 import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
 import {QUOTE} from './core.mjs';
 
