@@ -1,0 +1,33 @@
+name: MealForward T1-D isolated Render SETUP ONLY no-funds acceptance
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-render-isolated-20261022
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  never-fund-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install self-contained T1-D dependencies (no scripts)
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Check pinned source and unsafe bootstrap methods
+        working-directory: t1-intents
+        run: |
+          npm run check
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount' t1d-entrypoint.mjs; then
+            echo "SETUP_ONLY_MUST_HAVE_NO_WALLET_WRITE"
+            exit 1
+          fi
+      - name: Execute real setup-only HTTP (every SIWE/fund route denied)
+        working-directory: t1-intents
+        run: npm run test:render:setup
