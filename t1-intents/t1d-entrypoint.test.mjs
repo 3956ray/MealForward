@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import http from 'node:http';
 import {validateT1DDeployment,startT1DEntrypoint} from './t1d-entrypoint.mjs';
 
 const base=Object.freeze({
@@ -74,8 +75,20 @@ test('real setup-only HTTP refuses every signing, SIWE and payment path',async()
    assert.equal(v.r.status,503,path);
    assert.equal(JSON.parse(v.body).error,'T1D_SETUP_NO_FUNDS');
   }
-  const wrongHost=await send('/',{headers:{Host:'evil.example'}});
-  assert.equal(wrongHost.r.status,403);
+  // Node fetch may normalize/disallow the Host override. Send a real raw
+  // HTTP request so the negative Host check is tested, not the Fetch API.
+  const wrongHost=await new Promise((resolve,reject)=>{
+   const request=http.request({
+    hostname:'127.0.0.1',port,method:'GET',path:'/',
+    headers:{Host:'evil.example'}
+   },response=>{
+    response.resume();
+    response.on('end',()=>resolve(response.statusCode));
+   });
+   request.on('error',reject);
+   request.end();
+  });
+  assert.equal(wrongHost,403);
   const crossOrigin=await send('/',{headers:{Origin:'https://evil.example'}});
   assert.equal(crossOrigin.r.status,403);
   const query=await send('/?debug=1');
