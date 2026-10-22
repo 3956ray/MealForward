@@ -8,6 +8,7 @@ const base=Object.freeze({
  PUBLIC_ORIGIN:'https://mealforward-t1d-funding-laodao.onrender.com',
  PORT:'10000',T1D_DEPLOYMENT_STAGE:'SETUP_ONLY',
  T1C_SERVER_MODE:'SETUP_ONLY_NO_FUNDS',T1C_FUNDING_ENABLED:'false',
+ T1C_TESTNET_FUND_SCOPE:'DISABLED',
  T1C_QUOTE_SIGNER_ENABLED:'false'
 });
 test('T1-D standalone setup refuses financial flags, secrets and unpinned origins',()=>{
@@ -15,6 +16,7 @@ test('T1-D standalone setup refuses financial flags, secrets and unpinned origin
  const fail=(mod,code)=>assert.throws(()=>validateT1DDeployment({...base,...mod}),new RegExp(code));
  fail({T1C_SERVER_MODE:'TESTNET_SINGLE_SEVEN_USDC_FUND'},'T1D_SETUP_MUST_DISABLE_FUNDS');
  fail({T1C_FUNDING_ENABLED:'true'},'T1D_SETUP_MUST_DISABLE_FUNDS');
+ fail({T1C_TESTNET_FUND_SCOPE:'ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC'},'T1D_SETUP_MUST_DISABLE_FUNDS');
  fail({T1C_AUTH_DB_URL:'postgres://example.invalid'},'T1D_SETUP_SECRETS_FORBIDDEN');
  fail({T1C_INTENT_DB_URL:'postgres://example.invalid'},'T1D_SETUP_SECRETS_FORBIDDEN');
  fail({T1C_SUPABASE_ADMIN_DSN:'postgres://example.invalid'},'T1D_SETUP_SECRETS_FORBIDDEN');
