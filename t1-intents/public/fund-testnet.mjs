@@ -36,7 +36,7 @@ function controls(){
  const can=Boolean(account&&csrf&&serviceReady&&!lock&&equals(account,QUOTE));
  for(const key of STATE_IDS)$(key).disabled=lock;
  $('prepare').disabled=!can||Boolean(id);
- $('sign').disabled=!can||!quote||quoteAccepted;
+ $('sign').disabled=!can||!quote||Boolean(signature);
  $('approve').disabled=!can||!quoteAccepted||Boolean(approveHash)||approveConfirmed;
  $('confirmApprove').disabled=!can||!id||approveConfirmed;
  $('fund').disabled=!can||!approveConfirmed||!signature||Boolean(fundHash)||fundConfirmed;
@@ -117,15 +117,6 @@ const typedData=msg=>({
  domain:{name:'MealForward C0 Funding',version:'1',chainId:10143,verifyingContract:T0},
  message:msg
 });
-async function loginWallet(){
- await requireWallet();
- const who=account,capture=epoch;
- const pre=await req('/v1/auth/pre-session',{
-  method:'POST',body:{},headers:{'X-C1-Bootstrap':'1'}
- });
- // Normal request wrapper does not permit arbitrary headers. Call here
- // with original G0 SIWE headers explicitly, no raw signature logging.
-}
 const loginButton=guard(async()=>{
  await requireWallet();
  const current=account,originalEpoch=epoch;
@@ -219,14 +210,20 @@ $('sign').addEventListener('click',guard(async()=>{
  const proof=await wallet('eth_signTypedData_v4',[account,JSON.stringify(typedData(quote))]);
  await requireWallet();
  if(sentEpoch!==epoch)throw Error('WALLET_CHANGED_DURING_QUOTE');
- const result=await post('quote',{intentId:id,signature:proof});
- if(result.stage!=='QUOTE_BOUND'||result.testnetQuoteSignatureAccepted!==true)
-  throw Error('REAL_FUNDING_QUOTE_NOT_ACCEPTED');
+ const current=await req('/v1/t1/intents/'+id);
+ let digest=current.quoteDigest;
+ if(current.stage==='PREPARED'){
+  const result=await post('quote',{intentId:id,signature:proof});
+  if(result.stage!=='QUOTE_BOUND'||result.testnetQuoteSignatureAccepted!==true)
+   throw Error('REAL_FUNDING_QUOTE_NOT_ACCEPTED');
+  digest=result.quoteDigest;
+ }else if(!['QUOTE_BOUND','APPROVE_UNKNOWN','APPROVED'].includes(current.stage))
+  throw Error('ORIGINAL_QUOTE_NOT_RESIGNABLE');
  signature=proof;
  quoteAccepted=true;
- state('quote','PASS：真正 FundingQuote 已由 Quote Authority 签署\n'+
+ state('quote','真正 FundingQuote 已由 Quote Authority 签署\n'+
   'Intent ID: '+id+'\nQuote ID: '+quote.quoteId+
-  '\nDigest: '+result.quoteDigest+'\n请下一步仅授权 7 Test USDC。',true);
+  '\nDigest: '+digest+'\n后端将再次严格验证该签名。',true);
 }));
 async function nonceFor(){
  const raw=await wallet('eth_getTransactionCount',[account,'pending']);
@@ -282,12 +279,24 @@ $('approve').addEventListener('click',guard(async()=>{
 }));
 async function reconcileKind(kind){
  await requireWallet();
- const existing=kind==='approve'?approveHash:fundHash;
- const txHash=existing||$('recoverHash').value.trim();
  const originalId=id||$('recoverId').value.trim();
- if(!/^0x[0-9a-f]{64}$/i.test(txHash)||!originalId)
-  throw Error('原交易 Hash 与原 Intent ID 均不能为空。');
- await post('bind-hash',{intentId:originalId,kind,txHash});
+ if(!originalId)throw Error('原 Intent ID 不能为空。');
+ const status=await req('/v1/t1/intents/'+originalId);
+ const old=status.attempts?.find(x=>x.kind===kind);
+ const existing=kind==='approve'?approveHash:fundHash;
+ const txHash=existing||old?.txHash||$('recoverHash').value.trim();
+ if(!/^0x[0-9a-f]{64}$/i.test(txHash))
+  throw Error('请提供该原始交易的 Hash。');
+ const previouslyConfirmed=kind==='approve'?
+  ['APPROVED','FUND_UNKNOWN','FUNDED'].includes(status.stage):status.stage==='FUNDED';
+ if(previouslyConfirmed&&old?.status==='CONFIRMED'){
+  if(kind==='approve')approveConfirmed=true;else fundConfirmed=true;
+  state(kind==='approve'?'approveInfo':'fundInfo',
+   '已恢复持久化 CONFIRMED 的原 '+kind+' Receipt：\n'+txHash,true);
+  return;
+ }
+ if(old?.status==='UNKNOWN')await post('bind-hash',{intentId:originalId,kind,txHash});
+ else if(old?.status!=='HASH_BOUND')throw Error('原交易的恢复状态不可继续。');
  const proof=await post('reconcile',{intentId:originalId,kind});
  const place=kind==='approve'?'approveInfo':'fundInfo';
  if(proof.status==='UNKNOWN'){
@@ -332,10 +341,17 @@ $('reload').addEventListener('click',guard(async()=>{
  const snapshot=await req('/v1/t1/intents/'+originalId);
  if(!equals(snapshot.payer,account))throw Error('INTENT_WALLET_OWNERSHIP_MISMATCH');
  id=originalId;
+ quote=quoteFor(snapshot);
+ quoteAccepted=snapshot.quoteDigest!==null;
+ signature=null; // The signature is NOT stored on backend or in browser storage.
  $('recoverId').value=id;
  if(snapshot.stage==='APPROVED')approveConfirmed=true;
  if(snapshot.stage==='FUNDED'){approveConfirmed=true;fundConfirmed=true}
+ approveHash=snapshot.attempts?.find(x=>x.kind==='approve')?.txHash??null;
+ fundHash=snapshot.attempts?.find(x=>x.kind==='fund')?.txHash??null;
+ $('recoverHash').value=fundHash??approveHash??'';
  state('recoverInfo','原始 Intent（来自独立 PostgreSQL）：\n'+
-  JSON.stringify(snapshot,null,2),true);
+  JSON.stringify(snapshot,null,2)+
+  '\n如果 Quote 已签但原始签名未保存，你可以重新签署同一 Quote；不会重发 UNKNOWN。',true);
 }));
 controls();
