@@ -286,6 +286,9 @@ test('Cloud Supabase origin must be exact approved project + named roles + sessi
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(
    'ketfrukrcuosrqynnsay','qygnwgovbwltffsytnje'
   )},/WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
+  reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(
+   'aws-0-ap-southeast-2.pooler.supabase.com','aws-1-ap-southeast-2.pooler.supabase.com'
+  )},/ONLY_PINNED_SUPABASE_SESSION_POOLER/);
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(':5432/',':6543/')},
    /ONLY_PINNED_SUPABASE_SESSION_POOLER/);
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace(
