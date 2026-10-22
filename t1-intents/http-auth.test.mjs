@@ -134,8 +134,7 @@ test('separate T1-D funding CI role may mutate ONLY the original immutable Inten
    "has_table_privilege(current_user,'mf_t1c.intents','SELECT') AS can_read,"+
    "has_column_privilege(current_user,'mf_t1c.intents','stage','UPDATE') AS can_stage,"+
    "has_column_privilege(current_user,'mf_t1c.intents','payer','UPDATE') AS can_change_payer,"+
-   "has_table_privilege(current_user,'mf_t1c.intents','DELETE') AS can_delete,"+
-   "has_table_privilege(current_user,'mf_cp31_auth_pilot.sessions','SELECT') AS can_read_auth"
+   "has_table_privilege(current_user,'mf_t1c.intents','DELETE') AS can_delete"
   );
   assert.equal(q.rows[0].role,'mf_t1d_ci_fund');
   assert.equal(q.rows[0].can_insert,true);
@@ -143,7 +142,6 @@ test('separate T1-D funding CI role may mutate ONLY the original immutable Inten
   assert.equal(q.rows[0].can_stage,true);
   assert.equal(q.rows[0].can_change_payer,false);
   assert.equal(q.rows[0].can_delete,false);
-  assert.equal(q.rows[0].can_read_auth,false);
   await assert.rejects(()=>fundPool.query(
    'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'
   ),e=>e.code==='42501');
