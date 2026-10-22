@@ -87,8 +87,13 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const out=await verifyT1DCloudSetup();
   process.stdout.write(JSON.stringify(out,null,2)+'\n');
- }catch{
-  process.stderr.write('T1D_REAL_RENDER_SETUP_ONLY_NOT_ATTESTED\n');
+ }catch(e){
+  // Only static, whitelist-owned error codes are printed; no URL bodies,
+  // credentials, cookies, tokens or freeform upstream exception messages.
+  const reason=typeof e?.message==='string'&&
+   /^T1D_SETUP_[A-Z0-9_]{3,95}$/.test(e.message)?
+   e.message:'T1D_SETUP_PUBLIC_HTTP_NETWORK_ERROR';
+  process.stderr.write(reason+'\n');
   process.exitCode=1;
  }
 }
