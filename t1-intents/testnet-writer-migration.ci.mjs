@@ -44,7 +44,7 @@ GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_intent_runtime;`
  const migration=await readFile(new URL('./supabase/006_testnet_single_meal_writer.sql',import.meta.url),'utf8');
  // Exercise the real SQL, not a hand-maintained imitation.
  assert.ok(migration.includes('CREATE ROLE mf_t1d_fund_runtime NOLOGIN'));
- assert.ok(!/GRANT\\s+(?:SELECT|INSERT|UPDATE)[^;]*TO\\s+mf_t1c_intent_runtime/i.test(migration),
+ assert.ok(!/GRANT\s+(?:SELECT|INSERT|UPDATE)[^;]*TO\s+mf_t1c_intent_runtime/i.test(migration),
   'READONLY_ROLE_ESCALATION_ATTEMPT');
  await client.query(migration);
 
