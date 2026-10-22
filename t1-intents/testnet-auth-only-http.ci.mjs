@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {Wallet} from 'ethers';
 import pg from 'pg';
@@ -83,6 +84,42 @@ try{
  assert.match(page,/data-expected-mode="T1D_ISOLATED_SIWE_READ_ONLY_GATE"/);
  assert.equal((await fetch(origin+'/ui.mjs')).status,200);
  assert.notEqual((await fetch(origin+'/fund-testnet.html')).status,200);
+ // Reproduce Chrome Fetch Metadata for a link clicked from ChatGPT.
+ // Only top-level public HTML GET navigation may cross site. Never API,
+ // javascript, stylesheet, external Origin, iframe or transaction requests.
+ const rawGet=(path,headers)=>new Promise((resolve,reject)=>{
+  const request=http.request({
+   host:'127.0.0.1',port,path,method:'GET',headers
+  },response=>{
+   response.resume();
+   response.on('end',()=>resolve({
+    code:response.statusCode,headers:response.headers
+   }));
+  });
+  request.on('error',reject);request.end();
+ });
+ const crossNav={
+  'Sec-Fetch-Site':'cross-site',
+  'Sec-Fetch-Mode':'navigate',
+  'Sec-Fetch-Dest':'document',
+  'Sec-Fetch-User':'?1'
+ };
+ const externalLink=await rawGet('/',crossNav);
+ assert.equal(externalLink.code,200,'external document navigation must open');
+ assert.equal(externalLink.headers['x-frame-options'],'DENY');
+ assert.match(externalLink.headers['content-security-policy'],/frame-ancestors 'none'/);
+ for(const [pathname,headers] of [
+  ['/',{...crossNav,'Sec-Fetch-Dest':'iframe'}],
+  ['/',{...crossNav,'Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'}],
+  ['/',{...crossNav,Origin:'https://chatgpt.com'}],
+  ['/ui.mjs',{...crossNav,'Sec-Fetch-Dest':'script'}],
+  ['/ui.css',{...crossNav,'Sec-Fetch-Dest':'style'}]
+ ]){
+  assert.equal((await rawGet(pathname,headers)).code,403,
+   'cross-origin subresource and foreign origin must stay blocked');
+ }
+ const sourceDenied=await req('/v1/t1/status',{extra:crossNav});
+ assert.equal(sourceDenied.status,403,'cross-site API remains forbidden');
  const state=await req('/v1/t1/status');
  assert.equal(state.status,200);
  assert.equal(state.value.status,'READY_NO_FUNDS');
