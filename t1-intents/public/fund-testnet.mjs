@@ -342,8 +342,19 @@ $('reload').addEventListener('click',guard(async()=>{
  if(!equals(snapshot.payer,account))throw Error('INTENT_WALLET_OWNERSHIP_MISMATCH');
  id=originalId;
  quote=quoteFor(snapshot);
- quoteAccepted=snapshot.quoteDigest!==null;
- signature=null; // The signature is NOT stored on backend or in browser storage.
+ quoteAccepted=false;
+ signature=null; // No localStorage or reusable browser-only funding capability.
+ if(snapshot.quoteDigest!==null&&
+  ['QUOTE_BOUND','APPROVE_UNKNOWN','APPROVED'].includes(snapshot.stage)){
+  const signed=await req('/v1/t1/fund/quote/'+originalId);
+  if(signed.restoredFromOriginalPostgres!==true||
+    !equals(signed.quoteId,snapshot.quoteId)||
+    !equals(signed.quoteDigest,snapshot.quoteDigest)||
+    !/^0x[0-9a-f]{130}$/i.test(signed.signature))
+   throw Error('ORIGINAL_SIGNED_QUOTE_RECOVERY_INVALID');
+  signature=signed.signature;
+  quoteAccepted=true;
+ }
  $('recoverId').value=id;
  if(snapshot.stage==='APPROVED')approveConfirmed=true;
  if(snapshot.stage==='FUNDED'){approveConfirmed=true;fundConfirmed=true}
@@ -352,6 +363,6 @@ $('reload').addEventListener('click',guard(async()=>{
  $('recoverHash').value=fundHash??approveHash??'';
  state('recoverInfo','原始 Intent（来自独立 PostgreSQL）：\n'+
   JSON.stringify(snapshot,null,2)+
-  '\n如果 Quote 已签但原始签名未保存，你可以重新签署同一 Quote；不会重发 UNKNOWN。',true);
+  '\nFundingQuote 仅从原始 PostgreSQL 由该 SIWE 钱包恢复；UNKNOWN 绝不自动重发。',true);
 }));
 controls();
