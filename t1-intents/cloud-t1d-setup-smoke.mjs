@@ -27,6 +27,9 @@ export async function verifyT1DCloudSetup({
    // Free Render can sleep. Only the FIRST, fixed-host request has extra
    // time; the remaining requests stay strict and sequential.
    signal:AbortSignal.timeout(calls===0?100000:15000)
+  }).catch(e=>{
+   throw Error('T1D_SETUP_FETCH_FAILED_STEP_'+(calls+1)+'_'+
+    (e?.name==='TimeoutError'?'TIMEOUT':'NETWORK'));
   });
   calls++;
   check(res?.headers&&Number.isInteger(res.status),
@@ -91,7 +94,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   // Only static, whitelist-owned error codes are printed; no URL bodies,
   // credentials, cookies, tokens or freeform upstream exception messages.
   const reason=typeof e?.message==='string'&&
-   /^T1D_SETUP_[A-Z0-9_]{3,95}$/.test(e.message)?
+   /^T1D_SETUP_[A-Z0-9_-]{3,120}$/i.test(e.message)?
    e.message:'T1D_SETUP_PUBLIC_HTTP_NETWORK_ERROR';
   process.stderr.write(reason+'\n');
   process.exitCode=1;
