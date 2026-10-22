@@ -334,7 +334,7 @@ test('Cloud Supabase origin must be exact approved project + named roles + sessi
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL+'?sslmode=disable'},/DATABASE_DSN_NOT_REVIEWABLE/);
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace('mf_t1c_auth_runtime','postgres')},
    /WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
-  reject({T1C_FUNDING_ENABLED:'true'},/T1C_WALLET_WRITE_FLAG_FORBIDDEN/);
+  reject({T1C_FUNDING_ENABLED:'true'},/NO_FUNDS_MODE_CANNOT_ENABLE_FUND/);
   // First real funding must use its OWN runtime identity; never make the
   // live T1-C SELECT-only principal writable in place.
   const t1d={
@@ -370,9 +370,9 @@ test('cloud startup refuses unsafe database credentials and every money-enabled 
   T1C_AUTH_DB_URL:AUTH_DB,T1C_INTENT_DB_URL:INTENT_DB
  };
  assert.throws(()=>validateConfig({...good,T1C_SERVER_MODE:'FUNDING_ENABLED'}),
-  /FINANCIAL_WRITE_MODE_FORBIDDEN/);
+  /UNAPPROVED_FINANCIAL_MODE/);
  assert.throws(()=>validateConfig({...good,T1C_FUNDING_ENABLED:'true'}),
-  /T1C_WALLET_WRITE_FLAG_FORBIDDEN/);
+  /NO_FUNDS_MODE_CANNOT_ENABLE_FUND/);
  assert.throws(()=>validateConfig({...good,T1C_AUTH_DB_URL:INTENT_DB}),
   /TWO_DISTINCT_DATABASE_PRINCIPALS_REQUIRED/);
  assert.throws(()=>validateConfig({...good,PUBLIC_ORIGIN:'https://attacker.example'}),
