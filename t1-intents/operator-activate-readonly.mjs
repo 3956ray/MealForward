@@ -29,6 +29,8 @@ export function validateAdminConnection(raw){
   'T1C_WRONG_SUPABASE_POOLER');
  check(url.username==='postgres.'+PROJECT,'T1C_ADMIN_ROLE_REQUIRED');
  check(url.password.length>0,'T1C_ADMIN_PASSWORD_REQUIRED');
+ check(decodeURIComponent(url.password)!=='[YOUR-PASSWORD]',
+  'T1C_REPLACE_PASSWORD_PLACEHOLDER');
  check(!url.search&&!url.hash,'T1C_ADMIN_DSN_QUERY_FORBIDDEN');
  return {host:HOST,project:PROJECT,origin:ORIGIN};
 }
@@ -68,16 +70,32 @@ export async function activateFromTerminal(){
   ssl:{rejectUnauthorized:true,servername:HOST},
   connectionTimeoutMillis:9000
  });
- let opened=false,committed=false;
+ let opened=false,committed=false,phase='CONNECT_TLS';
+ const safeReason=e=>{
+  const codes={
+   '28P01':'PASSWORD_AUTH_FAILED',
+   'ENOTFOUND':'DNS_UNAVAILABLE',
+   'ETIMEDOUT':'NETWORK_TIMEOUT',
+   'ECONNREFUSED':'CONNECTION_REFUSED',
+   'ERR_TLS_CERT_ALTNAME_INVALID':'TLS_HOSTNAME_MISMATCH',
+   'UNABLE_TO_VERIFY_LEAF_SIGNATURE':'TLS_CERT_UNTRUSTED',
+   'SELF_SIGNED_CERT_IN_CHAIN':'TLS_CERT_UNTRUSTED',
+   '42501':'PG_PERMISSION_DENIED'
+  };
+  return codes[e?.code]||'CHECK_FAILED';
+ };
  try{
   await client.connect();
   opened=true;
+  phase='BEGIN_TRANSACTION';
   await client.query('BEGIN');
+  phase='REVIEW_ROLES';
   const roleQuery=await client.query(
    "SELECT rolname,rolcanlogin,rolsuper,rolcreaterole,rolcreatedb,rolbypassrls "+
    "FROM pg_roles WHERE rolname IN ('mf_t1c_auth_runtime','mf_t1c_intent_runtime')"
   );
   grantProbe(roleQuery.rows);
+  phase='REVIEW_GRANTS';
   const rights=await client.query(
    "SELECT "+
    "has_table_privilege('mf_t1c_auth_runtime','mf_cp31_auth_pilot.sessions','SELECT') AS a_auth,"+
@@ -91,13 +109,17 @@ export async function activateFromTerminal(){
    'T1C_CROSS_SCHEMA_ISOLATION_NOT_PROVEN');
   // Passwords are generated strictly as crypto-random hexadecimal; they
   // cannot contain SQL metacharacters or come from request parameters.
+  phase='ALTER_LOGIN';
   await client.query("ALTER ROLE "+AUTH+" LOGIN PASSWORD '"+authSecret+"'");
   await client.query("ALTER ROLE "+INTENT+" LOGIN PASSWORD '"+intentSecret+"'");
+  phase='COMMIT_ROLES';
   await client.query('COMMIT');
   committed=true;
- }catch{
+ }catch(error){
   if(opened&&!committed)await client.query('ROLLBACK').catch(()=>{});
-  throw Error('T1C_ROLE_ACTIVATION_FAILED_NO_SECRETS_PRINTED');
+  // Never include the raw driver message, SQL statement, username, admin
+  // connection string, passwords, wallet or stack trace in diagnostics.
+  throw Error('T1C_ROLE_ACTIVATION_'+phase+'_'+safeReason(error));
  }finally{
   if(opened)await client.end().catch(()=>{});
  }
@@ -120,7 +142,7 @@ export async function activateFromTerminal(){
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{await activateFromTerminal()}
  catch(e){
-  process.stderr.write(/^T1C_[A-Z_]{5,70}$/.test(e.message||'')?
+  process.stderr.write(/^T1C_[A-Z0-9_]{5,100}$/.test(e.message||'')?
    e.message+'\n':'T1C_OPERATOR_SETUP_DENIED\n');
   process.exitCode=1;
  }
