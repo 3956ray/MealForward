@@ -102,7 +102,7 @@ async function mustBeDenied(pool,query){
 
 export async function startT1ReadOnlyServer({env=process.env}={}){
  const cfg=validateConfig(env);
- const tls=cfg.testing?null:verifiedSupabasePoolerTls({env,host:new URL(cfg.authUrl).hostname});
+ const tls=cfg.testing?null:verifiedSupabasePoolerTls({host:new URL(cfg.authUrl).hostname});
  const opts=url=>({
   connectionString:url,
   ...(cfg.testing?{}:{ssl:tls}),
