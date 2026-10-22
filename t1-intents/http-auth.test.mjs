@@ -20,6 +20,7 @@ import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {initializeSchema,pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {startT1ReadOnlyServer,validateConfig} from './read-only-server.mjs';
+import {verifyReadOnlyCloud} from './cloud-readonly-smoke.mjs';
 
 const DSN='postgres://postgres:t1c-disposable-only@127.0.0.1:5433/mf_t1c_http_ci';
 const disabled=process.env.GITHUB_ACTIONS!=='true'||
@@ -398,6 +399,10 @@ test('real SECOND HTTP process boots read-only roles, reads prior SIWE wallet+In
    assert.match(css.headers.get('content-type'),/text\/css/);
    const blocked=await fetch(host+'/?wallet=other');
    assert.equal(blocked.status,403);
+   const smoke=await verifyReadOnlyCloud({origin:host,allowCiLoopback:true});
+   assert.equal(smoke.status,'T1_C_LIVE_READONLY_HTTP_PASS');
+   assert.equal(smoke.moneyRoutesBlocked,true);
+   assert.equal(smoke.requests,7);
    const ready=await fetchResult('/v1/t1/status');
    assert.equal(ready.status,200);
    assert.equal(ready.body.fundingEnabled,false);
