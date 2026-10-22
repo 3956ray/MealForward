@@ -62,6 +62,9 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Install original T1-C ethers dependency for shared quote constants
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Install isolated node-postgres and test protocol dependencies
         working-directory: t1-funding
         run: npm install --ignore-scripts --no-audit --no-fund
