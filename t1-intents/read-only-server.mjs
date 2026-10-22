@@ -166,8 +166,10 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    bootStage='REAL_T0_PREFLIGHT';
    readOnlyRpc=makeReadOnlyPublicRpc();
    const pre=await assertRealT0IsOpen({rpc:readOnlyRpc,payer:QUOTE});
-   strict(pre.chainId===10143&&pre.testnetOnly&&
-    pre.unitsFunded==='0'&&BigInt(pre.assets.balance)>=7000000n,
+   // The read-only recovery endpoint must remain available AFTER one
+   // genuine Fund, even if capacity/balance changes. New submissions are
+   // denied separately at prepare/reserve with the actual live state.
+   strict(pre.chainId===10143&&pre.testnetOnly,
     'T1D_REAL_T0_FUND_NOT_READY');
   }
   bootStage='GATEWAY_INIT';
