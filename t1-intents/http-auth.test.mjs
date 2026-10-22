@@ -123,6 +123,42 @@ test('real PostgreSQL roles prohibit Auth credentials from financial intents and
  await assert.rejects(()=>intentPool.query('DELETE FROM mf_t1c.intents'),e=>e.code==='42501');
  await assert.rejects(()=>intentPool.query('TRUNCATE TABLE mf_t1c.audit_events'),e=>e.code==='42501');
 });
+test('separate T1-D funding CI role may mutate ONLY the original immutable Intent fields',async()=>{
+ const fundDsn=DSN.replace('postgres:t1c-disposable-only',
+  'mf_t1d_ci_fund:t1d-ci-fund-only-local');
+ const fundPool=new pg.Pool({connectionString:fundDsn,max:2});
+ try{
+  const q=await fundPool.query(
+   "SELECT current_user AS role,"+
+   "has_table_privilege(current_user,'mf_t1c.intents','INSERT') AS can_insert,"+
+   "has_table_privilege(current_user,'mf_t1c.intents','SELECT') AS can_read,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','stage','UPDATE') AS can_stage,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','payer','UPDATE') AS can_change_payer,"+
+   "has_table_privilege(current_user,'mf_t1c.intents','DELETE') AS can_delete,"+
+   "has_table_privilege(current_user,'mf_cp31_auth_pilot.sessions','SELECT') AS can_read_auth"
+  );
+  assert.equal(q.rows[0].role,'mf_t1d_ci_fund');
+  assert.equal(q.rows[0].can_insert,true);
+  assert.equal(q.rows[0].can_read,true);
+  assert.equal(q.rows[0].can_stage,true);
+  assert.equal(q.rows[0].can_change_payer,false);
+  assert.equal(q.rows[0].can_delete,false);
+  assert.equal(q.rows[0].can_read_auth,false);
+  await assert.rejects(()=>fundPool.query(
+   'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'
+  ),e=>e.code==='42501');
+  await assert.rejects(()=>fundPool.query(
+   'TRUNCATE mf_t1c.wallet_attempts'
+  ),e=>e.code==='42501');
+  // This separate writer does not silently upgrade the T1-C readonly role.
+  const readonly=await adminPool.query(
+   "SELECT has_table_privilege('mf_t1c_ci_intent_ro','mf_t1c.intents','INSERT') AS insert_allowed,"+
+   "has_column_privilege('mf_t1c_ci_intent_ro','mf_t1c.intents','stage','UPDATE') AS update_allowed"
+  );
+  assert.equal(readonly.rows[0].insert_allowed,false);
+  assert.equal(readonly.rows[0].update_allowed,false);
+ }finally{await fundPool.end()}
+});
 test('real SIWE G0 A and B wallet sessions are distinct, private, expiring and server-authored',async()=>{
  const a=await request('/v1/me',{cookie:authA.cookie});
  const b=await request('/v1/me',{cookie:authB.cookie});
@@ -299,6 +335,24 @@ test('Cloud Supabase origin must be exact approved project + named roles + sessi
   reject({T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace('mf_t1c_auth_runtime','postgres')},
    /WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
   reject({T1C_FUNDING_ENABLED:'true'},/T1C_WALLET_WRITE_FLAG_FORBIDDEN/);
+  // First real funding must use its OWN runtime identity; never make the
+  // live T1-C SELECT-only principal writable in place.
+  const t1d={
+   ...base,T1C_SERVER_MODE:'TESTNET_SINGLE_SEVEN_USDC_FUND',
+   T1C_FUNDING_ENABLED:'true',
+   T1C_TESTNET_FUND_SCOPE:'ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
+   T1C_INTENT_DB_URL:base.T1C_INTENT_DB_URL.replace(
+    'mf_t1c_intent_runtime','mf_t1d_fund_runtime')
+  };
+  const fundingCfg=validateConfig(t1d);
+  assert.equal(fundingCfg.funding,true);
+  assert.equal(fundingCfg.expectedIntentRole,'mf_t1d_fund_runtime');
+  reject({
+   ...t1d,T1C_INTENT_DB_URL:base.T1C_INTENT_DB_URL
+  },/WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT/);
+  reject({
+   ...t1d,T1C_TESTNET_FUND_SCOPE:'UNLIMITED'
+  },/TESTNET_SINGLE_FUND_POLICY_REQUIRED/);
  }finally{
   if(oldActions===undefined)delete process.env.GITHUB_ACTIONS;else process.env.GITHUB_ACTIONS=oldActions;
   if(oldLabel===undefined)delete process.env.MF_T1C_DISPOSABLE_ONLY;else process.env.MF_T1C_DISPOSABLE_ONLY=oldLabel;
