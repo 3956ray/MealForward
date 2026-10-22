@@ -33,8 +33,9 @@ export function validateT1DAdminDsn(raw){
   'T1D_ONLY_APPROVED_SUPABASE_SESSION_POOLER');
  safe(u.username==='postgres.'+PROJECT,
   'T1D_ORIGINAL_SUPABASE_ADMIN_ONLY');
- safe(u.password.length>0&&u.password!=='[YOUR-PASSWORD]'&&
-  !u.password.includes(' '),
+ safe(u.password.length>0&&
+  decodeURIComponent(u.password)!=='[YOUR-PASSWORD]'&&
+  !decodeURIComponent(u.password).includes(' '),
   'T1D_ADMIN_PASSWORD_REQUIRED');
  return {host:HOST,project:PROJECT};
 }
