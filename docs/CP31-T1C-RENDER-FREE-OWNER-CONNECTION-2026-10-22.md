@@ -58,3 +58,49 @@ If password activation succeeds but the terminal closes before copying both secr
 - Check both custom PostgreSQL LOGIN roles remain neither SUPERUSER nor BYPASSRLS and have zero cross-Schema rights.
 
 Handoff source: GitHub PR #32 (this branch).
+## 2026-10-22 — TLS_CA_UNVERIFIED diagnosed and safely corrected
+
+The owner successfully unpacked the V2 operator helper on macOS Node 24.21.0 and ran the read-only private database diagnostic. It returned `T1C_DIAGNOSTIC_FAILED_CONNECT_TLS_TLS_CA_UNVERIFIED` before authentication and before any credential role change. Live Supabase SQL confirmed both service roles remain NOLOGIN and business tables remain empty.
+
+**Cause verified against current official Supabase docs:** Supavisor Session Pooler TLS is signed by Supabase's private 2021 CA, not a common public root. The original Node client had `ssl:{rejectUnauthorized:true,servername:HOST}` but did not add the Supabase root CA. This does not show the user's DB password is invalid. NEVER disable verification, skip hostname checks, set `NODE_TLS_REJECT_UNAUTHORIZED=0` or weaken sslmode.
+
+Official documentation: https://supabase.com/docs/guides/database/psql ; https://supabase.com/docs/guides/platform/ssl-enforcement . Download the exact project's public trust certificate from Supabase Dashboard > Database Settings > SSL Configuration > Download Certificate. Normally it is `prod-ca-2021.crt`.
+
+### Use existing Mac V2 diagnostic WITHOUT another ZIP
+
+Run commands locally on the owner's Mac; never paste outputted secrets here:
+
+```zsh
+cd ~/Downloads/MealForward-T1C-readonly-operator
+ls -lh "$HOME/Downloads/prod-ca-2021.crt"
+NODE_EXTRA_CA_CERTS="$HOME/Downloads/prod-ca-2021.crt" node -e 'const n=require("node:tls").getCACertificates("extra").length; console.log("CA certificates loaded:",n); if(n<1)process.exit(1)'
+```
+
+Then re-enter the DB password without shell-history leakage and run V2:
+
+```zsh
+read -s 'DB_PASSWORD?Supabase database password (hidden): '
+echo
+ENCODED=$(DB_PASSWORD="$DB_PASSWORD" node -e 'process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD).replace(/\*/g, "%2A"))')
+unset DB_PASSWORD
+export T1C_SUPABASE_ADMIN_DSN="postgresql://postgres.ketfrukrcuosrqynnsay:${ENCODED}@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres"
+unset ENCODED
+NODE_EXTRA_CA_CERTS="$HOME/Downloads/prod-ca-2021.crt" node operator-diagnose-readonly.mjs
+unset T1C_SUPABASE_ADMIN_DSN
+```
+
+`NODE_EXTRA_CA_CERTS` is read at Node PROCESS START and extends default certificate trust. The V2 script does not set an explicit `ssl.ca`, so this verified CA is used without modifying/re-downloading the V2 files. Only after three PASS diagnostics should the owner rerun password entry and invoke `NODE_EXTRA_CA_CERTS="..." node operator-activate-readonly.mjs`.
+
+### Render needs the same public CA trust anchor
+
+New `t1-intents/supabase-tls.mjs` requires the **dashboard-download Supabase CA**, base64-encoded without newlines, under Render Environment variable `T1C_SUPABASE_CA_B64`. It validates PEM structure and certificate dates, keeps `rejectUnauthorized=true`, pins the verified pooler DNS hostname, and fails closed if missing/tampered. This file is PUBLIC TRUST data, not a password, but must only come from the project's official dashboard.
+
+On the owner's Mac:
+
+```zsh
+base64 < "$HOME/Downloads/prod-ca-2021.crt" | tr -d '\n' | pbcopy
+```
+
+Paste the clipboard contents into **NEW Render Free service** `srv-dbclmetg1s2s73dnl5h0` > Environment > new variable `T1C_SUPABASE_CA_B64` (not into Vercel/ChatGPT/GitHub). The other two Render environment variables remain private credentials pasted owner-only. Do not configure the CA from arbitrary blog/GitHub snippets or submit it as a user input to the website.
+
+The original Mac CP30, old Auth Pilot, existing Supabase unrelated projects and Testnet money remain untouched. There is still no enabled FundingQuote/Approve/Fund API.
