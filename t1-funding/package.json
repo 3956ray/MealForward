@@ -1,0 +1,17 @@
+{
+  "name": "mealforward-t1d-testnet-funding-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test quote-protocol.test.mjs",
+    "check": "node --check quote-protocol.mjs && node --check quote-protocol.test.mjs"
+  },
+  "dependencies": {
+    "ethers": "6.15.0",
+    "@metamask/eth-sig-util": "9.0.0"
+  }
+}
