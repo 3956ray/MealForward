@@ -18,6 +18,7 @@ import pg from 'pg';
 import {fileURLToPath} from 'node:url';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
+import {pgStoreT1D} from './auth/t1d-db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
@@ -30,6 +31,8 @@ const ALLOWED_PUBLIC=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
 const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
 const PROJECT='ketfrukrcuosrqynnsay';
 const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
+const FUND_ROLE_AUTH='mf_t1d_auth_runtime';
+const FUND_ORIGIN='https://mealforward-t1d-funding-laodao.onrender.com';
 const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
 // Never grant writes to the T1-C live SELECT-only principal. T1-D has its own
 // separately provisioned NOLOGIN-until-owner-activation database identity.
@@ -47,6 +50,8 @@ function validateConfig(env){
  strict(['READ_ONLY_NO_FUNDS','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
   'UNAPPROVED_FINANCIAL_MODE');
  const funding=requested==='TESTNET_SINGLE_SEVEN_USDC_FUND';
+ if(funding&&!testing)strict(env.PUBLIC_ORIGIN===FUND_ORIGIN&&
+  env.T1D_DEPLOYMENT_STAGE==='FUNDING','T1D_EXACT_ORIGIN_AND_STAGE_REQUIRED');
  if(funding){
   strict(env.T1C_FUNDING_ENABLED==='true' &&
    env.T1C_TESTNET_FUND_SCOPE==='ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
@@ -79,7 +84,7 @@ function validateConfig(env){
  strict(originAuth.username!==originIntent.username,
   'SAME_PG_ROLE_REJECTED');
  if(!testing){
-  strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
+  strict(originAuth.username===(funding?FUND_ROLE_AUTH:PROD_ROLE_AUTH)+'.'+PROJECT&&
    originIntent.username===(funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
    'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
   strict(originAuth.hostname===originIntent.hostname,
@@ -89,7 +94,8 @@ function validateConfig(env){
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
  return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
-  expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
+  expectedAuthRole:testing?(funding?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
+   (funding?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
   expectedIntentRole:testing?(funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
    (funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
@@ -137,7 +143,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
   bootStage='SCHEMA_CHECK';
   const [authSchema,intentSchema]=await Promise.all([
-   authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
+   authPool.query(cfg.funding?
+    'SELECT 1 FROM mf_t1d_auth.schema_version WHERE version=1':
+    'SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
    intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
   ]);
   strict(authSchema.rowCount===1&&intentSchema.rows[0]?.ready===true,
@@ -147,6 +155,10 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   bootStage='GRANT_CHECK';
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
+   ...(cfg.funding?[
+    mustBeDenied(authPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
+    mustBeDenied(intentPool,'SELECT * FROM mf_t1d_auth.sessions LIMIT 0')
+   ]:[]),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
    mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
    mustBeDenied(intentPool,'DELETE FROM mf_t1c.intents')
@@ -194,7 +206,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   }
   bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
-   sessionPool:authPool,intentPool,authStore:pgStore(authPool),
+   sessionPool:authPool,intentPool,
+   authStore:cfg.funding?pgStoreT1D(authPool):pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
    mode:cfg.funding?'testnet_fund':'read_only',rpc:readOnlyRpc
   });
