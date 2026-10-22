@@ -29,6 +29,16 @@ test('T1-D standalone setup refuses financial flags, secrets and unpinned origin
  fail({PORT:'0'},'T1D_INVALID_PORT');
 });
 
+test('identity-only mode requires exact no-funds scope and cannot auto-upgrade to FUNDING',()=>{
+ const identity={...base,T1D_DEPLOYMENT_STAGE:'SIWE_ONLY',
+  T1C_SERVER_MODE:'T1D_SIWE_READ_ONLY'};
+ assert.equal(validateT1DDeployment(identity).stage,'SIWE_ONLY');
+ const bad=over=>assert.throws(()=>validateT1DDeployment({...identity,...over}),
+  /T1D_SIWE_STAGE_CANNOT_FUND/);
+ bad({T1C_FUNDING_ENABLED:'true'});
+ bad({T1C_SERVER_MODE:'TESTNET_SINGLE_SEVEN_USDC_FUND'});
+ bad({T1C_TESTNET_FUND_SCOPE:'ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC'});
+});
 test('real setup-only HTTP refuses every signing, SIWE and payment path',async()=>{
  const s=net.createServer();
  await new Promise(resolve=>s.listen(0,'127.0.0.1',resolve));
