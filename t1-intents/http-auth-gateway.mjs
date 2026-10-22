@@ -96,6 +96,9 @@ export function makeT1CAuthenticatedGateway({
  ))throw Error('T1C_CI_MODE_FORBIDDEN');
 
  const fundMode=mode==='testnet_fund';
+ // Funding sessions use a physically separate T1-D schema. Previously
+ // disclosed T1-C credentials must NEVER be able to mint T1-D principals.
+ const sessionTable=fundMode?'mf_t1d_auth.sessions':'mf_cp31_auth_pilot.sessions';
  const trusted=new WeakMap();
  const ledger=createT1IntentLedger({
   pool:intentPool,now:clock,persistSignedQuotes:fundMode,resolveWallet:async secret=>{
@@ -126,7 +129,7 @@ export function makeT1CAuthenticatedGateway({
   const csrf=req.headers['x-c1-csrf'];
   if(isWrite&&!COOKIE.test(csrf||''))throw err(403,'CSRF_REQUIRED');
   const wallet=await sessionPool.query(
-   'SELECT wallet FROM mf_cp31_auth_pilot.sessions '+
+   'SELECT wallet FROM '+sessionTable+' '+
    'WHERE token_hash=$1 AND expires_at>$2 AND NOT revoked '+
    'AND ($3::boolean=false OR csrf_hash=$4)',
    [digest(token),clock(),isWrite,isWrite?digest(csrf):'']
