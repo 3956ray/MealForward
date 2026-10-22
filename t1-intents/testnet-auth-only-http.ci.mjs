@@ -3,13 +3,11 @@
  * Must run AFTER exact 006/007/008 migration CI (which creates CI roles).
  */
 import assert from 'node:assert/strict';
-import http from 'node:http';
+import net from 'node:net';
 import {randomUUID} from 'node:crypto';
 import {Wallet} from 'ethers';
 import pg from 'pg';
-import {pgStoreT1D} from './auth/t1d-db.mjs';
-import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
-import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+import {startT1ReadOnlyServer} from './read-only-server.mjs';
 
 assert.equal(process.env.GITHUB_ACTIONS,'true');
 assert.equal(process.env.MF_T1C_DISPOSABLE_ONLY,'ack-fresh-t1c-postgres17');
@@ -22,7 +20,7 @@ const connect=(user,password)=>new pg.Pool({
 });
 const auth=connect('mf_t1d_ci_auth','t1d-ci-new-auth-only');
 const fund=connect('mf_t1d_ci_fund_e2e','t1d-ci-new-fund-only');
-let server=null;
+let server=null,runtime=null;
 try{
  assert.equal((await auth.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_auth');
  assert.equal((await fund.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_fund_e2e');
@@ -42,14 +40,26 @@ try{
   ()=>fund.query('SELECT * FROM mf_t1d_auth.sessions LIMIT 0'),
   e=>e.code==='42501'
  );
- server=http.createServer();
- await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
- const origin='http://127.0.0.1:'+server.address().port;
- const handler=makeT1CAuthenticatedGateway({
-  sessionPool:auth,intentPool:fund,authStore:pgStoreT1D(auth),
-  siwe:{makeChallenge,verifyChallenge},origin,mode:'t1d_read_only'
- });
- server.on('request',handler);
+ const selector=net.createServer();
+ await new Promise(resolve=>selector.listen(0,'127.0.0.1',resolve));
+ const port=selector.address().port;
+ await new Promise(resolve=>selector.close(resolve));
+ const origin='http://127.0.0.1:'+port;
+ // Start the same actual cloud module used by Render, NOT only the gateway.
+ // This exercises exact role checks, signed Quote grants, new private schema,
+ // static T1-D landing page, and production-mode no-funds routing.
+ runtime=await startT1ReadOnlyServer({env:{
+  ...process.env,PORT:String(port),PUBLIC_ORIGIN:origin,
+  T1D_DEPLOYMENT_STAGE:'SIWE_ONLY',
+  T1C_SERVER_MODE:'T1D_SIWE_READ_ONLY',
+  T1C_FUNDING_ENABLED:'false',T1C_TESTNET_FUND_SCOPE:'DISABLED',
+  T1C_QUOTE_SIGNER_ENABLED:'false',
+  T1C_AUTH_DB_URL:'postgres://mf_t1d_ci_auth:t1d-ci-new-auth-only@127.0.0.1:5433/postgres',
+  T1C_INTENT_DB_URL:'postgres://mf_t1d_ci_fund_e2e:t1d-ci-new-fund-only@127.0.0.1:5433/postgres'
+ }});
+ server=runtime.server;
+ assert.equal(runtime.identityOnly,true);
+ assert.equal(runtime.fundingEnabled,false);
  async function req(path,{method='GET',body=null,cookie=null,csrf=null,extra={}}={}){
   const response=await fetch(origin+path,{
    method,cache:'no-store',redirect:'manual',
@@ -66,6 +76,13 @@ try{
    cookie:response.headers.get('set-cookie')?.split(';')[0]??null
   };
  }
+ const landing=await fetch(origin+'/',{cache:'no-store'});
+ assert.equal(landing.status,200);
+ const page=await landing.text();
+ assert.match(page,/T1-D 独立登录验收/);
+ assert.match(page,/data-expected-mode="T1D_ISOLATED_SIWE_READ_ONLY_GATE"/);
+ assert.equal((await fetch(origin+'/ui.mjs')).status,200);
+ assert.notEqual((await fetch(origin+'/fund-testnet.html')).status,200);
  const state=await req('/v1/t1/status');
  assert.equal(state.status,200);
  assert.equal(state.value.status,'READY_NO_FUNDS');
@@ -139,6 +156,7 @@ try{
   committedFundingIntents:0,transactionsBroadcast:0
  }));
 }finally{
- if(server)await new Promise(resolve=>server.close(resolve));
+ if(runtime)await runtime.close();
+ else if(server)await new Promise(resolve=>server.close(resolve));
  await Promise.allSettled([auth.end(),fund.end()]);
 }
