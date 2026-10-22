@@ -1,49 +1,35 @@
 /**
- * Load the Supabase-issued root CA (PUBLIC trust certificate) for the
- * OWNER-APPROVED Session Pooler. Never globally disable TLS validation.
+ * A PUBLIC TRUST ANCHOR, downloaded by the MealForward owner directly
+ * from the authorized Supabase project's Database Settings.
+ * No token, password, connection URL, signer, credential or private key.
  *
- * The CA certificate is downloaded from the exact project's official
- * Supabase Database Settings > SSL Configuration > Download Certificate
- * and placed in the Render service environment as base64 text.
- *
- * No DATABASE URL, password or private key is processed by this module.
+ * Strict TLS verification stays mandatory. This anchored certificate
+ * avoids fragile base64 string copying from terminal to Render.
  */
-import {X509Certificate} from 'node:crypto';
+import {createHash,X509Certificate} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 
 const HOST='aws-0-ap-southeast-2.pooler.supabase.com';
+const PEM_SHA256='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7';
+const CERT_FINGERPRINT='807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa';
+const ROOT_PATH=new URL('./trust/supabase-root-2021-ca.pem',import.meta.url);
 const stop=(ok,code)=>{if(!ok)throw Error(code)};
-
-export function verifiedSupabasePoolerTls({env=process.env,host=HOST}={}){
+export function verifiedSupabasePoolerTls({host=HOST,now=Date.now()}={}){
  stop(host===HOST,'T1_C_TLS_UNTRUSTED_HOST');
- const b64=env?.T1C_SUPABASE_CA_B64;
- stop(typeof b64==='string'&&b64.length>=200&&b64.length<=40000&&
-  /^[A-Za-z0-9+/]+={0,2}$/.test(b64),
-  'T1_C_SUPABASE_CA_B64_REQUIRED');
- const data=Buffer.from(b64,'base64');
- stop(data.length>=200&&data.length<=24000&&
-  data.toString('base64')===b64,
-  'T1_C_SUPABASE_CA_B64_INVALID');
- const text=data.toString('utf8');
- const certs=text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[];
- stop(certs.length>=1&&certs.length<=4&&
-  text.replace(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g,'').trim()==='',
-  'T1_C_SUPABASE_CA_PEM_INVALID');
- try{
-  const now=Date.now();
-  for(const p of certs){
-   const cert=new X509Certificate(p);
-   stop(Number.isFinite(new Date(cert.validFrom).getTime())&&
-    now>=new Date(cert.validFrom).getTime()&&
-    now<new Date(cert.validTo).getTime(),
-   'T1_C_SUPABASE_CA_EXPIRED_OR_NOT_YET_VALID');
-  }
- }catch(e){
-  if(/^T1_C_SUPABASE_CA_/.test(e?.message||''))throw e;
-  throw Error('T1_C_SUPABASE_CA_CERT_INVALID');
- }
+ const certText=readFileSync(ROOT_PATH,'utf8');
+ stop(createHash('sha256').update(certText).digest('hex')===PEM_SHA256,
+  'T1_C_SUPABASE_PINNED_CA_HASH_MISMATCH');
+ stop(/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----\s*$/.test(certText),
+  'T1_C_SUPABASE_PINNED_CA_FORMAT_INVALID');
+ const c=new X509Certificate(certText);
+ stop(c.fingerprint256.replace(/:/g,'').toLowerCase()===CERT_FINGERPRINT,
+  'T1_C_SUPABASE_PINNED_CA_FINGERPRINT_MISMATCH');
+ stop(Number.isFinite(now)&&now>=new Date(c.validFrom).getTime()&&
+  now<new Date(c.validTo).getTime(),'T1_C_SUPABASE_PINNED_CA_EXPIRED');
+ stop(c.subject.includes('CN=Supabase Root 2021 CA') &&
+  c.issuer.includes('CN=Supabase Root 2021 CA')&&c.ca===true,
+  'T1_C_SUPABASE_PINNED_CA_WRONG_SUBJECT');
  return Object.freeze({
-  ca:text,
-  rejectUnauthorized:true,
-  servername:HOST
+  ca:certText,servername:HOST,rejectUnauthorized:true
  });
 }
