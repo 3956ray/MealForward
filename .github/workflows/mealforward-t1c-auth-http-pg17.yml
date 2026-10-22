@@ -6,6 +6,9 @@ on:
       - codex/mealforward-t1c-supabase-render-readonly-20261022
       - codex/mealforward-t1d-real-test-usdc-funding-20261022
       - codex/mealforward-t1d-render-isolated-20261022
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
