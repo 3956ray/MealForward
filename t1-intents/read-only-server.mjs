@@ -30,7 +30,7 @@ const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
 // Only the project-approved Supabase IPv4 session pooler may hold the
 // real financial database identities. Never use a generic direct DB host,
 // user-supplied URL, transaction-mode pooler or old Render G0 database.
-const POOLER=/^aws-[0-9]+-ap-southeast-2\.pooler\.supabase\.com$/;
+const POOLER_HOST='aws-0-ap-southeast-2.pooler.supabase.com';
 
 function validateConfig(env){
  const testing=env.GITHUB_ACTIONS==='true'&&
@@ -59,7 +59,7 @@ function validateConfig(env){
    'DATABASE_DSN_NOT_REVIEWABLE');
   // Reject IPv6 direct, generic postgres user, URLs outside the newly
   // authorized Supabase project, and insecure pooler transaction port.
-  if(!testing)strict(POOLER.test(item.hostname)&&item.port==='5432',
+  if(!testing)strict(item.hostname===POOLER_HOST&&item.port==='5432',
    'ONLY_PINNED_SUPABASE_SESSION_POOLER');
  }
  strict(originAuth.username!==originIntent.username,
