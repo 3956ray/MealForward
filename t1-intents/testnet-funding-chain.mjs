@@ -28,6 +28,13 @@ export const erc20Read=new Interface([
  'function balanceOf(address) view returns (uint256)',
  'function allowance(address,address) view returns (uint256)'
 ]);
+// ethers Interface.decodeFunctionResult('catalog') returns a flat Result:
+// [unitPrice, termsHash]. The values are not nested tuples.
+export function assertPinnedCatalog(result){
+ strict(result?.length===2&&result[0]===PRICE&&same(result[1],TERMS),
+  'T1D_UNEXPECTED_MEAL_PRICE_OR_TERMS');
+ return {unitPrice:result[0],termsHash:result[1]};
+}
 function hashCode(raw){
  strict(typeof raw==='string'&&/^0x[0-9a-f]*$/i.test(raw)&&raw.length>100,
   'T0_ESCROW_RUNTIME_UNAVAILABLE');
@@ -66,8 +73,7 @@ export async function assertRealT0IsOpen({rpc,payer=null}={}){
  strict(values.listed[0]===true&&values.paused[0]===false&&values.closed[0]===false,
   'T1D_ESCROW_NOT_OPERATING');
  strict(values.lifetimeFundedUnits[0]<10n,'T1D_LIFETIME_CAP_EXHAUSTED');
- strict(values.catalog[0][0]===PRICE&&same(values.catalog[0][1],TERMS),
-  'T1D_UNEXPECTED_MEAL_PRICE_OR_TERMS');
+ assertPinnedCatalog(values.catalog);
  let assets=null;
  if(payer!==null){
   strict(same(payer,QUOTE),'T1D_ONLY_VERIFIED_QUOTE_WALLET_FOR_FIRST_TEST');
