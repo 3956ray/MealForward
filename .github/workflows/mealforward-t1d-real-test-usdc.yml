@@ -33,7 +33,7 @@ jobs:
         working-directory: t1-intents
         run: |
           node --input-type=module -e '
-            import {makeReadOnlyPublicRpc} from "../staging-monad/attest-live-t0.mjs";
+            import {makeReadOnlyPublicRpc} from "./testnet-readonly-rpc.mjs";
             import {assertRealT0IsOpen} from "./testnet-funding-chain.mjs";
             import {QUOTE} from "./core.mjs";
             const x=await assertRealT0IsOpen({rpc:makeReadOnlyPublicRpc(),payer:QUOTE});
