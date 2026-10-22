@@ -1,0 +1,73 @@
+name: MealForward T1-D exact real Testnet FundingQuote V4 protocol (source only)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-real-testnet-funding-protocol-20261022
+permissions:
+  contents: read
+jobs:
+  exact-testnet-quote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install original T1-C ledger source dependencies
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install pinned actual MetaMask EIP712 V4 implementation
+        working-directory: t1-funding
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify module syntax and immutable original EIP712 quote
+        working-directory: t1-funding
+        run: npm run check
+      - name: Run actual MetaMask V4 digest, 7 Test USDC, donor role and transaction encoding regression
+        working-directory: t1-funding
+        run: npm test
+      - name: Assert source never broadcasts, signs with a server key or reads original CP30 wallet
+        run: |
+          if grep -E "eth_sendTransaction|eth_sendRawTransaction|sendRawTransaction|wallet_sendCalls|privateKeyToAccount" t1-funding/quote-protocol.mjs; then
+            echo "T1_D_SOURCE_MUST_NOT_BROADCAST"
+            exit 1
+          fi
+
+  append-only-quote-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
+      DATABASE_URL: postgres://postgres:t1d-disposable-only@127.0.0.1:5434/mf_t1d_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Provision brand new test-only Postgres 17.11 on loopback port 5434
+        run: |
+          docker run -d --rm --name mf-t1d-quote-pg17 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1d-disposable-only \
+            -e POSTGRES_DB=mf_t1d_ci \
+            -p 127.0.0.1:5434:5432 postgres:17.11
+          for i in $(seq 1 50); do
+            if docker exec mf-t1d-quote-pg17 pg_isready -U postgres -d mf_t1d_ci; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install original T1-C ethers dependency for shared quote constants
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install isolated node-postgres and test protocol dependencies
+        working-directory: t1-funding
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test frozen ORIGINAL quoteId and signed authorization append-only transitions on real PG17
+        working-directory: t1-funding
+        run: npm run test:pg
