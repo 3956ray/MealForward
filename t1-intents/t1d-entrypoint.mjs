@@ -11,6 +11,7 @@ import http from 'node:http';
 const ORIGIN='https://mealforward-t1d-funding-laodao.onrender.com';
 const SETUP='SETUP_ONLY_NO_FUNDS';
 const USER_WALLET='TESTNET_SINGLE_SEVEN_USDC_FUND';
+const AUTH_ONLY='T1D_SIWE_READ_ONLY';
 const fail=(pass,reason)=>{if(!pass)throw Error(reason)};
 export function validateT1DDeployment(env=process.env){
  fail(env.PUBLIC_ORIGIN===ORIGIN||
@@ -20,7 +21,7 @@ export function validateT1DDeployment(env=process.env){
  const port=Number(env.PORT);
  fail(Number.isSafeInteger(port)&&port>=1&&port<=65535,
   'T1D_INVALID_PORT');
- fail(env.T1D_DEPLOYMENT_STAGE==='SETUP_ONLY'||env.T1D_DEPLOYMENT_STAGE==='FUNDING',
+ fail(['SETUP_ONLY','SIWE_ONLY','FUNDING'].includes(env.T1D_DEPLOYMENT_STAGE),
   'T1D_UNKNOWN_STAGE');
  fail(env.T1C_QUOTE_SIGNER_ENABLED!=='true','T1D_NO_PLATFORM_QUOTE_SIGNER');
  if(env.T1D_DEPLOYMENT_STAGE==='SETUP_ONLY'){
@@ -30,6 +31,11 @@ export function validateT1DDeployment(env=process.env){
   for(const name of ['T1C_AUTH_DB_URL','T1C_INTENT_DB_URL','T1C_SUPABASE_ADMIN_DSN']){
    fail(!env[name],'T1D_SETUP_SECRETS_FORBIDDEN');
   }
+ }else if(env.T1D_DEPLOYMENT_STAGE==='SIWE_ONLY'){
+  fail(env.T1C_SERVER_MODE===AUTH_ONLY&&
+   env.T1C_FUNDING_ENABLED==='false'&&
+   env.T1C_TESTNET_FUND_SCOPE==='DISABLED',
+   'T1D_SIWE_STAGE_CANNOT_FUND');
  }else{
   fail(env.T1C_SERVER_MODE===USER_WALLET&&
    env.T1C_FUNDING_ENABLED==='true'&&
@@ -47,12 +53,12 @@ const headers=Object.freeze({
 });
 export async function startT1DEntrypoint({env=process.env}={}){
  const cfg=validateT1DDeployment(env);
- if(cfg.stage==='FUNDING'){
-  // Do not bind any listener until real PG roles, TLS, original T0 chain
-  // and append-only quote stores pass all their existing startup gates.
+ if(cfg.stage!=='SETUP_ONLY'){
+  // Do not bind any listener until real PG roles, TLS and original chain
+  // (for FUNDING only) all pass their mandatory fail-closed gates.
   const {startT1ReadOnlyServer}=await import('./read-only-server.mjs');
   const real=await startT1ReadOnlyServer({env});
-  return {...real,setupOnly:false};
+  return {...real,setupOnly:false,identityOnly:cfg.stage==='SIWE_ONLY'};
  }
  const host=new URL(cfg.origin).host;
  const html='<!doctype html><html lang="zh"><meta charset="utf-8">'+
@@ -104,7 +110,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const running=await startT1DEntrypoint();
   process.stdout.write(JSON.stringify({
-   status:running.setupOnly?'T1D_SAFE_SETUP_ONLY_READY':'T1D_FUNDING_WALLET_SERVICE_READY',
+   status:running.setupOnly?'T1D_SAFE_SETUP_ONLY_READY':
+    running.identityOnly?'T1D_SIWE_READ_ONLY_READY':'T1D_FUNDING_WALLET_SERVICE_READY',
    fundingEnabled:running.fundingEnabled,origin:running.origin
   })+'\n');
   let stopping=false;
