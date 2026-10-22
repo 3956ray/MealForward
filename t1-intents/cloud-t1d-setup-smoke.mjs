@@ -14,7 +14,7 @@ export async function verifyT1DCloudSetup({
  check(typeof fetchImpl==='function','T1D_SETUP_FETCH_REQUIRED');
  let calls=0;
  async function request(path,method='GET'){
-  check(/^\/(?:[a-z0-9/_-]+)?$/.test(path),
+  check(path==='/fund-testnet.html'||/^\/(?:[a-z0-9/_-]+)?$/.test(path),
    'T1D_SETUP_UNKNOWN_TEST_PATH');
   check(['GET','HEAD','POST'].includes(method),'T1D_SETUP_HTTP_METHOD_DENIED');
   const res=await fetchImpl(origin+path,{
