@@ -8,8 +8,7 @@ CREATE TABLE mf_t1c.quote_authorizations(
  intent_id uuid PRIMARY KEY REFERENCES mf_t1c.intents(intent_id) ON DELETE RESTRICT,
  quote_id text NOT NULL UNIQUE CHECK (quote_id ~ '^0x[0-9a-f]{64}$'),
  signed_authority text NOT NULL
-  CHECK (signed_authority='0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952'
-   OR current_setting('mf_t1d.synthetic_ci',true)='single-disposable-synthetic-authority'),
+  CHECK (signed_authority='0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952'),
  quote_digest text NOT NULL CHECK (quote_digest ~ '^0x[0-9a-f]{64}$'),
  signature text NOT NULL CHECK (signature ~ '^0x[0-9a-f]{130}$'),
  signature_fingerprint text NOT NULL CHECK (signature_fingerprint ~ '^0x[0-9a-f]{64}$'),
