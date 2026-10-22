@@ -13,16 +13,25 @@
  * No funding, no wallet broadcaster, no Quote signer, no historical Journal.
  */
 import http from 'node:http';
+import {readFile} from 'node:fs/promises';
 import pg from 'pg';
 import {fileURLToPath} from 'node:url';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 
 const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
 const PRIVILEGE_DENIAL='42501';
 const ALLOWED_PUBLIC=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
 const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
+const PROJECT='ketfrukrcuosrqynnsay';
+const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
+const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
+// Only the project-approved Supabase IPv4 session pooler may hold the
+// real financial database identities. Never use a generic direct DB host,
+// user-supplied URL, transaction-mode pooler or old Render G0 database.
+const POOLER_HOST='aws-0-ap-southeast-2.pooler.supabase.com';
 
 function validateConfig(env){
  const testing=env.GITHUB_ACTIONS==='true'&&
@@ -45,15 +54,30 @@ function validateConfig(env){
  const originIntent=new URL(env.T1C_INTENT_DB_URL);
  for(const item of [originAuth,originIntent]){
   strict(['postgres:','postgresql:'].includes(item.protocol)&&
-   item.username&&item.password&&item.hostname&&item.pathname!=='/',
+   item.username&&item.password&&item.hostname&&
+   item.pathname===(testing?'/mf_t1c_http_ci':'/postgres')&&
+   !item.hash&&!item.search,
    'DATABASE_DSN_NOT_REVIEWABLE');
+  // Reject IPv6 direct, generic postgres user, URLs outside the newly
+  // authorized Supabase project, and insecure pooler transaction port.
+  if(!testing)strict(item.hostname===POOLER_HOST&&item.port==='5432',
+   'ONLY_PINNED_SUPABASE_SESSION_POOLER');
  }
  strict(originAuth.username!==originIntent.username,
   'SAME_PG_ROLE_REJECTED');
+ if(!testing){
+  strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
+   originIntent.username===PROD_ROLE_INTENT+'.'+PROJECT,
+   'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
+  strict(originAuth.hostname===originIntent.hostname,
+   'CROSS_PROJECT_POOLER_HOST_MISMATCH');
+ }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
  return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
-  intentUrl:env.T1C_INTENT_DB_URL};
+  intentUrl:env.T1C_INTENT_DB_URL,
+  expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
+  expectedIntentRole:testing?'mf_t1c_ci_intent_ro':PROD_ROLE_INTENT};
 }
 async function roleAudit(pool){
  const query=await pool.query(
@@ -78,18 +102,26 @@ async function mustBeDenied(pool,query){
 
 export async function startT1ReadOnlyServer({env=process.env}={}){
  const cfg=validateConfig(env);
+ const tls=cfg.testing?null:verifiedSupabasePoolerTls({host:new URL(cfg.authUrl).hostname});
  const opts=url=>({
-  connectionString:url,max:8,connectionTimeoutMillis:5000,
+  connectionString:url,
+  ...(cfg.testing?{}:{ssl:tls}),
+  max:cfg.testing?8:2,
+  connectionTimeoutMillis:8000,
   idleTimeoutMillis:20000
  });
  const authPool=new pg.Pool(opts(cfg.authUrl));
  const intentPool=new pg.Pool(opts(cfg.intentUrl));
  let server=null;
+ let bootStage='ROLE_CHECK';
  try{
   const [authRole,intentRole]=await Promise.all([
    roleAudit(authPool),roleAudit(intentPool)
   ]);
+  strict(authRole===cfg.expectedAuthRole&&intentRole===cfg.expectedIntentRole,
+   'UNREVIEWED_DATABASE_LOGIN_ROLE');
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
+  bootStage='SCHEMA_CHECK';
   const [authSchema,intentSchema]=await Promise.all([
    authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
    intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
@@ -98,17 +130,55 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    'T1_C_SCHEMA_NOT_READY');
   // These negative proofs are mandatory on every process restart. A
   // shared superuser connection would fail before any HTTP handler listens.
+  bootStage='GRANT_CHECK';
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
-   mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events')
+   mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
+   mustBeDenied(intentPool,'INSERT INTO mf_t1c.intents DEFAULT VALUES'),
+   mustBeDenied(intentPool,'UPDATE mf_t1c.intents SET quantity=quantity WHERE false')
   ]);
+  bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,authStore:pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
    mode:'read_only'
   });
-  server=http.createServer((req,res)=>handler(req,res));
+  // Public UI is a fixed allowlist of THREE immutable local files; no
+  // arbitrary filesystem path, storage directory, SSR or API secrets.
+  bootStage='ASSET_LOAD';
+  const staticFiles=new Map(await Promise.all([
+   ['/', 'index.html','text/html; charset=utf-8'],
+   ['/ui.css','ui.css','text/css; charset=utf-8'],
+   ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
+  ].map(async([path,filename,type])=>[
+    path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
+  ])));
+  server=http.createServer((req,res)=>{
+   const u=new URL(req.url||'/',cfg.origin);
+   const item=staticFiles.get(u.pathname);
+   if(item&&req.method==='GET'){
+    if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
+     (req.headers.origin&&req.headers.origin!==cfg.origin)||
+     (req.headers['sec-fetch-site']&&
+       !['same-origin','none'].includes(req.headers['sec-fetch-site']))){
+     res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
+    }
+    res.writeHead(200,{
+     'Content-Type':item.type,
+     'Content-Length':item.bytes.length,
+     'Cache-Control':'no-store',
+     'X-Content-Type-Options':'nosniff',
+     'Referrer-Policy':'no-referrer',
+     'X-Frame-Options':'DENY',
+     'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; script-src 'self'; style-src 'self'"
+    });
+    res.end(item.bytes);
+    return;
+   }
+   return handler(req,res);
+  });
+  bootStage='HTTP_LISTEN';
   await new Promise((resolve,reject)=>{
    server.once('error',reject);
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
@@ -123,8 +193,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
  }catch{
   if(server?.listening)await new Promise(resolve=>server.close(resolve));
   await Promise.allSettled([authPool.end(),intentPool.end()]);
-  // No DSNs, query text or stack can leak into startup logs.
-  throw Error('T1_C_READONLY_BOOT_FAIL_CLOSED');
+  // Only a fixed stage label is observable; never reveal credentials,
+  // database names, SQL text, stack or wallet sessions in logs.
+  throw Error('T1_C_READONLY_BOOT_FAIL_CLOSED_'+bootStage);
  }
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
@@ -144,8 +215,15 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   };
   process.on('SIGTERM',stop);
   process.on('SIGINT',stop);
- }catch{
-  process.stderr.write('T1_C_READONLY_BOOT_FAIL_CLOSED\n');
+ }catch(e){
+  // Explicit static error allowlist: reveal neither DSN credentials, SQL,
+  // raw server exceptions nor the certificate contents in startup logs.
+  const codes=new Set(["FINANCIAL_WRITE_MODE_FORBIDDEN","T1C_WALLET_WRITE_FLAG_FORBIDDEN","ORIGIN_MUST_BE_EXACT_PINNED_HTTPS","TWO_DISTINCT_DATABASE_PRINCIPALS_REQUIRED","DATABASE_DSN_NOT_REVIEWABLE","ONLY_PINNED_SUPABASE_SESSION_POOLER","SAME_PG_ROLE_REJECTED","WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT","CROSS_PROJECT_POOLER_HOST_MISMATCH","HTTP_PORT_REQUIRED","T1_C_TLS_UNTRUSTED_HOST","T1_C_SUPABASE_CA_B64_REQUIRED","T1_C_SUPABASE_CA_B64_INVALID","T1_C_SUPABASE_CA_PEM_INVALID","T1_C_SUPABASE_CA_EXPIRED_OR_NOT_YET_VALID","T1_C_SUPABASE_CA_CERT_INVALID"]);
+  const message=typeof e?.message==='string'?e.message:'';
+  const safe=codes.has(message)?'T1_C_CONFIG_'+message:
+   /^T1_C_READONLY_BOOT_FAIL_CLOSED_[A-Z_]{3,40}$/.test(message)?
+   message:'T1_C_READONLY_BOOT_FAIL_CLOSED';
+  process.stderr.write(safe+'\n');
   process.exitCode=1;
  }
 }

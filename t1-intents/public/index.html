@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <meta name="description" content="MealForward 留膳 T1-C 独立测试网钱包登录和只读资金意图验收">
+ <title>留膳 · T1-C 只读钱包验收</title>
+ <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+<header class="mast"><div class="wrap">
+ <p class="eyebrow">MEALFORWARD · MONAD TESTNET · T1-C</p>
+ <div class="head-grid">
+  <div><h1>一膳留予人。<br><span>先让每一步可信。</span></h1>
+   <p class="intro">真正的 SIWE 钱包身份，独立 Supabase PostgreSQL，私有资助 Intent 只读验收。已经确认的 T0 合约继续保留，资金写入尚未开放。</p>
+  </div>
+  <div class="symbol" aria-hidden="true"><span>留</span><small>留一膳，待一人</small></div>
+ </div>
+ <nav><a href="https://mealforward-t1-quote-proof-fix.onrender.com/t1-readiness.html" target="_blank" rel="noopener noreferrer">← T1-B 已完成的 Quote 权限验证</a></nav>
+</div></header>
+<main class="wrap">
+ <aside class="safety" role="note">
+  <strong><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 2l8 4v5c0 5-3.4 9-8 11-4.6-2-8-6-8-11V6l8-4Z"/><path d="m9 12 2 2 4-4"/></svg> 仅登录与读取</strong>
+  <p>此页面不会请求 ERC-20 Approve、Fund、Issuer/Operator 签名或 Settle。钱包只会在你主动点击后签署用于登录的普通 SIWE 消息，不包含任何资金授权。请勿提供助记词、私钥或历史 CP30 数据。</p>
+ </aside>
+ <section class="metrics" aria-label="当前环境固定信息">
+  <div><small>网络</small><strong>Monad Testnet</strong><code>Chain 10143</code></div>
+  <div><small>固定 T0 Escrow</small><strong>StoreEscrow</strong><code>0xcF0C…afE58</code></div>
+  <div><small>餐品</small><strong>暖心盖饭</strong><code>7 Test USDC / 份</code></div>
+  <div><small>交易操作</small><strong class="disabled">永久关闭（本页）</strong><code>READ_ONLY_NO_FUNDS</code></div>
+ </section>
+ <div class="stack">
+ <section class="panel">
+  <div class="section-title"><span>01</span><div><h2>连接钱包</h2><p>选择用于验收的独立测试钱包。不同钱包的私有 Intent 不应相互可见。</p></div></div>
+  <div class="actions"><button id="connect" type="button">连接 MetaMask</button><button id="check" class="quiet" type="button">检查服务状态</button></div>
+  <div class="readout" id="wallet" role="status" aria-live="polite">尚未连接钱包。</div>
+  <div class="status" id="service">服务状态待检查。</div>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>02</span><div><h2>SIWE 安全登录</h2><p>服务端生成一次性挑战，MetaMask 显示登录消息。Session 只保存在本站 HttpOnly Cookie 中，不复用原 CP30。</p></div></div>
+  <div class="actions"><button id="login" type="button" disabled>本人签署 SIWE 登录</button><button id="me" class="quiet" type="button">读取当前登录身份</button><button id="logout" class="quiet" type="button" disabled>注销本次登录</button></div>
+  <div class="readout" id="identity">未登录。</div>
+  <p class="subtle">登录只证明本次测试网钱包持有权，不构成真实领取者、餐馆老板或资金付款人的业务资格证明。</p>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>03</span><div><h2>读取我的资助 Intent</h2><p>本次查询完全由后端 Session 确定钱包，不允许前端指定要读取的其他账户。</p></div></div>
+  <div class="actions"><button id="my" type="button" disabled>只读查询 My Intents</button></div>
+  <div class="readout" id="results">尚未查询。</div>
+  <p class="subtle">新数据库中的真实用户记录预计为空。空列表是正确结果，绝不会把合成订单显示为真实已付款记录。</p>
+ </section>
+ </div>
+ <section class="footnote">
+  <div><h3>当前尚未开放</h3><p>Quote Authority 的真实 FundingQuote 签发、独立付款钱包、资助 Intent 预留、Approve、Fund、Issued、Locked 与 Settled。原合约也尚未链上强制 180 秒结算延迟。</p></div>
+  <div><p>原 Mac CP30 历史账本、PREPARED #3560、原 7 USDC 测试资金与 Render G0 Auth Pilot 均未接入本服务。</p></div>
+ </section>
+</main>
+<footer class="wrap"><span>留一膳，待一人，是为善。</span><span>MealForward · 留膳 · 安全试验环境</span></footer>
+<script type="module" src="/ui.mjs"></script>
+</body></html>

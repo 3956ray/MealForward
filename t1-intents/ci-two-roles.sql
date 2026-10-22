@@ -6,13 +6,16 @@ CREATE ROLE mf_t1c_ci_auth LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE N
  PASSWORD 't1c-ci-auth-only-local';
 CREATE ROLE mf_t1c_ci_intent LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
  PASSWORD 't1c-ci-intent-only-local';
+CREATE ROLE mf_t1c_ci_intent_ro LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
+ PASSWORD 't1c-ci-intent-ro-only-local';
 
-GRANT CONNECT ON DATABASE mf_t1c_http_ci TO mf_t1c_ci_auth,mf_t1c_ci_intent;
+GRANT CONNECT ON DATABASE mf_t1c_http_ci TO mf_t1c_ci_auth,mf_t1c_ci_intent,mf_t1c_ci_intent_ro;
 
 GRANT USAGE ON SCHEMA mf_cp31_auth_pilot TO mf_t1c_ci_auth;
 GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA mf_cp31_auth_pilot TO mf_t1c_ci_auth;
 
-GRANT USAGE ON SCHEMA mf_t1c TO mf_t1c_ci_intent;
+GRANT USAGE ON SCHEMA mf_t1c TO mf_t1c_ci_intent,mf_t1c_ci_intent_ro;
+GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_ci_intent_ro;
 GRANT SELECT,INSERT,UPDATE ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_ci_intent;
 GRANT SELECT,INSERT ON mf_t1c.audit_events TO mf_t1c_ci_intent;
 GRANT USAGE,SELECT ON SEQUENCE mf_t1c.audit_events_event_id_seq TO mf_t1c_ci_intent;
