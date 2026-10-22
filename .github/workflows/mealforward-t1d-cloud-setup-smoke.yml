@@ -1,4 +1,4 @@
-name: MealForward T1-D real Render SETUP_ONLY 14-route public HTTPS gate
+name: MealForward T1-D real Render SIWE_ONLY no-funds public HTTPS gate
 on:
   push:
     branches:
@@ -20,5 +20,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Live isolated Render HTTPS must refuse all funding and private login
-        run: node t1-intents/cloud-t1d-setup-smoke.mjs
+      - name: Live isolated Render SIWE must keep unauthenticated private data and all funds denied
+        run: node t1-intents/cloud-t1d-siwe-smoke.mjs
