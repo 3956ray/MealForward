@@ -6,6 +6,7 @@
  * The immutable Render hostname is the only allowed remote target.
  * Stop BEFORE financial POST checks if funding appears enabled.
  */
+import https from 'node:https';
 const PINNED='https://mealforward-t1d-funding-laodao.onrender.com';
 const fail=(ok,reason)=>{if(!ok)throw Error(reason)};
 export async function attestPublicSiweOnly({origin=PINNED,fetcher=fetch}={}){
@@ -53,6 +54,41 @@ export async function attestPublicSiweOnly({origin=PINNED,fetcher=fetch}={}){
   html.body.includes('data-expected-mode="T1D_ISOLATED_SIWE_READ_ONLY_GATE"')&&
   (html.headers.get('content-security-policy')||'').includes("default-src 'none'"),
  'T1D_SIWE_WRONG_LANDING_PAGE');
+ // Render is already warm after the status+HTML probes above. Send
+ // actual Chromium-style cross-site navigation metadata over strict HTTPS:
+ // the ChatGPT link MUST navigate, but foreign iframe/script/API must not.
+ const rawGet=(path,headers)=>new Promise((resolve,reject)=>{
+  const req=https.request(origin+path,{
+   method:'GET',headers,
+   rejectUnauthorized:true,servername:new URL(origin).hostname
+  },response=>{
+   response.resume();
+   response.on('end',()=>resolve({
+    code:response.statusCode,headers:response.headers
+   }));
+  });
+  req.setTimeout(20000,()=>req.destroy(Error('NAVIGATION_TIMEOUT')));
+  req.on('error',reject);req.end();
+ });
+ const externalHeaders={
+  'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate',
+  'Sec-Fetch-Dest':'document','Sec-Fetch-User':'?1'
+ };
+ const externalClick=await rawGet('/',externalHeaders);
+ fail(externalClick.code===200,'T1D_SIWE_EXTERNAL_LINK_NAVIGATION_403');
+ fail(externalClick.headers['x-frame-options']==='DENY'&&
+  externalClick.headers['content-security-policy']?.includes("frame-ancestors 'none'"),
+  'T1D_SIWE_EMBED_GUARD_MISSING');
+ for(const [path,headers] of [
+  ['/',{...externalHeaders,'Sec-Fetch-Dest':'iframe'}],
+  ['/',{...externalHeaders,'Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'}],
+  ['/ui.mjs',{...externalHeaders,'Sec-Fetch-Dest':'script'}],
+  ['/ui.css',{...externalHeaders,'Sec-Fetch-Dest':'style'}],
+  ['/',{...externalHeaders,Origin:'https://chatgpt.com'}]
+ ]){
+  const denied=await rawGet(path,headers);
+  fail(denied.code===403,'T1D_SIWE_EXTERNAL_SUBRESOURCE_ORIGIN_BYPASS');
+ }
  const javascript=await request('/ui.mjs');
  fail(javascript.code===200&&typeof javascript.body==='string'&&
   !javascript.body.includes('eth_sendTransaction')&&
