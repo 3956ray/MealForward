@@ -24,7 +24,8 @@ export function validateT1DDeployment(env=process.env){
   'T1D_UNKNOWN_STAGE');
  fail(env.T1C_QUOTE_SIGNER_ENABLED!=='true','T1D_NO_PLATFORM_QUOTE_SIGNER');
  if(env.T1D_DEPLOYMENT_STAGE==='SETUP_ONLY'){
-  fail(env.T1C_SERVER_MODE===SETUP&&env.T1C_FUNDING_ENABLED==='false',
+  fail(env.T1C_SERVER_MODE===SETUP&&env.T1C_FUNDING_ENABLED==='false'&&
+   env.T1C_TESTNET_FUND_SCOPE==='DISABLED',
    'T1D_SETUP_MUST_DISABLE_FUNDS');
   for(const name of ['T1C_AUTH_DB_URL','T1C_INTENT_DB_URL','T1C_SUPABASE_ADMIN_DSN']){
    fail(!env[name],'T1D_SETUP_SECRETS_FORBIDDEN');
