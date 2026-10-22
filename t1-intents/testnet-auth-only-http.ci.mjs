@@ -26,6 +26,14 @@ let server=null;
 try{
  assert.equal((await auth.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_auth');
  assert.equal((await fund.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_fund_e2e');
+ // Earlier disposable signed-quote recovery tests deliberately persisted
+ // fixtures into this same CI-only database. Snapshot them, then prove
+ // SIWE_ONLY cannot add/mutate any financial row.
+ const countsQuery=
+  'SELECT (SELECT count(*)::int FROM mf_t1c.intents) AS intents,'+
+  '(SELECT count(*)::int FROM mf_t1c.wallet_attempts) AS attempts,'+
+  '(SELECT count(*)::int FROM mf_t1c.quote_authorizations) AS signed';
+ const initialFinancialCounts=(await fund.query(countsQuery)).rows[0];
  await assert.rejects(
   ()=>auth.query('SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
   e=>e.code==='42501'
@@ -115,12 +123,9 @@ try{
  const recovery=await req('/v1/t1/fund/quote/'+randomUUID(),{cookie:a.cookie});
  assert.equal(recovery.status,405);
  assert.equal(recovery.value.error,'FUNDING_DISABLED');
- const c=await fund.query(
-  'SELECT (SELECT count(*)::int FROM mf_t1c.intents) AS intents,'+
-  '(SELECT count(*)::int FROM mf_t1c.wallet_attempts) AS attempts,'+
-  '(SELECT count(*)::int FROM mf_t1c.quote_authorizations) AS signed'
- );
- assert.deepEqual(c.rows[0],{intents:0,attempts:0,signed:0});
+ const c=await fund.query(countsQuery);
+ assert.deepEqual(c.rows[0],initialFinancialCounts,
+  'SIWE_ONLY must neither create nor modify existing financial data');
  const logout=await req('/v1/auth/logout',{
   method:'POST',cookie:a.cookie,csrf:a.csrf,body:{}
  });
