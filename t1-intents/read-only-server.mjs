@@ -22,6 +22,7 @@ import {pgStoreT1D} from './auth/t1d-db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
+import {allowStaticFetchSite} from './static-fetch-policy.mjs';
 import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
 import {QUOTE} from './core.mjs';
 
@@ -239,8 +240,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    if(item&&req.method==='GET'){
     if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
      (req.headers.origin&&req.headers.origin!==cfg.origin)||
-     (req.headers['sec-fetch-site']&&
-       !['same-origin','none'].includes(req.headers['sec-fetch-site']))){
+     !allowStaticFetchSite({path:u.pathname,method:req.method,headers:req.headers})){
      res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
     }
     res.writeHead(200,{
