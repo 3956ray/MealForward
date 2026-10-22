@@ -78,11 +78,13 @@ function validateConfig(env){
  for(const item of [originAuth,originIntent]){
   strict(['postgres:','postgresql:'].includes(item.protocol)&&
    item.username&&item.password&&item.hostname&&
-   item.pathname===(testing?'/mf_t1c_http_ci':'/postgres')&&
+   item.pathname===(testing?(t1d?'/postgres':'/mf_t1c_http_ci'):'/postgres')&&
    !item.hash&&!item.search,
    'DATABASE_DSN_NOT_REVIEWABLE');
   // Reject IPv6 direct, generic postgres user, URLs outside the newly
   // authorized Supabase project, and insecure pooler transaction port.
+  if(testing)strict(item.hostname==='127.0.0.1'&&item.port==='5433',
+   'CI_MUST_USE_EXACT_DISPOSABLE_PG17');
   if(!testing)strict(item.hostname===POOLER_HOST&&item.port==='5432',
    'ONLY_PINNED_SUPABASE_SESSION_POOLER');
  }
