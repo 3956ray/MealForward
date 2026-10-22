@@ -38,6 +38,7 @@ try{
 CREATE ROLE mf_t1c_intent_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
 CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE service_role NOLOGIN;
 GRANT USAGE ON SCHEMA mf_t1c TO mf_t1c_intent_runtime;
 GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_intent_runtime;`);
 
@@ -79,6 +80,28 @@ GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_intent_runtime;`
   'old_role_can_update','auth_can_read_funds'
  ])assert.equal(p[property],false,property);
 
+ // Execute the unchanged PR32-derived migration for append-only signature
+ // handoff against disposable PG17. It may not touch the T1-C roles.
+ const quoteMigration=await readFile(new URL('./supabase/007_testnet_quote_authorizations.sql',import.meta.url),'utf8');
+ await client.query(quoteMigration);
+ const q=await client.query(`SELECT
+  has_table_privilege('mf_t1d_fund_runtime','mf_t1c.quote_authorizations','SELECT') AS writer_read,
+  has_table_privilege('mf_t1d_fund_runtime','mf_t1c.quote_authorizations','INSERT') AS writer_insert,
+  has_table_privilege('mf_t1d_fund_runtime','mf_t1c.quote_authorizations','DELETE') AS writer_delete,
+  has_table_privilege('mf_t1c_intent_runtime','mf_t1c.quote_authorizations','SELECT') AS old_reader_read,
+  has_table_privilege('mf_t1c_auth_runtime','mf_t1c.quote_authorizations','SELECT') AS auth_read,
+  has_table_privilege('anon','mf_t1c.quote_authorizations','SELECT') AS anon_read,
+  (SELECT count(*) FROM mf_t1c.quote_authorizations) AS signed_quotes`);
+ assert.deepEqual(q.rows[0],{
+  writer_read:true,writer_insert:true,writer_delete:false,
+  old_reader_read:false,auth_read:false,anon_read:false,signed_quotes:'0'
+ });
+ console.log(JSON.stringify({
+  status:'T1D_EXACT_APPEND_ONLY_SIGNED_QUOTE_MIGRATION_PG17_PASS',
+  newFundingRoleHasOnlyReadInsert:true,
+  originalReadonlyRoleCannotReadQuote:true,
+  signedQuotes:0
+ }));
  console.log(JSON.stringify({
   status:'T1D_EXACT_NOLOGIN_WRITER_MIGRATION_DISPOSABLE_PG17_PASS',
   originalReadonlyPrincipalUntouched:true,
