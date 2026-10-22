@@ -216,8 +216,13 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   process.on('SIGTERM',stop);
   process.on('SIGINT',stop);
  }catch(e){
-  const safe=/^T1_C_READONLY_BOOT_FAIL_CLOSED_[A-Z_]{3,40}$/.test(e.message||'')?
-   e.message:'T1_C_READONLY_BOOT_FAIL_CLOSED';
+  // Explicit static error allowlist: reveal neither DSN credentials, SQL,
+  // raw server exceptions nor the certificate contents in startup logs.
+  const codes=new Set(["FINANCIAL_WRITE_MODE_FORBIDDEN","T1C_WALLET_WRITE_FLAG_FORBIDDEN","ORIGIN_MUST_BE_EXACT_PINNED_HTTPS","TWO_DISTINCT_DATABASE_PRINCIPALS_REQUIRED","DATABASE_DSN_NOT_REVIEWABLE","ONLY_PINNED_SUPABASE_SESSION_POOLER","SAME_PG_ROLE_REJECTED","WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT","CROSS_PROJECT_POOLER_HOST_MISMATCH","HTTP_PORT_REQUIRED","T1_C_TLS_UNTRUSTED_HOST","T1_C_SUPABASE_CA_B64_REQUIRED","T1_C_SUPABASE_CA_B64_INVALID","T1_C_SUPABASE_CA_PEM_INVALID","T1_C_SUPABASE_CA_EXPIRED_OR_NOT_YET_VALID","T1_C_SUPABASE_CA_CERT_INVALID"]);
+  const message=typeof e?.message==='string'?e.message:'';
+  const safe=codes.has(message)?'T1_C_CONFIG_'+message:
+   /^T1_C_READONLY_BOOT_FAIL_CLOSED_[A-Z_]{3,40}$/.test(message)?
+   message:'T1_C_READONLY_BOOT_FAIL_CLOSED';
   process.stderr.write(safe+'\n');
   process.exitCode=1;
  }
