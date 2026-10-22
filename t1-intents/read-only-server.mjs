@@ -168,6 +168,19 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   }else{
    strict(!anyDml,'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
   }
+  if(cfg.funding){
+   bootStage='SIGNED_QUOTE_STORE_GRANTS';
+   const signed=await intentPool.query(
+    "SELECT to_regclass('mf_t1c.quote_authorizations') IS NOT NULL AS ready,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','SELECT') AS can_read,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','INSERT') AS can_insert,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','DELETE') AS can_delete"
+   );
+   strict(signed.rowCount===1&&signed.rows[0]?.ready===true&&
+    signed.rows[0].can_read===true&&signed.rows[0].can_insert===true&&
+    signed.rows[0].can_delete===false,
+    'T1D_SIGNED_QUOTE_STORE_DENIED_OR_OVERPRIVILEGED');
+  }
   let readOnlyRpc=null;
   if(cfg.funding){
    bootStage='REAL_T0_PREFLIGHT';
