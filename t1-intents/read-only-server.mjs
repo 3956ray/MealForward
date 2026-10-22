@@ -31,6 +31,9 @@ const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
 const PROJECT='ketfrukrcuosrqynnsay';
 const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
 const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
+// Never grant writes to the T1-C live SELECT-only principal. T1-D has its own
+// separately provisioned NOLOGIN-until-owner-activation database identity.
+const PROD_ROLE_FUND='mf_t1d_fund_runtime';
 // Only the project-approved Supabase IPv4 session pooler may hold the
 // real financial database identities. Never use a generic direct DB host,
 // user-supplied URL, transaction-mode pooler or old Render G0 database.
@@ -77,7 +80,7 @@ function validateConfig(env){
   'SAME_PG_ROLE_REJECTED');
  if(!testing){
   strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
-   originIntent.username===PROD_ROLE_INTENT+'.'+PROJECT,
+   originIntent.username===(funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
    'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
   strict(originAuth.hostname===originIntent.hostname,
    'CROSS_PROJECT_POOLER_HOST_MISMATCH');
@@ -87,7 +90,8 @@ function validateConfig(env){
  return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
-  expectedIntentRole:testing?'mf_t1c_ci_intent_ro':PROD_ROLE_INTENT};
+  expectedIntentRole:testing?(funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
+   (funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
  const query=await pool.query(
