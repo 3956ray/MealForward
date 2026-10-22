@@ -48,3 +48,7 @@ jobs:
       - name: Real EIP-191 SIWE, CSRF, PG17 private wallet A/B HTTP integration
         working-directory: t1-intents
         run: npm run test:http
+      - name: Execute exact T1-D isolated NOLOGIN writer migration on fresh disposable PG17
+        if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022'
+        working-directory: t1-intents
+        run: node testnet-writer-migration.ci.mjs
