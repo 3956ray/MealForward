@@ -105,11 +105,19 @@ export function buildMetaMaskFundingQuoteV4(row,{now=Math.floor(Date.now()/1000)
   digest,expiry: q.deadline.toString(),quoteId:q.quoteId,
   payload:rpcPayload};
 }
-export function verifyOriginalFundingQuote(row,signature,{now=Math.floor(Date.now()/1000)}={}){
+export function verifyOriginalFundingQuote(row,signature,{
+ now=Math.floor(Date.now()/1000),authorityOverride=null
+}={}){
+ const authority=authorityOverride??QUOTE;
+ if(authorityOverride!==null){
+  fail(process.env.GITHUB_ACTIONS==='true'&&
+   process.env.MF_T1D_DISPOSABLE_ONLY==='ack-ephemeral-quote-key',
+   'T1D_PRODUCTION_QUOTE_AUTHORITY_IMMUTABLE');
+ }
  fail(typeof signature==='string'&&HEX130.test(signature),'T1D_BAD_QUOTE_SIGNATURE');
  const q=quoteFromFrozenIntent(row,{now});
  const actual=verifyTypedData(signatureDomain,quoteTypes,q,signature);
- fail(eq(actual,QUOTE),'T1D_QUOTE_SIGNER_NOT_ONCHAIN_AUTHORITY');
+ fail(eq(actual,authority),'T1D_QUOTE_SIGNER_NOT_ONCHAIN_AUTHORITY');
  const digest=TypedDataEncoder.hash(signatureDomain,quoteTypes,q);
  if(row.quote_digest!==undefined&&row.quote_digest!==null)
   fail(eq(row.quote_digest,digest),'T1D_ORIGINAL_QUOTE_DIGEST_CHANGED');
@@ -142,9 +150,11 @@ export function exactApproveTransaction(row,{nonce:txNonce,now=Math.floor(Date.n
   gas:null // gas estimate is wallet-owned; no invisible approval/signing
  });
 }
-export function exactFundTransaction(row,{signature,nonce:txNonce,now=Math.floor(Date.now()/1000)}={}){
+export function exactFundTransaction(row,{
+ signature,nonce:txNonce,now=Math.floor(Date.now()/1000),authorityOverride=null
+}={}){
  fail(row.stage==='APPROVED','T1D_ORIGINAL_APPROVAL_NOT_CONFIRMED');
- verifyOriginalFundingQuote(row,signature,{now});
+ verifyOriginalFundingQuote(row,signature,{now,authorityOverride});
  const q=quoteFromFrozenIntent(row,{now,stages:['APPROVED']});
  return Object.freeze({
   from:q.payer,
