@@ -31,7 +31,10 @@ export async function verifyReadOnlyCloud({origin=PINNED,fetchImpl=fetch,allowCi
     }:{})
    },
    ...(body===undefined?{}:{body:JSON.stringify(body)}),
-   signal:AbortSignal.timeout(15000)
+   // Render Free can cold-start before the first response. Give ONLY
+   // the initial fixed-host GET a longer readiness window; every subsequent
+   // request retains the strict 15-second limit and exact negative assertions.
+   signal:AbortSignal.timeout(calls===0?90000:15000)
   });
   calls++;
   assert(response?.headers&&typeof response.status==='number',
