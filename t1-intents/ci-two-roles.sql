@@ -22,4 +22,18 @@ GRANT USAGE,SELECT ON SEQUENCE mf_t1c.audit_events_event_id_seq TO mf_t1c_ci_int
 
 -- Neither role receives TRUNCATE, DELETE, ALTER, CREATE, DDL, superuser,
 -- auth-to-intent or intent-to-auth table privilege.
+-- T1-D keeps a third, independent writer identity for the disposable only.
+-- No read-only CI service is permitted to inherit these privileges.
+CREATE ROLE mf_t1d_ci_fund LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
+ PASSWORD 't1d-ci-fund-only-local';
+GRANT CONNECT ON DATABASE mf_t1c_http_ci TO mf_t1d_ci_fund;
+GRANT USAGE ON SCHEMA mf_t1c TO mf_t1d_ci_fund;
+GRANT SELECT,INSERT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1d_ci_fund;
+GRANT UPDATE(stage,revision,quote_digest,quote_signature_hash)
+ ON mf_t1c.intents TO mf_t1d_ci_fund;
+GRANT UPDATE(status,tx_hash,receipt_block,receipt_block_hash,receipt_status)
+ ON mf_t1c.wallet_attempts TO mf_t1d_ci_fund;
+GRANT SELECT,INSERT ON mf_t1c.audit_events TO mf_t1d_ci_fund;
+GRANT USAGE,SELECT ON SEQUENCE mf_t1c.audit_events_event_id_seq
+ TO mf_t1d_ci_fund;
 COMMIT;
