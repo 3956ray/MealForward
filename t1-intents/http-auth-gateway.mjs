@@ -11,7 +11,8 @@
  */
 import {createHash} from 'node:crypto';
 import {makePilotHandler} from './auth/core.mjs';
-import {createT1IntentLedger,CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE} from './core.mjs';
+import {createT1IntentLedger,CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE,escrowAbi,quoteTypes,signatureDomain} from './core.mjs';
+import {keccak256,verifyTypedData} from 'ethers';
 import {assertRealT0IsOpen,proveFundingQuoteDigest} from './testnet-funding-chain.mjs';
 
 const TOKEN_COOKIE='__Host-mcpay_c1_session';
@@ -200,6 +201,31 @@ export function makeT1CAuthenticatedGateway({
       session:identity,intentId:recordId,signature:body.signature
      });
      return respond(res,200,{...signed,testnetQuoteSignatureAccepted:true});
+    }
+    if(action==='build-call'){
+     if(!exactly(body,['intentId','signature']))
+      throw err(422,'EXACT_FUNDED_CALL_REQUEST_REQUIRED');
+     const pending=await ledger.fetchOriginal({session:identity,intentId:recordId});
+     if(pending.stage!=='APPROVED')throw err(409,'ORIGINAL_APPROVE_NOT_FINAL');
+     if(typeof body.signature!=='string'||!/^0x[0-9a-f]{130}$/i.test(body.signature)||
+      keccak256(body.signature).toLowerCase()!==pending.quoteSignatureFingerprint)
+      throw err(422,'ORIGINAL_QUOTE_SIGNATURE_NOT_MATCHED');
+     const q={
+      quoteId:pending.quoteId,payer:pending.payer,
+      mealId:MEAL,currentVersion:'1',termsHash:TERMS,
+      quantity:'1',unitPrice:PRICE.toString(),
+      amount:PRICE.toString(),deadline:pending.quoteDeadline
+     };
+     if(verifyTypedData(signatureDomain,quoteTypes,q,body.signature).toLowerCase()!==QUOTE)
+      throw err(422,'ORIGINAL_QUOTE_AUTHORITY_NOT_MATCHED');
+     const proof=await assertRealT0IsOpen({rpc,payer:identity.wallet});
+     if(proof.unitsFunded!=='0'||BigInt(proof.assets.allowance)<PRICE)
+      throw err(409,'APPROVAL_NOT_ONCHAIN_OR_FIRST_TEST_ALREADY_FINISHED');
+     return respond(res,200,{
+      to:ESCROW,value:'0x0',data:escrowAbi.encodeFunctionData('fund',[q,body.signature]),
+      quoteId:pending.quoteId,amount:PRICE.toString(),
+      testnetOnly:true,requiresWalletReservation:true
+     });
     }
     if(action==='reserve'){
      if(!exactly(body,['intentId','kind','transaction'])||
