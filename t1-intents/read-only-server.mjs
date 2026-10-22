@@ -47,11 +47,16 @@ function validateConfig(env){
   env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
   env.MF_T1C_HTTP_DISPOSABLE_ONLY==='ack-original-siwe-pg17';
  const requested=env.T1C_SERVER_MODE;
- strict(['READ_ONLY_NO_FUNDS','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
+ strict(['READ_ONLY_NO_FUNDS','T1D_SIWE_READ_ONLY','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
   'UNAPPROVED_FINANCIAL_MODE');
  const funding=requested==='TESTNET_SINGLE_SEVEN_USDC_FUND';
- if(funding&&!testing)strict(env.PUBLIC_ORIGIN===FUND_ORIGIN&&
-  env.T1D_DEPLOYMENT_STAGE==='FUNDING','T1D_EXACT_ORIGIN_AND_STAGE_REQUIRED');
+ const identityOnly=requested==='T1D_SIWE_READ_ONLY';
+ const t1d=funding||identityOnly;
+ if(t1d&&!testing)strict(env.PUBLIC_ORIGIN===FUND_ORIGIN&&
+  env.T1D_DEPLOYMENT_STAGE===(funding?'FUNDING':'SIWE_ONLY'),
+  'T1D_EXACT_ORIGIN_AND_STAGE_REQUIRED');
+ if(identityOnly)strict(env.T1C_TESTNET_FUND_SCOPE==='DISABLED',
+  'T1D_IDENTITY_ONLY_FUNDS_SCOPE_REJECTED');
  if(funding){
   strict(env.T1C_FUNDING_ENABLED==='true' &&
    env.T1C_TESTNET_FUND_SCOPE==='ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
@@ -84,20 +89,20 @@ function validateConfig(env){
  strict(originAuth.username!==originIntent.username,
   'SAME_PG_ROLE_REJECTED');
  if(!testing){
-  strict(originAuth.username===(funding?FUND_ROLE_AUTH:PROD_ROLE_AUTH)+'.'+PROJECT&&
-   originIntent.username===(funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
+  strict(originAuth.username===(t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH)+'.'+PROJECT&&
+   originIntent.username===(t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
    'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
   strict(originAuth.hostname===originIntent.hostname,
    'CROSS_PROJECT_POOLER_HOST_MISMATCH');
  }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
- return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
+ return {origin,port,testing,funding,identityOnly,t1d,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
-  expectedAuthRole:testing?(funding?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
-   (funding?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
-  expectedIntentRole:testing?(funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
-   (funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
+  expectedAuthRole:testing?(t1d?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
+   (t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
+  expectedIntentRole:testing?(t1d?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
+   (t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
  const query=await pool.query(
@@ -143,7 +148,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
   bootStage='SCHEMA_CHECK';
   const [authSchema,intentSchema]=await Promise.all([
-   authPool.query(cfg.funding?
+   authPool.query(cfg.t1d?
     'SELECT 1 FROM mf_t1d_auth.schema_version WHERE version=1':
     'SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
    intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
@@ -155,7 +160,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   bootStage='GRANT_CHECK';
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
-   ...(cfg.funding?[
+   ...(cfg.t1d?[
     mustBeDenied(authPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
     mustBeDenied(intentPool,'SELECT * FROM mf_t1d_auth.sessions LIMIT 0')
    ]:[]),
@@ -175,12 +180,12 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   const allDml=grant.insert_allowed&&grant.stage_update&&grant.revision_update&&
    grant.attempt_update&&grant.attempt_insert&&grant.audit_insert;
   const anyDml=Object.values(grant).some(Boolean);
-  if(cfg.funding){
+  if(cfg.t1d){
    strict(allDml,'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
   }else{
    strict(!anyDml,'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
   }
-  if(cfg.funding){
+  if(cfg.t1d){
    bootStage='SIGNED_QUOTE_STORE_GRANTS';
    const signed=await intentPool.query(
     "SELECT to_regclass('mf_t1c.quote_authorizations') IS NOT NULL AS ready,"+
@@ -207,9 +212,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,
-   authStore:cfg.funding?pgStoreT1D(authPool):pgStore(authPool),
+   authStore:cfg.t1d?pgStoreT1D(authPool):pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
-   mode:cfg.funding?'testnet_fund':'read_only',rpc:readOnlyRpc
+   mode:cfg.funding?'testnet_fund':cfg.identityOnly?'t1d_read_only':'read_only',rpc:readOnlyRpc
   });
   // Public UI is a fixed allowlist of THREE immutable local files; no
   // arbitrary filesystem path, storage directory, SSR or API secrets.
@@ -257,7 +262,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   });
   return {
    server,origin:cfg.origin,authRole,intentRole,
-   fundingEnabled:cfg.funding,testnetOnly:true,
+   fundingEnabled:cfg.funding,identityOnly:cfg.identityOnly,testnetOnly:true,
    async close(){
     await new Promise(resolve=>server.close(resolve));
     await Promise.all([authPool.end(),intentPool.end()]);
@@ -275,7 +280,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const runtime=await startT1ReadOnlyServer();
   process.stdout.write(JSON.stringify({
-   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
+   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':
+     runtime.identityOnly?'T1D_SIWE_READ_ONLY_PROCESS_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
    fundingEnabled:runtime.fundingEnabled,origin:runtime.origin,
    distinctDatabasePrincipals:true
   })+'\n');
