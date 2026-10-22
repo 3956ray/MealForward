@@ -11,10 +11,19 @@
  */
 import {createHash} from 'node:crypto';
 import {makePilotHandler} from './auth/core.mjs';
-import {createT1IntentLedger,CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE,escrowAbi,quoteTypes,signatureDomain} from './core.mjs';
-import {keccak256,verifyTypedData} from 'ethers';
+import {createT1IntentLedger,CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE} from './core.mjs';
 import {assertRealT0IsOpen,proveFundingQuoteDigest} from './testnet-funding-chain.mjs';
-import {verifyOriginalFundingQuote} from './quote-protocol.mjs';
+import {verifyOriginalFundingQuote,exactApproveTransaction,exactFundTransaction} from './quote-protocol.mjs';
+
+const frozenFundingRow=x=>({
+ intent_id:x.intentId,stage:x.stage,
+ chain_id:CHAIN,escrow:ESCROW,payer:x.payer,
+ quote_id:x.quoteId,meal_id:MEAL,terms_hash:TERMS,
+ version:1,quantity:x.quantity,unit_price:PRICE.toString(),
+ amount:x.amount,quote_deadline:x.quoteDeadline,
+ quote_digest:x.quoteDigest,
+ quote_signature_hash:x.quoteSignatureFingerprint
+});
 
 const TOKEN_COOKIE='__Host-mcpay_c1_session';
 const COOKIE=/^[a-zA-Z0-9_-]{43}$/;
@@ -212,40 +221,43 @@ export function makeT1CAuthenticatedGateway({
      await proveFundingQuoteDigest({rpc,quote:q});
      // An independently reviewed PR #32 protocol verifier rejects any
      // mismatched payer, terms, authority, amount or expired FundingQuote.
-     verifyOriginalFundingQuote({
-      intent_id:recordId,stage:pending.stage,
-      chain_id:CHAIN,escrow:ESCROW,meal_id:MEAL,terms_hash:TERMS,
-      version:1,quantity:pending.quantity,unit_price:PRICE.toString(),
-      amount:pending.amount,quote_id:pending.quoteId,payer:pending.payer,
-      quote_deadline:pending.quoteDeadline
-     },body.signature,{now:clock()});
+     verifyOriginalFundingQuote(
+      frozenFundingRow(pending),body.signature,{now:clock()}
+     );
      const signed=await ledger.bindQuote({
       session:identity,intentId:recordId,signature:body.signature
      });
      return respond(res,200,{...signed,testnetQuoteSignatureAccepted:true});
     }
+    if(action==='approve-call'){
+     if(!exactly(body,['intentId','nonce']))
+      throw err(422,'EXACT_APPROVE_CALL_REQUEST_REQUIRED');
+     const pending=await ledger.fetchOriginal({session:identity,intentId:recordId});
+     if(pending.stage!=='QUOTE_BOUND')throw err(409,'ORIGINAL_QUOTE_NOT_BOUND');
+     const tx=exactApproveTransaction(frozenFundingRow(pending),{
+      nonce:body.nonce,now:clock()
+     });
+     return respond(res,200,{
+      ...tx,amount:PRICE.toString(),testnetOnly:true,
+      requiresWalletReservation:true
+     });
+    }
     if(action==='build-call'){
-     if(!exactly(body,['intentId','signature']))
+     if(!exactly(body,['intentId','nonce']))
       throw err(422,'EXACT_FUNDED_CALL_REQUEST_REQUIRED');
      const pending=await ledger.fetchOriginal({session:identity,intentId:recordId});
      if(pending.stage!=='APPROVED')throw err(409,'ORIGINAL_APPROVE_NOT_FINAL');
-     if(typeof body.signature!=='string'||!/^0x[0-9a-f]{130}$/i.test(body.signature)||
-      keccak256(body.signature).toLowerCase()!==pending.quoteSignatureFingerprint)
-      throw err(422,'ORIGINAL_QUOTE_SIGNATURE_NOT_MATCHED');
-     const q={
-      quoteId:pending.quoteId,payer:pending.payer,
-      mealId:MEAL,currentVersion:'1',termsHash:TERMS,
-      quantity:'1',unitPrice:PRICE.toString(),
-      amount:PRICE.toString(),deadline:pending.quoteDeadline
-     };
-     if(verifyTypedData(signatureDomain,quoteTypes,q,body.signature).toLowerCase()!==QUOTE)
-      throw err(422,'ORIGINAL_QUOTE_AUTHORITY_NOT_MATCHED');
+     const saved=await ledger.recoverSignedQuote({
+      session:identity,intentId:recordId
+     });
+     const tx=exactFundTransaction(frozenFundingRow(pending),{
+      signature:saved.signature,nonce:body.nonce,now:clock()
+     });
      const proof=await assertRealT0IsOpen({rpc,payer:identity.wallet});
      if(proof.unitsFunded!=='0'||BigInt(proof.assets.allowance)<PRICE)
       throw err(409,'APPROVAL_NOT_ONCHAIN_OR_FIRST_TEST_ALREADY_FINISHED');
      return respond(res,200,{
-      to:ESCROW,value:'0x0',data:escrowAbi.encodeFunctionData('fund',[q,body.signature]),
-      quoteId:pending.quoteId,amount:PRICE.toString(),
+      ...tx,quoteId:pending.quoteId,amount:PRICE.toString(),
       testnetOnly:true,requiresWalletReservation:true
      });
     }
