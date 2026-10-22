@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Wallet,TypedDataEncoder,verifyTypedData} from 'ethers';
 import {TypedDataUtils,SignTypedDataVersion} from '@metamask/eth-sig-util';
 import {QUOTE,ESCROW,MEAL,TERMS,PRICE,signatureDomain,quoteTypes} from './core.mjs';
-import {assertRealT0IsOpen,proveFundingQuoteDigest,T0_RUNTIME_SHA256} from './testnet-funding-chain.mjs';
+import {assertRealT0IsOpen,proveFundingQuoteDigest,T0_RUNTIME_SHA256,escrowRead,assertPinnedCatalog} from './testnet-funding-chain.mjs';
 const fakeQuote=(payer)=>({
  quoteId:'0x'+'1'.repeat(64),payer,mealId:MEAL,currentVersion:'1',
  termsHash:TERMS,quantity:'1',unitPrice:PRICE.toString(),
@@ -14,6 +14,18 @@ const mmDomain=[
  {name:'name',type:'string'},{name:'version',type:'string'},
  {name:'chainId',type:'uint256'},{name:'verifyingContract',type:'address'}
 ];
+test('real contract catalog ABI decodes flat result and rejects wrong price or terms hash',()=>{
+ const decoded=(price,terms)=>escrowRead.decodeFunctionResult('catalog',
+  escrowRead.encodeFunctionResult('catalog',[price,terms]));
+ const pinned=assertPinnedCatalog(decoded(PRICE,TERMS));
+ assert.equal(pinned.unitPrice,PRICE);
+ assert.equal(pinned.termsHash.toLowerCase(),TERMS.toLowerCase());
+ assert.throws(()=>assertPinnedCatalog(decoded(PRICE+1n,TERMS)),
+  /T1D_UNEXPECTED_MEAL_PRICE_OR_TERMS/);
+ assert.throws(()=>assertPinnedCatalog(decoded(PRICE,'0x'+'f'.repeat(64))),
+  /T1D_UNEXPECTED_MEAL_PRICE_OR_TERMS/);
+});
+
 test('REAL FundingQuote EIP712 MetaMask V4 digest equals ethers original immutable StoreEscrow digest',()=>{
  const account=Wallet.createRandom();
  const original=fakeQuote(account.address);
