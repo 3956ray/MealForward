@@ -14,6 +14,7 @@ import {makePilotHandler} from './auth/core.mjs';
 import {createT1IntentLedger,CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE,escrowAbi,quoteTypes,signatureDomain} from './core.mjs';
 import {keccak256,verifyTypedData} from 'ethers';
 import {assertRealT0IsOpen,proveFundingQuoteDigest} from './testnet-funding-chain.mjs';
+import {verifyOriginalFundingQuote} from './quote-protocol.mjs';
 
 const TOKEN_COOKIE='__Host-mcpay_c1_session';
 const COOKIE=/^[a-zA-Z0-9_-]{43}$/;
@@ -88,7 +89,7 @@ export function makeT1CAuthenticatedGateway({
  const fundMode=mode==='testnet_fund';
  const trusted=new WeakMap();
  const ledger=createT1IntentLedger({
-  pool:intentPool,now:clock,resolveWallet:async secret=>{
+  pool:intentPool,now:clock,persistSignedQuotes:fundMode,resolveWallet:async secret=>{
    const identity=trusted.get(secret);
    if(!identity)throw Error('UNVERIFIED_T1_WALLET_PRINCIPAL');
    return {verified:true,source:'TESTNET_WALLET_AUTHORITY',address:identity.wallet};
@@ -157,6 +158,18 @@ export function makeT1CAuthenticatedGateway({
     if(proof.unitsFunded!=='0')throw err(409,'FIRST_TEST_FUND_ALREADY_COMPLETED');
     return respond(res,200,{...proof,allowedUnitsPerIntent:1,onlyUserClickedWalletActions:true});
    }
+   // Recover the original Authority signature ONLY for its authenticated
+   // payer. Never expose raw signatures in public status, DTOs or logs.
+   const signedMatch=fundMode&&req.method==='GET'?
+    /^\/v1\/t1\/fund\/quote\/([0-9a-f-]{36})$/.exec(path):null;
+   if(signedMatch){
+    const identity=await sessionPrincipal(req,false);
+    if(identity.wallet!==QUOTE)throw err(403,'TESTNET_FIRST_PAYER_NOT_QUOTE_AUTHORITY');
+    const signed=await ledger.recoverSignedQuote({
+     session:identity,intentId:signedMatch[1]
+    });
+    return respond(res,200,signed);
+   }
    if(fundMode&&path.startsWith('/v1/t1/fund/')&&req.method==='POST'){
     const identity=await sessionPrincipal(req,true);
     if(identity.wallet!==QUOTE)throw err(403,'TESTNET_FIRST_PAYER_NOT_QUOTE_AUTHORITY');
@@ -197,6 +210,15 @@ export function makeT1CAuthenticatedGateway({
       amount:PRICE.toString(),deadline:pending.quoteDeadline
      };
      await proveFundingQuoteDigest({rpc,quote:q});
+     // An independently reviewed PR #32 protocol verifier rejects any
+     // mismatched payer, terms, authority, amount or expired FundingQuote.
+     verifyOriginalFundingQuote({
+      intent_id:recordId,stage:pending.stage,
+      chain_id:CHAIN,escrow:ESCROW,meal_id:MEAL,terms_hash:TERMS,
+      version:1,quantity:pending.quantity,unit_price:PRICE.toString(),
+      amount:pending.amount,quote_id:pending.quoteId,payer:pending.payer,
+      quote_deadline:pending.quoteDeadline
+     },body.signature,{now:clock()});
      const signed=await ledger.bindQuote({
       session:identity,intentId:recordId,signature:body.signature
      });
