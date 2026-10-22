@@ -19,6 +19,7 @@ import {fileURLToPath} from 'node:url';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 
 const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
 const PRIVILEGE_DENIAL='42501';
@@ -101,11 +102,10 @@ async function mustBeDenied(pool,query){
 
 export async function startT1ReadOnlyServer({env=process.env}={}){
  const cfg=validateConfig(env);
+ const tls=cfg.testing?null:verifiedSupabasePoolerTls({env,host:new URL(cfg.authUrl).hostname});
  const opts=url=>({
   connectionString:url,
-  ...(cfg.testing?{}:{
-   ssl:{rejectUnauthorized:true,servername:new URL(url).hostname}
-  }),
+  ...(cfg.testing?{}:{ssl:tls}),
   max:cfg.testing?8:2,
   connectionTimeoutMillis:8000,
   idleTimeoutMillis:20000
