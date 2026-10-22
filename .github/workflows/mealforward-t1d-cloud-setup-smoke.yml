@@ -1,0 +1,21 @@
+name: MealForward T1-D real Render SETUP_ONLY 14-route public HTTPS gate
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-render-isolated-20261022
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  attested-public-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Live isolated Render HTTPS must refuse all funding and private login
+        run: node t1-intents/cloud-t1d-setup-smoke.mjs
