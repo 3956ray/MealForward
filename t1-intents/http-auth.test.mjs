@@ -336,9 +336,11 @@ test('Cloud Supabase origin must be exact approved project + named roles + sessi
   // First real funding must use its OWN runtime identity; never make the
   // live T1-C SELECT-only principal writable in place.
   const t1d={
-   ...base,T1C_SERVER_MODE:'TESTNET_SINGLE_SEVEN_USDC_FUND',
+   ...base,PUBLIC_ORIGIN:'https://mealforward-t1d-funding-laodao.onrender.com',
+   T1D_DEPLOYMENT_STAGE:'FUNDING',T1C_SERVER_MODE:'TESTNET_SINGLE_SEVEN_USDC_FUND',
    T1C_FUNDING_ENABLED:'true',
    T1C_TESTNET_FUND_SCOPE:'ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
+   T1C_AUTH_DB_URL:base.T1C_AUTH_DB_URL.replace('mf_t1c_auth_runtime','mf_t1d_auth_runtime'),
    T1C_INTENT_DB_URL:base.T1C_INTENT_DB_URL.replace(
     'mf_t1c_intent_runtime','mf_t1d_fund_runtime')
   };
