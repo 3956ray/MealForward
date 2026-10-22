@@ -28,6 +28,8 @@ jobs:
           node --check public/fund-testnet.mjs
       - name: Actual MetaMask V4 cryptographic quote parity, no keys, no wallet writes
         working-directory: t1-intents
+        env:
+          MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
         run: npm run test:fund
       - name: Independent public RPC actual original T0 chain read-only proof (NO wallet)
         working-directory: t1-intents
