@@ -233,9 +233,9 @@ async function nonceFor(){
  return Number(big);
 }
 const hex=x=>'0x'+BigInt(x).toString(16);
-async function sendOriginal(kind,data,target){
+async function sendOriginal(kind,data,target,nonce){
  await requireWallet();
- const nonce=await nonceFor();
+ if(!Number.isSafeInteger(nonce)||nonce<0)throw Error('EXACT_ORIGINAL_NONCE_REQUIRED');
  const transaction={from:account,to:target,nonce,value:'0',data};
  const decision=await post('reserve',{intentId:id,kind,transaction});
  if(decision.stage!==(kind==='approve'?'APPROVE_UNKNOWN':'FUND_UNKNOWN')||
@@ -269,13 +269,17 @@ async function sendOriginal(kind,data,target){
   state(surface,'节点尚未找到原始交易，稍后点击 Receipt 核对或手动恢复原 Hash：\n'+hashValue,false);
  }
 }
-const APPROVE_SELECTOR='0x095ea7b3';
-const pad=(x)=>x.toLowerCase().replace(/^0x/,'').padStart(64,'0');
 $('approve').addEventListener('click',guard(async()=>{
  await requireWallet();
  if(!csrf||!quoteAccepted||!id||approveHash)throw Error('ORIGINAL_APPROVE_STAGE_DENIED');
- const data=APPROVE_SELECTOR+pad(T0)+AMOUNT.toString(16).padStart(64,'0');
- await sendOriginal('approve',data,TOKEN);
+ const nonce=await nonceFor();
+ const call=await post('approve-call',{intentId:id,nonce});
+ if(!equals(call.from,account)||!equals(call.to,TOKEN)||
+  call.amount!==AMOUNT.toString()||call.value!=='0x0'||
+  call.chainId!==hex(CHAIN)||call.nonce!==hex(nonce)||
+  call.testnetOnly!==true||call.requiresWalletReservation!==true)
+  throw Error('ORIGINAL_EXACT_APPROVE_CALL_REQUIRED');
+ await sendOriginal('approve',call.data,TOKEN,nonce);
 }));
 async function reconcileKind(kind){
  await requireWallet();
@@ -318,12 +322,17 @@ $('confirmApprove').addEventListener('click',guard(async()=>{
 $('fund').addEventListener('click',guard(async()=>{
  await requireWallet();
  if(!approveConfirmed||!signature||!id||fundHash)
-  throw Error('必须先完成原 Approve 且保留签名。');
- const call=await post('build-call',{intentId:id,signature});
- if(!equals(call.to,T0)||call.amount!==AMOUNT.toString()||
-  call.testnetOnly!==true)
+  throw Error('必须先完成原 Approve 并恢复签名。');
+ const nonce=await nonceFor();
+ // The backend loads the immutable FundingQuote signature from PG17 and
+ // constructs original StoreEscrow.fund; browser never fabricates the calldata.
+ const call=await post('build-call',{intentId:id,nonce});
+ if(!equals(call.from,account)||!equals(call.to,T0)||
+  call.amount!==AMOUNT.toString()||call.value!=='0x0'||
+  call.chainId!==hex(CHAIN)||call.nonce!==hex(nonce)||
+  call.testnetOnly!==true||call.requiresWalletReservation!==true)
   throw Error('WRONG_REAL_FUND_CALL');
- await sendOriginal('fund',call.data,T0);
+ await sendOriginal('fund',call.data,T0,nonce);
 }));
 $('confirmFund').addEventListener('click',guard(async()=>{
  await reconcileKind('fund');
