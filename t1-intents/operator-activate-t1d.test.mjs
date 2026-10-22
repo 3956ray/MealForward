@@ -35,6 +35,7 @@ test('only exact privileged Supabase admin session pooler is accepted',()=>{
   ADMIN.replace('postgresql:','http:'),
   ADMIN.replace('/postgres','/cp30'),
   ADMIN+'?sslmode=disable',
+  ADMIN.replace('fake-admin-only-test','[YOUR-PASSWORD]'),
   ADMIN+'#fragment',
   ''
  ]){
