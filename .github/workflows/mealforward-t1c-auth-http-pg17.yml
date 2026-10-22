@@ -51,4 +51,6 @@ jobs:
       - name: Execute exact T1-D isolated NOLOGIN writer migration on fresh disposable PG17
         if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022'
         working-directory: t1-intents
-        run: node testnet-writer-migration.ci.mjs
+        run: |
+          node testnet-writer-migration.ci.mjs
+          node testnet-signed-quote.ci.mjs
