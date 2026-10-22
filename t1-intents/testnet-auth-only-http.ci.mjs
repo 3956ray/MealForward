@@ -21,11 +21,11 @@ const connect=(user,password)=>new pg.Pool({
  max:4
 });
 const auth=connect('mf_t1d_ci_auth','t1d-ci-new-auth-only');
-const fund=connect('mf_t1d_ci_fund','t1d-ci-new-fund-only');
+const fund=connect('mf_t1d_ci_fund_e2e','t1d-ci-new-fund-only');
 let server=null;
 try{
  assert.equal((await auth.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_auth');
- assert.equal((await fund.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_fund');
+ assert.equal((await fund.query('SELECT current_user')).rows[0].current_user,'mf_t1d_ci_fund_e2e');
  await assert.rejects(
   ()=>auth.query('SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
   e=>e.code==='42501'
