@@ -123,10 +123,13 @@ function expectedAttempt(i,kind,tx,authority){
  return {payer:sender,to,nonce,calldataHash:keccak256(calldata),calldata};
 }
 
-export function createT1IntentLedger({pool,resolveWallet,now=nowSecs,quoteAuthority=QUOTE}={}){
+export function createT1IntentLedger({
+ pool,resolveWallet,now=nowSecs,quoteAuthority=QUOTE,persistSignedQuotes=false
+}={}){
  stop(pool&&typeof pool.connect==='function','POSTGRES_POOL_REQUIRED');
  stop(typeof resolveWallet==='function','SERVER_VERIFIED_PRINCIPAL_REQUIRED');
  stop(typeof now==='function','CLOCK_REQUIRED');
+ stop(typeof persistSignedQuotes==='boolean','INVALID_SIGNED_QUOTE_PERSISTENCE_POLICY');
  const authority=validWallet(quoteAuthority);
  if(authority!==QUOTE){
   stop(process.env.GITHUB_ACTIONS==='true'&&
@@ -194,9 +197,55 @@ export function createT1IntentLedger({pool,resolveWallet,now=nowSecs,quoteAuthor
     "stage='QUOTE_BOUND',revision=revision+1 WHERE intent_id=$1 AND payer=$2 RETURNING *",
     [intentId,payer,digest.toLowerCase(),signatureHash.toLowerCase()]
    );
+   if(persistSignedQuotes){
+    stop(i.quantity===1&&BigInt(i.amount)===PRICE,
+     'T1D_ONLY_ONE_SEVEN_TEST_USDC_QUOTE');
+    // The signed capability and stage transition COMMIT atomically.
+    await c.query(
+     'INSERT INTO mf_t1c.quote_authorizations '+
+     '(intent_id,quote_id,signed_authority,quote_digest,signature,signature_fingerprint) '+
+     'VALUES($1,$2,$3,$4,$5,$6)',
+     [intentId,i.quote_id,QUOTE,digest.toLowerCase(),
+      signature.toLowerCase(),signatureHash.toLowerCase()]
+    );
+   }
    await event(c,intentId,'QUOTE_BOUND');
    return display(updated.rows[0]);
   });
+ }
+ async function recoverSignedQuote({session,intentId}={}){
+  stop(persistSignedQuotes,'SIGNED_QUOTE_RECOVERY_NOT_ENABLED');
+  const payer=await payerFromSession(session);
+  stop(RFC_UUID.test(intentId||''),'INVALID_INTENT_ID');
+  const found=await pool.query(
+   'SELECT i.*,q.signature AS signed_signature,q.quote_id AS signed_quote_id,'+
+   'q.quote_digest AS signed_digest,q.signature_fingerprint AS signed_fingerprint '+
+   'FROM mf_t1c.intents i JOIN mf_t1c.quote_authorizations q '+
+   'ON q.intent_id=i.intent_id WHERE i.intent_id=$1 AND i.payer=$2',
+   [intentId,payer]
+  );
+  stop(found.rowCount===1,'SIGNED_QUOTE_NOT_FOUND');
+  const r=found.rows[0];
+  stop(['QUOTE_BOUND','APPROVE_UNKNOWN','APPROVED'].includes(r.stage),
+   'SIGNED_QUOTE_IN_FLIGHT_OR_FINISHED');
+  stop(BigInt(r.quote_deadline)>BigInt(now()+5),'SIGNED_QUOTE_EXPIRED');
+  const signature=r.signed_signature;
+  stop(same(r.quote_id,r.signed_quote_id)&&
+   same(r.quote_digest,r.signed_digest)&&
+   same(r.quote_signature_hash,r.signed_fingerprint)&&
+   same(keccak256(signature),r.quote_signature_hash),
+   'ORIGINAL_SIGNED_QUOTE_RECORD_CONFLICT');
+  const typed=quoteFromRow(r);
+  stop(same(TypedDataEncoder.hash(signatureDomain,quoteTypes,typed),r.quote_digest)&&
+   same(verifyTypedData(signatureDomain,quoteTypes,typed,signature),authority),
+   'ORIGINAL_SIGNED_QUOTE_INVALID');
+  return {
+   intentId:r.intent_id,quoteId:r.quote_id,
+   signature,quoteDigest:r.quote_digest,
+   quoteSignatureFingerprint:r.quote_signature_hash,
+   expiresAt:r.quote_deadline.toString(),
+   restoredFromOriginalPostgres:true
+  };
  }
  async function reserve({session,intentId,kind,transaction}={}){
   const payer=await payerFromSession(session);
@@ -289,6 +338,6 @@ export function createT1IntentLedger({pool,resolveWallet,now=nowSecs,quoteAuthor
     blockNumber:proof.blockNumber,blockHash:proof.blockHash,readOnlyProof:true};
   });
  }
- return Object.freeze({prepare,fetchOriginal,bindQuote,reserve,bindOriginalHash,reconcile});
+ return Object.freeze({prepare,fetchOriginal,bindQuote,recoverSignedQuote,reserve,bindOriginalHash,reconcile});
 }
 export {CHAIN,ESCROW,TOKEN,MEAL,TERMS,QUOTE,PRICE,erc20,escrowAbi,quoteTypes,signatureDomain,quoteFromRow};

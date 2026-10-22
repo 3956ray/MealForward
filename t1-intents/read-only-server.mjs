@@ -20,6 +20,9 @@ import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
+import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
+import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
+import {QUOTE} from './core.mjs';
 
 const strict=(valid,reason)=>{if(!valid)throw Error(reason)};
 const PRIVILEGE_DENIAL='42501';
@@ -28,6 +31,9 @@ const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
 const PROJECT='ketfrukrcuosrqynnsay';
 const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
 const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
+// Never grant writes to the T1-C live SELECT-only principal. T1-D has its own
+// separately provisioned NOLOGIN-until-owner-activation database identity.
+const PROD_ROLE_FUND='mf_t1d_fund_runtime';
 // Only the project-approved Supabase IPv4 session pooler may hold the
 // real financial database identities. Never use a generic direct DB host,
 // user-supplied URL, transaction-mode pooler or old Render G0 database.
@@ -37,11 +43,18 @@ function validateConfig(env){
  const testing=env.GITHUB_ACTIONS==='true'&&
   env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
   env.MF_T1C_HTTP_DISPOSABLE_ONLY==='ack-original-siwe-pg17';
- strict(env.T1C_SERVER_MODE==='READ_ONLY_NO_FUNDS',
-  'FINANCIAL_WRITE_MODE_FORBIDDEN');
- strict(env.T1C_FUNDING_ENABLED!== 'true'&&
-  env.T1C_QUOTE_SIGNER_ENABLED!== 'true',
-  'T1C_WALLET_WRITE_FLAG_FORBIDDEN');
+ const requested=env.T1C_SERVER_MODE;
+ strict(['READ_ONLY_NO_FUNDS','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
+  'UNAPPROVED_FINANCIAL_MODE');
+ const funding=requested==='TESTNET_SINGLE_SEVEN_USDC_FUND';
+ if(funding){
+  strict(env.T1C_FUNDING_ENABLED==='true' &&
+   env.T1C_TESTNET_FUND_SCOPE==='ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
+   'TESTNET_SINGLE_FUND_POLICY_REQUIRED');
+ }else strict(env.T1C_FUNDING_ENABLED!=='true',
+  'NO_FUNDS_MODE_CANNOT_ENABLE_FUND');
+ strict(env.T1C_QUOTE_SIGNER_ENABLED!=='true',
+  'T1D_NO_PLATFORM_QUOTE_PRIVATE_KEY');
  const origin=env.PUBLIC_ORIGIN;
  strict(typeof origin==='string'&&(
   ALLOWED_PUBLIC.test(origin)||(testing&&ALLOWED_TEST.test(origin))
@@ -67,17 +80,18 @@ function validateConfig(env){
   'SAME_PG_ROLE_REJECTED');
  if(!testing){
   strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
-   originIntent.username===PROD_ROLE_INTENT+'.'+PROJECT,
+   originIntent.username===(funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
    'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
   strict(originAuth.hostname===originIntent.hostname,
    'CROSS_PROJECT_POOLER_HOST_MISMATCH');
  }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
- return {origin,port,testing,authUrl:env.T1C_AUTH_DB_URL,
+ return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
-  expectedIntentRole:testing?'mf_t1c_ci_intent_ro':PROD_ROLE_INTENT};
+  expectedIntentRole:testing?(funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
+   (funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
  const query=await pool.query(
@@ -135,23 +149,68 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
    mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
-   mustBeDenied(intentPool,'INSERT INTO mf_t1c.intents DEFAULT VALUES'),
-   mustBeDenied(intentPool,'UPDATE mf_t1c.intents SET quantity=quantity WHERE false')
+   mustBeDenied(intentPool,'DELETE FROM mf_t1c.intents')
   ]);
+  const perms=await intentPool.query(
+   "SELECT has_table_privilege(current_user,'mf_t1c.intents','INSERT') AS insert_allowed,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','stage','UPDATE') AS stage_update,"+
+   "has_column_privilege(current_user,'mf_t1c.intents','revision','UPDATE') AS revision_update,"+
+   "has_column_privilege(current_user,'mf_t1c.wallet_attempts','status','UPDATE') AS attempt_update,"+
+   "has_table_privilege(current_user,'mf_t1c.wallet_attempts','INSERT') AS attempt_insert,"+
+   "has_table_privilege(current_user,'mf_t1c.audit_events','INSERT') AS audit_insert"
+  );
+  const grant=perms.rows[0];
+  const allDml=grant.insert_allowed&&grant.stage_update&&grant.revision_update&&
+   grant.attempt_update&&grant.attempt_insert&&grant.audit_insert;
+  const anyDml=Object.values(grant).some(Boolean);
+  if(cfg.funding){
+   strict(allDml,'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
+  }else{
+   strict(!anyDml,'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
+  }
+  if(cfg.funding){
+   bootStage='SIGNED_QUOTE_STORE_GRANTS';
+   const signed=await intentPool.query(
+    "SELECT to_regclass('mf_t1c.quote_authorizations') IS NOT NULL AS ready,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','SELECT') AS can_read,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','INSERT') AS can_insert,"+
+    "has_table_privilege(current_user,'mf_t1c.quote_authorizations','DELETE') AS can_delete"
+   );
+   strict(signed.rowCount===1&&signed.rows[0]?.ready===true&&
+    signed.rows[0].can_read===true&&signed.rows[0].can_insert===true&&
+    signed.rows[0].can_delete===false,
+    'T1D_SIGNED_QUOTE_STORE_DENIED_OR_OVERPRIVILEGED');
+  }
+  let readOnlyRpc=null;
+  if(cfg.funding){
+   bootStage='REAL_T0_PREFLIGHT';
+   readOnlyRpc=makeReadOnlyPublicRpc();
+   const pre=await assertRealT0IsOpen({rpc:readOnlyRpc,payer:QUOTE});
+   // The read-only recovery endpoint must remain available AFTER one
+   // genuine Fund, even if capacity/balance changes. New submissions are
+   // denied separately at prepare/reserve with the actual live state.
+   strict(pre.chainId===10143&&pre.testnetOnly,
+    'T1D_REAL_T0_FUND_NOT_READY');
+  }
   bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
    sessionPool:authPool,intentPool,authStore:pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
-   mode:'read_only'
+   mode:cfg.funding?'testnet_fund':'read_only',rpc:readOnlyRpc
   });
   // Public UI is a fixed allowlist of THREE immutable local files; no
   // arbitrary filesystem path, storage directory, SSR or API secrets.
   bootStage='ASSET_LOAD';
-  const staticFiles=new Map(await Promise.all([
+  const exposedFiles=[
    ['/', 'index.html','text/html; charset=utf-8'],
    ['/ui.css','ui.css','text/css; charset=utf-8'],
    ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
-  ].map(async([path,filename,type])=>[
+  ];
+  if(cfg.funding)exposedFiles.push(
+   ['/fund-testnet.html','fund-testnet.html','text/html; charset=utf-8'],
+   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8']
+  );
+  const staticFiles=new Map(await Promise.all(exposedFiles.map(async([path,filename,type])=>[
     path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
   ])));
   server=http.createServer((req,res)=>{
@@ -184,7 +243,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
   });
   return {
-   server,origin:cfg.origin,authRole,intentRole,fundingEnabled:false,
+   server,origin:cfg.origin,authRole,intentRole,
+   fundingEnabled:cfg.funding,testnetOnly:true,
    async close(){
     await new Promise(resolve=>server.close(resolve));
     await Promise.all([authPool.end(),intentPool.end()]);
@@ -202,8 +262,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const runtime=await startT1ReadOnlyServer();
   process.stdout.write(JSON.stringify({
-   status:'T1_C_SAFE_READONLY_PROCESS_READY',
-   fundingEnabled:false,origin:runtime.origin,
+   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
+   fundingEnabled:runtime.fundingEnabled,origin:runtime.origin,
    distinctDatabasePrincipals:true
   })+'\n');
   let shuttingDown=false;

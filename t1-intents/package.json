@@ -5,13 +5,17 @@
   "version": "0.1.0",
   "scripts": {
     "test": "node --test --test-concurrency=1 *.test.mjs",
-    "check": "node --check core.mjs && node --check receipt.mjs && node --check http-auth-gateway.mjs && node --check http-auth.test.mjs && node --check read-only-server.mjs && node --check public/ui.mjs && node --check cloud-readonly-smoke.mjs && node --check operator-activate-readonly.mjs && node --check operator-diagnose-readonly.mjs && node --check supabase-tls.mjs && node --check supabase-tls.test.mjs",
+    "check": "node --check core.mjs && node --check receipt.mjs && node --check http-auth-gateway.mjs && node --check http-auth.test.mjs && node --check read-only-server.mjs && node --check public/ui.mjs && node --check cloud-readonly-smoke.mjs && node --check operator-activate-readonly.mjs && node --check operator-diagnose-readonly.mjs && node --check supabase-tls.mjs && node --check supabase-tls.test.mjs && node --check testnet-funding-chain.mjs && node --check testnet-funding.test.mjs && node --check public/fund-testnet.mjs && node --check quote-protocol.mjs && node --check quote-protocol.test.mjs && node --check testnet-signed-quote.ci.mjs && node --check testnet-writer-migration.ci.mjs",
     "test:http": "node --test --test-concurrency=1 http-auth.test.mjs operator-activate-readonly.test.mjs supabase-tls.test.mjs",
-    "start:readonly": "node read-only-server.mjs"
+    "start:readonly": "node read-only-server.mjs",
+    "test:fund": "node --test testnet-funding.test.mjs quote-protocol.test.mjs"
   },
   "dependencies": {
     "pg": "8.16.3",
     "ethers": "6.15.0",
     "viem": "2.57.1"
+  },
+  "devDependencies": {
+    "@metamask/eth-sig-util": "9.0.0"
   }
 }

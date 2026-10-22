@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <meta name="description" content="留膳 Monad Testnet 7 Test USDC 真人钱包资助测试">
+ <title>留膳 · 第一次 Test USDC 资助</title>
+ <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+<header class="mast"><div class="wrap">
+ <p class="eyebrow">MEALFORWARD · MONAD TESTNET · T1-D REAL FUND</p>
+ <h1>一膳之微，<br><span>亦可为善。</span></h1>
+ <p class="intro">仅限测试网的一份「暖心盖饭」，7 Test USDC。先保存原始 Intent，再由你亲自在 MetaMask 中确认签名、授权及资助。</p>
+ <nav><a href="/">← 返回已部署的 T1-C 只读入口</a></nav>
+</div></header>
+<main class="wrap">
+ <aside class="safety">
+ <strong>真实 Testnet 交易 · 仅测试代币</strong>
+ <p>本页将请求你使用 MetaMask 签署真正的 FundingQuote，并主动确认一次 ERC-20 Approve（精确 7 Test USDC）与一次 StoreEscrow Fund。请核对链 ID 10143、合约和金额。页面不会发送主网交易、索取私钥或自动点击钱包确认。每笔发出前都会持久记录唯一的原始 Intent 和 nonce；UNKNOWN 不会自动重新支付。</p>
+ </aside>
+ <section class="metrics" aria-label="固定测试范围">
+  <div><small>区块链</small><strong>Monad Testnet</strong><code>10143</code></div>
+  <div><small>真正代币</small><strong>Circle Test USDC</strong><code>6 decimals</code></div>
+  <div><small>金额 / 份数</small><strong>7 Test USDC</strong><code>只允许 1 份</code></div>
+  <div><small>限定测试钱包</small><strong>Quote Account 2</strong><code>0xcc5C…282952</code></div>
+ </section>
+ <div class="stack">
+ <section class="panel">
+  <div class="section-title"><span>01</span><div><h2>钱包连接与 SIWE 登录</h2><p>第一次资助暂由已验证的 Quote Authority 钱包自测资助；业务正式版本再拆分资助者与签发权限。</p></div></div>
+  <div class="actions"><button type="button" id="connect">连接 MetaMask</button><button type="button" id="login">SIWE 登录</button><button type="button" id="readiness" class="quiet">检查链上余额及权限</button></div>
+  <div id="identity" class="readout" role="status" aria-live="polite">尚未连接。链上交易按钮默认不可用。</div>
+  <div id="chain" class="status">未验证真实 T0 Escrow 状态。</div>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>02</span><div><h2>固定原始 Intent · 生成真实 Quote</h2><p>后台先保存唯一 Quote ID、付款人、7 Test USDC、到期时间及订单来源，然后由 Account 2 本人进行真正 EIP-712 FundingQuote 签名。</p></div></div>
+  <div class="actions"><button type="button" id="prepare" disabled>持久创建 1 份 Intent</button><button type="button" id="sign" disabled>本人签署 FundingQuote</button></div>
+  <div id="quote" class="readout">未建立任何待资助 Intent。</div>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>03</span><div><h2>第一次 MetaMask 授权</h2><p>授权 Test USDC 合约给新 T0 Escrow，严格等于 7 Test USDC，不允许无限授权。</p></div></div>
+  <div class="actions"><button type="button" id="approve" disabled>本人确认 Approve（7 Test USDC）</button><button type="button" id="confirmApprove" disabled class="quiet">核对 Approve Receipt</button></div>
+  <div id="approveInfo" class="readout">尚未发起 Approve。</div>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>04</span><div><h2>第二次 MetaMask 资助</h2><p>确认最终要支付 7 Test USDC；Funds 会进入部署的 T0 StoreEscrow，不能因本页关闭而自动撤销。</p></div></div>
+  <div class="actions"><button type="button" id="fund" disabled>本人确认 Fund（7 Test USDC）</button><button type="button" id="confirmFund" disabled class="quiet">核对 Funded Receipt 与资产变化</button></div>
+  <div id="fundInfo" class="readout">须先有 Approve 的真实链上确认。</div>
+ </section>
+ <section class="panel">
+  <div class="section-title"><span>05</span><div><h2>断线后的原交易恢复</h2><p>如果交易已从 MetaMask 发送，但网页未收到 Hash，可以输入原交易 Hash 重新查证。这里只会读取链上数据，**绝不会重发交易**。</p></div></div>
+  <label for="recoverId">原始 Intent ID</label>
+  <textarea rows="2" id="recoverId" placeholder="从上面的 Intent 记录复制 UUID"></textarea>
+  <label for="recoverHash">同一次原始交易 Hash（0x…）</label>
+  <textarea rows="2" id="recoverHash" placeholder="从 MetaMask Activity 复制 TX Hash"></textarea>
+  <div class="actions"><button type="button" class="quiet" id="recoverApprove">恢复原 Approve</button><button type="button" class="quiet" id="recoverFund">恢复原 Fund</button><button type="button" class="quiet" id="reload">查询原始 Intent 状态</button></div>
+  <div id="recoverInfo" class="readout">仅恢复已持久记录的原交易。不要随意更换 nonce 或重发。</div>
+ </section>
+ </div>
+ <section class="footnote"><div><h3>长期仍待完善</h3><p>多钱包职责隔离、领取、锁券、实际交餐、结算和链上强制 180 秒结算延迟尚不属于本轮测试。</p></div><div><p>这是全新 Monad 测试网实例，不导入原 Mac CP30 PREPARED #3560，也不会修改历史测试 USDC 和 Journal。</p></div></section>
+</main>
+<footer class="wrap"><span>留一膳，待一人，是为善。</span><span>T1-D · 真人批准 · 一次 7 Test USDC</span></footer>
+<script type="module" src="/fund-testnet.mjs"></script>
+</body></html>

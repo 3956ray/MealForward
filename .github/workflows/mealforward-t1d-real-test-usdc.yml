@@ -1,0 +1,44 @@
+name: MealForward T1-D REAL 7 Test USDC authorization safety and public-chain readiness
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-real-test-usdc-funding-20261022
+permissions:
+  contents: read
+jobs:
+  fund-protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned dependencies (no scripts)
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Static safety checks
+        working-directory: t1-intents
+        run: |
+          npm run check
+          test -f public/fund-testnet.html
+          test -f public/fund-testnet.mjs
+          node --check public/fund-testnet.mjs
+      - name: Actual MetaMask V4 cryptographic quote parity, no keys, no wallet writes
+        working-directory: t1-intents
+        env:
+          MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
+        run: npm run test:fund
+      - name: Independent public RPC actual original T0 chain read-only proof (NO wallet)
+        working-directory: t1-intents
+        run: |
+          node --input-type=module -e '
+            import {makeReadOnlyPublicRpc} from "./testnet-readonly-rpc.mjs";
+            import {assertRealT0IsOpen} from "./testnet-funding-chain.mjs";
+            import {QUOTE} from "./core.mjs";
+            const x=await assertRealT0IsOpen({rpc:makeReadOnlyPublicRpc(),payer:QUOTE});
+            if(x.chainId!==10143 || !x.testnetOnly || x.unitPrice!=="7000000" || x.contract.toLowerCase()!=="0xcf0c8827c8610eeff1ecbd9719e559d805fafe58") process.exit(1);
+            console.log(JSON.stringify({status:"T1D_PUBLIC_MONAD_REAL_CONTRACT_PASS",block:x.blockNumber,remainingUnits:x.remainingUnits,balanceEnough:BigInt(x.assets.balance)>=7000000n,readonlyRpc:true,sendTxCount:0}));
+          '
