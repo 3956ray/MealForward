@@ -137,7 +137,21 @@ GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_intent_runtime;`
   GRANT USAGE ON SCHEMA mf_t1d_auth TO mf_t1d_ci_auth;
   GRANT SELECT ON mf_t1d_auth.schema_version TO mf_t1d_ci_auth;
   GRANT SELECT,INSERT,UPDATE ON mf_t1d_auth.pre_sessions,
-  mf_t1d_auth.challenges,mf_t1d_auth.sessions TO mf_t1d_ci_auth;`);
+  mf_t1d_auth.challenges,mf_t1d_auth.sessions TO mf_t1d_ci_auth;
+  CREATE ROLE mf_t1d_ci_fund LOGIN NOINHERIT
+   NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
+   PASSWORD 't1d-ci-new-fund-only';
+  GRANT CONNECT ON DATABASE postgres TO mf_t1d_ci_fund;
+  GRANT USAGE ON SCHEMA mf_t1c TO mf_t1d_ci_fund;
+  GRANT SELECT,INSERT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1d_ci_fund;
+  GRANT UPDATE(stage,revision,quote_digest,quote_signature_hash)
+   ON mf_t1c.intents TO mf_t1d_ci_fund;
+  GRANT UPDATE(status,tx_hash,receipt_block,receipt_block_hash,receipt_status)
+   ON mf_t1c.wallet_attempts TO mf_t1d_ci_fund;
+  GRANT SELECT,INSERT ON mf_t1c.audit_events,mf_t1c.quote_authorizations
+   TO mf_t1d_ci_fund;
+  GRANT USAGE,SELECT ON SEQUENCE mf_t1c.audit_events_event_id_seq
+   TO mf_t1d_ci_fund;`);
  const authPool=new pg.Pool({
   connectionString:'postgres://mf_t1d_ci_auth:t1d-ci-new-auth-only@127.0.0.1:5433/postgres',
   max:3,connectionTimeoutMillis:3000
