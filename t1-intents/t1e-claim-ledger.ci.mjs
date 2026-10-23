@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import pg from 'pg';
+import {Wallet} from 'ethers';
+import {buildRecipientConsent,verifyRecipientConsent} from './t1e-recipient-consent.mjs';
+import {proposeOriginalIssuerOperation,inspectReservedIssuerOperation} from './t1f-issue-operation.mjs';
+import {FIXED} from './t1e-first-issue-readiness.mjs';
 import {originalVoucherId} from './t1e-first-issue-readiness.mjs';
 const strict=(x,label)=>assert.equal(x,true,label);
 assert.equal(process.env.GITHUB_ACTIONS,'true');
@@ -26,11 +30,13 @@ const aHash='0x0b5ef56afe4e8ffcba6349b7893929231213a130896a7810d5f428723b4a218d'
 const fHash='0x6d241844fc0edda40af1c30eceab11ac0b95057337218de21e0c4026954ce219';
 const blockA='0x65e25481798e882a51c96cd07457639566d4047d5c595c189c60419d67857dd3';
 const blockF='0xe90a0e084d9b83e6063c04a2e831158d53173c77c6cd2e240551257587c80b9e';
-const claimId=randomUUID(),beneficiary='0x'+'7'.repeat(40);
+const claimId=randomUUID(),beneficiaryWallet=Wallet.createRandom();
+const beneficiary=beneficiaryWallet.address.toLowerCase();
+const NOW=1792740000;
 const voucherId=originalVoucherId(0,1n);
 const nonce='0x'+'a'.repeat(64);
-const consentDigest='0x'+'b'.repeat(64),sigHash='0x'+'c'.repeat(64);
-const opId='0x'+'d'.repeat(64),dataHash='0x'+'e'.repeat(64);
+const opId='0x'+'d'.repeat(64);
+let dataHash='0x'+'e'.repeat(64);
 const issueTxHash='0x'+'f'.repeat(64);
 async function mustFail(action,code){
  await assert.rejects(action,error=>error?.code===code,
@@ -124,14 +130,61 @@ try{
  SET stage='ISSUE_UNKNOWN',revision=revision+1,
  issuer_op_id=$2,issuer_tx_nonce=9,issuer_tx_data_hash=$3
  WHERE claim_id=$1`,[claimId,opId,dataHash]),'P0001');
+ // Ephemeral recipient test-wallet signs the actual pinned 1-unit
+ // EIP712 consent. Never use a real beneficiary key in GitHub CI.
+ const originalProof={
+  status:'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS',
+  chainId:10143,escrow,mealId:meal,
+  firstUnitSequence:0,nextGeneration:1,unitPrice:'7000000',
+  originalQuoteUsed:true,verifiedFirstBatch:true,issuedOnchain:false,
+  issueSimulatedWithoutSend:true,originalIssuerAuthority:FIXED.issuerAuthority,
+  accounting:{availableUnits:'1',liabilityBaseUnits:'7000000',
+   escrowBalanceBaseUnits:'7000000'}
+ };
+ const prepared=buildRecipientConsent({
+  recipient:beneficiary,nonce,deadline:NOW+480,now:NOW,
+  fundedUnitProof:originalProof
+ });
+ const signed=await beneficiaryWallet.signTypedData(
+  prepared.domain,prepared.types,prepared.message
+ );
+ const consent=verifyRecipientConsent({
+  prepared,signature:signed,sessionWallet:beneficiary,
+  nonceReservedInPrivateDatabase:true,now:NOW+15
+ });
+ assert.equal(consent.onchainIssued,false);
+ assert.equal(consent.merchantSettlementAuthorized,false);
  await c.query(`UPDATE mf_t1e.recipient_claims SET
   stage='CONSENT_VERIFIED',consent_digest=$2,consent_signature_fingerprint=$3,
-  revision=revision+1 WHERE claim_id=$1`,[claimId,consentDigest,sigHash]);
+  revision=revision+1 WHERE claim_id=$1`,[
+  claimId,consent.digest,consent.signatureFingerprint
+ ]);
  await c.query(`INSERT INTO mf_t1e.claim_events(claim_id,event_type)
   VALUES($1,'CONSENT_VERIFIED')`,[claimId]);
+ // Derive the EXACT immutable StoreEscrow Issue calldata, then
+ // atomically store original op/nonce/calldata digest in disposable PG17.
+ // A live implementation MUST COMMIT before requesting MetaMask signature.
+ const sourceClaim=(await c.query(
+  'SELECT * FROM mf_t1e.recipient_claims WHERE claim_id=$1',[claimId]
+ )).rows[0];
+ const draft=proposeOriginalIssuerOperation({
+  claim:sourceClaim,operationId:opId,
+  issuerPendingNonce:9,chainProof:originalProof,now:NOW+20
+ });
+ dataHash=draft.issuerCalldataHash;
+ assert.equal(draft.mustNotBroadcastBeforeDbCommit,true);
+ assert.equal(draft.serverMaySignOrBroadcast,false);
  await c.query(`UPDATE mf_t1e.recipient_claims SET
   stage='ISSUE_UNKNOWN',issuer_op_id=$2,issuer_tx_nonce=9,issuer_tx_data_hash=$3,
   revision=revision+1 WHERE claim_id=$1`,[claimId,opId,dataHash]);
+ const dbReserved=(await c.query(
+  'SELECT * FROM mf_t1e.recipient_claims WHERE claim_id=$1',[claimId]
+ )).rows[0];
+ const restored=inspectReservedIssuerOperation({
+  claim:dbReserved,now:NOW+900
+ });
+ assert.equal(restored.sendAgainPermitted,false);
+ assert.equal(restored.expectedCalldataHash,dataHash);
  await mustFail(()=>c.query(`UPDATE mf_t1e.recipient_claims SET
   issuer_tx_nonce=10,stage='ISSUE_HASH_BOUND',issuer_tx_hash=$2,
   revision=revision+1 WHERE claim_id=$1`,[claimId,issueTxHash]),'P0001');
@@ -163,6 +216,9 @@ try{
   roleIsNoLogin:true,oldT1CFundAuthDenied:true,
   onlyOneFirstUnitClaim:true,differentBeneficiaryCannotReplace:true,
   consentBeforeIssueReserved:true,originalNonceCannotChange:true,
+  realEphemeralRecipientEip712Verified:true,
+  sourceDerivedOriginalIssuerCalldataHashPersisted:true,
+  postExpiryUnknownRecoveryWithoutResend:true,
   originalTransactionHashCannotChange:true,appendOnlyClaimEvents:true,
   noLiveDatabaseConnected:true,realVoucherIssued:false,
   onchainTransactionsSent:0
