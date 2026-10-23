@@ -81,15 +81,17 @@ export async function attestFirstIssuerLive({
   '/v1/t1f/issuer/status'];
  for(const path of mustBePrivate){
   const r=await ask(path);
-  const expected=!enabled&&path.startsWith('/v1/t1f/')?405:401;
-  yes(r.code===expected&&
-   (expected!==401||r.body.error==='UNAUTHENTICATED'),
+  // Old T1-E does not even register /v1/t1f; its safe fallback is
+  // 503 ORIGINAL_BUSINESS_NOT_CONNECTED. New T1-F flag=false returns 405.
+  const legacyDisabled=!enabled&&path.startsWith('/v1/t1f/');
+  yes((legacyDisabled?[404,405,503]:[401]).includes(r.code)&&
+   (legacyDisabled||r.body.error==='UNAUTHENTICATED'),
    prefix+'UNAUTHENTICATED_PRIVATE_API_LEAK');
  }
  for(const path of ['/v1/t1f/issuer/prepare','/v1/t1f/issuer/bind',
   '/v1/t1f/issuer/reconcile']){
   const r=await ask(path,{method:'POST',body:{}});
-  yes(r.code===(enabled?401:405)&&
+  yes((enabled?[401]:[404,405,503]).includes(r.code)&&
    (!enabled||r.body.error==='UNAUTHENTICATED'),
    prefix+'UNAUTHENTICATED_ISSUER_POST_ALLOWED');
  }
