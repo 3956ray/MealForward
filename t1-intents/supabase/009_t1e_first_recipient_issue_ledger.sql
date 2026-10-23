@@ -169,31 +169,7 @@ CREATE TABLE mf_t1e.claim_events(
  event_type text NOT NULL CHECK(event_type IN(
   'CLAIM_PREPARED','CONSENT_VERIFIED','ISSUE_RESERVED',
   'ISSUE_HASH_BOUND','ISSUE_CONFIRMED','CLAIM_BLOCKED')),
- original_tx_hash text CHECK(original_tx_hash ~ '^0x[0-9a-f]{64}
--- human approval. It cannot access any T1-C/T1-D Auth or money table.
-CREATE ROLE mf_t1e_claim_runtime NOLOGIN NOINHERIT
- NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-GRANT CONNECT ON DATABASE postgres TO mf_t1e_claim_runtime;
-GRANT USAGE ON SCHEMA mf_t1e TO mf_t1e_claim_runtime;
-GRANT SELECT,INSERT ON mf_t1e.recipient_claims TO mf_t1e_claim_runtime;
-GRANT UPDATE(
- stage,revision,consent_digest,consent_signature_fingerprint,
- issuer_op_id,issuer_tx_nonce,issuer_tx_data_hash,issuer_tx_hash,
- receipt_block,receipt_block_hash
-) ON mf_t1e.recipient_claims TO mf_t1e_claim_runtime;
-REVOKE DELETE,TRUNCATE,TRIGGER,REFERENCES
- ON mf_t1e.recipient_claims FROM mf_t1e_claim_runtime;
-REVOKE ALL ON SCHEMA mf_t1e FROM
- mf_t1c_auth_runtime,mf_t1c_intent_runtime,
- mf_t1d_auth_runtime,mf_t1d_fund_runtime;
-REVOKE ALL ON ALL TABLES IN SCHEMA mf_t1e FROM
- PUBLIC,anon,authenticated,service_role,
- mf_t1c_auth_runtime,mf_t1c_intent_runtime,
- mf_t1d_auth_runtime,mf_t1d_fund_runtime;
-
-COMMENT ON SCHEMA mf_t1e IS
- 'Isolated Testnet recipient consent and issuer operation ledger; not an onchain recipient binding or food delivery proof.';
-),
+ original_tx_hash text CHECK(original_tx_hash ~ '^0x[0-9a-f]{64}$'),
  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE TRIGGER t1e_claim_event_no_update_delete
