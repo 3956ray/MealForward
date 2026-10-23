@@ -33,6 +33,16 @@ const store={
   assert.equal(proof.status,'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS');
   return {row,created:++prepared===1}
  },
+ async renew({wallet,now,proof}){
+  assert.equal(wallet,PILOT_RECIPIENT);
+  assert.equal(now,NOW);
+  assert.equal(proof.status,'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS');
+  assert.equal(row.round.state,'PENDING');
+  assert.ok(Number(row.round.deadline)<NOW);
+  row.round={...row.round,seq:2,nonce:'0x'+'b'.repeat(64),
+   deadline:String(NOW+420)};
+  return row;
+ },
  async issuerReadiness(){return {claimStage:row.stage,consentVerified:false}},
  async verifyConsent(){verified++;throw Error('WRONG_SIGNATURE_MUST_NOT_TOUCH_DB')}
 };
@@ -147,4 +157,29 @@ test('single original claim can be recovered, wrong consent cannot change databa
  assert.equal(bad.status,422);
  assert.equal(bad.body.error,'T1E_CONSENT_CRYPTO_DENIED');
  assert.equal(verified,0);
+});
+
+test('expired consent recovers SAME original Claim and changes ONLY private nonce round',async()=>{
+ assert.equal(row.stage,'PREPARED');
+ const originalId=row.claim_id,firstNonce=row.consent_nonce;
+ row.round={...row.round,deadline:String(NOW-2)};
+ const view=await req('/v1/t1e/claim/me','recipient');
+ assert.equal(view.status,200);
+ assert.equal(view.body.consent,null);
+ assert.equal(view.body.consentNeedsRenewal,true);
+ const unauthorized=await req('/v1/t1e/claim/renew','issuer','POST',{});
+ assert.equal(unauthorized.status,403);
+ const badOrigin=await req('/v1/t1e/claim/renew','recipient','POST',{},
+  {Origin:'https://attacker.invalid'});
+ assert.equal(badOrigin.status,403);
+ const recovered=await req('/v1/t1e/claim/renew','recipient','POST',{});
+ assert.equal(recovered.status,200);
+ assert.equal(recovered.body.originalClaimReused,true);
+ assert.equal(recovered.body.claim.claimId,originalId);
+ assert.equal(recovered.body.claim.consentRound,2);
+ assert.equal(recovered.body.consent.message.nonce,row.round.nonce);
+ assert.notEqual(row.round.nonce,firstNonce);
+ assert.equal(row.consent_nonce,firstNonce);
+ assert.equal(recovered.body.issuerIssueEnabled,false);
+ assert.equal(prepared,2);
 });
