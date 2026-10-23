@@ -24,10 +24,15 @@ jobs:
         working-directory: t1-intents
         run: |
           node --check t1e-claim-siwe-cloud-smoke.mjs
-          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount' t1e-claim-siwe-cloud-smoke.mjs; then
-            echo 'T1E_READONLY_SMOKE_NO_BROADCAST_METHODS_ALLOWED'
-            exit 1
-          fi
+          # The smoke test intentionally CONTAINS rejection literals for
+          # eth_sendTransaction and eth_sendRawTransaction. Scan actual
+          # server/browser application code, not assertion source.
+          for source in t1e-claim-server.mjs t1e-claim-http.mjs public/t1e-claim.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount' "$source"; then
+              echo 'T1E_CLAIM_APP_IMPLICIT_BROADCAST_METHOD_FORBIDDEN'
+              exit 1
+            fi
+          done
       - name: Actual Render HTTPS private SIWE and zero-write gate
         working-directory: t1-intents
         run: node t1e-claim-siwe-cloud-smoke.mjs
