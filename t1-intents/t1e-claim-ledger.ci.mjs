@@ -9,6 +9,7 @@ import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import pg from 'pg';
 import {originalVoucherId} from './t1e-first-issue-readiness.mjs';
+import {PILOT_RECIPIENT,claimStore} from './t1e-claim-store.mjs';
 const strict=(x,label)=>assert.equal(x,true,label);
 assert.equal(process.env.GITHUB_ACTIONS,'true');
 assert.equal(process.env.MF_T1E_DISPOSABLE_ONLY,'ack-fresh-t1e-pg17');
@@ -26,7 +27,7 @@ const aHash='0x0b5ef56afe4e8ffcba6349b7893929231213a130896a7810d5f428723b4a218d'
 const fHash='0x6d241844fc0edda40af1c30eceab11ac0b95057337218de21e0c4026954ce219';
 const blockA='0x65e25481798e882a51c96cd07457639566d4047d5c595c189c60419d67857dd3';
 const blockF='0xe90a0e084d9b83e6063c04a2e831158d53173c77c6cd2e240551257587c80b9e';
-const claimId=randomUUID(),beneficiary='0x'+'7'.repeat(40);
+let claimId=randomUUID();const beneficiary=PILOT_RECIPIENT;
 const voucherId=originalVoucherId(0,1n);
 const nonce='0x'+'a'.repeat(64);
 const consentDigest='0x'+'b'.repeat(64),sigHash='0x'+'c'.repeat(64);
@@ -121,12 +122,28 @@ try{
  await c.query('SET ROLE mf_t1e_claim_runtime');
  await mustFail(()=>c.query('SELECT * FROM mf_t1c.intents LIMIT 0'),'42501');
  await mustFail(()=>c.query('SELECT * FROM mf_t1d_auth.sessions LIMIT 0'),'42501');
- await c.query(`INSERT INTO mf_t1e.recipient_claims(
- claim_id,funding_intent,voucher_id,beneficiary_wallet,consent_nonce,consent_deadline
- ) VALUES($1,$2,$3,$4,$5,$6)`,
-  [claimId,id,voucherId,beneficiary,nonce,1792740000+480]);
- await c.query(`INSERT INTO mf_t1e.claim_events(claim_id,event_type)
-  VALUES($1,'CLAIM_PREPARED')`,[claimId]);
+ const app=claimStore({
+  query:(...args)=>c.query(...args),
+  connect:async()=>({query:(...args)=>c.query(...args),release(){}})
+ });
+ const unitProof={
+  status:'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS',
+  chainId:10143,escrow,mealId:meal,
+  firstUnitSequence:0,nextGeneration:1,issuedOnchain:false,
+  verifiedFirstBatch:true,
+  accounting:{availableUnits:'1',liabilityBaseUnits:'7000000'}
+ };
+ const prep=await app.prepare({wallet:beneficiary,now:1792740000,proof:unitProof});
+ assert.equal(prep.created,true);
+ claimId=prep.row.claim_id;
+ assert.equal(prep.row.funding_intent,id);
+ assert.equal(prep.row.voucher_id,voucherId);
+ const retry=await app.prepare({wallet:beneficiary,now:1792740001,proof:unitProof});
+ assert.equal(retry.created,false);
+ assert.equal(retry.row.claim_id,claimId);
+ assert.equal(retry.row.consent_nonce,prep.row.consent_nonce);
+ assert.equal((await app.own(beneficiary)).claim_id,claimId);
+ assert.equal((await c.query('SELECT count(*)::int AS n FROM mf_t1e.claim_events')).rows[0].n,1);
  // The first funded unit may be reserved only once, even with a new UUID.
  await mustFail(()=>c.query(`INSERT INTO mf_t1e.recipient_claims(
   claim_id,funding_intent,voucher_id,beneficiary_wallet,consent_nonce,consent_deadline
@@ -142,11 +159,15 @@ try{
  SET stage='ISSUE_UNKNOWN',revision=revision+1,
  issuer_op_id=$2,issuer_tx_nonce=9,issuer_tx_data_hash=$3
  WHERE claim_id=$1`,[claimId,opId,dataHash]),'P0001');
- await c.query(`UPDATE mf_t1e.recipient_claims SET
-  stage='CONSENT_VERIFIED',consent_digest=$2,consent_signature_fingerprint=$3,
-  revision=revision+1 WHERE claim_id=$1`,[claimId,consentDigest,sigHash]);
- await c.query(`INSERT INTO mf_t1e.claim_events(claim_id,event_type)
-  VALUES($1,'CONSENT_VERIFIED')`,[claimId]);
+ const verified=await app.verifyConsent({
+  wallet:beneficiary,claimId,digest:consentDigest,
+  fingerprint:sigHash,now:1792740100
+ });
+ assert.equal(verified.stage,'CONSENT_VERIFIED');
+ await assert.rejects(()=>app.verifyConsent({
+  wallet:beneficiary,claimId,digest:consentDigest,
+  fingerprint:sigHash,now:1792740101
+ }),/T1E_CONSENT_ALREADY_USED_OR_EXPIRED/);
  await c.query(`UPDATE mf_t1e.recipient_claims SET
   stage='ISSUE_UNKNOWN',issuer_op_id=$2,issuer_tx_nonce=9,issuer_tx_data_hash=$3,
   revision=revision+1 WHERE claim_id=$1`,[claimId,opId,dataHash]);
@@ -181,7 +202,7 @@ try{
   roleIsNoLogin:true,oldT1CFundAuthDenied:true,
   onlyOneFirstUnitClaim:true,differentBeneficiaryCannotReplace:true,
   consentBeforeIssueReserved:true,originalNonceCannotChange:true,
-  originalTransactionHashCannotChange:true,appendOnlyClaimEvents:true,
+  originalTransactionHashCannotChange:true,appendOnlyClaimEvents:true,appAtomicClaimAndOneTimeConsent:true,
   separateAuthRoleIsNoLogin:true,noCrossRoleSessionAccess:true,
   noLiveDatabaseConnected:true,realVoucherIssued:false,
   onchainTransactionsSent:0
