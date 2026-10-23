@@ -10,17 +10,19 @@
  * malicious Issuer/Operator/Owner collusion, grant eligibility or authorize
  * Settle. It is intentionally scoped to ONE already funded Testnet voucher.
  */
-import {Interface,keccak256} from 'ethers';
+import {Interface,keccak256,toUtf8Bytes,AbiCoder} from 'ethers';
 import {
  CHAIN,ESCROW,TOKEN,MEAL,TERMS,PRICE,QUOTE
 } from './core.mjs';
-import {t0,erc20,originalVoucherId,FIXED} from './t1e-first-issue-readiness.mjs';
+import {t0,erc20,originalVoucherId,FIXED,QUOTE_ID} from './t1e-first-issue-readiness.mjs';
 
 const ORIGINAL='2b9ae6f1-2bb7-4096-8136-70f30f302eea';
 const HEX32=/^0x[0-9a-f]{64}$/i;
 const HEX=/^0x[0-9a-f]+$/i;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ZERO='0x'+'0'.repeat(64);
+const OP_DOMAIN=keccak256(toUtf8Bytes('MealForwardOperationV1'));
+const abi=AbiCoder.defaultAbiCoder();
 const eq=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
 const check=(ok,reason)=>{if(!ok)throw Error(reason)};
 const u=x=>{
@@ -34,7 +36,8 @@ const receiptABI=new Interface([
  'event Issued(bytes32 indexed voucherId,uint8 unitSeq,uint256 generation,bytes32 termsHash,uint256 issuedAt,uint256 expiresAt)',
  'event OperationExecuted(bytes32 indexed opId,uint8 kind,address caller,bytes32 payloadHash,bytes32 result)',
  'event Settled(bytes32 indexed voucherId,bytes32 opId,address indexed receiver,uint256 amount)',
- 'function getVoucher(bytes32) view returns ((uint8 unitSeq,uint256 generation,bytes32 termsHash,uint256 issuedAt,uint256 expiresAt,address issuer,bytes32 lockId,uint256 lockedAt,address operator,address processor,bytes32 markerId,uint256 handoverRecordedAt,uint256 handoverBlock,bytes32 reportId,bytes32 settleId,bool expired))'
+ 'function getVoucher(bytes32) view returns ((uint8 unitSeq,uint256 generation,bytes32 termsHash,uint256 issuedAt,uint256 expiresAt,address issuer,bytes32 lockId,uint256 lockedAt,address operator,address processor,bytes32 markerId,uint256 handoverRecordedAt,uint256 handoverBlock,bytes32 reportId,bytes32 settleId,bool expired))',
+ 'function getOperation(bytes32) view returns ((uint8 kind,address caller,bytes32 payloadHash,bytes32 result,uint256 executedAt))'
 ]);
 
 function assertClaim(claim,stage,now,{freshConsent=true}={}){
@@ -229,6 +232,14 @@ export async function verifyOriginalIssuerReceipt({
  check(issued.length===1&&ops.length===1&&payout.length===0,
   'T1F_ISSUER_ONCHAIN_EVENTS_UNEXPECTED');
  const i=issued[0],op=ops[0];
+ const paramsHash=keccak256(abi.encode(
+  ['bytes32','uint8','uint256','bytes32','uint256'],
+  [MEAL,0,1,TERMS,u(claim.consent_deadline)]
+ ));
+ const operationHash=keccak256(abi.encode(
+  ['bytes32','uint256','uint256','address','uint8','address','bytes32','bytes32'],
+  [OP_DOMAIN,1,CHAIN,ESCROW,5,FIXED.issuerAuthority,claim.issuer_op_id,paramsHash]
+ ));
  check(eq(i.voucherId,voucherId)&&u(i.unitSeq)===0n&&
   u(i.generation)===1n&&eq(i.termsHash,TERMS)&&
   u(i.issuedAt)===u(block.timestamp)&&
@@ -236,14 +247,24 @@ export async function verifyOriginalIssuerReceipt({
   u(i.expiresAt)===u(i.issuedAt)+259200n,
   'T1F_ORIGINAL_ISSUED_EVENT_MISMATCH');
  check(eq(op.opId,claim.issuer_op_id)&&u(op.kind)===5n&&
-  eq(op.caller,FIXED.issuerAuthority)&&eq(op.result,voucherId),
+  eq(op.caller,FIXED.issuerAuthority)&&eq(op.result,voucherId)&&
+  eq(op.payloadHash,operationHash),
   'T1F_ISSUER_OPERATION_AUDIT_EVENT_MISMATCH');
- const [unit,accounting,voucher,balance]=await Promise.all([
+ const [unit,accounting,voucher,balance,savedOperation,usedQuote]=await Promise.all([
   at(rpc,ESCROW,t0,'getUnit',[0],tag),
   at(rpc,ESCROW,t0,'getAccounting',[],tag),
   at(rpc,ESCROW,receiptABI,'getVoucher',[voucherId],tag),
-  at(rpc,TOKEN,erc20,'balanceOf',[ESCROW],tag)
+  at(rpc,TOKEN,erc20,'balanceOf',[ESCROW],tag),
+  at(rpc,ESCROW,receiptABI,'getOperation',[claim.issuer_op_id],tag),
+  rpc.send('eth_call',[{
+   to:ESCROW,data:t0.encodeFunctionData('quoteUses',[QUOTE_ID])
+  },tag]).then(result=>t0.decodeFunctionResult('quoteUses',result))
  ]);
+ check(eq(unit.batchId,usedQuote[1])&&usedQuote[1]!==ZERO&&
+  savedOperation.kind===5n&&eq(savedOperation.caller,FIXED.issuerAuthority)&&
+  eq(savedOperation.payloadHash,operationHash)&&eq(savedOperation.result,voucherId)&&
+  savedOperation.executedAt===u(i.issuedAt),
+  'T1F_STORED_ORIGINAL_OPERATION_MISMATCH');
  check(unit.bucket===1n&&unit.generation===1n&&eq(unit.voucherId,voucherId)&&
   eq(unit.mealId,MEAL)&&eq(unit.termsHash,TERMS)&&
   unit.unitPrice===PRICE&&
