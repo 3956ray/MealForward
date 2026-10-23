@@ -1,0 +1,33 @@
+name: MealForward T1-E live protected SIWE_ONLY HTTPS gate (zero funds, zero claims)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-recipient-claim-http-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  live-readonly-siwe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check public smoke source without connecting to secrets
+        working-directory: t1-intents
+        run: |
+          node --check t1e-claim-siwe-cloud-smoke.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount' t1e-claim-siwe-cloud-smoke.mjs; then
+            echo 'T1E_READONLY_SMOKE_NO_BROADCAST_METHODS_ALLOWED'
+            exit 1
+          fi
+      - name: Actual Render HTTPS private SIWE and zero-write gate
+        working-directory: t1-intents
+        run: node t1e-claim-siwe-cloud-smoke.mjs
