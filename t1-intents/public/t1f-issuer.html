@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>留膳 · 唯一餐券发券验收 · T1-F</title>
+<link rel="stylesheet" href="/t1e-claim.css">
+</head>
+<body>
+<div class="shell">
+<header class="bar">
+<a class="brand" href="/"><span class="seal">膳</span><span>MEALFORWARD <small>留膳 · 原始合约发券验收</small></span></a>
+<span class="network">MONAD TESTNET · 10143</span>
+</header>
+<main>
+<section class="hero">
+<div class="overline">ONE VERIFIED CONSENT · ONE ORIGINAL OPERATION</div>
+<h1>一膳已留，<br><em>由你亲手发券。</em></h1>
+<p>已确认的 Recipient Consent 仅保存在链下。只有原链上 Issuer 钱包可以提交这笔原始 <code>issue()</code> 交易。系统会先永久预留唯一 Nonce，钱包交易绝不自动重发。</p>
+<div class="facts">
+<div><small>原资助</small><strong>7 Test USDC</strong><span>已托管，不重复 Fund</span></div>
+<div><small>唯一餐券</small><strong>Unit 0</strong><span>Generation 1</span></div>
+<div><small>商家结算</small><strong>关闭</strong><span>本页无法提款或结算</span></div>
+</div>
+</section>
+<section class="flow">
+<div class="section-top">
+<div><div class="overline">ISSUER ONLY · FIRST VOUCHER</div><h2>唯一原始 Issue · 交易恢复</h2></div>
+<span class="mode" id="t1f-stage" role="status">正在核验 T1-F 门禁…</span>
+</div>
+<div class="panel">
+<div class="index">01 / ISSUER SIWE</div>
+<h3>用原发行者钱包登录</h3>
+<p>发行者：<code>0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3</code></p>
+<div class="actions">
+<button type="button" id="connect" disabled>连接 MetaMask</button>
+<button type="button" id="choose" disabled>重新选择账户</button>
+<button type="button" id="login" disabled>本人 SIWE 登录（无转账）</button>
+<button type="button" id="inspect" disabled>核对原 Claim</button>
+<button type="button" id="logout" disabled>注销</button>
+</div>
+<pre id="identity" class="feedback" role="status" aria-live="polite">等待服务核验。</pre>
+</div>
+<div class="panel">
+<div class="index">02 / RESERVE EXACTLY ONCE</div>
+<h3>先保存原始交易，再显示钱包操作</h3>
+<p>只可对 Claim <code>fbab3b22-965d-44e2-b144-d7307b7aa8ea</code> 的已确认 Consent 发券。点击预留后，会固定原始 Operation ID、Nonce、Calldata Hash 和新 Issuer 截止时间。<strong>即使拒绝钱包弹窗，也不得再次发起新的 Issue。</strong></p>
+<div class="actions">
+<button type="button" id="reserve" disabled>一次性预留原始 Issue</button>
+<button type="button" id="send" disabled>本人 MetaMask 发送唯一 Issue</button>
+</div>
+<pre id="reservation" class="feedback" role="status" aria-live="polite">尚未预留。此步骤会永久锁定唯一交易；请确认钱包有少量 Monad Testnet MON 支付 Gas。</pre>
+</div>
+<div class="panel">
+<div class="index">03 / SAME ORIGINAL TX ONLY</div>
+<h3>核验原交易 Hash 与链上回执</h3>
+<p>如果浏览器断线或发送后失去返回值，请从 MetaMask 活动记录找回<strong>原交易 Hash</strong>，不要点击第二次发券。本页允许重复绑定和查询<strong>同一笔</strong>原交易，但不会重播它。</p>
+<div class="wallet">
+<small>原交易 Hash（可手动填写从 MetaMask 找回的 Hash）</small>
+<input id="original-hash" type="text" spellcheck="false" autocomplete="off" placeholder="0x + 64 位十六进制" aria-label="原始 Issue 交易 Hash" maxlength="66">
+</div>
+<div class="actions">
+<button type="button" id="bind" disabled>验证并绑定原交易</button>
+<button type="button" id="reconcile" disabled>检查原始 Receipt</button>
+</div>
+<pre id="receipt" class="feedback" role="status" aria-live="polite">需要原交易 Hash。无自动重发，无自动 Settle。</pre>
+</div>
+<div class="panel blocked">
+<div class="index">04 / SECURITY BOUNDARY</div>
+<h3>本次 Issue 不是核销或出餐证明</h3>
+<p>原合约的 <code>issue()</code> 不会链上验证受助者 EIP-712 Consent。此流程依赖平台链下校验与原 Issuer 钱包控制；不能证明受助资格、商家已出餐或抗管理员合谋。锁券、交付、Report 和 Settle 仍未开放。原合约 180 秒结算强制门槛问题仍待解决。</p>
+</div>
+</section>
+</main>
+<footer><span>留一膳，待一人，是为善。</span><span>Testnet only · 自己确认 MetaMask · 永不索取私钥</span><a href="/" rel="noopener">返回受助者页面 ↗</a></footer>
+</div>
+<script type="module" src="/t1f-issuer.mjs"></script>
+</body>
+</html>
