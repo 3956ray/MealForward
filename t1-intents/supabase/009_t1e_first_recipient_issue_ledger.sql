@@ -163,6 +163,46 @@ CREATE TRIGGER t1e_claim_no_delete BEFORE DELETE ON mf_t1e.recipient_claims
 CREATE TRIGGER t1e_claim_no_truncate BEFORE TRUNCATE ON mf_t1e.recipient_claims
  FOR EACH STATEMENT EXECUTE FUNCTION mf_t1e.claim_forbid_delete();
 
+CREATE TABLE mf_t1e.claim_events(
+ event_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ claim_id uuid NOT NULL REFERENCES mf_t1e.recipient_claims(claim_id) ON DELETE RESTRICT,
+ event_type text NOT NULL CHECK(event_type IN(
+  'CLAIM_PREPARED','CONSENT_VERIFIED','ISSUE_RESERVED',
+  'ISSUE_HASH_BOUND','ISSUE_CONFIRMED','CLAIM_BLOCKED')),
+ original_tx_hash text CHECK(original_tx_hash ~ '^0x[0-9a-f]{64}
+-- human approval. It cannot access any T1-C/T1-D Auth or money table.
+CREATE ROLE mf_t1e_claim_runtime NOLOGIN NOINHERIT
+ NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+GRANT CONNECT ON DATABASE postgres TO mf_t1e_claim_runtime;
+GRANT USAGE ON SCHEMA mf_t1e TO mf_t1e_claim_runtime;
+GRANT SELECT,INSERT ON mf_t1e.recipient_claims TO mf_t1e_claim_runtime;
+GRANT UPDATE(
+ stage,revision,consent_digest,consent_signature_fingerprint,
+ issuer_op_id,issuer_tx_nonce,issuer_tx_data_hash,issuer_tx_hash,
+ receipt_block,receipt_block_hash
+) ON mf_t1e.recipient_claims TO mf_t1e_claim_runtime;
+REVOKE DELETE,TRUNCATE,TRIGGER,REFERENCES
+ ON mf_t1e.recipient_claims FROM mf_t1e_claim_runtime;
+REVOKE ALL ON SCHEMA mf_t1e FROM
+ mf_t1c_auth_runtime,mf_t1c_intent_runtime,
+ mf_t1d_auth_runtime,mf_t1d_fund_runtime;
+REVOKE ALL ON ALL TABLES IN SCHEMA mf_t1e FROM
+ PUBLIC,anon,authenticated,service_role,
+ mf_t1c_auth_runtime,mf_t1c_intent_runtime,
+ mf_t1d_auth_runtime,mf_t1d_fund_runtime;
+
+COMMENT ON SCHEMA mf_t1e IS
+ 'Isolated Testnet recipient consent and issuer operation ledger; not an onchain recipient binding or food delivery proof.';
+),
+ recorded_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER t1e_claim_event_no_update_delete
+ BEFORE UPDATE OR DELETE ON mf_t1e.claim_events FOR EACH ROW
+ EXECUTE FUNCTION mf_t1e.claim_forbid_delete();
+CREATE TRIGGER t1e_claim_event_no_truncate
+ BEFORE TRUNCATE ON mf_t1e.claim_events FOR EACH STATEMENT
+ EXECUTE FUNCTION mf_t1e.claim_forbid_delete();
+
 -- This role cannot authenticate to the database until an owner-local
 -- human approval. It cannot access any T1-C/T1-D Auth or money table.
 CREATE ROLE mf_t1e_claim_runtime NOLOGIN NOINHERIT
@@ -177,6 +217,9 @@ GRANT UPDATE(
 ) ON mf_t1e.recipient_claims TO mf_t1e_claim_runtime;
 REVOKE DELETE,TRUNCATE,TRIGGER,REFERENCES
  ON mf_t1e.recipient_claims FROM mf_t1e_claim_runtime;
+GRANT SELECT,INSERT ON mf_t1e.claim_events TO mf_t1e_claim_runtime;
+GRANT USAGE,SELECT ON SEQUENCE mf_t1e.claim_events_event_id_seq
+ TO mf_t1e_claim_runtime;
 REVOKE ALL ON SCHEMA mf_t1e FROM
  mf_t1c_auth_runtime,mf_t1c_intent_runtime,
  mf_t1d_auth_runtime,mf_t1d_fund_runtime;
