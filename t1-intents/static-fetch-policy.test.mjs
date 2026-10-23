@@ -8,32 +8,49 @@ const entry=(path='/',over={})=>({
   'sec-fetch-site':'cross-site',
   'sec-fetch-mode':'navigate',
   'sec-fetch-dest':'document',
-  'sec-fetch-user':'?1',...over
+  'sec-fetch-user':'?1',
+  ...over
  }
 });
-test('offsite top-level GET navigation to public entry works, including browser link from ChatGPT',()=>{
- assert.equal(allowStaticFetchSite(entry('/')),true);
- assert.equal(allowStaticFetchSite(entry('/fund-testnet.html')),true);
- assert.equal(allowStaticFetchSite(entry('/',{'sec-fetch-user':undefined})),true);
- for(const site of ['none','same-origin',undefined]){
-  assert.equal(allowStaticFetchSite(entry('/ui.css',{'sec-fetch-site':site})),true);
+test('public, unpersonalized document responds to all real browser link metadata',()=>{
+ for(const path of ['/','/fund-testnet.html']){
+  for(const site of ['cross-site','same-site','same-origin','none',undefined]){
+   for(const mode of ['navigate','cors','no-cors',undefined]){
+    for(const dest of ['document','iframe','empty',undefined]){
+     const req=entry(path,{
+      'sec-fetch-site':site,'sec-fetch-mode':mode,
+      'sec-fetch-dest':dest,
+      origin:'https://chatgpt.com'
+     });
+     assert.equal(allowStaticFetchSite(req),true,
+      JSON.stringify({path,site,mode,dest}));
+     assert.equal(allowStaticFetchSite({...req,method:'HEAD'}),true);
+    }
+   }
+  }
  }
 });
-test('foreign-site HTML frames, API requests, script/css loads or POST stay denied',()=>{
- const blocked=[
-  entry('/ui.mjs'),entry('/ui.css'),
-  entry('/v1/t1/status'),entry('/v1/me'),
-  entry('/',{'sec-fetch-mode':'cors','sec-fetch-dest':'empty'}),
-  entry('/',{'sec-fetch-mode':'no-cors','sec-fetch-dest':'image'}),
-  entry('/',{'sec-fetch-mode':'navigate','sec-fetch-dest':'iframe'}),
-  entry('/',{'sec-fetch-mode':'navigate','sec-fetch-dest':'frame'}),
-  entry('/',{'sec-fetch-mode':'navigate','sec-fetch-dest':'script'}),
-  entry('/',{origin:'https://chatgpt.com'}),
-  entry('/',{'sec-fetch-site':'same-site'}),
-  {...entry('/'),method:'POST'},
-  {...entry('/fund-testnet.html'),method:'POST'}
- ];
- for(const item of blocked){
-  assert.equal(allowStaticFetchSite(item),false,JSON.stringify(item));
+test('cross-site JS/CSS remain blocked, even with fake navigation headers',()=>{
+ for(const path of ['/ui.mjs','/ui.css']){
+  for(const site of ['cross-site','opaque']){
+   assert.equal(allowStaticFetchSite(entry(path,{
+    'sec-fetch-site':site
+   })),false);
+  }
+  for(const site of ['none','same-origin','same-site',undefined]){
+   assert.equal(allowStaticFetchSite(entry(path,{
+    'sec-fetch-site':site
+   })),true);
+  }
+ }
+});
+test('policy cannot turn non-document API or any write method into a static fetch',()=>{
+ for(const path of ['/','/fund-testnet.html']){
+  for(const method of ['POST','PUT','PATCH','DELETE']){
+   assert.equal(allowStaticFetchSite({...entry(path),method}),false);
+  }
+ }
+ for(const path of ['/v1/me','/v1/t1/status','/v1/t1/fund/quote']){
+  assert.equal(allowStaticFetchSite(entry(path)),false);
  }
 });
