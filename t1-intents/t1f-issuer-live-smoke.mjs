@@ -85,6 +85,9 @@ export async function attestFirstIssuerLive({
    page.body.includes('id="send" disabled')&&
    typeof js.body==='string'&&js.body.includes('eth_sendTransaction')&&
    js.body.includes('reservedTransaction=null;submitted=true')&&
+   js.body.includes('function issueWindowOpen')&&
+   js.body.includes('SEND_WINDOW_MIN_SEC=90')&&
+   js.body.includes('latest.serverTimeUnix')&&
    !js.body.includes('eth_sendRawTransaction')&&
    !js.body.includes('privateKeyToAccount'),
    prefix+'ISSUER_WALLET_UI_NOT_EXACTLY_DEPLOYED');
