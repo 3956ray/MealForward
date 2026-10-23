@@ -32,6 +32,8 @@ test('both private T1-E roles begin NOLOGIN, and no privilege grants leak',()=>{
   claim_can_stage:true,old_auth_sees_new:false,old_fund_sees_new:false,
   auth_sees_claims:false,claim_sees_auth:false,
   auth_sees_finance:false,claim_sees_finance:false,
+  round_can_read:true,round_can_insert:true,
+  round_can_update_state:true,round_can_rewrite_nonce:false,
   claim_can_reassign_recipient:false,claim_can_delete:false
  };
  assert.equal(checkIsolation(grants),true);
