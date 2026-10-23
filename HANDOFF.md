@@ -134,3 +134,9 @@ Supabase 隔离 Staging 项目 **`mealforward-t1-staging` / `ketfrukrcuosrqynnsa
 **用户明确要求：每次开发结束后，必须更新根目录这一个 `HANDOFF.md`**，这样任何 Agent 只读 Markdown 即可立即接手开发；见根 `AGENTS.md`。更新时依次完成：最新代码/PR/分支与 SHA、实际部署 commit 和状态、Supabase 迁移/权限/数据只读真相、链上的实际 vs 推测、CI/人工验收精确链接、已知 bug/保留风险、下一步最小执行计划、需要用户亲自做的操作。未验证标明 `PENDING` 或 `NOT_RUN`，禁止拿合成 fixture 充当真人结果。每次开发和部署后再检查并提交 Handoff，向用户说明 GitHub 文件的可打开链接。
 
 优先级：**用户最新明确授权与安全边界 > 当前真源代码 + 真实运行时只读证据 > 本文件最新提交 > 过去交接与聊天摘要**。新的 Agent 不得用旧 `main` 或 `codex/mealforward-integrated-mvp` 猜测 T1-F 当前交易记录。
+### 文档版本落点与历史兼容（2026-10-23）
+
+- 旧 `docs/CP31-T1F-ISSUER-ISSUE-READINESS-2026-10-23.md` 现已加注“上线前历史 HOLD”，因此新 Agent 不应据旧句子误判当前 T1-F Issue 页面未上线；应先核对本文件的“最新实时发布与人工门槛”及真实 Render。
+- 最新应用实测部署来源 **`f0cb951742c52f03e0a734c2424ffb715a52108f`**；之后 staging 分支的工作主要是**只改变 Handoff / Actions 期望模式，不改变链上逻辑**。如再次触发部署，应精确比对 Git tree、启动日志和只读状态。
+- 人工测试前，仅停在 **Issuer SIWE 登录 + 核对原 Claim**；切勿由 Agent 或无人值守自动访问 Issuer Prepare，也不要让用户无意识地触发永久 `ISSUE_UNKNOWN`。
+- 每个新的交付阶段仍要更新**根目录此文件**作为该阶段最后的文档动作；只改历史文件不算完成交接。
