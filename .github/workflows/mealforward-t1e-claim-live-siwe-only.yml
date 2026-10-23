@@ -1,4 +1,4 @@
-name: MealForward T1-E live protected SIWE_ONLY HTTPS gate (zero funds, zero claims)
+name: MealForward T1-E live protected CLAIM_CONSENT HTTPS negative gate (no onchain writes)
 on:
   push:
     branches:
@@ -23,7 +23,7 @@ jobs:
       - name: Check public smoke source without connecting to secrets
         working-directory: t1-intents
         run: |
-          node --check t1e-claim-siwe-cloud-smoke.mjs
+          node --check t1e-claim-consent-live-smoke.mjs
           # The smoke test intentionally CONTAINS rejection literals for
           # eth_sendTransaction and eth_sendRawTransaction. Scan actual
           # server/browser application code, not assertion source.
@@ -33,6 +33,6 @@ jobs:
               exit 1
             fi
           done
-      - name: Actual Render HTTPS private SIWE and zero-write gate
+      - name: Actual Render HTTPS Consent negative/role/no-funds gate
         working-directory: t1-intents
-        run: node t1e-claim-siwe-cloud-smoke.mjs
+        run: node t1e-claim-consent-live-smoke.mjs
