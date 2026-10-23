@@ -13,7 +13,7 @@
  */
 export function allowStaticFetchSite({path,method,headers}={}){
  if(method!=='GET'&&method!=='HEAD')return false;
- if(path==='/'||path==='/fund-testnet.html')return true;
+ if(path==='/'||path==='/fund-testnet.html'||path==='/t1f-issuer-proof.html')return true;
  const site=headers?.['sec-fetch-site'];
  return site===undefined||site==='same-origin'||site==='none'||site==='same-site';
 }
@@ -30,7 +30,7 @@ export function allowStaticFetchSite({path,method,headers}={}){
 export function allowStaticQuery({path,search}={}){
  if(typeof search!=='string')return false;
  if(search==='')return true;
- if((path!=='/'&&path!=='/fund-testnet.html')||
+ if((path!=='/'&&path!=='/fund-testnet.html'&&path!=='/t1f-issuer-proof.html')||
   !search.startsWith('?')||search.length>512)return false;
  // Only harmless attribution fields may appear on the immutable public HTML.
  // A browser-supplied wallet, Intent, return URL or payment parameter must
