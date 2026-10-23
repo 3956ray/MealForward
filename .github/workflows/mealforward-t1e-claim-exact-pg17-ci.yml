@@ -1,0 +1,42 @@
+name: MealForward T1-E exact 009 and 010 private Claim app SQL on disposable PG17
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-recipient-claim-http-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  claim-t1e-disposable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5435/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start empty CI-only PostgreSQL 17
+        run: |
+          docker run -d --rm --name t1e-recipient-only-pg17 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1e-disposable-only \
+            -e POSTGRES_DB=postgres \
+            -p 127.0.0.1:5435:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec t1e-recipient-only-pg17 pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned PG and cryptographic libraries
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run EXACT 009 and 010 plus real Claim and one-time consent transactions
+        working-directory: t1-intents
+        run: |
+          node --check t1e-claim-ledger.ci.mjs
+          node t1e-claim-ledger.ci.mjs
