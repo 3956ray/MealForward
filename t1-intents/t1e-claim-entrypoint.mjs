@@ -106,7 +106,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   process.stdout.write(JSON.stringify({
    status:setup?'T1E_SAFE_SETUP_ONLY_READY':'T1E_PRIVATE_SIWE_STAGE_READY',
    stage:process.env.T1E_DEPLOYMENT_STAGE,
-   fundingEnabled:false,issuerTransactionEnabled:false,
+   fundingEnabled:false,
+   issuerTransactionEnabled:!setup&&runtime.config?.issueEnabled===true,
    merchantSettlementEnabled:false,
    databaseConnected:!setup
   })+'\n');
