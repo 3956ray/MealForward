@@ -54,6 +54,18 @@ export function buildIssuerControlChallenge({
   fundsAuthorization:false
  });
 }
+export function recoverEip191Signer({message,signature,expectedAddress,recover}={}){
+ assert(typeof message==='string'&&message.length>0&&message.length<1200,
+  'T1F_EIP191_MESSAGE_REQUIRED');
+ assert(typeof signature==='string'&&ECDSA.test(signature),
+  'T1F_INVALID_EIP191_SIGNATURE');
+ assert(typeof expectedAddress==='string'&&/^0x[0-9a-f]{40}$/i.test(expectedAddress),
+  'T1F_EIP191_EXPECTED_ADDRESS_REQUIRED');
+ assert(typeof recover==='function','T1F_EIP191_RECOVERY_REQUIRED');
+ const signer=recover(message,signature);
+ assert(same(signer,expectedAddress),'T1F_RECOVERED_SIGNER_NOT_ISSUER');
+ return signer;
+}
 export function verifyIssuerControlChallenge({
  challenge,signature,selectedAccount,chainId,origin,now,recover
 }={}){
@@ -74,11 +86,9 @@ export function verifyIssuerControlChallenge({
   issuedAt:challenge.issuedAt
  });
  assert(expected.text===challenge.text,'T1F_PROOF_TEXT_MODIFIED');
- assert(typeof signature==='string'&&ECDSA.test(signature),
-  'T1F_INVALID_EIP191_SIGNATURE');
- assert(typeof recover==='function','T1F_EIP191_RECOVERY_REQUIRED');
- const signer=recover(challenge.text,signature);
- assert(same(signer,ISSUER_ADDRESS),'T1F_RECOVERED_SIGNER_NOT_ISSUER');
+ recoverEip191Signer({
+  message:challenge.text,signature,expectedAddress:ISSUER_ADDRESS,recover
+ });
  // Do not expose raw signature, nonce, challenge or reusable auth capability.
  return Object.freeze({
   status:'LOCAL_ISSUER_EOA_EIP191_PROOF_PASS',
