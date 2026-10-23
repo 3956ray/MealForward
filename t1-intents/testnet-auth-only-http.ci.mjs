@@ -121,6 +121,25 @@ try{
   assert.match(page.headers['content-security-policy'],/frame-ancestors 'none'/);
   assert.equal(page.headers['set-cookie'],undefined);
  }
+ // This EXACT tracked URL was observed returning 403 in Chrome, while
+ // the bare URL passed earlier cloud smoke. Both MUST now be HTTP 200.
+ for(const trackedPath of [
+  '/?utm_source=chatgpt.com',
+  '/?utm_source=chatgpt.com&utm_medium=referral',
+  '/?gclid=untrustedclick'
+ ]){
+  const tracked=await rawGet(trackedPath,crossNav);
+  assert.equal(tracked.code,200,trackedPath);
+  assert.equal(tracked.headers['cache-control'],'no-store');
+  assert.equal(tracked.headers['x-frame-options'],'DENY');
+  assert.equal(tracked.headers['set-cookie'],undefined);
+  assert.equal((await rawGet(trackedPath,crossNav,'HEAD')).code,200);
+ }
+ // Do not let tracking suffixes or unusual query lengths turn into a
+ // generic bypass for scripts, signed data or protected APIs.
+ assert.equal((await rawGet('/ui.mjs?utm_source=chatgpt.com',{})).code,403);
+ assert.equal((await rawGet('/v1/t1/status?utm_source=chatgpt.com',{})).code,403);
+ assert.equal((await rawGet('/?'+ 'x'.repeat(2048),crossNav)).code,403);
  const head=await rawGet('/',crossNav,'HEAD');
  assert.equal(head.code,200,'HEAD public landing must work');
  for(const [pathname,headers] of [
