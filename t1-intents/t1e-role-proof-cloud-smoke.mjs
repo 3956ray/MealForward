@@ -63,7 +63,7 @@ export async function verifyT1ERoleProofCloud({fetchImpl=fetch}={}){
   if(path==='/t1e-role-proof.mjs')check(asset.body.includes('personal_sign')&&
    asset.body.includes('wallet_requestPermissions')&&
    asset.body.includes('classifyT1EWallet')&&
-   asset.body.includes('recipient-current-wallet')&&
+   asset.body.includes("'-current-wallet'")&&
    !asset.body.includes('eth_sendTransaction')&&
    !asset.body.includes('eth_signTypedData_v4'),
    'T1E_CLOUD_UNSAFE_PUBLIC_WALLET_API');
