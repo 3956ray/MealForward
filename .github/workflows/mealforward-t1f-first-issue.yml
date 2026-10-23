@@ -33,6 +33,10 @@ jobs:
           node --check t1e-claim-entrypoint.mjs
           node --check testnet-readonly-rpc.mjs
           node --test t1e-claim-http.test.mjs
+          node --test t1f-issuer-http.test.mjs
+          node --test t1f-issuer-page.test.mjs
+          node --check public/t1f-issuer.mjs
+          node --check t1f-issuer-http.mjs
 
   original-issue-pg17:
     runs-on: ubuntu-latest
