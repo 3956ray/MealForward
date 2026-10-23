@@ -38,7 +38,7 @@ export async function attestT1EConsentLive({fetchImpl=fetch}={}){
   status.data.chainId===10143&&
   status.data.walletLoginEnabled===true&&
   status.data.recipientClaimWriteEnabled===true&&
-  status.data.issuerIssueEnabled===false&&
+  typeof status.data.issuerIssueEnabled==='boolean'&&
   status.data.fundEnabled===false&&
   status.data.settleEnabled===false&&
   status.data.beneficiaryEligibilityVerified===false&&
