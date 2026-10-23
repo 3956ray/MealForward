@@ -13,6 +13,8 @@ function manage(){
  $('inspect').disabled=!logged||locked;
  $('prepare').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||locked||
   !!claim;
+ $('renew').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||
+  !claim?.consentNeedsRenewal||locked;
  $('consent').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||
   !consent||claim?.stage!=='PREPARED'||locked;
 }
@@ -120,7 +122,8 @@ $('inspect').addEventListener('click',()=>perform(async()=>{
  put('claim-result',claim?
   'Claim ID: '+claim.claimId+'\nStage: '+claim.stage+
   '\nUnit 0 / Generation 1\nVoucher: '+claim.voucherId+
-  '\n不可自动更换 Nonce 或创建新的领取申请。':
+  '\nConsent Round '+claim.consentRound+' / '+claim.maxConsentRounds+
+  (claim.consentNeedsRenewal?'\n授权已过期，可恢复同一原始 Claim。':'\n不能创建第二份餐券。'):
   '尚未创建测试受助者 Claim。');
  if(consent)put('consent-result',
   '已准备独立受助者授权，尚未签名。\n截止时间：'+
@@ -140,7 +143,25 @@ $('prepare').addEventListener('click',()=>perform(async()=>{
  put('consent-result',consent?
   'EIP-712 Consent 已准备（尚未签署）。截止：'+
   new Date(Number(consent.expiry)*1000).toLocaleString():
-  '此 Claim 已进入 '+claim.stage+'，不能重复签署。');
+  claim?.consentNeedsRenewal?
+   '上一轮授权过期。请点击「原 Claim 授权过期后恢复」，不能新建第二个 Claim。':
+   '此 Claim 已进入 '+claim.stage+'，不能重复签署。');
+}));
+$('renew').addEventListener('click',()=>perform(async()=>{
+ if(wallet!==RECIPIENT||sessionWallet!==wallet||!csrf||
+  !claim?.consentNeedsRenewal||claim.stage!=='PREPARED')
+  throw Error('原 Claim 尚未过期或不属于当前登录钱包');
+ await checkWallet(wallet);
+ const data=await send('/v1/t1e/claim/renew','POST',{}, {'X-C1-CSRF':csrf});
+ if(data.originalClaimReused!==true||data.claim.claimId!==claim.claimId||
+   data.claim.consentRound<=claim.consentRound)
+  throw Error('原始 Claim 恢复证明未通过');
+ claim=data.claim;consent=data.consent;
+ put('claim-result','原始 Claim 不变：'+claim.claimId+
+  '\n已建立第 '+claim.consentRound+' / '+claim.maxConsentRounds+
+  ' 轮新授权窗口；旧 Nonce 永久失效。');
+ put('consent-result','现在可以使用 MetaMask 签署新一轮 Consent。\n到期：'+
+  new Date(Number(consent.expiry)*1000).toLocaleString());
 }));
 $('consent').addEventListener('click',()=>perform(async()=>{
  if(wallet!==RECIPIENT||sessionWallet!==wallet||!csrf||
