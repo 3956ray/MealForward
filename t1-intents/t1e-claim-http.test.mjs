@@ -21,6 +21,7 @@ const row={
  unit_seq:0,generation:'1',voucher_id:FIRST_VOUCHER,
  issuer_wallet:FIXED.issuerAuthority,beneficiary_wallet:PILOT_RECIPIENT,
  consent_nonce:'0x'+'a'.repeat(64),consent_deadline:String(NOW+420),
+ round:{claim_id:'2b9ae6f1-2bb7-4096-8136-70f30f302eee',seq:1,nonce:'0x'+'a'.repeat(64),deadline:String(NOW+420),state:'PENDING'},
  consent_digest:null,consent_signature_fingerprint:null,stage:'PREPARED',revision:'0',
  issuer_tx_hash:null
 };
