@@ -87,6 +87,8 @@ try{
  assert.match(page,/data-expected-mode="T1D_ISOLATED_SIWE_READ_ONLY_GATE"/);
  assert.equal((await fetch(origin+'/ui.mjs')).status,200);
  assert.notEqual((await fetch(origin+'/fund-testnet.html')).status,200);
+ assert.notEqual((await fetch(origin+'/t1f-issuer-proof.html')).status,200);
+ assert.notEqual((await fetch(origin+'/t1f-issuer-control.mjs')).status,200);
  // Reproduce Chrome Fetch Metadata for a link clicked from ChatGPT.
  // Only top-level public HTML GET navigation may cross site. Never API,
  // javascript, stylesheet, external Origin, iframe or transaction requests.
