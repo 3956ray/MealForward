@@ -1,4 +1,5 @@
 /* No wallet transaction, token approval, contract call or storage access. */
+import {classifyT1EWallet,walletSelectionHelp} from './t1e-wallet-roles.mjs';
 const $=id=>document.getElementById(id);
 const ORIGIN=location.origin,CHAIN=10143n;
 let running=false,revision=0;
@@ -7,12 +8,31 @@ const display=(role,text,pass=null)=>{
  const el=$(role+'-result');
  el.textContent=text;el.dataset.state=pass===null?'':pass?'ok':'bad';
 };
+function preview(role,address){
+ const result=classifyT1EWallet(role,address);
+ const slot=$(role+'-current-wallet');
+ if(slot)slot.textContent=result.wallet?
+  result.wallet+' · '+(result.roleName||'钱包地址'):
+  '尚未连接或授权 MetaMask';
+ return result;
+}
+async function refreshConnectedWallet(){
+ if(!window.ethereum?.request)return;
+ const connected=await window.ethereum.request({method:'eth_accounts'});
+ const address=connected?.[0]||null;
+ preview('issuer',address);
+ preview('recipient',address);
+}
 function invalid(){
  revision++;
  for(const role of ['issuer','recipient']){
-  if(STATE[role])display(role,'PASS：此前已验证钱包控制权（非当前连接会话）\\n'+STATE[role],true);
+  preview(role,null);
+  if(STATE[role])display(role,
+   'PASS：此前已验证钱包控制权（非当前连接会话）\n'+STATE[role],true);
   else display(role,'钱包或网络已切换，可重新发起独立证明。');
  }
+ // Do not treat a historical PASS as the currently connected MetaMask account.
+ void refreshConnectedWallet().catch(()=>{});
 }
 window.ethereum?.on?.('accountsChanged',invalid);
 window.ethereum?.on?.('chainChanged',invalid);
@@ -51,6 +71,15 @@ async function verify(role){
   const wallet=accounts?.[0];
   if(typeof wallet!=='string'||!/^0x[a-fA-F0-9]{40}$/.test(wallet))
    throw Error('未能读取钱包地址');
+  const check=preview(role,wallet);
+  if(!check.ok){
+   // Client-only explanation. The independent backend role restriction
+   // remains unchanged and rejects a spoofed HTTP request as before.
+   throw Error(walletSelectionHelp(check)+'\n本次实际连接地址：'+wallet);
+  }
+  const selected=await provider.request({method:'eth_accounts'});
+  if(selected?.[0]?.toLowerCase()!==wallet.toLowerCase())
+   throw Error('账户在准备挑战时发生切换，请重新选择受助者钱包');
   const challenge=await request('/v1/t1e/role/challenge','POST',{
    role,address:wallet
   });
@@ -85,6 +114,32 @@ async function verify(role){
   display(role,'未通过：'+(e?.message||'未知错误'),false);
  }finally{running=false;button.disabled=false}
 }
+async function selectRecipientAccount(){
+ if(running)return;
+ running=true;
+ const button=$('recipient-switch');
+ button.disabled=true;
+ display('recipient','请在 MetaMask 中仅选择独立的受助者测试账号（不可使用 Issuer/Quote/Owner）。');
+ try{
+  const provider=connectEthereum();
+  if(typeof provider.request!=='function')throw Error('请启用 MetaMask');
+  // Explicit owner click asks MetaMask to show connected-accounts permission.
+  // This is NOT a signature, ERC20 approval, wallet transaction or login.
+  await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]});
+  const [accounts,chain]=await Promise.all([
+   provider.request({method:'eth_accounts'}),
+   provider.request({method:'eth_chainId'})
+  ]);
+  if(BigInt(chain)!==CHAIN)throw Error('请先切换 Monad Testnet（Chain ID 10143）');
+  const result=preview('recipient',accounts?.[0]);
+  display('recipient',walletSelectionHelp(result)+
+   (result.wallet?'\n实际连接地址：'+result.wallet:''),result.ok);
+ }catch(e){
+  display('recipient','无法自动重选账户：'+String(e?.message||'未知错误')+
+   '\n你也可以在 MetaMask 的「已连接的网站」中断开本网站，重新只授权独立受助者账户。',false);
+ }finally{running=false;button.disabled=false}
+}
+$('recipient-switch').addEventListener('click',selectRecipientAccount);
 $('issuer-proof').addEventListener('click',()=>verify('issuer'));
 $('recipient-proof').addEventListener('click',()=>verify('recipient'));
 (async()=>{
@@ -99,6 +154,7 @@ $('recipient-proof').addEventListener('click',()=>verify('recipient'));
     status.settleEnabled!==false)
    throw Error('安全模式未通过');
   $('cloud-status').textContent='ROLE_PROOF_ONLY · 无数据库写入 · 无资金交易';
+  void refreshConnectedWallet().catch(()=>{});
  }catch(e){
   $('cloud-status').textContent='无法确认安全模式：'+(e?.message||'服务暂不可用');
   $('issuer-proof').disabled=true;$('recipient-proof').disabled=true;
