@@ -104,7 +104,7 @@ function validateConfig(env){
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?(t1d?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
    (t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
-  expectedIntentRole:testing?(identityOnly?'mf_t1d_ci_fund_e2e':funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
+  expectedIntentRole:testing?(t1d?'mf_t1d_ci_fund_e2e':'mf_t1c_ci_intent_ro'):
    (t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
