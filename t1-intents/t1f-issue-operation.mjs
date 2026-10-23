@@ -165,6 +165,23 @@ export function inspectReservedIssuerOperation({
   recommendedAction:'RECOVER_EXISTING_TX_HASH_FROM_METAMASK_ACTIVITY'
  });
 }
+/**
+ * Server-side transaction identity proof for an already reserved operation.
+ * Never return these bytes to the browser after the original ISSUE_UNKNOWN
+ * reservation: this function exists only for independent tx-hash matching.
+ */
+export function rebuildReservedIssuerTransaction({claim}={}){
+ check(['ISSUE_UNKNOWN','ISSUE_HASH_BOUND','ISSUED'].includes(claim?.stage),
+  'T1F_RESERVED_OPERATION_REQUIRED');
+ assertClaim(claim,claim.stage,Math.floor(Date.now()/1000),{freshConsent:false});
+ check(HEX32.test(claim.issuer_op_id||'')&&claim.issuer_issue_deadline!=null,
+  'T1F_ORIGINAL_OP_OR_DEADLINE_MISSING');
+ const nonce=u(claim.issuer_tx_nonce);
+ const transaction=construct({claim,opId:claim.issuer_op_id,nonce});
+ check(eq(keccak256(transaction.data),claim.issuer_tx_data_hash),
+  'T1F_ORIGINAL_IMMUTABLE_TX_HASH_DIFFERENT');
+ return Object.freeze(transaction);
+}
 async function at(rpc,to,iface,fn,args,blockTag){
  const output=await rpc.send('eth_call',[{
   to,data:iface.encodeFunctionData(fn,args)
@@ -240,7 +257,7 @@ export async function verifyOriginalIssuerReceipt({
   eq(decoded.args[0],claim.issuer_op_id)&&
   eq(decoded.args[1],MEAL)&&u(decoded.args[2])===0n&&
   u(decoded.args[3])===1n&&eq(decoded.args[4],TERMS)&&
-  u(decoded.args[5])===u(claim.consent_deadline),
+  u(decoded.args[5])===u(claim.issuer_issue_deadline),
   'T1F_ORIGINAL_ISSUE_FUNCTION_ARGS_MISMATCH');
  const voucherId=originalVoucherId(0,1n);
  const issued=decodedEvents(receipt.logs,'Issued');
@@ -251,7 +268,7 @@ export async function verifyOriginalIssuerReceipt({
  const i=issued[0],op=ops[0];
  const paramsHash=keccak256(abi.encode(
   ['bytes32','uint8','uint256','bytes32','uint256'],
-  [MEAL,0,1,TERMS,u(claim.consent_deadline)]
+  [MEAL,0,1,TERMS,u(claim.issuer_issue_deadline)]
  ));
  const operationHash=keccak256(abi.encode(
   ['bytes32','uint256','uint256','address','uint8','address','bytes32','bytes32'],
@@ -260,7 +277,7 @@ export async function verifyOriginalIssuerReceipt({
  check(eq(i.voucherId,voucherId)&&u(i.unitSeq)===0n&&
   u(i.generation)===1n&&eq(i.termsHash,TERMS)&&
   u(i.issuedAt)===u(block.timestamp)&&
-  u(i.issuedAt)<u(claim.consent_deadline)&&
+  u(i.issuedAt)<u(claim.issuer_issue_deadline)&&
   u(i.expiresAt)===u(i.issuedAt)+259200n,
   'T1F_ORIGINAL_ISSUED_EVENT_MISMATCH');
  check(eq(op.opId,claim.issuer_op_id)&&u(op.kind)===5n&&
