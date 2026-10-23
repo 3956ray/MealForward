@@ -82,3 +82,22 @@ test('accountChanged event clears all wallet-owned Issuer abilities',async()=>{
  assert.equal(b.buttons.reserve.disabled,true);
  assert.equal(b.buttons.send.disabled,true);
 });
+
+test('original Issue send deadline fail-closes after expiration and with short remaining window',()=>{
+ const declaration=source.match(/function issueWindowOpen\([\s\S]*?\n}/);
+ assert.ok(declaration,'issuer issue-window guard must exist');
+ const scope={};
+ runInNewContext(declaration[0],scope);
+ const open=scope.issueWindowOpen;
+ assert.equal(open({stage:'CONSENT_VERIFIED',issuerDeadline:'1000'},100),false);
+ assert.equal(open({stage:'ISSUE_UNKNOWN',issuerDeadline:'1000'},850),true);
+ assert.equal(open({stage:'ISSUE_UNKNOWN',issuerDeadline:'1000'},910),false);
+ assert.equal(open({stage:'ISSUE_UNKNOWN',issuerDeadline:'1000'},1000),false);
+ assert.equal(open({stage:'ISSUE_UNKNOWN',issuerDeadline:null},100),false);
+ assert.equal(open({stage:'ISSUE_UNKNOWN',issuerDeadline:'99999999'},100),false);
+ assert.match(source,/!issueWindowOpen\(claim\)/);
+ assert.match(source,/!issueWindowOpen\(latestClaim,serverNow\)/);
+ assert.match(source,/reservedTransaction=null;submitted=true/);
+ assert.match(source,/latestClaim\.originalTxHash!==null/);
+ assert.match(source,/answer\.created===false/);
+});

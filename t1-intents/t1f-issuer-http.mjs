@@ -30,6 +30,7 @@ export async function t1fIssuerRoute({
  if(path==='/v1/t1f/issuer/status'&&method==='GET'){
   return send(response,200,{
    status:'T1F_ISSUER_WALLET_ONLY',
+   serverTimeUnix:now,
    claim:await ledger.status({issuer}),
    fundedAgainAllowed:false,
    onchainRecipientConsentEnforced:false,
