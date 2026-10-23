@@ -30,6 +30,22 @@ export function allowStaticFetchSite({path,method,headers}={}){
 export function allowStaticQuery({path,search}={}){
  if(typeof search!=='string')return false;
  if(search==='')return true;
- return (path==='/'||path==='/fund-testnet.html')&&
-  search.startsWith('?')&&search.length<=2048;
+ if((path!=='/'&&path!=='/fund-testnet.html')||
+  !search.startsWith('?')||search.length>512)return false;
+ // Only harmless attribution fields may appear on the immutable public HTML.
+ // A browser-supplied wallet, Intent, return URL or payment parameter must
+ // NEVER be accepted or interpolated into the page.
+ const allowed=new Set([
+  'utm_source','utm_medium','utm_campaign','utm_content','utm_term',
+  'gclid','fbclid','ref'
+ ]);
+ const params=new URLSearchParams(search);
+ if(params.size===0||params.size>8)return false;
+ const seen=new Set();
+ for(const [key,value] of params){
+  if(!allowed.has(key)||seen.has(key)||!value||value.length>120||
+   !/^[a-zA-Z0-9._~-]+$/.test(value))return false;
+  seen.add(key);
+ }
+ return true;
 }
