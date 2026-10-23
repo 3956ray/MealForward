@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-t1e-first-voucher-readonly-20261023
+      - codex/mealforward-t1f-issuer-control-and-issuance-20261023
   workflow_dispatch:
 permissions:
   contents: read
