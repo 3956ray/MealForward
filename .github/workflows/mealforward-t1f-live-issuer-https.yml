@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      T1F_EXPECT_ENABLED: "false"
+      T1F_EXPECT_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
