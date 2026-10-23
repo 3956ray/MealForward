@@ -9,7 +9,10 @@ const display=(role,text,pass=null)=>{
 };
 function invalid(){
  revision++;
- for(const role of ['issuer','recipient']){STATE[role]=null;display(role,'钱包或网络已切换，需要重新证明。',false)}
+ for(const role of ['issuer','recipient']){
+  if(STATE[role])display(role,'PASS：此前已验证钱包控制权（非当前连接会话）\\n'+STATE[role],true);
+  else display(role,'钱包或网络已切换，可重新发起独立证明。');
+ }
 }
 window.ethereum?.on?.('accountsChanged',invalid);
 window.ethereum?.on?.('chainChanged',invalid);
@@ -38,12 +41,12 @@ async function verify(role){
  if(running)return;
  running=true;
  const button=$(role+'-proof');button.disabled=true;
- const version=revision;
  display(role,'请核对 MetaMask 钱包与 Monad Testnet 网络…');
  try{
   const provider=connectEthereum();
   const accounts=await provider.request({method:'eth_requestAccounts'});
   const chain=await provider.request({method:'eth_chainId'});
+  const version=revision; // freeze AFTER the initial wallet-selection popup
   if(BigInt(chain)!==CHAIN)throw Error('请先切换到 Monad Testnet（Chain ID 10143）');
   const wallet=accounts?.[0];
   if(typeof wallet!=='string'||!/^0x[a-fA-F0-9]{40}$/.test(wallet))
@@ -74,6 +77,8 @@ async function verify(role){
     result.noSessionCreated!==true||result.noOnchainIssue!==true)
    throw Error('证明响应未通过来源校验');
   STATE[role]=wallet;
+  if(STATE.issuer&&STATE.recipient)
+   $('cloud-status').textContent='两种独立测试钱包均已验证（仅历史控制证明；没有领取 Session）';
   display(role,'PASS：本次测试钱包控制权已验证。\n'+wallet+
    '\n未建立用户会话、未发行餐券、未转移 USDC。',true);
  }catch(e){
