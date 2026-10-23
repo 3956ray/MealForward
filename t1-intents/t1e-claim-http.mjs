@@ -8,6 +8,7 @@ import {verifyRecipientConsent} from './t1e-recipient-consent.mjs';
 import {consentFromClaim} from './t1e-consent-payload.mjs';
 import {publicClaim,PILOT_RECIPIENT} from './t1e-claim-store.mjs';
 import {FIXED} from './t1e-first-issue-readiness.mjs';
+import {t1fIssuerRoute} from './t1f-issuer-http.mjs';
 
 const HASH=x=>createHash('sha256').update(x,'utf8').digest('hex');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
@@ -51,6 +52,7 @@ async function requestJson(req){
 }
 export function makeT1EClaimGateway({
  origin,stage,authStore,claimStore,readiness,loginHandler,
+ issueEnabled=false,issuerLedger=null,issuerRpc=null,issuerReadiness=null,
  clock=()=>Math.floor(Date.now()/1000)
 }={}){
  const isConsent=stage==='CLAIM_CONSENT';
@@ -60,6 +62,10 @@ export function makeT1EClaimGateway({
    !authStore||!claimStore||
    typeof readiness!=='function'||typeof loginHandler!=='function')
   throw Error('T1E_CLAIM_GATEWAY_INVALID_CONFIG');
+ if(issueEnabled&&(
+   stage!=='CLAIM_CONSENT'||!issuerLedger||
+   typeof issuerRpc?.send!=='function'||typeof issuerReadiness!=='function'
+ ))throw Error('T1F_ISSUE_CONFIG_NOT_READY');
  const host=new URL(origin).host;
  const active=async(req,csrf=false)=>{
   const cookies=cookieMap(req.headers.cookie);
@@ -92,7 +98,7 @@ export function makeT1EClaimGateway({
     status:isConsent?'T1E_RECIPIENT_CONSENT_ONLY':'T1E_ISOLATED_SIWE_READ_ONLY',
     chainId:10143,pinnedRecipient:PILOT_RECIPIENT,
     walletLoginEnabled:true,recipientClaimWriteEnabled:isConsent,
-    issuerIssueEnabled:false,fundEnabled:false,settleEnabled:false,
+    issuerIssueEnabled:issueEnabled,fundEnabled:false,settleEnabled:false,
     beneficiaryEligibilityVerified:false,
     onchainRecipientSignatureEnforced:false,
     originalCp30Connected:false
@@ -109,7 +115,7 @@ export function makeT1EClaimGateway({
     const snapshot=await claimStore.issuerReadiness();
     return writeJson(res,200,{
      originalUnit:0,generation:1,issuance:snapshot,
-     issuerTransactionEnabled:false,
+     issuerTransactionEnabled:issueEnabled,
      nextAction:snapshot?.claimStage==='CONSENT_VERIFIED'?
       'AWAIT_EXPLICIT_WALLET_ISSUE_RELEASE':'AWAIT_BENEFICIARY_DURABLE_CONSENT'
     });
@@ -204,6 +210,17 @@ export function makeT1EClaimGateway({
      beneficiaryEligibilityVerified:false
     });
    }
+   if(path.startsWith('/v1/t1f/')){
+    if(!issueEnabled)throw ERR(405,'T1F_ISSUE_NOT_RELEASED');
+    const issuer=await active(req,method==='POST');
+    if(issuer!==FIXED.issuerAuthority)
+     throw ERR(403,'T1F_REGISTERED_ISSUER_ONLY');
+    return await t1fIssuerRoute({
+     path,method,request:req,response:res,issuer,
+     ledger:issuerLedger,rpc:issuerRpc,readiness:issuerReadiness,
+     readBody:requestJson,now
+    });
+   }
    if(path.startsWith('/v1/t1e/'))
     throw ERR(method==='POST'?405:404,'T1E_ISSUE_AND_SETTLEMENT_DISABLED');
    return loginHandler(req,res);
@@ -213,7 +230,7 @@ export function makeT1EClaimGateway({
    // non-sensitive 401. Do not mislabel it as a 503-style outage.
    const safeSessionMissing=status===401&&e?.code==='UNAUTHENTICATED';
    let code=safeSessionMissing?'UNAUTHENTICATED':
-    typeof e?.code==='string'&&/^T1E_[A-Z_]{3,80}$/.test(e.code)?
+    typeof e?.code==='string'&&/^T1[EF]_[A-Z_]{3,80}$/.test(e.code)?
     e.code:'T1E_SERVICE_UNAVAILABLE';
    // Explicit safe programmatic state errors, no raw SQL or wallet data.
    if(status===503&&typeof e?.message==='string'&&/^T1E_[A-Z_]{3,80}$/.test(e.message)){
@@ -224,6 +241,19 @@ export function makeT1EClaimGateway({
      'T1E_CONSENT_RENEW_ONLY_AFTER_EXPIRED',
      'T1E_CONSENT_RETRY_LIMIT',
      'T1E_CONSENT_ROUND_CAS_CONFLICT'].includes(code)?409:403;
+   }
+   if(status===503&&typeof e?.message==='string'&&
+      /^T1F_[A-Z0-9_]{4,90}$/.test(e.message)){
+     const known=e.message;
+     status=[
+      'T1F_ORIGINAL_TRANSACTION_NOT_INDEXED',
+      'T1F_ORIGINAL_NONCE_NOT_RESERVED',
+      'T1F_ORIGINAL_RESERVATION_CHANGED',
+      'T1F_ORIGINAL_HASH_NOT_BOUND',
+      'T1F_ORIGINAL_CLAIM_NOT_READY',
+      'T1F_ISSUE_ATOMIC_CAS_FAILURE'
+     ].includes(known)?409:403;
+     code=known;
    }
    return writeJson(res,status,{error:code});
   }
