@@ -6,6 +6,15 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-23 22:28（UTC+8）：原始 Issue 截止时间已过（最新硬停止）
+
+- 原始 Issuer `ISSUE_UNKNOWN` 的不可变 `issuer_issue_deadline=1792765625`，即 **北京时间 2026-10-23 22:27:05**；在 UTC+8 22:27:07 工具核对当前时钟时已经过期，**绝对不能再点击 MetaMask 的「发送唯一 Issue」**。
+- 截止之后，真实 Supabase 二次读取仍为 `ISSUE_UNKNOWN`、`revision=2`、原唯一 nonce `0`、`issuer_tx_hash=NULL`、`receipt_block=NULL`、只有三条审计事件（`CLAIM_PREPARED`、`CONSENT_VERIFIED`、`ISSUE_RESERVED`），不存在重复 Claim/Fund 记录。**NULL Hash 不足以证明浏览器/钱包绝对没有广播交易。**
+- 截止以后触发的独立真实 Monad Testnet 只读 Actions：[`39961919635` attempt 3](https://github.com/3956ray/MealForward/actions/runs/39961919635/attempts/3) **PASS**；UTC `2026-10-23T14:28:17.971Z`，区块 `73552746`：原 Unit 0 `Available=1`，未见 Issued，7,000,000 USDC 基本单位余额与 Liability 相等，`rpcWriteMethodsCalled=0`。即截至该链上检查尚未观察到成功发券；不排除待打包的原交易，需要核对 MetaMask Activity/Nonce。
+- **此刻唯一人工问题：用户是否已经在截止时间之前点过「本人 MetaMask 发送唯一 Issue」？** 若点过，必须从 MetaMask Activity 找回**该**公开 Transaction Hash 并只读调查原链交易；不能重发。如果仅点过预留按钮，则当前应停止，保留 DB 不变，进入人工审计的单笔过期恢复方案设计。
+- 严禁重置/改写 `issuer_op_id`、`issuer_issue_deadline`、`issuer_tx_nonce`，也严禁从另一钱包重发/补发、重新 Consent/Claim、重复 Fund/Settle；代码未实现安全恢复过期预留的流程，必须先在隔离 PG17 设计和验证补救方案，经单独人工审核授权后才允许实际修改。此前给用户的“有效期内可一次发送”条件已经失效。
+- 这是 **HANDOFF 文档更新，不是生产代码变更或 Render 重部署**。所有正式 T1-F 操作应保持不继续，等用户提供是否发送/原公开 Hash 的证据，切勿猜测钱包状态。
+
 ## 2026-10-23 22:24（UTC+8）：真人已点击「一次性预留原始 Issue」— CRITICAL LIVE STATE
 
 **当前高优先级真相：原 Claim 已永久进入 `ISSUE_UNKNOWN`；后续所有“先预留一次”的旧步骤均被此状态覆盖。请先读本节，再看历史发布文档。**
