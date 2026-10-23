@@ -86,7 +86,7 @@ test('accountChanged event clears all wallet-owned Issuer abilities',async()=>{
 test('original Issue send deadline fail-closes after expiration and with short remaining window',()=>{
  const declaration=source.match(/function issueWindowOpen\([\s\S]*?\n}/);
  assert.ok(declaration,'issuer issue-window guard must exist');
- const scope={};
+ const scope={SEND_WINDOW_MIN_SEC:90};
  runInNewContext(declaration[0],scope);
  const open=scope.issueWindowOpen;
  assert.equal(open({stage:'CONSENT_VERIFIED',issuerDeadline:'1000'},100),false);
