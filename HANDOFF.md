@@ -6,15 +6,29 @@
 >
 > **当前人工门槛：T1-F Issuer 专属云页面已经通过安全发布 Gate，用户下一步亲自 SIWE 登录并读取唯一原 Claim；先不要预留或发送 issue()。** 自动化工作已完成到需要真人钱包这一点。
 
+## 2026-10-23 21:28（UTC+8）紧急修复：T1-F 链接附加参数导致 HTTP 403
+
+**最新核验结论：已修复并部署，真实公网验证 PASS；用户仍需自行重新打开页面。**
+
+- **症状**：用户点击 T1-F Issuer 入口，浏览器报 `HTTP ERROR 403`，尚未登录、预留或发送链上交易。Render 免费服务未返回此请求的细粒度 request log，不能断言每次用户浏览器带了什么参数。
+- **可复现的源码原因**：原 `t1-intents/t1e-claim-server.mjs` 在静态资源路由检查 `(u.pathname!=='/'&&u.search)`，对 `/t1f-issuer.html?utm_source=chatgpt.com` 无条件返回 403；先前的 GitHub Actions 新公网回归检查在旧线上版本**FAIL**：[`39961238421` attempt 1](https://github.com/3956ray/MealForward/actions/runs/39961238421/attempts/1)。
+- **修复范围**：新增纯函数 `safeStaticQuery`，只允许 Issuer **HTML 页面**携带有限 `utm_source / utm_medium / utm_campaign / utm_content / utm_term`、无重复、无危险值、总长度不超过 400；原首页行为不变；JS、API 和任意 `wallet / claimId / next` 等 query 继续被拒绝。绝不通过 URL 指定身份、用户钱包或资金动作。
+- **开发与合入**：Draft PR #40 源码提交 `f4a38344a391664fb9e649034c5305cc1ba125ca`；Stage 分支补丁提交 `c30a07d9f641d189cfb3632d57361639328dbda5`。受影响文件：`t1-intents/t1e-claim-server.mjs`、`t1-intents/t1f-issuer-live-smoke.mjs`、`t1-intents/t1f-static-query.test.mjs`、`.github/workflows/mealforward-t1f-first-issue.yml`。同一核心源码通过源分支 T1-F 协议/PG 和 Monad 只读 CI。
+- **实际 Render 部署**：`mealforward-t1e-claim-laodao`，服务 `srv-dbdgstivcj2c73fnqcc0`，Deploy `dep-dbdm1di9lscs73c7nc8g`，**Live**，exact deployed commit `c30a07d9f641d189cfb3632d57361639328dbda5`。启动日志 `CLAIM_CONSENT`、`issuerTransactionEnabled:true`、`fundingEnabled:false`、`merchantSettlementEnabled:false`、`databaseConnected:true`。
+- **部署后真实 HTTPS 回归**：[`39961238421` attempt 2](https://github.com/3956ray/MealForward/actions/runs/39961238421/attempts/2) **PASS**，`T1F_ISSUER_HTTPS_RELEASE_NEGATIVE_PASS`，22 个真实公网请求；验证原 HTML、`?utm_source=chatgpt.com`、多 UTM 参数都返回 200 且 HTML 内容一致，非允许 query 和 JS query 返回 403，未授权 Issuer 401，资金/结算拒绝，0 Claim 写入/0 链上交易。此前失败的第一次执行只代表**部署前**的旧代码，不是当前 Live 故障。
+- **数据库再次实核**：唯一 `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 `CONSENT_VERIFIED` / `revision=1`，原 opId/Nonce/issuerDeadline/TxHash 均 NULL；1 条原 `FUNDED`、1 条 Claim、2 条审计和 1 条 Verified Consent Round，Supabase Advisor 无告警。**本次修复没有发放餐券或改变资金**。
+- **下一位 Agent / 当前用户操作**：用户重新打开 `https://mealforward-t1e-claim-laodao.onrender.com/t1f-issuer.html`（也已兼容 `?utm_source=chatgpt.com`），只用原 Issuer `0x9747...aA2B3` 在 Monad 10143 进行 **SIWE 登录 → 核对原 Claim**。请务必停在此步，不点击一次性预留或交易发送。若仍见 403，请记录浏览器地址栏的 URL（删去秘密）、究竟在页面导航还是 API 请求时返回，以及 DevTools Network 的 HTTP status；不要泄露 Cookie/签名。无需再 Fund/Claim/Consent。
+- **原安全界限完全不变**：原 StoreEscrow 不链上强制 Recipient EIP-712 授权，商家 Lock/Report/Settle 不开放，原 180 秒 settle 链上门槛问题 #17 未解决；旧 CP30 Journal `PREPARED #3560` 不碰。
+
 ## 最新实时发布与人工门槛（2026-10-23 19:25 UTC+8）
 
 | Gate | 已实际确认的结果 |
 | --- | --- |
 | GitHub T1-F 开发 | [Draft PR #40](https://github.com/3956ray/MealForward/pull/40)，原始实现提交树 `3efd4632`，后续更新了正式公网安全测试；**不得合并 main** |
 | T1-E staging 发布真源 | `codex/mealforward-t1e-recipient-claim-http-20261023`，正式源码 Release Commit `065d0ee5d824dbd0283387462fd0927c70f1aa67`；之后又有 Handoff/CI-only 提交。读取仓库真实 HEAD |
-| Render 已上线版本 | T1-E 独立服务 `srv-dbdgstivcj2c73fnqcc0`，**LIVE**：`dep-dbdk7kcs728c73c8u63g`，部署 Commit `f0cb951742c52f03e0a734c2424ffb715a52108f`，含同一受测应用源码 + 文档 |
+| Render 已上线版本（最新见上文） | **LIVE：`dep-dbdm1di9lscs73c7nc8g`**，部署 Commit `c30a07d9f641d189cfb3632d57361639328dbda5`；旧 `dep-dbdk7kcs728c73c8u63g` 是本次 403 修复之前的历史记录 |
 | Render 安全模式 | `T1E_DEPLOYMENT_STAGE=CLAIM_CONSENT`，`T1F_ISSUE_WALLET_ENABLED=true`，`T1E_WALLET_TX_ENABLED=false`，`T1E_SETTLEMENT_ENABLED=false`；启动日志 `issuerTransactionEnabled:true`、`fundingEnabled:false`、`merchantSettlementEnabled:false`、`databaseConnected:true` |
-| 真实外部 HTTPS 门禁 | **PASS** [Actions 39945930715](https://github.com/3956ray/MealForward/actions/runs/39945930715)：17 次实际公网匿名请求，Issuer 页面可读取，非登录 Issuer 接口 401、跨域/伪造地址 403、资金与结算仍拒绝；0 Claim 写入/0 链上交易 |
+| 真实外部 HTTPS 门禁（最新见上文） | **PASS** [39961238421 attempt 2](https://github.com/3956ray/MealForward/actions/runs/39961238421/attempts/2)，22 次部署后真实 HTTPS 请求，包括 Issuer HTML 带 ChatGPT UTM 参数、非法查询参数拒绝及未认证/资金接口负测试；0 Claim 写入/0 链上交易 |
 | T1-E 原功能回归 | **PASS** [Actions 39945930678](https://github.com/3956ray/MealForward/actions/runs/39945930678) Consent HTTPS；[39945930713](https://github.com/3956ray/MealForward/actions/runs/39945930713) HTTP + Wallet；[39945930712](https://github.com/3956ray/MealForward/actions/runs/39945930712) PG17；[39945930697](https://github.com/3956ray/MealForward/actions/runs/39945930697) 原单券真实 Monad RPC |
 | T1-F 新发券协议/DB CI | **PASS** [Actions 39945232839](https://github.com/3956ray/MealForward/actions/runs/39945232839) 独立 PG17 009–012 + Issuer HTTP/UI；[39945232632](https://github.com/3956ray/MealForward/actions/runs/39945232632) Monad public readonly |
 | 最后真实 Supabase 核验 | 1 条 `FUNDED` 原资助；1 条 `CONSENT_VERIFIED` 领取 Claim（`revision=1`）；1 条 `VERIFIED` Consent Round、2 条 Claim Events；原 Issuer `opId/nonce/issueDeadline/txHash/receipt` **全部 NULL**；安全 Advisor 无 lints |
