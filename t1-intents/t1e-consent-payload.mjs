@@ -18,8 +18,9 @@ export function consentFromClaim(row,now=Math.floor(Date.now()/1000)){
  publicClaim(row); // fail-closed on wrong original/beneficiary/Terms
  safe(row.stage==='PREPARED'&&row.consent_digest===null&&
   Number.isSafeInteger(now)&&now>0&&
-  BigInt(row.consent_deadline)>BigInt(now+5)&&
-  BigInt(row.consent_deadline)<=BigInt(now+600),
+  row.round?.state==='PENDING'&&
+  BigInt(row.round.deadline)>BigInt(now+5)&&
+  BigInt(row.round.deadline)<=BigInt(now+600),
   'T1E_PREPARED_CONSENT_EXPIRED_OR_ALREADY_USED');
  safe(same(row.beneficiary_wallet,PILOT_RECIPIENT)&&
   row.funding_intent===ORIGINAL_INTENT&&
@@ -32,8 +33,8 @@ export function consentFromClaim(row,now=Math.floor(Date.now()/1000)){
   issuer:getAddress(FIXED.issuerAuthority),
   mealId:MEAL,termsHash:TERMS,voucherId:FIRST_VOUCHER,
   unitSeq:0,generation:1,
-  nonce:row.consent_nonce.toLowerCase(),
-  deadline:String(row.consent_deadline)
+  nonce:row.round.nonce.toLowerCase(),
+  deadline:String(row.round.deadline)
  });
  const digest=TypedDataEncoder.hash(DOMAIN,TYPES,message);
  return Object.freeze({
@@ -46,7 +47,8 @@ export function consentFromClaim(row,now=Math.floor(Date.now()/1000)){
    types:{EIP712Domain:domainTypes,RecipientConsent:FIELDS},
    message
   }),
-  digest,expiry:String(row.consent_deadline),
+  digest,expiry:String(row.round.deadline),
+  consentRound:Number(row.round.seq),
   onchainRecipientBinding:false,
   claimOrVoucherIssued:false,
   walletSignatureRequested:false,
