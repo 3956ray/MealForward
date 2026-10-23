@@ -37,7 +37,7 @@ const receiptABI=new Interface([
  'function getVoucher(bytes32) view returns ((uint8 unitSeq,uint256 generation,bytes32 termsHash,uint256 issuedAt,uint256 expiresAt,address issuer,bytes32 lockId,uint256 lockedAt,address operator,address processor,bytes32 markerId,uint256 handoverRecordedAt,uint256 handoverBlock,bytes32 reportId,bytes32 settleId,bool expired))'
 ]);
 
-function assertClaim(claim,stage,now){
+function assertClaim(claim,stage,now,{freshConsent=true}={}){
  check(claim&&typeof claim==='object'&&claim.stage===stage,
   'T1F_ISSUER_CLAIM_STAGE_NOT_ALLOWED');
  check(typeof claim.claim_id==='string'&&UUID.test(claim.claim_id),
@@ -58,7 +58,7 @@ function assertClaim(claim,stage,now){
   HEX32.test(claim.consent_digest||'')&&
   HEX32.test(claim.consent_signature_fingerprint||''),
   'T1F_DURABLE_CONSENT_EVIDENCE_REQUIRED');
- check(u(claim.consent_deadline)>BigInt(now),
+ if(freshConsent)check(u(claim.consent_deadline)>BigInt(now),
   'T1F_RECIPIENT_CONSENT_EXPIRED');
  return u(claim.consent_deadline);
 }
@@ -128,7 +128,7 @@ export function inspectReservedIssuerOperation({
  check(Number.isSafeInteger(now)&&now>0,'T1F_VALID_SERVER_CLOCK_REQUIRED');
  // A reserved nonce means any MetaMask timeout/rejection/connection loss
  // MUST be resolved from the original Activity/txHash, never re-sent.
- assertClaim(claim,'ISSUE_UNKNOWN',now);
+ assertClaim(claim,'ISSUE_UNKNOWN',now,{freshConsent:false});
  check(HEX32.test(claim.issuer_op_id||'')&&!eq(claim.issuer_op_id,ZERO),
   'T1F_RESERVED_OPERATION_ID_MISSING');
  const nonce=u(claim.issuer_tx_nonce);
@@ -170,7 +170,7 @@ export async function verifyOriginalIssuerReceipt({
  check(claim?.stage==='ISSUE_HASH_BOUND','T1F_ORIGINAL_ISSUE_HASH_NOT_BOUND');
  // A chain receipt may finalize AFTER the signed deadline; it only had
  // to be valid at the actual Issue inclusion block.
- assertClaim(claim,'ISSUE_HASH_BOUND',0);
+ assertClaim(claim,'ISSUE_HASH_BOUND',now,{freshConsent:false});
  check(typeof claim.issuer_op_id==='string'&&HEX32.test(claim.issuer_op_id)&&
   typeof claim.issuer_tx_data_hash==='string'&&HEX32.test(claim.issuer_tx_data_hash)&&
   typeof claim.issuer_tx_hash==='string'&&HEX32.test(claim.issuer_tx_hash)&&
@@ -232,6 +232,7 @@ export async function verifyOriginalIssuerReceipt({
  check(eq(i.voucherId,voucherId)&&u(i.unitSeq)===0n&&
   u(i.generation)===1n&&eq(i.termsHash,TERMS)&&
   u(i.issuedAt)===u(block.timestamp)&&
+  u(i.issuedAt)<u(claim.consent_deadline)&&
   u(i.expiresAt)===u(i.issuedAt)+259200n,
   'T1F_ORIGINAL_ISSUED_EVENT_MISMATCH');
  check(eq(op.opId,claim.issuer_op_id)&&u(op.kind)===5n&&
