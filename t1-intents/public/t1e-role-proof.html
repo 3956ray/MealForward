@@ -42,6 +42,7 @@
       <h3 id="issuer-title">发行者钱包</h3>
       <p>必须使用原 T0 StoreEscrow 注册的独立 Issuer 钱包，不能使用之前的 Quote / 资助钱包。</p>
       <div class="address"><small>链上注册的 Issuer</small><code>0x9747D93d…F634aA2B3</code></div>
+      <div class="current-wallet"><small>本次网站实际连接的钱包</small><code id="issuer-current-wallet">尚未读取</code></div>
       <button type="button" id="issuer-proof" class="primary">连接并证明 Issuer <span aria-hidden="true">↗</span></button>
       <div id="issuer-result" class="result" role="status" aria-live="polite">尚未验证钱包控制权。</div>
      </article>
@@ -50,7 +51,12 @@
       <h3 id="recipient-title">受助者测试钱包</h3>
       <p>选择另一只与 Owner、Quote、Issuer、Operator、Catalog 均不同的钱包。本阶段不收集真实贫困证明或私人身份数据。</p>
       <div class="address"><small>身份限制</small><code>独立测试钱包 · 不必持有 USDC</code></div>
-      <button type="button" id="recipient-proof" class="secondary">连接并证明受助者 <span aria-hidden="true">↗</span></button>
+      <div class="current-wallet"><small>本次网站实际连接的钱包</small><code id="recipient-current-wallet">尚未读取</code></div>
+      <div class="recipient-actions">
+       <button type="button" id="recipient-switch" class="switch-wallet">重新选择 MetaMask 账户 ↻</button>
+       <button type="button" id="recipient-proof" class="secondary">连接并证明受助者 <span aria-hidden="true">↗</span></button>
+      </div>
+      <p class="wallet-hint">如仍显示 Issuer、Quote 或 Owner 地址，请在 MetaMask 中取消本网站的旧账户授权，再只连接独立的受助者测试账户。</p>
       <div id="recipient-result" class="result" role="status" aria-live="polite">尚未验证钱包控制权。</div>
      </article>
     </div>
