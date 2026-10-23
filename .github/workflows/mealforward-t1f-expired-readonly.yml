@@ -1,0 +1,30 @@
+name: MealForward T1-F expired immutable Issue read-only chain forensic
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-original-issue-recovery-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  expired-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned libraries with no lifecycle scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test synthetic nonce ambiguity and read-only method whitelist
+        working-directory: t1-intents
+        run: |
+          node --check t1f-expired-issuer-readonly.mjs
+          node --test t1f-expired-issuer-readonly.test.mjs
+      - name: Independently inspect original Issuer latest/pending nonce and operation on Monad Testnet
+        working-directory: t1-intents
+        run: node t1f-expired-issuer-readonly.mjs
