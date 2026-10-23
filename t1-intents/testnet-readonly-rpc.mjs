@@ -10,7 +10,8 @@ const ENDPOINTS=Object.freeze([
 ]);
 const METHODS=new Set([
  'eth_chainId','eth_blockNumber','eth_getBlockByNumber','eth_getCode',
- 'eth_call','eth_getTransactionByHash','eth_getTransactionReceipt'
+ 'eth_call','eth_getTransactionByHash','eth_getTransactionReceipt',
+ 'eth_getTransactionCount'
 ]);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const strict=(ok,why)=>{if(!ok)throw Error(why)};

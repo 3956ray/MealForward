@@ -1,3 +1,5 @@
+> **所有接手 Agent 请先读：[HANDOFF.md](HANDOFF.md)**。这是最新可直接接手开发的单一 Markdown 入口；历史 CP/本机运维文档是背景而非当下云端真源。**每次开发结束必须更新它**（见 [AGENTS.md](AGENTS.md)）。
+
 ## CP28：Dynamic身份与候选钱包准备
 
 现有15287准备入口新增 `/#/identity`：本人Dynamic邮箱登录与管理员/老板同一候选地址确认。SDK登录、服务端身份、候选声明和业务权限分开；未配新入口已审核claim profile时明确关闭服务端验证和候选确认。recipient免登录。运行、边界与测试见[CP28身份接线](docs/CP28-IDENTITY.md)；本次不签名、不广播，业务仍BLOCKED。

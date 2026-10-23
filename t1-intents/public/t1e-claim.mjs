@@ -221,7 +221,7 @@ window.ethereum?.on?.('chainChanged',()=>switched());
  try{
   const status=await send('/v1/t1e/status');
   if(status.chainId!==10143||status.walletLoginEnabled!==true||
-   status.issuerIssueEnabled!==false||status.fundEnabled!==false||
+   typeof status.issuerIssueEnabled!=='boolean'||status.fundEnabled!==false||
    status.settleEnabled!==false||status.originalCp30Connected!==false||
    !['T1E_ISOLATED_SIWE_READ_ONLY','T1E_RECIPIENT_CONSENT_ONLY'].includes(status.status))
    throw Error('服务安全配置不符合预期');
