@@ -55,7 +55,8 @@ CREATE TABLE mf_t1e.recipient_claims(
    '0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952',
    '0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3',
    '0xc4f8a468f10d5f98dcff3282516125e97f26433b',
-   '0x3dc9d4509062cba2cfc8edd3a8d656839a50165'
+   '0x3dc9d4509062cba2cfc8edd3a8d656839a50165',
+   '0x41dcbfed391b79fac7b2951dd136c6b7e1384259'
   )
  ),
  issuer_wallet text NOT NULL DEFAULT '0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3'
@@ -67,7 +68,7 @@ CREATE TABLE mf_t1e.recipient_claims(
  consent_digest text CHECK(consent_digest ~ '^0x[0-9a-f]{64}$'),
  consent_signature_fingerprint text CHECK(consent_signature_fingerprint ~ '^0x[0-9a-f]{64}$'),
  stage text NOT NULL DEFAULT 'PREPARED' CHECK(stage IN
-  ('PREPARED','CONSENT_VERIFIED','ISSUE_UNKNOWN','ISSUED','BLOCKED')),
+  ('PREPARED','CONSENT_VERIFIED','ISSUE_UNKNOWN','ISSUE_HASH_BOUND','ISSUED','BLOCKED')),
  issuer_op_id text UNIQUE CHECK(issuer_op_id ~ '^0x[0-9a-f]{64}$'),
  issuer_tx_nonce bigint CHECK(issuer_tx_nonce>=0),
  issuer_tx_data_hash text CHECK(issuer_tx_data_hash ~ '^0x[0-9a-f]{64}$'),
@@ -80,12 +81,19 @@ CREATE TABLE mf_t1e.recipient_claims(
  UNIQUE(funding_intent,unit_seq,generation),
  UNIQUE(issuer_wallet,issuer_tx_nonce),
  CHECK ((consent_digest IS NULL)=(consent_signature_fingerprint IS NULL)),
- CHECK ((stage='PREPARED')=(consent_digest IS NULL)),
- CHECK ((stage IN ('ISSUE_UNKNOWN','ISSUED'))=
-  (issuer_op_id IS NOT NULL AND issuer_tx_nonce IS NOT NULL AND issuer_tx_data_hash IS NOT NULL)),
- CHECK (stage='ISSUED' OR (issuer_tx_hash IS NULL AND receipt_block IS NULL AND receipt_block_hash IS NULL)),
- CHECK (stage<>'ISSUED' OR
-  (issuer_tx_hash IS NOT NULL AND receipt_block IS NOT NULL AND receipt_block_hash IS NOT NULL))
+ CHECK ((stage='PREPARED' AND consent_digest IS NULL)
+  OR (stage IN ('CONSENT_VERIFIED','ISSUE_UNKNOWN','ISSUE_HASH_BOUND','ISSUED')
+    AND consent_digest IS NOT NULL) OR stage='BLOCKED'),
+ CHECK ((stage IN ('ISSUE_UNKNOWN','ISSUE_HASH_BOUND','ISSUED')
+  AND issuer_op_id IS NOT NULL AND issuer_tx_nonce IS NOT NULL AND issuer_tx_data_hash IS NOT NULL)
+  OR (stage IN ('PREPARED','CONSENT_VERIFIED')
+    AND issuer_op_id IS NULL AND issuer_tx_nonce IS NULL AND issuer_tx_data_hash IS NULL)
+  OR stage='BLOCKED'),
+ CHECK ((stage IN ('ISSUE_HASH_BOUND','ISSUED') AND issuer_tx_hash IS NOT NULL)
+  OR (stage IN ('PREPARED','CONSENT_VERIFIED','ISSUE_UNKNOWN') AND issuer_tx_hash IS NULL)
+  OR stage='BLOCKED'),
+ CHECK ((stage='ISSUED' AND receipt_block IS NOT NULL AND receipt_block_hash IS NOT NULL)
+  OR (stage<>'ISSUED' AND receipt_block IS NULL AND receipt_block_hash IS NULL))
 );
 CREATE UNIQUE INDEX t1e_first_unit_generation_claim_unique
  ON mf_t1e.recipient_claims(chain_id,escrow,unit_seq,generation);
@@ -135,7 +143,8 @@ BEGIN
  IF NOT (
   (OLD.stage='PREPARED' AND NEW.stage='CONSENT_VERIFIED') OR
   (OLD.stage='CONSENT_VERIFIED' AND NEW.stage='ISSUE_UNKNOWN') OR
-  (OLD.stage='ISSUE_UNKNOWN' AND NEW.stage='ISSUED') OR
+  (OLD.stage='ISSUE_UNKNOWN' AND NEW.stage='ISSUE_HASH_BOUND') OR
+  (OLD.stage='ISSUE_HASH_BOUND' AND NEW.stage='ISSUED') OR
   (NEW.stage='BLOCKED' AND OLD.stage NOT IN ('ISSUED','BLOCKED'))
  ) THEN RAISE EXCEPTION USING ERRCODE='P0001',
   MESSAGE='T1E_INVALID_CLAIM_STAGE_TRANSITION'; END IF;
