@@ -2,13 +2,38 @@
 
 > **本文件是当前项目唯一的高优先级跨 Agent 接手入口。** 从仓库根目录打开 `HANDOFF.md`，先核对实时 GitHub / Render / Supabase，再继续任何开发。此文件随每次开发、迁移、部署和用户验收更新。历史 `docs/agent-handoff-2026-10-16/` 与原 CP30 合同不得当作 2026-10-23 的实时云状态。
 >
-> **更新日期：2026-10-23（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
+> **更新日期：2026-10-24（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-24（UTC+8）最新：用户确认两次均为预留，过期发送已由新 UI 阻止
+
+**这是当前最高优先级接手真相，覆盖下文 2026-10-23 的历史人工疑问。** 用户明确回复：**“第二次点击的是『一次性预留原始 Issue』”**，而非第二次点击发送。不能据此推断 MetaMask Activity 绝对没有任何先前单独发送，仍须核对本人钱包记录。
+
+### 真实数据与链上结果
+
+- 最新 Supabase 再次只读核验：唯一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea`，`ISSUE_UNKNOWN` / `revision=2`，一条 `ISSUE_RESERVED` 审计，唯一 opId `0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、Issuer Nonce `0`、不可变截止时间 `1792765625`（2026-10-23 22:27:05 北京时间）、`issuer_tx_hash=NULL`、`receipt_block=NULL`。原 `FUNDED=1`、`Claims=1`、`Issue Reserves=1`，无第二笔数据库预留或新 Fund。
+- 同一原 Issuer 真实链上只读验收：[Actions 40032357397](https://github.com/3956ray/MealForward/actions/runs/40032357397)，2026-10-23T22:15:21Z（2026-10-24 06:15 UTC+8），区块 `73645548`：Issuer `latestNonce=0`、`pendingNonce=0`、原 `getOperation(opId)` 未执行、Unit 0 `Available`、`unitIssued=false`。状态 `T1F_EXPIRED_NO_ISSUE_OBSERVED_NOT_ABSENCE_PROOF`；**公共 RPC 没有观察到原 Tx ≠ 可以证明所有节点 / MetaMask 均没有任何曾广播的 Tx。** 不可据此直接重置已冻结数据。
+- Supabase Security Advisor 最新查询 0 lints。没有调用任何链写方法、变更真实 Claim 或触碰原 CP30 Journal。
+
+### 已修复一个实际 UX 安全缺陷并部署
+
+以前的 Issuer 浏览器页面即使临近或超过 Solidity `issue()` 截止时间，仍可能保持「本人 MetaMask 发送唯一 Issue」可点。新代码使用 `issueWindowOpen`（至少剩余 90 秒）、`serverTimeUnix` 服务端时钟和不可变原 opId/nonce/deadline/Hash 比对，**在准备打开 MetaMask 发送弹窗之前**拒绝过期、太接近截止或已变化的原操作，并清除内存中的可发送交易。第二次 Prepare 收到 `created:false` 时显示“恢复原交易”而不是误报新预留成功。真实钱包签名依然只能由用户点击，服务器不能广播。
+- 开发真源：Draft PR [#40](https://github.com/3956ray/MealForward/pull/40)，安全代码曾验证的开发提交 `6aa9efc9e13e9c87c0123bc2f12e253e06697447`；后续更新仅增强公网验收和 Handoff，实时查 PR HEAD。
+- Staging 应用代码提交 `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`，**真实 Render Live** 服务 `srv-dbdgstivcj2c73fnqcc0`，Deploy `dep-dbdto63rjlhs738br1sg`。之后 staging HEAD `61cc60a6...` 的变化属于测试断言，须实时核对 HEAD，不能把 GitHub HEAD 冒充 Render 已部署 Commit。
+- 已通过：最新 staging [T1-F PG17/Wallet/HTTP 安全测试 40032357425](https://github.com/3956ray/MealForward/actions/runs/40032357425) PASS；[T1-E Auth HTTP 40032357474](https://github.com/3956ray/MealForward/actions/runs/40032357474) PASS；[真实公网 HTTPS 40032357818](https://github.com/3956ray/MealForward/actions/runs/40032357818) PASS，22 请求，且新前端确实包含过期 guard 和 serverTimeUnix check；[链上过期预留诊断 40032357397](https://github.com/3956ray/MealForward/actions/runs/40032357397) PASS；[原单份资金只读校验 40032357496](https://github.com/3956ray/MealForward/actions/runs/40032357496) PASS。以上均无钱包广播。
+- 新诊断脚本 `t1-intents/t1f-expired-issuer-readonly.mjs` 和对应 `.test.mjs`，仅允许链 ID、Latest/Pending nonce、`getOperation`、原 Unit 与同一固定区块一致性，只输出不可用于自助重发的风险评估。
+
+### 新 Agent 的唯一安全下一步（非自动 Issue）
+
+1. **让原 Issuer 本人查看 MetaMask Activity，确认该钱包在 Monad Testnet 上是否有 Nonce 0 的交易、交易 Hash 或待处理记录**；如有，基于**原 Hash**只读核实 Tx/Receipt 并继续原 `ISSUE_UNKNOWN` 的恢复，不创建新交易。无需提供私钥、Session Cookie 或原始签名。
+2. 如果用户明确从未点击任何发送按钮、钱包 Activity 确认无相关 Tx、Nonce 仍是 0、原 Unit 仍 Available，则新 Agent 可**先写受审计的过期预留恢复设计/隔离测试**，包括原事件不可删改、区分首次过期与真正已广播的情况、原操作永久保留、所有新尝试必须另存 append-only 数据、模拟并发/链重组/钱包拒绝；**没有额外明确人工授权不得对真实数据库做任何恢复写入或发第二笔 Issue**。
+3. 目前 `ISSUE_UNKNOWN` **仍存在且已过期**；绝不可点击旧页或新版页的「本人 MetaMask 发送唯一 Issue」，不可再次预留、重置 nonce/op/deadline、重复 Fund/Claim/Consent/Settle。刷新页面可取得新版禁发保护，但刷新不会取消 MetaMask 可能已经广播的 Tx，需先看钱包 Activity。
+4. **每次开发结束必须继续更新本根目录 HANDOFF.md**，优先读此最新日期段；旧文“用户是否点击第二次发送？”已由用户本轮明确解释为第二次**预留**，不要重复问同一个问题。
+
 ## 2026-10-23 22:35+（UTC+8）：用户报告「这是第二次点击了」— 数据库无二次预留
 
-- 用户在首次报告已点击「一次性预留原始 Issue」后，进一步回复「这是第二次点击了」。**所指按钮可能是第二次点击预留，也可能另指发送；必须向用户确认是否触发过 MetaMask「本人 MetaMask 发送唯一 Issue」**，不要仅凭语句下结论。
+- 用户在首次报告已点击「一次性预留原始 Issue」后，进一步回复「这是第二次点击了」。**已在 2026-10-24 由用户明确：第二次点击的是「一次性预留原始 Issue」，不是该次发送**，不要仅凭语句下结论。
 - 随后实际只读查询 Supabase `mf_t1e.recipient_claims`：唯一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 `ISSUE_UNKNOWN`、`revision=2`、原唯一 `issuer_op_id=0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、nonce `0`、`issuer_issue_deadline=1792765625`、原 `issuer_tx_data_hash=0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed`；仍未持久记录 `issuer_tx_hash` 或 Receipt。
 - `mf_t1e.claim_events` 仍仅 **1 条** `ISSUE_RESERVED`（event id 3），另有 `CLAIM_PREPARED` 和 `CONSENT_VERIFIED`，总 3 条；原 `FUNDED=1`，Claim=1，Issuer Hash=0。**没有第二条预留的数据库证据**。
 - 已检查实际部署所用 `t1-intents/t1f-issue-ledger.mjs`：当 Claim 不再是 `CONSENT_VERIFIED` 而是 `ISSUE_UNKNOWN`、`ISSUE_HASH_BOUND` 或 `ISSUED` 时，`reserve` 直接返回 `created:false`、`recoveryOnly:true`、`sendAgainPermitted:false`，不生成新的 opId、Nonce、Calldata 或可提交交易。
