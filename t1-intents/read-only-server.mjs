@@ -223,7 +223,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   // arbitrary filesystem path, storage directory, SSR or API secrets.
   bootStage='ASSET_LOAD';
   const exposedFiles=[
-   ['/',cfg.identityOnly?'t1d-identity.html':'index.html','text/html; charset=utf-8'],
+   ['/',cfg.funding?'fund-testnet.html':cfg.identityOnly?'t1d-identity.html':'index.html','text/html; charset=utf-8'],
    ['/ui.css','ui.css','text/css; charset=utf-8'],
    ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
   ];
