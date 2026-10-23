@@ -40,6 +40,9 @@ jobs:
       - name: Browser MetaMask account switching and rejected-wallet fail-closed tests
         working-directory: t1-intents
         run: node --test t1e-claim-wallet-ui.test.mjs
+      - name: Validate Consent-stage live negative probe syntax without network
+        working-directory: t1-intents
+        run: node --check t1e-claim-consent-live-smoke.mjs
       - name: Original recipient consent cross-check and Issuer receipt source-only negative tests
         working-directory: t1-intents
         run: node --test t1e-recipient-consent.test.mjs t1e-issuer-original.test.mjs

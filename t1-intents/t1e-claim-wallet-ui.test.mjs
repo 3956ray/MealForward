@@ -74,6 +74,7 @@ test('UI exposes an explicit user-click account chooser, never an automatic sign
  assert.match(html,/id="choose-account" disabled/);
  assert.match(html,/id="connect" disabled/);
  assert.match(script,/wallet_requestPermissions/);
+ assert.match(script,/\$\('inspect'\)\.disabled=!logged\|\|wallet!==RECIPIENT\|\|locked/);
  for(const method of ['eth_sendTransaction','eth_sendRawTransaction','privateKeyToAccount'])
   assert.equal(script.includes(method),false,method);
 });

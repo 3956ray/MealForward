@@ -13,7 +13,7 @@ function manage(){
  $('login').disabled=!eligible||logged||locked;
  $('who').disabled=!logged||locked;
  $('logout').disabled=!logged||locked;
- $('inspect').disabled=!logged||locked;
+ $('inspect').disabled=!logged||wallet!==RECIPIENT||locked;
  $('prepare').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||locked||
   !!claim;
  $('renew').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||
