@@ -1,0 +1,40 @@
+name: MealForward T1-E original funded Unit nextVoucher read-only and issuer simulation
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-first-voucher-readonly-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  first-voucher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned local ABI, do not run install scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Static safety of first-voucher read-only source
+        working-directory: t1-intents
+        run: |
+          node --check t1e-first-issue-readiness.mjs
+          node --check t1e-first-issue-readiness.test.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet\.fromPrivateKey' t1e-first-issue-readiness.mjs; then
+            echo T1E_NO_CHAIN_WRITE_METHODS_ALLOWED
+            exit 1
+          fi
+      - name: Exact original Voucher ID + ABI + no-wallet-write unit tests
+        working-directory: t1-intents
+        run: node --test t1e-first-issue-readiness.test.mjs
+      - name: Real Monad Testnet funded Unit, original role, candidate and issuer eth_call dry-run
+        working-directory: t1-intents
+        run: node t1e-first-issue-readiness.mjs
