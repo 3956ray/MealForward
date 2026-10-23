@@ -120,11 +120,13 @@ export function makeT1EClaimGateway({
     const row=await claimStore.own(wallet);
     const basic=publicClaim(row);
     let consent=null;
-    if(row?.stage==='PREPARED'&&Number(row.consent_deadline)>now+5){
+    if(row?.stage==='PREPARED'&&row.round?.state==='PENDING'&&
+       Number(row.round.deadline)>now+5){
      consent=consentFromClaim(row,now);
     }
     return writeJson(res,200,{
      claim:basic,consent,
+     consentNeedsRenewal:basic?.consentNeedsRenewal===true,
      originalUnitEligibleAsTestOnly:true,
      beneficiaryEligibilityVerified:false
     });
@@ -139,12 +141,33 @@ export function makeT1EClaimGateway({
     // blocked/issued/refunded, BEFORE a new private claim nonce can be made.
     const proof=await readiness();
     const state=await claimStore.prepare({wallet,now,proof});
-    const consent=state.row.stage==='PREPARED'?
+    const consent=state.row.stage==='PREPARED'&&
+      state.row.round?.state==='PENDING'&&
+      Number(state.row.round.deadline)>now+5?
      consentFromClaim(state.row,now):null;
     return writeJson(res,state.created?201:200,{
      claim:publicClaim(state.row),consent,
      created:state.created,mayAttemptNewClaim:false,
      onchainIssued:false,issuerIssueEnabled:false
+    });
+   }
+   if(path==='/v1/t1e/claim/renew'&&method==='POST'){
+    if(!isConsent)throw ERR(405,'T1E_CLAIM_WRITES_DISABLED');
+    const wallet=await active(req,true);
+    if(wallet!==PILOT_RECIPIENT)throw ERR(403,'T1E_RECIPIENT_ROLE_REQUIRED');
+    const body=await requestJson(req);
+    if(!exact(body,[]))throw ERR(422,'T1E_EXACT_RENEW_REQUEST_REQUIRED');
+    // A stalled wallet popup can expire a 7 minute EIP712 challenge.
+    // Immutable original Claim/nonce stays; bounded at most THREE rounds
+    // and never a second voucher/Unit. Only after real chain gate still
+    // proves original Unit 0 is Available.
+    const proof=await readiness();
+    const row=await claimStore.renew({wallet,now,proof});
+    const consent=consentFromClaim(row,now);
+    return writeJson(res,200,{
+     claim:publicClaim(row,now),consent,
+     originalClaimReused:true,
+     fundEnabled:false,issuerIssueEnabled:false
     });
    }
    if(path==='/v1/t1e/claim/consent'&&method==='POST'){
@@ -169,6 +192,7 @@ export function makeT1EClaimGateway({
     // request logs or cookie. Exactly one original nonce is consumed.
     const updated=await claimStore.verifyConsent({
      wallet,claimId:body.claimId,
+     expectedNonce:prepared.message.nonce,
      digest:verified.digest.toLowerCase(),
      fingerprint:verified.signatureFingerprint.toLowerCase(),
      now
@@ -192,7 +216,10 @@ export function makeT1EClaimGateway({
     code=e.message;
     status=['T1E_ORIGINAL_UNIT_ALREADY_CLAIMED',
      'T1E_CONSENT_ALREADY_USED_OR_EXPIRED','T1E_ORIGINAL_AVAILABLE_UNIT_REQUIRED',
-     'T1E_PREPARED_CONSENT_EXPIRED_OR_ALREADY_USED'].includes(code)?409:403;
+     'T1E_PREPARED_CONSENT_EXPIRED_OR_ALREADY_USED',
+     'T1E_CONSENT_RENEW_ONLY_AFTER_EXPIRED',
+     'T1E_CONSENT_RETRY_LIMIT',
+     'T1E_CONSENT_ROUND_CAS_CONFLICT'].includes(code)?409:403;
    }
    return writeJson(res,status,{error:code});
   }
