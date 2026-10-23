@@ -40,8 +40,8 @@
     <div class="panel">
      <div class="index">02 / CLAIM · FIRST ORIGINAL UNIT</div>
      <h3>持久创建唯一领取申请</h3>
-     <p>服务器会先确认原来资助的 Unit 仍然 Available，再把受助者地址、唯一 Nonce 和截止时间写入私有数据库。刷新页面只能找回原申请，不允许新造第二份。</p>
-     <div class="actions"><button type="button" id="inspect" disabled>读取我的 Claim</button><button type="button" id="prepare" disabled>持久创建一次 Claim</button></div>
+     <p>服务器会先确认原资助 Unit 仍 Available，再以私有数据库保存唯一 Claim、Nonce 与截止时间。刷新后只能找回原申请，绝不再造第二份。若本人签名超时，可在同一 Claim 内恢复新的授权窗口（最多 3 轮）；原始 Nonce、受助者与餐券身份永久保留。</p>
+     <div class="actions"><button type="button" id="inspect" disabled>读取我的 Claim</button><button type="button" id="prepare" disabled>持久创建一次 Claim</button><button type="button" id="renew" disabled>原 Claim 授权过期后恢复（最多 3 次）</button></div>
      <pre id="claim-result" class="feedback" role="status" aria-live="polite">登录后可以读取自己的领取记录。当前测试环境可能仅开放只读。</pre>
     </div>
     <div class="panel">
