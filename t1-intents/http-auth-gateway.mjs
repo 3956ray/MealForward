@@ -83,7 +83,7 @@ export function makeT1CAuthenticatedGateway({
   typeof siwe?.verifyChallenge!=='function'||
   !ORIGIN.test(origin||'')||typeof clock!=='function')
   throw Error('T1C_PINNED_AUTH_AND_PG_REQUIRED');
- if(!['read_only','disposable_ci','testnet_fund'].includes(mode))
+ if(!['read_only','disposable_ci','testnet_fund','t1d_read_only'].includes(mode))
   throw Error('T1C_UNKNOWN_MODE');
  if(mode==='testnet_fund'&&typeof rpc?.send!=='function')
   throw Error('T1D_READ_ONLY_RPC_REQUIRED');
@@ -96,6 +96,10 @@ export function makeT1CAuthenticatedGateway({
  ))throw Error('T1C_CI_MODE_FORBIDDEN');
 
  const fundMode=mode==='testnet_fund';
+ const t1dIdentity=mode==='t1d_read_only'||fundMode;
+ // T1-D sessions use a physically separate private schema. Previously
+ // disclosed T1-C credentials must NEVER be able to mint T1-D principals.
+ const sessionTable=t1dIdentity?'mf_t1d_auth.sessions':'mf_cp31_auth_pilot.sessions';
  const trusted=new WeakMap();
  const ledger=createT1IntentLedger({
   pool:intentPool,now:clock,persistSignedQuotes:fundMode,resolveWallet:async secret=>{
@@ -126,7 +130,7 @@ export function makeT1CAuthenticatedGateway({
   const csrf=req.headers['x-c1-csrf'];
   if(isWrite&&!COOKIE.test(csrf||''))throw err(403,'CSRF_REQUIRED');
   const wallet=await sessionPool.query(
-   'SELECT wallet FROM mf_cp31_auth_pilot.sessions '+
+   'SELECT wallet FROM '+sessionTable+' '+
    'WHERE token_hash=$1 AND expires_at>$2 AND NOT revoked '+
    'AND ($3::boolean=false OR csrf_hash=$4)',
    [digest(token),clock(),isWrite,isWrite?digest(csrf):'']
@@ -150,7 +154,8 @@ export function makeT1CAuthenticatedGateway({
     ]);
     return respond(res,auth&&db.rows[0].ready?200:503,{
      status:auth&&db.rows[0].ready?(fundMode?'READY_TESTNET_7_USDC':'READY_NO_FUNDS'):'UNAVAILABLE',
-     mode:fundMode?'T1D_WALLET_OWNED_TESTNET_FUND':'T1_C_READ_ONLY_AUTH_GATE',
+     mode:fundMode?'T1D_WALLET_OWNED_TESTNET_FUND':
+      t1dIdentity?'T1D_ISOLATED_SIWE_READ_ONLY_GATE':'T1_C_READ_ONLY_AUTH_GATE',
      network:10143,
      transactionActionsEnabled:fundMode,
      quoteSigningEnabled:fundMode,

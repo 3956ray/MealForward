@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <meta name="description" content="留膳 T1-F：独立 Issuer 钱包验权。仅个人签名，不发生链上交易或餐券发行。">
+ <title>留膳 · T1-F Issuer 钱包权限验收</title>
+ <link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+<header class="mast"><div class="wrap">
+ <p class="eyebrow">MEALFORWARD · MONAD TESTNET · T1-F · ISSUER PROOF ONLY</p>
+ <h1>领取之前，<br><span>先证明谁能发行。</span></h1>
+ <p class="intro">已托管的第一份暖心盖饭（7 Test USDC）仍然属于原 StoreEscrow。本页只验证<strong>原合约已登记的独立 Issuer 钱包</strong>是否由当前 MetaMask 控制；不发行餐券，也不向任何地址转账。</p>
+ <nav><a href="https://mealforward-t1d-funding-laodao.onrender.com/">← 原 T1-D 资助记录</a></nav>
+</div></header>
+<main class="wrap">
+ <aside class="safety">
+  <strong>只签署普通 EIP-191 消息 · 不触发区块链交易</strong>
+  <p>第一次发行必须由原 T0 的 Issuer Authority 本人完成。请先在 MetaMask 选择正确的独立 Issuer 账户。挑战使用临时随机 Nonce，5 分钟内有效，在浏览器内恢复签名地址。不保存、不上传原始签名，不生成后台登录凭证。</p>
+ </aside>
+ <section class="metrics" aria-label="固定链上上下文">
+  <div><small>网络</small><strong>Monad Testnet</strong><code>10143</code></div>
+  <div><small>已资助餐品</small><strong>暖心盖饭</strong><code>1 份 · 7 Test USDC</code></div>
+  <div><small>原合约</small><strong>StoreEscrow</strong><code>0xcF0C…FafE58</code></div>
+  <div><small>允许的操作</small><strong>Issuer 验权</strong><code>NO ISSUE / NO SETTLE</code></div>
+ </section>
+ <div class="stack">
+  <section class="panel">
+   <div class="section-title"><span>01</span><div><h2>固定权限地址</h2>
+    <p>这是原 T0 部署时登记的 Issuer，不是此前完成 7 Test USDC FundingQuote 签名的 Quote Authority。</p></div></div>
+   <div class="readout" id="issuer-address">Issuer: 0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3
+Quote/Donor: 0xcc5C1ce846c0302ab27a4811cf2e0E6FC7282952
+不可通过网页手动修改角色地址。</div>
+  </section>
+  <section class="panel">
+   <div class="section-title"><span>02</span><div><h2>连接原 Issuer 钱包</h2>
+    <p>检查当前选中的钱包与 Monad Testnet（Chain ID 10143）。任何钱包或网络切换都会清除先前的验权结果。</p></div></div>
+   <div class="actions"><button type="button" id="t1f-connect">连接 MetaMask Issuer</button>
+    <button type="button" class="quiet" id="t1f-check">检查公开服务状态</button></div>
+   <div class="readout" id="t1f-connect-result" role="status" aria-live="polite">尚未连接独立 Issuer 钱包。</div>
+  </section>
+  <section class="panel">
+   <div class="section-title"><span>03</span><div><h2>本人签署无资金权限的验权消息</h2>
+    <p>只会请求一次 MetaMask personal_sign；不会提示 ERC-20 授权、发行或结算。验权成功只说明该钱包能产生匹配的 EIP-191 签名。</p></div></div>
+   <div class="actions"><button type="button" id="t1f-prove" disabled>本人签署 Issuer 验权消息</button>
+    <button type="button" class="quiet" id="t1f-reset">清除本次结果</button></div>
+   <div class="readout" id="t1f-proof-result" role="status" aria-live="polite">待钱包连接，未生成挑战。</div>
+  </section>
+  <section class="panel">
+   <div class="section-title"><span>04</span><div><h2>安全边界与下一阶段</h2>
+    <p>领取人需要另外的独立测试钱包、真实可复核的领取授权和一次性数据库记录。Issuer 验权不等于餐券已经发放。</p></div></div>
+   <div class="status">第一份可发行 Unit：0 · 下一 Generation：1
+领取者身份与资格：未验证
+链上 Issued 事件：无
+商家 Lock / MarkHandover / Report：未开放
+180 秒链上结算延迟：原合约尚未强制
+商家资金转出：不允许</div>
+  </section>
+ </div>
+ <section class="footnote">
+  <div><h3>本地验权，不是授权服务器</h3><p>浏览器生成的挑战不写入独立数据库，也不会成为后端 Issue Permit。真正发行时必须重新通过独立 SIWE、持久化受助者 Consent 与 Issuer 操作 Nonce 校验。</p></div>
+  <div><h3>原资金和 CP30 保持隔离</h3><p>唯一已经资助的 7 Test USDC 仍在原 Monad T0 合约内。本阶段不会再资助一次，也不会访问 Mac CP30 原始 Journal、旧密钥或已冻结的数据。</p></div>
+ </section>
+</main>
+<footer class="wrap"><span>留一膳，待一人，是为善。</span><span>T1-F · Issuer 本地控制权证明 · 不发送交易</span></footer>
+<script defer src="/t1f-ethers.umd.min.js"></script>
+<script type="module" src="/t1f-issuer-proof-ui.mjs"></script>
+</body></html>

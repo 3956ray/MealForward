@@ -1,0 +1,51 @@
+name: MealForward T1-D public single-meal funding readiness (no wallet transactions)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-render-isolated-20261022
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  attested-public-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Independently verify T1-D funding scope and private HTTP with no signatures
+        run: |
+          node --input-type=module -e '
+            const origin="https://mealforward-t1d-funding-laodao.onrender.com";
+            const read=async(path)=>{
+              const res=await fetch(origin+path,{redirect:"manual",signal:AbortSignal.timeout(90000)});
+              const type=res.headers.get("content-type")||"";
+              const data=type.startsWith("application/json")?await res.json():await res.text();
+              return {res,data};
+            };
+            const {res,data}=await read("/v1/t1/status");
+            if(res.status!==200||
+               data.status!=="READY_TESTNET_7_USDC"||
+               data.mode!=="T1D_WALLET_OWNED_TESTNET_FUND"||
+               data.network!==10143||
+               data.testnetFundingPolicy!=="QUOTE_AUTHORITY_SELF_FUNDED_ONE_UNIT"||
+               data.originalCp30DataConnected!==false||
+               data.fundingEnabled!==true||
+               data.testnetOnly!==true)throw Error("TESTNET_SCOPE_NOT_READY");
+            const home=await read("/");
+            if(home.res.status!==200||!home.data.includes("T1-D REAL FUND"))throw Error("FUNDING_PAGE_MISSING");
+            const tracked=await read("/?utm_source=chatgpt.com");
+            if(tracked.res.status!==200||tracked.data!==home.data)throw Error("TRACKED_PUBLIC_HTML_DENIED");
+            for(const path of ["/v1/me","/v1/t1/my-intents","/v1/t1/fund/readiness"]){
+              const x=await read(path);
+              if(x.res.status!==401||x.data.error!=="UNAUTHENTICATED")throw Error("PRIVATE_DATA_EXPOSED");
+            }
+            console.log("T1D_PUBLIC_FUNDING_SCOPE_READONLY_HTTP_PASS");
+          '

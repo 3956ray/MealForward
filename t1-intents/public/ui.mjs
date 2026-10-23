@@ -11,6 +11,7 @@ const ui=(id,value,state='')=>{
  item.dataset.state=state;
 };
 const same=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
+const expectedMode=document.body?.dataset?.expectedMode||null;
 let account=null,sessionWallet=null,sessionCsrf=null,busy=false,epoch=0;
 const wallet=async(method,params=[])=>{
  if(!['eth_requestAccounts','eth_accounts','eth_chainId','personal_sign'].includes(method))
@@ -85,7 +86,8 @@ el('connect').addEventListener('click',guarded(async()=>{
 }));
 el('check').addEventListener('click',guarded(async()=>{
  const status=await api('/v1/t1/status');
- if(status.status!=='READY_NO_FUNDS'||status.transactionActionsEnabled!==false||
+ if(status.status!=='READY_NO_FUNDS'||(expectedMode&&status.mode!==expectedMode)||
+    status.transactionActionsEnabled!==false||
     status.fundingEnabled!==false||status.quoteSigningEnabled!==false||
     status.originalCp30DataConnected!==false)
   throw Error('服务不处于预期 NO FUNDS 安全模式。');
@@ -156,7 +158,8 @@ window.ethereum?.on?.('chainChanged',()=>resetWallet('MetaMask 已切换网络�
 buttons();
 guarded(async()=>{
  const status=await api('/v1/t1/status');
- if(status.status==='READY_NO_FUNDS'&&status.fundingEnabled===false)
+ if(status.status==='READY_NO_FUNDS'&&status.fundingEnabled===false&&
+    (!expectedMode||status.mode===expectedMode))
   ui('service','READY_NO_FUNDS · 独立 Supabase 连接已就绪。','ok');
  else ui('service','服务未通过只读门禁。','bad');
 })().catch(()=>ui('service','服务暂时不可用，请稍后重试。','bad'));

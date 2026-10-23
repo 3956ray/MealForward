@@ -18,9 +18,11 @@ import pg from 'pg';
 import {fileURLToPath} from 'node:url';
 import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 import {pgStore} from './auth/db.mjs';
+import {pgStoreT1D} from './auth/t1d-db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
+import {allowStaticFetchSite,allowStaticQuery} from './static-fetch-policy.mjs';
 import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
 import {QUOTE} from './core.mjs';
 
@@ -30,6 +32,8 @@ const ALLOWED_PUBLIC=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
 const ALLOWED_TEST=/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/;
 const PROJECT='ketfrukrcuosrqynnsay';
 const PROD_ROLE_AUTH='mf_t1c_auth_runtime';
+const FUND_ROLE_AUTH='mf_t1d_auth_runtime';
+const FUND_ORIGIN='https://mealforward-t1d-funding-laodao.onrender.com';
 const PROD_ROLE_INTENT='mf_t1c_intent_runtime';
 // Never grant writes to the T1-C live SELECT-only principal. T1-D has its own
 // separately provisioned NOLOGIN-until-owner-activation database identity.
@@ -44,9 +48,16 @@ function validateConfig(env){
   env.MF_T1C_DISPOSABLE_ONLY==='ack-fresh-t1c-postgres17'&&
   env.MF_T1C_HTTP_DISPOSABLE_ONLY==='ack-original-siwe-pg17';
  const requested=env.T1C_SERVER_MODE;
- strict(['READ_ONLY_NO_FUNDS','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
+ strict(['READ_ONLY_NO_FUNDS','T1D_SIWE_READ_ONLY','TESTNET_SINGLE_SEVEN_USDC_FUND'].includes(requested),
   'UNAPPROVED_FINANCIAL_MODE');
  const funding=requested==='TESTNET_SINGLE_SEVEN_USDC_FUND';
+ const identityOnly=requested==='T1D_SIWE_READ_ONLY';
+ const t1d=funding||identityOnly;
+ if(t1d&&!testing)strict(env.PUBLIC_ORIGIN===FUND_ORIGIN&&
+  env.T1D_DEPLOYMENT_STAGE===(funding?'FUNDING':'SIWE_ONLY'),
+  'T1D_EXACT_ORIGIN_AND_STAGE_REQUIRED');
+ if(identityOnly)strict(env.T1C_TESTNET_FUND_SCOPE==='DISABLED',
+  'T1D_IDENTITY_ONLY_FUNDS_SCOPE_REJECTED');
  if(funding){
   strict(env.T1C_FUNDING_ENABLED==='true' &&
    env.T1C_TESTNET_FUND_SCOPE==='ONE_QUOTE_AUTHORITY_WALLET_SEVEN_USDC',
@@ -68,30 +79,33 @@ function validateConfig(env){
  for(const item of [originAuth,originIntent]){
   strict(['postgres:','postgresql:'].includes(item.protocol)&&
    item.username&&item.password&&item.hostname&&
-   item.pathname===(testing?'/mf_t1c_http_ci':'/postgres')&&
+   item.pathname===(testing?(t1d?'/postgres':'/mf_t1c_http_ci'):'/postgres')&&
    !item.hash&&!item.search,
    'DATABASE_DSN_NOT_REVIEWABLE');
   // Reject IPv6 direct, generic postgres user, URLs outside the newly
   // authorized Supabase project, and insecure pooler transaction port.
+  if(testing)strict(item.hostname==='127.0.0.1'&&item.port==='5433',
+   'CI_MUST_USE_EXACT_DISPOSABLE_PG17');
   if(!testing)strict(item.hostname===POOLER_HOST&&item.port==='5432',
    'ONLY_PINNED_SUPABASE_SESSION_POOLER');
  }
  strict(originAuth.username!==originIntent.username,
   'SAME_PG_ROLE_REJECTED');
  if(!testing){
-  strict(originAuth.username===PROD_ROLE_AUTH+'.'+PROJECT&&
-   originIntent.username===(funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
+  strict(originAuth.username===(t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH)+'.'+PROJECT&&
+   originIntent.username===(t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)+'.'+PROJECT,
    'WRONG_CLOUD_ROLE_OR_SUPABASE_TENANT');
   strict(originAuth.hostname===originIntent.hostname,
    'CROSS_PROJECT_POOLER_HOST_MISMATCH');
  }
  const port=Number(env.PORT);
  strict(Number.isSafeInteger(port)&&port>=1&&port<=65535,'HTTP_PORT_REQUIRED');
- return {origin,port,testing,funding,authUrl:env.T1C_AUTH_DB_URL,
+ return {origin,port,testing,funding,identityOnly,t1d,authUrl:env.T1C_AUTH_DB_URL,
   intentUrl:env.T1C_INTENT_DB_URL,
-  expectedAuthRole:testing?'mf_t1c_ci_auth':PROD_ROLE_AUTH,
-  expectedIntentRole:testing?(funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
-   (funding?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
+  expectedAuthRole:testing?(t1d?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
+   (t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
+  expectedIntentRole:testing?(t1d?'mf_t1d_ci_fund_e2e':'mf_t1c_ci_intent_ro'):
+   (t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
  const query=await pool.query(
@@ -137,7 +151,9 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   strict(authRole!==intentRole,'DATABASE_ROLES_IDENTICAL');
   bootStage='SCHEMA_CHECK';
   const [authSchema,intentSchema]=await Promise.all([
-   authPool.query('SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
+   authPool.query(cfg.t1d?
+    'SELECT 1 FROM mf_t1d_auth.schema_version WHERE version=1':
+    'SELECT 1 FROM mf_cp31_auth_pilot.schema_version WHERE version=1'),
    intentPool.query("SELECT to_regclass('mf_t1c.intents') IS NOT NULL AS ready")
   ]);
   strict(authSchema.rowCount===1&&intentSchema.rows[0]?.ready===true,
@@ -147,6 +163,10 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   bootStage='GRANT_CHECK';
   await Promise.all([
    mustBeDenied(authPool,'SELECT * FROM mf_t1c.intents LIMIT 0'),
+   ...(cfg.t1d?[
+    mustBeDenied(authPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
+    mustBeDenied(intentPool,'SELECT * FROM mf_t1d_auth.sessions LIMIT 0')
+   ]:[]),
    mustBeDenied(intentPool,'SELECT * FROM mf_cp31_auth_pilot.sessions LIMIT 0'),
    mustBeDenied(intentPool,'TRUNCATE mf_t1c.audit_events'),
    mustBeDenied(intentPool,'DELETE FROM mf_t1c.intents')
@@ -163,12 +183,12 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   const allDml=grant.insert_allowed&&grant.stage_update&&grant.revision_update&&
    grant.attempt_update&&grant.attempt_insert&&grant.audit_insert;
   const anyDml=Object.values(grant).some(Boolean);
-  if(cfg.funding){
+  if(cfg.t1d){
    strict(allDml,'T1D_DURABLE_INTENT_WRITER_GRANTS_REQUIRED');
   }else{
    strict(!anyDml,'T1C_FINANCIAL_WRITES_IMPROPERLY_ENABLED');
   }
-  if(cfg.funding){
+  if(cfg.t1d){
    bootStage='SIGNED_QUOTE_STORE_GRANTS';
    const signed=await intentPool.query(
     "SELECT to_regclass('mf_t1c.quote_authorizations') IS NOT NULL AS ready,"+
@@ -194,33 +214,55 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   }
   bootStage='GATEWAY_INIT';
   const handler=makeT1CAuthenticatedGateway({
-   sessionPool:authPool,intentPool,authStore:pgStore(authPool),
+   sessionPool:authPool,intentPool,
+   authStore:cfg.t1d?pgStoreT1D(authPool):pgStore(authPool),
    siwe:{makeChallenge,verifyChallenge},origin:cfg.origin,
-   mode:cfg.funding?'testnet_fund':'read_only',rpc:readOnlyRpc
+   mode:cfg.funding?'testnet_fund':cfg.identityOnly?'t1d_read_only':'read_only',rpc:readOnlyRpc
   });
   // Public UI is a fixed allowlist of THREE immutable local files; no
   // arbitrary filesystem path, storage directory, SSR or API secrets.
   bootStage='ASSET_LOAD';
   const exposedFiles=[
-   ['/', 'index.html','text/html; charset=utf-8'],
+   ['/',cfg.funding?'fund-testnet.html':cfg.identityOnly?'t1d-identity.html':'index.html','text/html; charset=utf-8'],
    ['/ui.css','ui.css','text/css; charset=utf-8'],
    ['/ui.mjs','ui.mjs','text/javascript; charset=utf-8']
   ];
   if(cfg.funding)exposedFiles.push(
    ['/fund-testnet.html','fund-testnet.html','text/html; charset=utf-8'],
-   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8']
+   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8'],
+   // Browser-only T1-F proof; the original funding gateway is unchanged.
+   ['/t1f-issuer-proof.html','t1f-issuer-proof.html','text/html; charset=utf-8'],
+   ['/t1f-issuer-proof-ui.mjs','t1f-issuer-proof-ui.mjs','text/javascript; charset=utf-8']
   );
   const staticFiles=new Map(await Promise.all(exposedFiles.map(async([path,filename,type])=>[
     path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
   ])));
+  if(cfg.funding){
+   // Local, pinned ethers 6.15.0 UMD: no CDN, signer keys, database API,
+   // Issue writer or privileged nonce endpoint is added to this service.
+   staticFiles.set('/t1f-issuer-control.mjs',{
+    bytes:await readFile(new URL('./t1f-issuer-control.mjs',import.meta.url)),
+    type:'text/javascript; charset=utf-8'
+   });
+   staticFiles.set('/t1f-ethers.umd.min.js',{
+    bytes:await readFile(new URL('./node_modules/ethers/dist/ethers.umd.min.js',import.meta.url)),
+    type:'text/javascript; charset=utf-8'
+   });
+  }
   server=http.createServer((req,res)=>{
    const u=new URL(req.url||'/',cfg.origin);
    const item=staticFiles.get(u.pathname);
-   if(item&&req.method==='GET'){
-    if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
-     (req.headers.origin&&req.headers.origin!==cfg.origin)||
-     (req.headers['sec-fetch-site']&&
-       !['same-origin','none'].includes(req.headers['sec-fetch-site']))){
+   if(item&&(req.method==='GET'||req.method==='HEAD')){
+    // These two HTML documents are invariant and unauthenticated, so do
+    // not treat an optional Origin / Sec-Fetch header as authority to
+    // reject a normal browser link. Every API path still goes through the
+    // original strict SIWE Origin, CSRF and per-wallet permission checks.
+    const publicDocument=u.pathname==='/'||u.pathname==='/fund-testnet.html'||
+      u.pathname==='/t1f-issuer-proof.html';
+    if(req.headers.host!==new URL(cfg.origin).host||
+     !allowStaticQuery({path:u.pathname,search:u.search})||u.hash||
+     (!publicDocument&&req.headers.origin&&req.headers.origin!==cfg.origin)||
+     !allowStaticFetchSite({path:u.pathname,method:req.method,headers:req.headers})){
      res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
     }
     res.writeHead(200,{
@@ -232,7 +274,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
      'X-Frame-Options':'DENY',
      'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; script-src 'self'; style-src 'self'"
     });
-    res.end(item.bytes);
+    res.end(req.method==='HEAD'?undefined:item.bytes);
     return;
    }
    return handler(req,res);
@@ -244,7 +286,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   });
   return {
    server,origin:cfg.origin,authRole,intentRole,
-   fundingEnabled:cfg.funding,testnetOnly:true,
+   fundingEnabled:cfg.funding,identityOnly:cfg.identityOnly,testnetOnly:true,
    async close(){
     await new Promise(resolve=>server.close(resolve));
     await Promise.all([authPool.end(),intentPool.end()]);
@@ -262,7 +304,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const runtime=await startT1ReadOnlyServer();
   process.stdout.write(JSON.stringify({
-   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
+   status:runtime.fundingEnabled?'T1D_ONE_MEAL_TESTNET_WALLET_READY':
+     runtime.identityOnly?'T1D_SIWE_READ_ONLY_PROCESS_READY':'T1_C_SAFE_READONLY_PROCESS_READY',
    fundingEnabled:runtime.fundingEnabled,origin:runtime.origin,
    distinctDatabasePrincipals:true
   })+'\n');

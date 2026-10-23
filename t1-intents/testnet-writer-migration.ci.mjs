@@ -7,6 +7,10 @@
  */
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {randomBytes,randomUUID,createHash} from 'node:crypto';
+import {Wallet} from 'ethers';
+import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
+import {pgStoreT1D} from './auth/t1d-db.mjs';
 import pg from 'pg';
 
 const LOCAL='postgres://postgres:t1c-disposable-only@127.0.0.1:5433/postgres';
@@ -102,6 +106,99 @@ GRANT SELECT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1c_intent_runtime;`
   originalReadonlyRoleCannotReadQuote:true,
   signedQuotes:0
  }));
+ // The exact 008 migration is tested on disposable PG17; all previous
+ // T1-C Sessions and the two original cloud roles stay untouched.
+ const isolatedAuth=await readFile(new URL('./supabase/008_t1d_isolated_siwe_auth.sql',import.meta.url),'utf8');
+ await client.query(isolatedAuth);
+ const authGrants=await client.query(`SELECT
+  (SELECT rolcanlogin FROM pg_roles WHERE rolname='mf_t1d_auth_runtime') AS can_login,
+  has_table_privilege('mf_t1d_auth_runtime','mf_t1d_auth.sessions','SELECT') AS can_read_new,
+  has_table_privilege('mf_t1d_auth_runtime','mf_t1d_auth.sessions','INSERT') AS can_insert_new,
+  has_table_privilege('mf_t1d_auth_runtime','mf_t1d_auth.sessions','UPDATE') AS can_update_new,
+  has_table_privilege('mf_t1d_auth_runtime','mf_t1d_auth.sessions','DELETE') AS can_delete_new,
+  has_schema_privilege('mf_t1d_auth_runtime','mf_cp31_auth_pilot','USAGE') AS new_sees_old,
+  has_schema_privilege('mf_t1c_auth_runtime','mf_t1d_auth','USAGE') AS old_sees_new,
+  has_schema_privilege('mf_t1d_fund_runtime','mf_t1d_auth','USAGE') AS funding_sees_auth,
+  has_schema_privilege('mf_t1d_auth_runtime','mf_t1c','USAGE') AS auth_sees_funding,
+  (SELECT count(*) FROM mf_t1d_auth.sessions) AS sessions`);
+ assert.deepEqual(authGrants.rows[0],{
+  can_login:false,can_read_new:true,can_insert_new:true,
+  can_update_new:true,can_delete_new:false,new_sees_old:false,
+  old_sees_new:false,funding_sees_auth:false,auth_sees_funding:false,
+  sessions:'0'
+ });
+
+ // Create disposable login identity only in GitHub Docker and verify the
+ // unmodified original EIP-191 challenge semantics on the new schema.
+ await client.query(`CREATE ROLE mf_t1d_ci_auth LOGIN NOINHERIT
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
+  PASSWORD 't1d-ci-new-auth-only';
+  GRANT CONNECT ON DATABASE postgres TO mf_t1d_ci_auth;
+  GRANT USAGE ON SCHEMA mf_t1d_auth TO mf_t1d_ci_auth;
+  GRANT SELECT ON mf_t1d_auth.schema_version TO mf_t1d_ci_auth;
+  GRANT SELECT,INSERT,UPDATE ON mf_t1d_auth.pre_sessions,
+  mf_t1d_auth.challenges,mf_t1d_auth.sessions TO mf_t1d_ci_auth;
+  CREATE ROLE mf_t1d_ci_fund_e2e LOGIN NOINHERIT
+   NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
+   PASSWORD 't1d-ci-new-fund-only';
+  GRANT CONNECT ON DATABASE postgres TO mf_t1d_ci_fund_e2e;
+  GRANT USAGE ON SCHEMA mf_t1c TO mf_t1d_ci_fund_e2e;
+  GRANT SELECT,INSERT ON mf_t1c.intents,mf_t1c.wallet_attempts TO mf_t1d_ci_fund_e2e;
+  GRANT UPDATE(stage,revision,quote_digest,quote_signature_hash)
+   ON mf_t1c.intents TO mf_t1d_ci_fund_e2e;
+  GRANT UPDATE(status,tx_hash,receipt_block,receipt_block_hash,receipt_status)
+   ON mf_t1c.wallet_attempts TO mf_t1d_ci_fund_e2e;
+  GRANT SELECT,INSERT ON mf_t1c.audit_events,mf_t1c.quote_authorizations
+   TO mf_t1d_ci_fund_e2e;
+  GRANT USAGE,SELECT ON SEQUENCE mf_t1c.audit_events_event_id_seq
+   TO mf_t1d_ci_fund_e2e;`);
+ const authPool=new pg.Pool({
+  connectionString:'postgres://mf_t1d_ci_auth:t1d-ci-new-auth-only@127.0.0.1:5433/postgres',
+  max:3,connectionTimeoutMillis:3000
+ });
+ try{
+  const store=pgStoreT1D(authPool);
+  assert.equal(await store.health(),true);
+  const now=Math.floor(Date.now()/1000);
+  const sh=()=>createHash('sha256').update(randomBytes(32)).digest('hex');
+  const preHash=sh(),csrfHash=sh();
+  const w=Wallet.createRandom();
+  const challenge=makeChallenge({
+   wallet:w.address.toLowerCase(),
+   origin:'https://mealforward-t1d-funding-laodao.onrender.com',
+   chainId:10143,nonce:randomBytes(32).toString('hex'),
+   challengeId:randomUUID(),issuedAt:now,expiresAt:now+180
+  });
+  await store.createPre({preHash,csrfHash,expiresAt:now+300});
+  const created=await store.createChallenge({preHash,csrfHash,challenge,now});
+  assert.equal(created,true);
+  const reread=await store.getChallenge({
+   preHash,csrfHash,challengeId:challenge.challengeId,now
+  });
+  assert.equal(reread.message,challenge.message);
+  const signed=await w.signMessage(challenge.message);
+  assert.equal(await verifyChallenge(reread,signed,now),w.address.toLowerCase());
+  const sessionHash=sh(),sessionCsrfHash=sh();
+  assert.equal(await store.consumeAndCreateSession({
+   preHash,csrfHash,challenge,sessionHash,sessionCsrfHash,
+   wallet:w.address.toLowerCase(),expiresAt:now+3600,now
+  }),true);
+  assert.equal((await store.getSession(sessionHash,now))?.wallet,w.address.toLowerCase());
+  assert.equal(await store.revokeSession(sessionHash,sessionCsrfHash,now),true);
+  assert.equal(await store.getSession(sessionHash,now),null);
+  // The formerly leaked T1-C credentials could still access their own
+  // separate test schema, but NEVER T1-D sessions.
+  assert.equal((await client.query(
+   "SELECT count(*)::int AS n FROM mf_cp31_auth_pilot.sessions"
+  )).rows[0].n,0);
+  console.log(JSON.stringify({
+   status:'T1D_ISOLATED_PRIVATE_SIWE_EIP191_PG17_PASS',
+   existingT1CAuthSchemaUntouched:true,newRoleCanLogin:false,
+   oldAuthCannotReadOrForgeNew:true,
+   fundingRoleCannotReadSessions:true,actualTestnetSessionsCreated:0,
+   disposableOnly:true
+  }));
+ }finally{await authPool.end()}
  console.log(JSON.stringify({
   status:'T1D_EXACT_NOLOGIN_WRITER_MIGRATION_DISPOSABLE_PG17_PASS',
   originalReadonlyPrincipalUntouched:true,
