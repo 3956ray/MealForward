@@ -104,7 +104,7 @@ function validateConfig(env){
   intentUrl:env.T1C_INTENT_DB_URL,
   expectedAuthRole:testing?(t1d?'mf_t1d_ci_auth':'mf_t1c_ci_auth'):
    (t1d?FUND_ROLE_AUTH:PROD_ROLE_AUTH),
-  expectedIntentRole:testing?(identityOnly?'mf_t1d_ci_fund_e2e':funding?'mf_t1d_ci_fund':'mf_t1c_ci_intent_ro'):
+  expectedIntentRole:testing?(t1d?'mf_t1d_ci_fund_e2e':'mf_t1c_ci_intent_ro'):
    (t1d?PROD_ROLE_FUND:PROD_ROLE_INTENT)};
 }
 async function roleAudit(pool){
@@ -229,11 +229,26 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   ];
   if(cfg.funding)exposedFiles.push(
    ['/fund-testnet.html','fund-testnet.html','text/html; charset=utf-8'],
-   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8']
+   ['/fund-testnet.mjs','fund-testnet.mjs','text/javascript; charset=utf-8'],
+   // Browser-only T1-F proof; the original funding gateway is unchanged.
+   ['/t1f-issuer-proof.html','t1f-issuer-proof.html','text/html; charset=utf-8'],
+   ['/t1f-issuer-proof-ui.mjs','t1f-issuer-proof-ui.mjs','text/javascript; charset=utf-8']
   );
   const staticFiles=new Map(await Promise.all(exposedFiles.map(async([path,filename,type])=>[
     path,{bytes:await readFile(new URL('./public/'+filename,import.meta.url)),type}
   ])));
+  if(cfg.funding){
+   // Local, pinned ethers 6.15.0 UMD: no CDN, signer keys, database API,
+   // Issue writer or privileged nonce endpoint is added to this service.
+   staticFiles.set('/t1f-issuer-control.mjs',{
+    bytes:await readFile(new URL('./t1f-issuer-control.mjs',import.meta.url)),
+    type:'text/javascript; charset=utf-8'
+   });
+   staticFiles.set('/t1f-ethers.umd.min.js',{
+    bytes:await readFile(new URL('./node_modules/ethers/dist/ethers.umd.min.js',import.meta.url)),
+    type:'text/javascript; charset=utf-8'
+   });
+  }
   server=http.createServer((req,res)=>{
    const u=new URL(req.url||'/',cfg.origin);
    const item=staticFiles.get(u.pathname);
@@ -242,7 +257,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
     // not treat an optional Origin / Sec-Fetch header as authority to
     // reject a normal browser link. Every API path still goes through the
     // original strict SIWE Origin, CSRF and per-wallet permission checks.
-    const publicDocument=u.pathname==='/'||u.pathname==='/fund-testnet.html';
+    const publicDocument=u.pathname==='/'||u.pathname==='/fund-testnet.html'||
+      u.pathname==='/t1f-issuer-proof.html';
     if(req.headers.host!==new URL(cfg.origin).host||
      !allowStaticQuery({path:u.pathname,search:u.search})||u.hash||
      (!publicDocument&&req.headers.origin&&req.headers.origin!==cfg.origin)||
