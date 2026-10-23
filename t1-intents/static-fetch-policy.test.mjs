@@ -61,8 +61,8 @@ test('ChatGPT UTM and other tracking params to unpersonalized HTML cannot produc
   '?utm_source=chatgpt.com&utm_medium=referral',
   '?gclid=example-opaque-click-id',
   '?utm_source=chatgpt.com&fbclid=opaque',
-  '?utm_source=%3Cscript%3E',
-  '?unknown=untrusted'
+  '?ref=chatgpt.com',
+  '?utm_source=chatgpt.com&fbclid=tracking-123'
  ];
  for(const path of ['/','/fund-testnet.html']){
   for(const search of safe){
@@ -81,5 +81,13 @@ test('tracking URLs cannot relax JS/CSS, API or excessive-query policy',()=>{
   assert.equal(allowStaticQuery({path,search:'?'+ 'x'.repeat(2048)}),false);
   assert.equal(allowStaticQuery({path,search:null}),false);
   assert.equal(allowStaticQuery({path,search:'utm_source=chatgpt.com'}),false);
+  for(const invalid of [
+   '?wallet=other','?intentId=an-id','?redirect=https://evil.invalid',
+   '?unknown=untrusted','?utm_source=%3Cscript%3E',
+   '?utm_source=chatgpt.com&utm_source=other',
+   '?utm_source=chatgpt.com&wallet=other'
+  ]){
+   assert.equal(allowStaticQuery({path,search:invalid}),false,invalid);
+  }
  }
 });
