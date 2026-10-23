@@ -87,6 +87,9 @@ try{
  await c.query(migration);
  const newAuthMigration=await readFile(new URL('./supabase/010_t1e_auth_nologin.sql',import.meta.url),'utf8');
  await c.query(newAuthMigration);
+ const recovery=await readFile(new URL('./supabase/011_t1e_consent_nonce_recovery.sql',import.meta.url),'utf8');
+ assert.match(recovery,/CREATE UNIQUE INDEX t1e_one_pending_round_per_claim/);
+ await c.query(recovery);
  const role=(await c.query(`SELECT
    (SELECT rolcanlogin FROM pg_roles WHERE rolname='mf_t1e_auth_runtime') AS login,
    has_table_privilege('mf_t1e_auth_runtime','mf_t1e_auth.sessions','INSERT') AS auth_can_insert,
@@ -133,16 +136,36 @@ try{
   verifiedFirstBatch:true,
   accounting:{availableUnits:'1',liabilityBaseUnits:'7000000'}
  };
- const prep=await app.prepare({wallet:beneficiary,now:1792740000,proof:unitProof});
+ const realNow=Math.floor(Date.now()/1000);
+ const originallyPreparedAt=realNow-1000;
+ const prep=await app.prepare({wallet:beneficiary,now:originallyPreparedAt,proof:unitProof});
  assert.equal(prep.created,true);
  claimId=prep.row.claim_id;
  assert.equal(prep.row.funding_intent,id);
  assert.equal(prep.row.voucher_id,voucherId);
- const retry=await app.prepare({wallet:beneficiary,now:1792740001,proof:unitProof});
+ const retry=await app.prepare({wallet:beneficiary,now:originallyPreparedAt+1,proof:unitProof});
  assert.equal(retry.created,false);
  assert.equal(retry.row.claim_id,claimId);
  assert.equal(retry.row.consent_nonce,prep.row.consent_nonce);
  assert.equal((await app.own(beneficiary)).claim_id,claimId);
+ assert.equal(prep.row.round.seq,1);
+ assert.equal(prep.row.round.nonce,prep.row.consent_nonce);
+ await assert.rejects(()=>app.renew({
+  wallet:beneficiary,now:originallyPreparedAt+10,proof:unitProof
+ }),/T1E_CONSENT_RENEW_ONLY_AFTER_EXPIRED/);
+ const renewed=await app.renew({wallet:beneficiary,now:realNow,proof:unitProof});
+ assert.equal(renewed.claim_id,claimId);
+ assert.equal(renewed.consent_nonce,prep.row.consent_nonce);
+ assert.equal(renewed.round.seq,2);
+ assert.notEqual(renewed.round.nonce,prep.row.round.nonce);
+ const rounds=await c.query(
+  'SELECT seq,nonce,state FROM mf_t1e.consent_rounds ORDER BY seq');
+ assert.deepEqual(rounds.rows.map(x=>[Number(x.seq),x.state]),[
+  [1,'EXPIRED'],[2,'PENDING']
+ ]);
+ await assert.rejects(()=>app.renew({
+  wallet:beneficiary,now:realNow+1,proof:unitProof
+ }),/T1E_CONSENT_RENEW_ONLY_AFTER_EXPIRED/);
  assert.equal((await c.query('SELECT count(*)::int AS n FROM mf_t1e.claim_events')).rows[0].n,1);
  // The first funded unit may be reserved only once, even with a new UUID.
  await mustFail(()=>c.query(`INSERT INTO mf_t1e.recipient_claims(
@@ -161,12 +184,17 @@ try{
  WHERE claim_id=$1`,[claimId,opId,dataHash]),'P0001');
  const verified=await app.verifyConsent({
   wallet:beneficiary,claimId,digest:consentDigest,
-  fingerprint:sigHash,now:1792740100
+  fingerprint:sigHash,expectedNonce:renewed.round.nonce,now:realNow+100
  });
  assert.equal(verified.stage,'CONSENT_VERIFIED');
+ const history=await c.query('SELECT seq,state,digest FROM mf_t1e.consent_rounds ORDER BY seq');
+ assert.deepEqual(history.rows.map(r=>[Number(r.seq),r.state]),[
+  [1,'EXPIRED'],[2,'VERIFIED']
+ ]);
+ assert.equal(history.rows[1].digest,consentDigest);
  await assert.rejects(()=>app.verifyConsent({
   wallet:beneficiary,claimId,digest:consentDigest,
-  fingerprint:sigHash,now:1792740101
+  fingerprint:sigHash,expectedNonce:prep.row.consent_nonce,now:realNow+101
  }),/T1E_CONSENT_ALREADY_USED_OR_EXPIRED/);
  await c.query(`UPDATE mf_t1e.recipient_claims SET
   stage='ISSUE_UNKNOWN',issuer_op_id=$2,issuer_tx_nonce=9,issuer_tx_data_hash=$3,
@@ -203,6 +231,7 @@ try{
   onlyOneFirstUnitClaim:true,differentBeneficiaryCannotReplace:true,
   consentBeforeIssueReserved:true,originalNonceCannotChange:true,
   originalTransactionHashCannotChange:true,appendOnlyClaimEvents:true,appAtomicClaimAndOneTimeConsent:true,
+  originalClaimNonceImmutableWithRecovery:true,boundedConsentRounds:true,
   separateAuthRoleIsNoLogin:true,noCrossRoleSessionAccess:true,
   noLiveDatabaseConnected:true,realVoucherIssued:false,
   onchainTransactionsSent:0
