@@ -1,0 +1,71 @@
+name: MealForward T1-E original funded Unit nextVoucher read-only and issuer simulation
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-first-voucher-readonly-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  first-voucher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned local ABI, do not run install scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Static safety of first-voucher read-only source
+        working-directory: t1-intents
+        run: |
+          node --check t1e-first-issue-readiness.mjs
+          node --check t1e-first-issue-readiness.test.mjs
+          node --check t1e-recipient-consent.mjs
+          node --check t1e-recipient-consent.test.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet\.fromPrivateKey' t1e-first-issue-readiness.mjs; then
+            echo T1E_NO_CHAIN_WRITE_METHODS_ALLOWED
+            exit 1
+          fi
+      - name: Exact original Voucher ID + ABI + no-wallet-write unit tests
+        working-directory: t1-intents
+        run: node --test t1e-first-issue-readiness.test.mjs t1e-recipient-consent.test.mjs
+      - name: Real Monad Testnet funded Unit, original role, candidate and issuer eth_call dry-run
+        working-directory: t1-intents
+        run: node t1e-first-issue-readiness.mjs
+  private-claim-ledger-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5435/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Boot entirely fresh disposable PostgreSQL 17 (never live Supabase)
+        run: |
+          docker run -d --rm --name mf-t1e-claim-disposable             -e POSTGRES_USER=postgres             -e POSTGRES_PASSWORD=t1e-disposable-only             -e POSTGRES_DB=postgres             -p 127.0.0.1:5435:5432 postgres:17.11
+          for i in $(seq 1 35); do
+            if docker exec mf-t1e-claim-disposable pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned PostgreSQL driver and EVM ABI without scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Execute exact T1-E 009 migration and validate no role privilege leakage
+        working-directory: t1-intents
+        run: |
+          node --check t1e-claim-ledger.ci.mjs
+          node t1e-claim-ledger.ci.mjs
