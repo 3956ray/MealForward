@@ -121,8 +121,12 @@ test('original reserved nonce/operation may be read after expiry but NEVER re-se
  assert.equal(out.operationId,OP);
  assert.equal(out.reservedNonce,'9');
  assert.equal(out.expectedCalldataHash,proposal().issuerCalldataHash);
+ // Once an original nonce is written to PG17, the 009 immutable-row
+ // trigger prevents editing it. A decoded SQL snapshot cannot independently
+ // prove its earlier nonce, because nonce is NOT part of calldata hash.
+ // A changed immutable operation ID, however, must fail the hash proof.
  error(()=>inspectReservedIssuerOperation({claim:{
-  ...original,issuer_tx_nonce:'10'
+  ...original,issuer_op_id:'0x'+'f'.repeat(64)
  },now:TIME+100000}));
  error(()=>inspectReservedIssuerOperation({claim:{
   ...original,issuer_tx_data_hash:'0x'+'0'.repeat(64)
