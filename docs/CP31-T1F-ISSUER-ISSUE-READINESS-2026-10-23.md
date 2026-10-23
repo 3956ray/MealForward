@@ -1,3 +1,5 @@
+> ⚠️ 此文件是 T1-F 上线前的历史记录，包含当时的 HOLD 和旧 Render Commit，**不能当作当前实时发布状态**。最新正式真源及对新 Agent 的完整交接见仓库根目录 [HANDOFF.md](../HANDOFF.md)。T1-F Issuer-only 已经通过公开 HTTPS 门禁并在独立 T1-E 服务上线；**但真正 `issue()` 交易尚未发出，用户需要先登录、读取 Claim，再另行确认不可逆的预留与 MetaMask 签名**。
+
 # MealForward T1-F · First original Issuer Issue — implementation handoff
 
 2026-10-23, staging / Monad Testnet 10143. Source of truth: Draft PR #40 (`codex/mealforward-t1f-original-issue-recovery-20261023`).
