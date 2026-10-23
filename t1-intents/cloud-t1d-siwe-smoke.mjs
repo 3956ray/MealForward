@@ -74,20 +74,30 @@ export async function attestPublicSiweOnly({origin=PINNED,fetcher=fetch}={}){
   'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate',
   'Sec-Fetch-Dest':'document','Sec-Fetch-User':'?1'
  };
- const externalClick=await rawGet('/',externalHeaders);
- fail(externalClick.code===200,'T1D_SIWE_EXTERNAL_LINK_NAVIGATION_403');
- fail(externalClick.headers['x-frame-options']==='DENY'&&
-  externalClick.headers['content-security-policy']?.includes("frame-ancestors 'none'"),
-  'T1D_SIWE_EMBED_GUARD_MISSING');
+ // The public landing is identical for everybody. Browser implementations
+ // vary the Fetch Metadata headers, and some client proxy apps omit them.
+ // No variant may generate 403 for public HTML; CSP blocks iframe rendering.
+ for(const headers of [
+  externalHeaders,
+  {'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'},
+  {'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'iframe'},
+  {'Sec-Fetch-Site':'same-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'},
+  {...externalHeaders,Origin:'https://chatgpt.com'},
+  {'User-Agent':'Mozilla/5.0 Chrome/155.0.0.0 Safari/537.36'}
+ ]){
+  const doc=await rawGet('/',headers);
+  fail(doc.code===200,'T1D_SIWE_PUBLIC_LANDING_BLOCKED_BY_BROWSER_HEADERS');
+  fail(doc.headers['x-frame-options']==='DENY'&&
+   doc.headers['content-security-policy']?.includes("frame-ancestors 'none'")&&
+   !doc.headers['set-cookie'],
+   'T1D_SIWE_PUBLIC_DOCUMENT_NOT_ISOLATED');
+ }
  for(const [path,headers] of [
-  ['/',{...externalHeaders,'Sec-Fetch-Dest':'iframe'}],
-  ['/',{...externalHeaders,'Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'}],
   ['/ui.mjs',{...externalHeaders,'Sec-Fetch-Dest':'script'}],
-  ['/ui.css',{...externalHeaders,'Sec-Fetch-Dest':'style'}],
-  ['/',{...externalHeaders,Origin:'https://chatgpt.com'}]
+  ['/ui.css',{...externalHeaders,'Sec-Fetch-Dest':'style'}]
  ]){
   const denied=await rawGet(path,headers);
-  fail(denied.code===403,'T1D_SIWE_EXTERNAL_SUBRESOURCE_ORIGIN_BYPASS');
+  fail(denied.code===403,'T1D_SIWE_EXTERNAL_SCRIPT_OR_STYLE_BYPASS');
  }
  const javascript=await request('/ui.mjs');
  fail(javascript.code===200&&typeof javascript.body==='string'&&
