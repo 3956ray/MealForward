@@ -73,6 +73,10 @@ test('public GET, optional ChatGPT referral parameters and security headers',asy
  assert.equal(page.headers.get('set-cookie'),null);
  assert.equal((await request('/t1e-role-proof.mjs',{expectJson:false})).code,200);
  assert.equal((await request('/t1e-role-proof.css',{expectJson:false})).code,200);
+ const rolesFile=await request('/t1e-wallet-roles.mjs',{expectJson:false});
+ assert.equal(rolesFile.code,200);
+ assert.match(rolesFile.body,/RECIPIENT_MUST_BE_INDEPENDENT/);
+ assert.equal((await request('/t1e-wallet-roles.mjs?utm_source=chatgpt.com',{expectJson:false})).code,403);
  const js=readFileSync(new URL('./public/t1e-role-proof.mjs',import.meta.url),'utf8');
  for(const unsafe of ['eth_sendTransaction','eth_sendRawTransaction','eth_signTypedData_v4','wallet_sendCalls','localStorage'])
   assert.equal(js.includes(unsafe),false,unsafe);
