@@ -87,9 +87,9 @@ try{
  // Reproduce Chrome Fetch Metadata for a link clicked from ChatGPT.
  // Only top-level public HTML GET navigation may cross site. Never API,
  // javascript, stylesheet, external Origin, iframe or transaction requests.
- const rawGet=(path,headers)=>new Promise((resolve,reject)=>{
+ const rawGet=(path,headers,method='GET')=>new Promise((resolve,reject)=>{
   const request=http.request({
-   host:'127.0.0.1',port,path,method:'GET',headers
+   host:'127.0.0.1',port,path,method,headers
   },response=>{
    response.resume();
    response.on('end',()=>resolve({
@@ -104,22 +104,38 @@ try{
   'Sec-Fetch-Dest':'document',
   'Sec-Fetch-User':'?1'
  };
- const externalLink=await rawGet('/',crossNav);
- assert.equal(externalLink.code,200,'external document navigation must open');
- assert.equal(externalLink.headers['x-frame-options'],'DENY');
- assert.match(externalLink.headers['content-security-policy'],/frame-ancestors 'none'/);
+ // The landing is PUBLIC and carries no wallet principal, so it must
+ // not depend on browser, in-app WebView or intermediary Fetch Metadata.
+ for(const headers of [
+  crossNav,
+  {'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'},
+  {'Sec-Fetch-Site':'same-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'},
+  {'Sec-Fetch-Site':'cross-site','Sec-Fetch-Dest':'iframe'},
+  {'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'no-cors','Sec-Fetch-Dest':'image'},
+  {...crossNav,Origin:'https://chatgpt.com'},
+  {'User-Agent':'Mozilla/5.0 Chrome/155.0.0.0 Safari/537.36'}
+ ]){
+  const page=await rawGet('/',headers);
+  assert.equal(page.code,200,'ALL public document link variants must work');
+  assert.equal(page.headers['x-frame-options'],'DENY');
+  assert.match(page.headers['content-security-policy'],/frame-ancestors 'none'/);
+  assert.equal(page.headers['set-cookie'],undefined);
+ }
+ const head=await rawGet('/',crossNav,'HEAD');
+ assert.equal(head.code,200,'HEAD public landing must work');
  for(const [pathname,headers] of [
-  ['/',{...crossNav,'Sec-Fetch-Dest':'iframe'}],
-  ['/',{...crossNav,'Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'}],
-  ['/',{...crossNav,Origin:'https://chatgpt.com'}],
   ['/ui.mjs',{...crossNav,'Sec-Fetch-Dest':'script'}],
   ['/ui.css',{...crossNav,'Sec-Fetch-Dest':'style'}]
  ]){
   assert.equal((await rawGet(pathname,headers)).code,403,
-   'cross-origin subresource and foreign origin must stay blocked');
+   'cross-site scripts and styles remain blocked');
  }
  const sourceDenied=await req('/v1/t1/status',{extra:crossNav});
- assert.equal(sourceDenied.status,403,'cross-site API remains forbidden');
+ assert.equal(sourceDenied.status,403,'cross-site private API remains forbidden');
+ const foreignOriginApi=await req('/v1/t1/status',{
+  extra:{Origin:'https://chatgpt.com'}
+ });
+ assert.equal(foreignOriginApi.status,403,'untrusted API Origin stays forbidden');
  const state=await req('/v1/t1/status');
  assert.equal(state.status,200);
  assert.equal(state.value.status,'READY_NO_FUNDS');
