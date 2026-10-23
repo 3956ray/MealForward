@@ -118,7 +118,7 @@ export function makeT1EClaimGateway({
     const wallet=await active(req);
     if(wallet!==PILOT_RECIPIENT)throw ERR(403,'T1E_RECIPIENT_ROLE_REQUIRED');
     const row=await claimStore.own(wallet);
-    const basic=publicClaim(row);
+    const basic=publicClaim(row,now);
     let consent=null;
     if(row?.stage==='PREPARED'&&row.round?.state==='PENDING'&&
        Number(row.round.deadline)>now+5){
@@ -146,7 +146,7 @@ export function makeT1EClaimGateway({
       Number(state.row.round.deadline)>now+5?
      consentFromClaim(state.row,now):null;
     return writeJson(res,state.created?201:200,{
-     claim:publicClaim(state.row),consent,
+     claim:publicClaim(state.row,now),consent,
      created:state.created,mayAttemptNewClaim:false,
      onchainIssued:false,issuerIssueEnabled:false
     });
@@ -199,7 +199,7 @@ export function makeT1EClaimGateway({
     });
     return writeJson(res,200,{
      status:'T1E_OFFCHAIN_CONSENT_DURABLY_VERIFIED',
-     claim:publicClaim(updated),
+     claim:publicClaim(updated,now),
      onchainIssued:false,issuerIssueEnabled:false,
      beneficiaryEligibilityVerified:false
     });
