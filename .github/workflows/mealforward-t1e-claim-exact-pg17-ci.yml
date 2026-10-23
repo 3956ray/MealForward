@@ -39,4 +39,6 @@ jobs:
         working-directory: t1-intents
         run: |
           node --check t1e-claim-ledger.ci.mjs
+          node --check t1e-claim-server.ci.mjs
           node t1e-claim-ledger.ci.mjs
+          node t1e-claim-server.ci.mjs
