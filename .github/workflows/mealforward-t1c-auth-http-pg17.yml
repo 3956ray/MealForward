@@ -6,6 +6,7 @@ on:
       - codex/mealforward-t1c-supabase-render-readonly-20261022
       - codex/mealforward-t1d-real-test-usdc-funding-20261022
       - codex/mealforward-t1d-render-isolated-20261022
+      - codex/mealforward-t1f-issuer-control-and-issuance-20261023
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -53,9 +54,13 @@ jobs:
         working-directory: t1-intents
         run: npm run test:http
       - name: Execute exact T1-D isolated NOLOGIN writer migration on fresh disposable PG17
-        if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022' || github.ref_name == 'codex/mealforward-t1d-render-isolated-20261022'
+        if: github.ref_name == 'codex/mealforward-t1d-real-test-usdc-funding-20261022' || github.ref_name == 'codex/mealforward-t1d-render-isolated-20261022' || github.ref_name == 'codex/mealforward-t1f-issuer-control-and-issuance-20261023'
         working-directory: t1-intents
         run: |
           node testnet-writer-migration.ci.mjs
           node testnet-signed-quote.ci.mjs
           node testnet-auth-only-http.ci.mjs
+      - name: T1-F actual funding-mode server static issuer proof, strict no new Issue wallet API
+        if: github.ref_name == 'codex/mealforward-t1f-issuer-control-and-issuance-20261023'
+        working-directory: t1-intents
+        run: node t1f-static-funding-pg17.ci.mjs
