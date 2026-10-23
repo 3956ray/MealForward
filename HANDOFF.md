@@ -4,7 +4,23 @@
 >
 > **更新日期：2026-10-23（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前唯一待完成里程碑：T1-F 原始唯一餐券由真正 Issuer 的 MetaMask 亲自调用 `issue()`。** 下一位 Agent 先执行本文的核验与公网安全 Gate；未经通过不可让人发交易。
+> **当前人工门槛：T1-F Issuer 专属云页面已经通过安全发布 Gate，用户下一步亲自 SIWE 登录并读取唯一原 Claim；先不要预留或发送 issue()。** 自动化工作已完成到需要真人钱包这一点。
+
+## 最新实时发布与人工门槛（2026-10-23 19:25 UTC+8）
+
+| Gate | 已实际确认的结果 |
+| --- | --- |
+| GitHub T1-F 开发 | [Draft PR #40](https://github.com/3956ray/MealForward/pull/40)，原始实现提交树 `3efd4632`，后续更新了正式公网安全测试；**不得合并 main** |
+| T1-E staging 发布真源 | `codex/mealforward-t1e-recipient-claim-http-20261023`，正式源码 Release Commit `065d0ee5d824dbd0283387462fd0927c70f1aa67`；之后又有 Handoff/CI-only 提交。读取仓库真实 HEAD |
+| Render 已上线版本 | T1-E 独立服务 `srv-dbdgstivcj2c73fnqcc0`，**LIVE**：`dep-dbdk7kcs728c73c8u63g`，部署 Commit `f0cb951742c52f03e0a734c2424ffb715a52108f`，含同一受测应用源码 + 文档 |
+| Render 安全模式 | `T1E_DEPLOYMENT_STAGE=CLAIM_CONSENT`，`T1F_ISSUE_WALLET_ENABLED=true`，`T1E_WALLET_TX_ENABLED=false`，`T1E_SETTLEMENT_ENABLED=false`；启动日志 `issuerTransactionEnabled:true`、`fundingEnabled:false`、`merchantSettlementEnabled:false`、`databaseConnected:true` |
+| 真实外部 HTTPS 门禁 | **PASS** [Actions 39945930715](https://github.com/3956ray/MealForward/actions/runs/39945930715)：17 次实际公网匿名请求，Issuer 页面可读取，非登录 Issuer 接口 401、跨域/伪造地址 403、资金与结算仍拒绝；0 Claim 写入/0 链上交易 |
+| T1-E 原功能回归 | **PASS** [Actions 39945930678](https://github.com/3956ray/MealForward/actions/runs/39945930678) Consent HTTPS；[39945930713](https://github.com/3956ray/MealForward/actions/runs/39945930713) HTTP + Wallet；[39945930712](https://github.com/3956ray/MealForward/actions/runs/39945930712) PG17；[39945930697](https://github.com/3956ray/MealForward/actions/runs/39945930697) 原单券真实 Monad RPC |
+| T1-F 新发券协议/DB CI | **PASS** [Actions 39945232839](https://github.com/3956ray/MealForward/actions/runs/39945232839) 独立 PG17 009–012 + Issuer HTTP/UI；[39945232632](https://github.com/3956ray/MealForward/actions/runs/39945232632) Monad public readonly |
+| 最后真实 Supabase 核验 | 1 条 `FUNDED` 原资助；1 条 `CONSENT_VERIFIED` 领取 Claim（`revision=1`）；1 条 `VERIFIED` Consent Round、2 条 Claim Events；原 Issuer `opId/nonce/issueDeadline/txHash/receipt` **全部 NULL**；安全 Advisor 无 lints |
+| **真正用户测试** | Recipient SIWE/Consent、Issuer SIWE 已由用户早前完成；**T1-F Issuer 页面登录、页面核对及 MetaMask `issue()` 尚未执行**，下一步必须用户亲自操作 |
+
+> 重要：自动 CI 在代码提交后可能再次运行；“已验证”仅限上述精确运行。Root Handoff 的文档提交若发生在上表测试之后，须重新查 HEAD/CI，不要称文档提交为原应用部署 Commit。
 
 ## 0. 接手即读 / 不可犯的错误
 
@@ -58,7 +74,7 @@ Render 连接器工作空间 **LaoDao**：`tea-db7q3ou7bikc73bp2bt0`（已获用
 | T1-D 资助服务 | `srv-dbd0nl67bikc73a5grh0` | 原第一笔 Fund 已成功，不重复 |
 | T1-C Read-only | `srv-dbclmetg1s2s73dnl5h0` | 完全独立、只读 |
 
-当前 Render T1-E 是 `CLAIM_CONSENT`（真实上线旧 Commit `d5e0adf5`，部署 `dep-dbdj1sqvcj2c73fuq1pg`）；原环境已有 **私有的** T1E 双角色 DB 连接，Agent 不得提取或跨服务复制。
+**当前 Render T1-E LIVE** 是 `CLAIM_CONSENT` 且 T1-F 独立 Issuer-only 功能已经开启，具体部署、Gate 和数据库状态以上方「最新实时发布与人工门槛」为准；原环境已有 **私有的** T1E 双角色 DB 连接，Agent 不得提取或跨服务复制。
 
 **T1-F 开关 `T1F_ISSUE_WALLET_ENABLED` 默认 `false`**：当 `false` 时不能暴露 Issuer 页面和接口；当 `true` 时必须仍满足 `T1E_DEPLOYMENT_STAGE=CLAIM_CONSENT`、`T1E_CLAIM_WRITES_ENABLED=true`、`T1E_WALLET_TX_ENABLED=false`、`T1E_SETTLEMENT_ENABLED=false`。后两项永远不允许变 true。Render autoDeploy OFF，每次推分支还须显式 trigger deploy。部署之前备份旧 Git commit、保留旧部署可回退。**切换前先证实最新提交、CI、安全网关和实库都合格。**
 
@@ -90,16 +106,19 @@ Supabase 隔离 Staging 项目 **`mealforward-t1-staging` / `ketfrukrcuosrqynnsa
 - `POST /v1/t1f/issuer/bind` 核对链 ID、from、to、nonce、value=0、calldata hash（不接受仅凭用户填的 Hash）。`reconcile` 用只读 RPC 查 Receipt/canonical block/events/accounting，成功才 CAS 更新 `ISSUED`，失败返回 UNKNOWN/PENDING/REVERTED 无重发。需要数据库交易与事件双重持久化和严格原数据一致。
 - 若任何服务接入失败，不得凭感觉撤销已预留 Nonce。对其他后台账户或相同合约重新发券是高风险操作。
 
-## 5. 当前开发 / 发布与验收操作序列
+## 5. 现在停止自动工作：由用户本人开始 T1-F Issuer 页面验收
 
-当前目标是**在不触碰历史 CP30、不换钱包和不发任何交易的前提下**完成 T1-F 的独立云发布；下个 Agent 应：
+**交给新 Agent 时的下一步已收敛到用户必须参与的真人 Gate。** 已完成原 T1-F 代码开发、PG17 exact-script CI、Supabase 012 迁移、T1-E 兼容验证、旧版备份、灰度关闭模式、正式 Issuer 开启和 17 次外部 HTTPS 安全测试。**任何 Agent 都不应自行准备/广播 `issue()`。**
 
-1. GitHub 获取 PR #40 最新 HEAD，审查 `t1f-issuer-http`、SQL012、`t1f-issue-ledger`、钱包 UI、公开负测脚本和当前 Handoff；跑 T1-F GitHub Actions exact-head，严格区分通过的 source/PG/RPC 与未测试的真实人的钱包。
-2. 只读 Supabase 检查 012 存在、唯一 Claim 仍 `CONSENT_VERIFIED` 且没有原 Issue Nonce、Hash、审计事件异常；确认最小权限、原 `FUNDED` 单份和安全 Advisor。出现未知已预留就**停止新 Issue**转恢复。
-3. T1-E Render 现有服务预先保留旧 Live commit/部署，先部署新代码且 **`T1F_ISSUE_WALLET_ENABLED=false`**，确保 T1-E 原领取页面和私有隔离仍健康。不得动 T1-D/T1-C 服务。
-4. 在本次 T1-E Release 通过默认关闭门禁及公网 GET/POST 负测试后，再 **仅**在 T1-E Render 将 `T1F_ISSUE_WALLET_ENABLED=true`，由 Render 自动构建新部署；重复核验 exact source SHA、Live、启动日志、私有 Session 401、Issuer API 未登录 401、跨站 403、旧 settle/fund 405/不可写；再次核对数据库 Claim/资金没有被自动修改。
-5. **停在真人 MetaMask Gate**：用户自己打开 `https://mealforward-t1e-claim-laodao.onrender.com/t1f-issuer.html`，Issuer 登录→检查状态→一次性预留→本人检查 MetaMask `issue()` tx→绑定同一原交易→Receipt 核对。不要机器人替用户签或广播。用户可先仅验登录/状态，之后再单独点击预留，**一旦预留不能重新发券**。
-6. 用户送回页面的 Claim 状态/公开 Tx Hash 后，只读链/DB 对账，并更新本文；按约每轮开发结束都要更新 root Handoff。
+1. **先仅测试登录与读取：** 用户打开 `https://mealforward-t1e-claim-laodao.onrender.com/t1f-issuer.html`，连接原 Issuer 钱包 `0x9747...aa2b3` 且 Monad 10143，点「本人 SIWE 登录」签 EIP-191 登录证明，点击「核对原 Claim」。预期 `CONSENT_VERIFIED`、唯一 Claim ID / Voucher ID、尚无原 Issue Nonce/Hash，且仍不开 Fund/Settle。把页面脱敏输出回传，不发私钥/签名/Cookie。
+2. **请先在这一步停下**，不要轻率点击「一次性预留原始 Issue」或「本人 MetaMask 发送唯一 Issue」；必须在 Agent 核对真人只读结果与最新数据库、Pending Nonce、链上原 Unit still Available、钱包 Gas 余额足够之后，才开始不可逆的一次性预留。**预留即固定唯一 Nonce/Operation，MetaMask 拒绝或超时也不能再建第二次。**
+3. 之后由用户本人点击一次预留与单次 MetaMask `issue()`；Agent 仅核对公链原交易 Hash + Receipt/Canonical Block/Issued/OperationExecuted + Bucket A→R + USDC escrow 责任；成功才标 `ISSUED`。若钱包没有返回 Hash，先去活动记录恢复，**不可再发**。
+4. 领取者是否符合资格、商家物理交餐、二维码 Lock/Report 和资金 Settle 属于后续完全不同的工程阶段；原 StoreEscrow 180 秒链上冷却 Issue #17 未修，严禁以 Issued 代表已出餐/结算。
+5. **每次用户验收或新代码、配置、部署结束后立刻更新根目录 `HANDOFF.md`，同步真实记录/阻塞/可恢复的唯一下一步**；不允许只在聊天里交接。
+
+### 快速安全回退（仅在尚未预留 Issue 时）
+
+如新 Issuer 入口有安全异常，首先在独立 T1-E Render 设置 `T1F_ISSUE_WALLET_ENABLED=false`（仅变更公开开关；**绝不读取或覆盖私有 DSN**），确认自动触发部署且公网状态返回 disabled；仍保留 Claim/Consent/原 Fund 不变。如须恢复旧前端分支，备份为 `codex/mealforward-t1e-prerelease-t1f-20261023` `f786d08521f092bea5c8cff355c316dcd5591c79`，旧部署参考 `dep-dbdj1sqvcj2c73fuq1pg` `d5e0adf5`。对已 `ISSUE_UNKNOWN`/已发 Tx 的情况禁止删除 DB/重跑迁移/重建操作，必须先恢复原事务。
 
 ## 6. GitHub CI / 环境安全和调试
 
