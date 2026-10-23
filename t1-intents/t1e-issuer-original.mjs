@@ -54,6 +54,7 @@ export async function attestIssuerReceipt({rpc,original,txHash}={}){
  check(original&&original.stage==='ISSUE_HASH_BOUND'&&
   original.funding_intent===want&&
   original.unit_seq===0&&asBig(original.generation)===1n&&
+  same(original.issuer_wallet,FIXED.issuerAuthority)&&
   same(original.voucher_id,ID)&&
   hex32.test(original.issuer_op_id||'')&&
   hex32.test(original.issuer_tx_data_hash||'')&&
