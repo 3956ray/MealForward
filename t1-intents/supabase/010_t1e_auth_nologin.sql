@@ -63,14 +63,14 @@ GRANT SELECT,INSERT,UPDATE ON mf_t1e_auth.pre_sessions,
 -- Explicitly deny cross-service privileged access. T1-C cannot forge T1-E
 -- login sessions; T1-E Auth cannot access original Auth or financial data.
 REVOKE ALL ON SCHEMA mf_t1e_auth FROM mf_t1c_auth_runtime,
- mf_t1c_intent_runtime,mf_t1d_fund_runtime,mf_t1e_claim_runtime;
+ mf_t1c_intent_runtime,mf_t1d_fund_runtime,mf_t1d_auth_runtime,mf_t1e_claim_runtime;
 REVOKE ALL ON SCHEMA mf_cp31_auth_pilot FROM mf_t1e_auth_runtime;
 REVOKE ALL ON SCHEMA mf_t1d_auth FROM mf_t1e_auth_runtime;
 REVOKE ALL ON SCHEMA mf_t1c FROM mf_t1e_auth_runtime;
 REVOKE ALL ON SCHEMA mf_t1e FROM mf_t1e_auth_runtime;
 REVOKE ALL ON ALL TABLES IN SCHEMA mf_t1e_auth FROM PUBLIC,
  anon,authenticated,service_role,mf_t1c_auth_runtime,
- mf_t1c_intent_runtime,mf_t1d_fund_runtime,mf_t1e_claim_runtime;
+ mf_t1c_intent_runtime,mf_t1d_fund_runtime,mf_t1d_auth_runtime,mf_t1e_claim_runtime;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA mf_t1e_auth FROM PUBLIC,
  anon,authenticated,service_role;
 COMMENT ON SCHEMA mf_t1e_auth IS
