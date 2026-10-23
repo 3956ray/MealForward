@@ -36,12 +36,12 @@ const store={
  },
  async renew({wallet,now,proof}){
   assert.equal(wallet,PILOT_RECIPIENT);
-  assert.equal(now,NOW);
+  assert.equal(now,NOW+500);
   assert.equal(proof.status,'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS');
   assert.equal(row.round.state,'PENDING');
-  assert.ok(Number(row.round.deadline)<NOW);
+  assert.ok(Number(row.round.deadline)<now);
   row.round={...row.round,seq:2,nonce:'0x'+'b'.repeat(64),
-   deadline:String(NOW+420)};
+   deadline:String(now+420)};
   return row;
  },
  async issuerReadiness(){return {claimStage:row.stage,consentVerified:false}},
@@ -70,7 +70,7 @@ const env={
 };
 const createGate=mode=>makeT1EClaimGateway({
  origin,stage:mode,authStore:auth,claimStore:store,
- clock:()=>NOW,
+ clock:()=>FAKE_NOW,
  readiness:async()=>({status:'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS'}),
  loginHandler:(req,res)=>{
   res.writeHead(404,{'Content-Type':'application/json'});
@@ -163,7 +163,7 @@ test('single original claim can be recovered, wrong consent cannot change databa
 test('expired consent recovers SAME original Claim and changes ONLY private nonce round',async()=>{
  assert.equal(row.stage,'PREPARED');
  const originalId=row.claim_id,firstNonce=row.consent_nonce;
- row.round={...row.round,deadline:String(NOW-2)};
+ FAKE_NOW=NOW+500;
  const view=await req('/v1/t1e/claim/me','recipient');
  assert.equal(view.status,200);
  assert.equal(view.body.consent,null);
