@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Require complete canonical Agent HANDOFF before closing work
+        run: |
+          test -s HANDOFF.md
+          grep -q 'Agent 一读即接手' HANDOFF.md
+          grep -q '强制每轮交接更新规范' HANDOFF.md
+          grep -q '不可犯的错误' HANDOFF.md
       - name: Install pinned dependencies with no install scripts
         working-directory: t1-intents
         run: npm install --ignore-scripts --no-audit --no-fund
@@ -31,6 +37,7 @@ jobs:
           node --check t1e-claim-server.mjs
           node --check t1e-claim-http.mjs
           node --check t1e-claim-entrypoint.mjs
+          node --check t1f-issuer-live-smoke.mjs
           node --check testnet-readonly-rpc.mjs
           node --test t1e-claim-http.test.mjs
           node --test t1f-issuer-http.test.mjs
