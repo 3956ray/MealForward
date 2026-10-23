@@ -7,6 +7,11 @@
 const ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const allowlist=new Set([
  '/','/t1f-issuer.html','/t1f-issuer.mjs','/health',
+ '/t1f-issuer.html?utm_source=chatgpt.com',
+ '/t1f-issuer.html?utm_source=chatgpt.com&utm_medium=referral',
+ '/t1f-issuer.html?wallet=0x123',
+ '/t1f-issuer.html?utm_source=chatgpt.com&utm_source=evil.com',
+ '/t1f-issuer.mjs?utm_source=chatgpt.com',
  '/v1/t1e/status','/v1/t1e/claim/me','/v1/t1e/issuer/readiness',
  '/v1/t1f/issuer/status','/v1/t1f/issuer/prepare',
  '/v1/t1f/issuer/bind','/v1/t1f/issuer/reconcile',
@@ -61,11 +66,21 @@ export async function attestFirstIssuerLive({
   root.headers.get('cache-control')?.includes('no-store')&&
   root.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"),
   prefix+'PUBLIC_HTTPS_HEADERS_INVALID');
- const [page,js]=await Promise.all([
-  ask('/t1f-issuer.html'),ask('/t1f-issuer.mjs')
+ const [page,js,tracked,multiTracked,unsafeWallet,duplicateTag,scriptTracking]=await Promise.all([
+  ask('/t1f-issuer.html'),
+  ask('/t1f-issuer.mjs'),
+  ask('/t1f-issuer.html?utm_source=chatgpt.com'),
+  ask('/t1f-issuer.html?utm_source=chatgpt.com&utm_medium=referral'),
+  ask('/t1f-issuer.html?wallet=0x123'),
+  ask('/t1f-issuer.html?utm_source=chatgpt.com&utm_source=evil.com'),
+  ask('/t1f-issuer.mjs?utm_source=chatgpt.com')
  ]);
  if(enabled){
   yes(page.code===200&&js.code===200&&
+   tracked.code===200&&multiTracked.code===200&&
+   tracked.body===page.body&&multiTracked.body===page.body&&
+   tracked.headers.get('cache-control')?.includes('no-store')&&
+   unsafeWallet.code===403&&duplicateTag.code===403&&scriptTracking.code===403&&
    typeof page.body==='string'&&page.body.includes('fbab3b22-965d-44e2-b144-d7307b7aa8ea')&&
    page.body.includes('id="send" disabled')&&
    typeof js.body==='string'&&js.body.includes('eth_sendTransaction')&&
@@ -74,7 +89,8 @@ export async function attestFirstIssuerLive({
    !js.body.includes('privateKeyToAccount'),
    prefix+'ISSUER_WALLET_UI_NOT_EXACTLY_DEPLOYED');
  }else{
-  yes(page.code!==200&&js.code!==200,
+  yes(page.code!==200&&tracked.code!==200&&multiTracked.code!==200&&
+   js.code!==200,
    prefix+'ISSUER_UI_MUST_BE_HIDDEN_BEFORE_RELEASE');
  }
  const mustBePrivate=['/v1/t1e/claim/me','/v1/t1e/issuer/readiness',
