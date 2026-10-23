@@ -46,7 +46,9 @@ try{
  strict(head.version>=170000&&head.version<180000,'Postgres17');
  strict(head.empty,'fresh database required');
  await c.query(await readFile(new URL('./schema.sql',import.meta.url),'utf8'));
- await c.query(`CREATE SCHEMA mf_t1d_auth;
+ await c.query(`CREATE SCHEMA mf_cp31_auth_pilot;
+  CREATE TABLE mf_cp31_auth_pilot.sessions(id text);
+  CREATE SCHEMA mf_t1d_auth;
   CREATE TABLE mf_t1d_auth.sessions (id text PRIMARY KEY);
   CREATE ROLE anon NOLOGIN;
   CREATE ROLE authenticated NOLOGIN;
