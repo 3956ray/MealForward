@@ -1,0 +1,36 @@
+name: MealForward T1-F live Render issuer safety gate (NO user wallet / NO writes)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-original-issue-recovery-20261023
+      - codex/mealforward-t1e-recipient-claim-http-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  public-issuer-no-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      T1F_EXPECT_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate that the public gate cannot sign, broadcast, claim or fund
+        working-directory: t1-intents
+        run: |
+          node --check t1f-issuer-live-smoke.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|T1E_AUTH_DB_URL|T1E_CLAIM_DB_URL' t1f-issuer-live-smoke.mjs; then
+            echo T1F_LIVE_SMOKE_MUST_BE_PUBLIC_AND_NEVER_SIGN
+            exit 1
+          fi
+      - name: Actual public Render HTTPS issuer-gate and no-funds checks
+        working-directory: t1-intents
+        run: node t1f-issuer-live-smoke.mjs
