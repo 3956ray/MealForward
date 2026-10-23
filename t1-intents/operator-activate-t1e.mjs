@@ -50,6 +50,8 @@ export function checkIsolation(row){
   row.old_auth_sees_new===false&&row.old_fund_sees_new===false&&
   row.auth_sees_claims===false&&row.claim_sees_auth===false&&
   row.auth_sees_finance===false&&row.claim_sees_finance===false&&
+  row.round_can_read===true&&row.round_can_insert===true&&
+  row.round_can_update_state===true&&row.round_can_rewrite_nonce===false&&
   row.claim_can_reassign_recipient===false&&
   row.claim_can_delete===false,'T1E_ROLE_GRANTS_NOT_ISOLATED');
  return true;
@@ -95,11 +97,13 @@ export async function activateT1EFromMac(){
    (SELECT count(*) FROM mf_t1e.recipient_claims) AS claims,
    (SELECT count(*) FROM mf_t1e.claim_events) AS claim_events,
    (SELECT count(*) FROM mf_t1e_auth.sessions) AS sessions,
+   (SELECT count(*) FROM mf_t1e.consent_rounds) AS rounds,
    (SELECT count(*) FROM mf_t1c.intents WHERE stage='FUNDED') AS funded,
    (SELECT count(*) FROM mf_t1c.wallet_attempts WHERE status='CONFIRMED') AS attempts`)).rows[0];
   assert(meta?.db==='postgres'&&meta.who==='postgres'&&
    meta.pg_version>=170000&&meta.pg_version<180000&&
    meta.claims==='0'&&meta.claim_events==='0'&&meta.sessions==='0'&&
+   meta.rounds==='0'&&
    meta.funded==='1'&&meta.attempts==='2',
    'T1E_STAGING_STATE_NOT_SAFE_FOR_FIRST_LOGIN');
   phase='ROLE_CHECK';
@@ -120,6 +124,10 @@ export async function activateT1EFromMac(){
    has_schema_privilege('mf_t1e_claim_runtime','mf_t1e_auth','USAGE') AS claim_sees_auth,
    has_schema_privilege('mf_t1e_auth_runtime','mf_t1c','USAGE') AS auth_sees_finance,
    has_schema_privilege('mf_t1e_claim_runtime','mf_t1c','USAGE') AS claim_sees_finance,
+   has_table_privilege('mf_t1e_claim_runtime','mf_t1e.consent_rounds','SELECT') AS round_can_read,
+   has_table_privilege('mf_t1e_claim_runtime','mf_t1e.consent_rounds','INSERT') AS round_can_insert,
+   has_column_privilege('mf_t1e_claim_runtime','mf_t1e.consent_rounds','state','UPDATE') AS round_can_update_state,
+   has_column_privilege('mf_t1e_claim_runtime','mf_t1e.consent_rounds','nonce','UPDATE') AS round_can_rewrite_nonce,
    has_column_privilege('mf_t1e_claim_runtime','mf_t1e.recipient_claims','beneficiary_wallet','UPDATE') AS claim_can_reassign_recipient,
    has_table_privilege('mf_t1e_claim_runtime','mf_t1e.recipient_claims','DELETE') AS claim_can_delete`)).rows[0];
   checkIsolation(priv);
