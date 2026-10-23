@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {allowStaticFetchSite} from './static-fetch-policy.mjs';
+import {allowStaticFetchSite,allowStaticQuery} from './static-fetch-policy.mjs';
 
 const entry=(path='/',over={})=>({
  path,method:'GET',
@@ -52,5 +52,34 @@ test('policy cannot turn non-document API or any write method into a static fetc
  }
  for(const path of ['/v1/me','/v1/t1/status','/v1/t1/fund/quote']){
   assert.equal(allowStaticFetchSite(entry(path)),false);
+ }
+});
+
+test('ChatGPT UTM and other tracking params to unpersonalized HTML cannot produce a 403',()=>{
+ const safe=[
+  '', '?utm_source=chatgpt.com',
+  '?utm_source=chatgpt.com&utm_medium=referral',
+  '?gclid=example-opaque-click-id',
+  '?utm_source=chatgpt.com&fbclid=opaque',
+  '?utm_source=%3Cscript%3E',
+  '?unknown=untrusted'
+ ];
+ for(const path of ['/','/fund-testnet.html']){
+  for(const search of safe){
+   assert.equal(allowStaticQuery({path,search}),true,
+    JSON.stringify({path,search}));
+  }
+ }
+});
+test('tracking URLs cannot relax JS/CSS, API or excessive-query policy',()=>{
+ for(const path of ['/ui.mjs','/ui.css','/v1/me',
+  '/v1/t1/status','/v1/t1/fund/quote']){
+  assert.equal(allowStaticQuery({path,search:'?utm_source=chatgpt.com'}),false,path);
+  assert.equal(allowStaticQuery({path,search:''}),true,path);
+ }
+ for(const path of ['/','/fund-testnet.html']){
+  assert.equal(allowStaticQuery({path,search:'?'+ 'x'.repeat(2048)}),false);
+  assert.equal(allowStaticQuery({path,search:null}),false);
+  assert.equal(allowStaticQuery({path,search:'utm_source=chatgpt.com'}),false);
  }
 });
