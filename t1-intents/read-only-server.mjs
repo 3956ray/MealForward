@@ -237,9 +237,14 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
   server=http.createServer((req,res)=>{
    const u=new URL(req.url||'/',cfg.origin);
    const item=staticFiles.get(u.pathname);
-   if(item&&req.method==='GET'){
+   if(item&&(req.method==='GET'||req.method==='HEAD')){
+    // These two HTML documents are invariant and unauthenticated, so do
+    // not treat an optional Origin / Sec-Fetch header as authority to
+    // reject a normal browser link. Every API path still goes through the
+    // original strict SIWE Origin, CSRF and per-wallet permission checks.
+    const publicDocument=u.pathname==='/'||u.pathname==='/fund-testnet.html';
     if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
-     (req.headers.origin&&req.headers.origin!==cfg.origin)||
+     (!publicDocument&&req.headers.origin&&req.headers.origin!==cfg.origin)||
      !allowStaticFetchSite({path:u.pathname,method:req.method,headers:req.headers})){
      res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
     }
@@ -252,7 +257,7 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
      'X-Frame-Options':'DENY',
      'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; script-src 'self'; style-src 'self'"
     });
-    res.end(item.bytes);
+    res.end(req.method==='HEAD'?undefined:item.bytes);
     return;
    }
    return handler(req,res);
