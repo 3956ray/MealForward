@@ -1,0 +1,41 @@
+name: MealForward T1-E authenticated Claim HTTP and privacy gates (NO onchain writes)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-recipient-claim-http-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  authenticated-private-claim-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Exact dependencies without lifecycle scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Complete T1-E source syntax and strict wallet broadcaster prohibition
+        working-directory: t1-intents
+        run: |
+          npm run check
+          for file in t1e-claim-http.mjs t1e-claim-store.mjs t1e-claim-server.mjs public/t1e-claim.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount' "$file"; then
+              echo "T1E_CLAIM_IMPLICIT_TRANSACTION_FORBIDDEN"
+              exit 1
+            fi
+          done
+      - name: Session-derived wallet, CSRF, original Unit, EIP712, no money negative tests
+        working-directory: t1-intents
+        run: npm run test:t1e:claim
+      - name: Original recipient consent cross-check and Issuer receipt source-only negative tests
+        working-directory: t1-intents
+        run: node --test t1e-recipient-consent.test.mjs t1e-issuer-original.test.mjs
