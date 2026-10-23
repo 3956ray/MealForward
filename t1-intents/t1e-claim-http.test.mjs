@@ -56,22 +56,23 @@ const env={
  T1E_AUTH_DB_URL:'postgres://mf_t1e_auth_runtime:auth-ci-password-only@127.0.0.1:5435/postgres',
  T1E_CLAIM_DB_URL:'postgres://mf_t1e_claim_runtime:claim-ci-password-only@127.0.0.1:5435/postgres'
 };
-let server;
+const createGate=mode=>makeT1EClaimGateway({
+ origin,stage:mode,authStore:auth,claimStore:store,
+ clock:()=>NOW,
+ readiness:async()=>({status:'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS'}),
+ loginHandler:(req,res)=>{
+  res.writeHead(404,{'Content-Type':'application/json'});
+  res.end(JSON.stringify({error:'UNLISTED'}));
+ }
+});
+let currentGate=createGate('CLAIM_SIWE_ONLY');
+const server=createServer((req,res)=>currentGate(req,res));
+await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
 async function stage(mode){
- if(server)await new Promise(resolve=>server.close(resolve));
- const app=makeT1EClaimGateway({
-  origin,stage:mode,authStore:auth,claimStore:store,
-  clock:()=>NOW,
-  readiness:async()=>({status:'T1E_ORIGINAL_FUNDED_UNIT_READONLY_ISSUE_GATE_PASS'}),
-  loginHandler:(req,res)=>{
-   res.writeHead(404,{'Content-Type':'application/json'});
-   res.end(JSON.stringify({error:'UNLISTED'}));
-  }
- });
- server=createServer(app);
- await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
+ // Real production stage changes require a new deployment. The CI gate
+ // swaps only an in-memory test handler so pooled fetch sockets never reset.
+ currentGate=createGate(mode);
 }
-await stage('CLAIM_SIWE_ONLY');
 after(async()=>{if(server)await new Promise(resolve=>server.close(resolve))});
 async function req(path,role='anonymous',method='GET',body={},headers={}){
  const h={Accept:'application/json',...headers};
