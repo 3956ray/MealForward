@@ -12,6 +12,7 @@ import {PILOT_RECIPIENT,ORIGINAL_INTENT,FIRST_VOUCHER} from './t1e-claim-store.m
 import {FIXED} from './t1e-first-issue-readiness.mjs';
 import {MEAL,TERMS,ESCROW} from './core.mjs';
 const NOW=1792740000;
+let FAKE_NOW=NOW;
 const token='a'.repeat(43),csrf='c'.repeat(43),issuerToken='b'.repeat(43);
 const hash=s=>createHash('sha256').update(s).digest('hex');
 let prepared=0,verified=0;
