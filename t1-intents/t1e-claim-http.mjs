@@ -215,7 +215,7 @@ export function makeT1EClaimGateway({
     const issuer=await active(req,method==='POST');
     if(issuer!==FIXED.issuerAuthority)
      throw ERR(403,'T1F_REGISTERED_ISSUER_ONLY');
-    return t1fIssuerRoute({
+    return await t1fIssuerRoute({
      path,method,request:req,response:res,issuer,
      ledger:issuerLedger,rpc:issuerRpc,readiness:issuerReadiness,
      readBody:requestJson,now
