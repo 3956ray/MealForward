@@ -1,0 +1,36 @@
+name: MealForward T1-D original first 7 Test USDC independently verified on Monad
+on:
+  push:
+    branches:
+      - codex/mealforward-t1d-first-fund-receipt-attestation-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  first-original-fund-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned read-only EVM interfaces
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned source and read-only onchain calls
+        working-directory: t1-intents
+        run: |
+          node --check attest-first-funded-receipts.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|process.env.PRIVATE_KEY' attest-first-funded-receipts.mjs; then
+            echo 'T1D_ATTESTATION_BROADCAST_UNACCEPTABLE'
+            exit 1
+          fi
+      - name: Two real confirmed tx, Funded and USDC transfer, quoteUse and escrow solvency
+        working-directory: t1-intents
+        run: node attest-first-funded-receipts.mjs
