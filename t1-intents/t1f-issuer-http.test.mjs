@@ -71,7 +71,9 @@ async function send(path,{method='GET',role='anonymous',data,originOverride,csrf
 test('issuer routes are invisible to unauthenticated and recipient wallets',async()=>{
  assert.equal((await send('/v1/t1f/issuer/status')).status,401);
  assert.equal((await send('/v1/t1f/issuer/status',{role:'recipient'})).status,403);
- assert.equal((await send('/v1/t1f/issuer/status',{role:'issuer'})).status,200);
+ const issuerStatus=await send('/v1/t1f/issuer/status',{role:'issuer'});
+ assert.equal(issuerStatus.status,200);
+ assert.equal(issuerStatus.body.serverTimeUnix,1792749900);
  assert.equal((await send('/v1/t1f/issuer/prepare',{role:'recipient',method:'POST',
   data:{issuerPendingNonce:'9'}})).status,403);
  assert.equal(called,0);
