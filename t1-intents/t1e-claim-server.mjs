@@ -16,7 +16,7 @@ import {claimStore} from './t1e-claim-store.mjs';
 import {makeT1EClaimGateway} from './t1e-claim-http.mjs';
 import {firstVoucherCandidate} from './t1e-first-issue-readiness.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
-import {T1E_ORIGIN} from './t1e-role-proof-server.mjs';
+export const T1E_CLAIM_ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const PROJECT='ketfrukrcuosrqynnsay';
 const DB_HOST='aws-0-ap-southeast-2.pooler.supabase.com';
 const AUTH_ROLE='mf_t1e_auth_runtime';
@@ -25,14 +25,13 @@ const FAIL=(x,c)=>{if(!x)throw Error(c)};
 const ci=(e)=>e.GITHUB_ACTIONS==='true'&&
  e.MF_T1E_DISPOSABLE_ONLY==='ack-fresh-t1e-pg17'&&
  e.MF_T1E_HTTP_DISPOSABLE_ONLY==='ack-claim-http-pg17';
-const URL_RULE=/^https:\/\/[a-z0-9-]+\.onrender\.com$/;
 export function validateT1EClaimConfig(e=process.env){
  const testing=ci(e);
  const stage=e.T1E_DEPLOYMENT_STAGE;
  FAIL(['CLAIM_SIWE_ONLY','CLAIM_CONSENT'].includes(stage),
   'T1E_CLAIM_STAGE_NOT_REVIEWED');
  const origin=e.PUBLIC_ORIGIN,port=Number(e.PORT);
- FAIL(origin===T1E_ORIGIN||
+ FAIL(origin===T1E_CLAIM_ORIGIN||
   testing&&/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin||''),
   'T1E_CLAIM_PUBLIC_ORIGIN_NOT_PINNED');
  FAIL(Number.isSafeInteger(port)&&port>=1&&port<=65535&&
