@@ -6,9 +6,12 @@ let wallet=null,sessionWallet=null,csrf=null,claim=null,consent=null;
 let mode=null,locked=false;
 function put(id,message){$(id).textContent=message}
 function manage(){
- const logged=!!sessionWallet&&!!csrf&&sessionWallet===wallet;
- $('login').disabled=!wallet||logged||locked;
- $('who').disabled=!wallet||locked;
+ const eligible=wallet===RECIPIENT||wallet===ISSUER;
+ const logged=eligible&&!!sessionWallet&&!!csrf&&sessionWallet===wallet;
+ $('connect').disabled=!mode||locked;
+ $('choose-account').disabled=!mode||locked;
+ $('login').disabled=!eligible||logged||locked;
+ $('who').disabled=!logged||locked;
  $('logout').disabled=!logged||locked;
  $('inspect').disabled=!logged||locked;
  $('prepare').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||locked||
@@ -54,17 +57,33 @@ async function perform(fn){
  try{await fn()}catch(e){put('login-result','操作未通过：'+String(e?.message||'未知错误'))}
  finally{locked=false;manage()}
 }
-$('connect').addEventListener('click',()=>perform(async()=>{
+// Never arm SIWE for a rejected account. MetaMask may report a stale
+// eth_requestAccounts result while the user is switching site permissions.
+// Read the current connected account again before storing any UI identity.
+async function connectSelected(choose=false){
  const p=guardProvider();
- const accounts=await p.request({method:'eth_requestAccounts'});
- const chain=await p.request({method:'eth_chainId'});
+ wallet=null;sessionWallet=null;csrf=null;claim=null;consent=null;
+ if(choose)await p.request({
+  method:'wallet_requestPermissions',params:[{eth_accounts:{}}]
+ });
+ const requested=await p.request({method:'eth_requestAccounts'});
+ const [selected,chain]=await Promise.all([
+  p.request({method:'eth_accounts'}),p.request({method:'eth_chainId'})
+ ]);
+ const candidate=selected?.[0]?.toLowerCase();
+ if(!requested?.[0]||requested[0].toLowerCase()!==candidate)
+  throw Error('MetaMask 切换钱包期间连接状态已改变，请重新选择账户');
  if(BigInt(chain)!==10143n)throw Error('请切换到 Monad Testnet（10143）');
- wallet=accounts?.[0]?.toLowerCase();
- if(![RECIPIENT,ISSUER].includes(wallet))
-  throw Error('当前账户不是登记的测试受助者或 Issuer，请选择正确的独立钱包');
+ if(candidate!==RECIPIENT&&candidate!==ISSUER)
+  throw Error('实际连接账户 '+(candidate||'未知')+
+   ' 不属于本次测试的独立受助者或 Issuer，请点击「重新选择钱包」');
+ wallet=candidate;
  put('login-result','已连接：'+wallet+
-  '\n下一步需要 SIWE 登录证明。所有资金动作仍关闭。');
-}));
+  '\n测试角色：'+(wallet===RECIPIENT?'Recipient 受助者':'Issuer 发行者')+
+  '\n下一步需要本人 SIWE 登录证明；不会发送链上交易。');
+}
+$('connect').addEventListener('click',()=>perform(()=>connectSelected()));
+$('choose-account').addEventListener('click',()=>perform(()=>connectSelected(true)));
 $('login').addEventListener('click',()=>perform(async()=>{
  if(!wallet)throw Error('请先连接 MetaMask');
  const p=await checkWallet(wallet);
@@ -186,13 +205,18 @@ $('consent').addEventListener('click',()=>perform(async()=>{
  put('consent-result','PASS：独立 EIP-712 Consent 已验证并持久记录。\n'+
   'Stage: '+claim.stage+'\n链上尚未 Issued，无法核销或结算。');
 }));
-function switched(){
+function switched(accounts){
+ // Ignore a duplicate event for the very account just selected: MetaMask
+ // sometimes emits accountsChanged after eth_requestAccounts resolves.
+ const current=Array.isArray(accounts)&&typeof accounts[0]==='string'?
+  accounts[0].toLowerCase():null;
+ if(wallet&&current===wallet)return;
  wallet=null;sessionWallet=null;csrf=null;claim=null;consent=null;
- put('login-result','钱包账户发生变化。为了避免跨账户访问，请重新完成 T1-E 登录。');
+ put('login-result','钱包账户或网络发生变化，请重新完成 T1-E 登录。');
  manage();
 }
 window.ethereum?.on?.('accountsChanged',switched);
-window.ethereum?.on?.('chainChanged',switched);
+window.ethereum?.on?.('chainChanged',()=>switched());
 (async()=>{
  try{
   const status=await send('/v1/t1e/status');
