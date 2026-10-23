@@ -6,6 +6,15 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-23 22:35+（UTC+8）：用户报告「这是第二次点击了」— 数据库无二次预留
+
+- 用户在首次报告已点击「一次性预留原始 Issue」后，进一步回复「这是第二次点击了」。**所指按钮可能是第二次点击预留，也可能另指发送；必须向用户确认是否触发过 MetaMask「本人 MetaMask 发送唯一 Issue」**，不要仅凭语句下结论。
+- 随后实际只读查询 Supabase `mf_t1e.recipient_claims`：唯一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 `ISSUE_UNKNOWN`、`revision=2`、原唯一 `issuer_op_id=0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、nonce `0`、`issuer_issue_deadline=1792765625`、原 `issuer_tx_data_hash=0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed`；仍未持久记录 `issuer_tx_hash` 或 Receipt。
+- `mf_t1e.claim_events` 仍仅 **1 条** `ISSUE_RESERVED`（event id 3），另有 `CLAIM_PREPARED` 和 `CONSENT_VERIFIED`，总 3 条；原 `FUNDED=1`，Claim=1，Issuer Hash=0。**没有第二条预留的数据库证据**。
+- 已检查实际部署所用 `t1-intents/t1f-issue-ledger.mjs`：当 Claim 不再是 `CONSENT_VERIFIED` 而是 `ISSUE_UNKNOWN`、`ISSUE_HASH_BOUND` 或 `ISSUED` 时，`reserve` 直接返回 `created:false`、`recoveryOnly:true`、`sendAgainPermitted:false`，不生成新的 opId、Nonce、Calldata 或可提交交易。
+- **停止规则**：截止时间已经过期（22:27:05 北京时间），即使浏览器仍保有第一次的 pending transaction object，也不可以点击「本人 MetaMask 发送唯一 Issue」。用户如实际已发，先提供来自 MetaMask Activity 的同一原操作公开 Tx Hash，再做只读链上恢复；如未发，只能保留 `ISSUE_UNKNOWN`，另行审计设计和授权恢复路径。严禁自行重置原 Issuer opId、Nonce、签名截止时间或重复 Fund/Issue。
+- 本条仅更新 Handoff；**未修改任何 Render、Supabase、旧 CP30 Journal 或 Monad 数据**。
+
 ## 2026-10-23 22:28（UTC+8）：原始 Issue 截止时间已过（最新硬停止）
 
 - 原始 Issuer `ISSUE_UNKNOWN` 的不可变 `issuer_issue_deadline=1792765625`，即 **北京时间 2026-10-23 22:27:05**；在 UTC+8 22:27:07 工具核对当前时钟时已经过期，**绝对不能再点击 MetaMask 的「发送唯一 Issue」**。
