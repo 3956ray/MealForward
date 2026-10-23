@@ -92,6 +92,25 @@ export async function attestPublicSiweOnly({origin=PINNED,fetcher=fetch}={}){
    !doc.headers['set-cookie'],
    'T1D_SIWE_PUBLIC_DOCUMENT_NOT_ISOLATED');
  }
+ // The real Mac Chrome Network panel showed this EXACT tracked URL.
+ // Query parameters on a non-personalized public HTML document must not 403.
+ for(const trackedPath of [
+  '/?utm_source=chatgpt.com',
+  '/?utm_source=chatgpt.com&utm_medium=referral'
+ ]){
+  const tracked=await rawGet(trackedPath,externalHeaders);
+  fail(tracked.code===200,'T1D_SIWE_TRACKED_CHROME_LANDING_403');
+  fail(tracked.headers['cache-control']?.includes('no-store')&&
+   tracked.headers['x-frame-options']==='DENY'&&!tracked.headers['set-cookie'],
+   'T1D_SIWE_TRACKED_DOCUMENT_SECURITY_HEADERS_MISSING');
+ }
+ for(const protectedPath of [
+  '/ui.mjs?utm_source=chatgpt.com',
+  '/v1/t1/status?utm_source=chatgpt.com'
+ ]){
+  const denied=await rawGet(protectedPath,{});
+  fail(denied.code===403,'T1D_SIWE_PROTECTED_QUERY_BYPASS');
+ }
  for(const [path,headers] of [
   ['/ui.mjs',{...externalHeaders,'Sec-Fetch-Dest':'script'}],
   ['/ui.css',{...externalHeaders,'Sec-Fetch-Dest':'style'}]
