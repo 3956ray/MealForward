@@ -14,7 +14,7 @@ export async function verifyT1ERoleProofCloud({fetchImpl=fetch}={}){
   check([
    '/','/?utm_source=chatgpt.com',
    '/health','/v1/t1e/status',
-   '/t1e-role-proof.mjs','/t1e-role-proof.css',
+   '/t1e-role-proof.mjs','/t1e-role-proof.css','/t1e-wallet-roles.mjs',
    '/v1/t1e/role/challenge','/v1/t1e/role/verify',
    '/v1/t1e/claim/prepare','/v1/t1e/issuer/issue',
    '/v1/t1e/report','/v1/t1e/settle','/v1/t1/fund/prepare'
@@ -51,11 +51,13 @@ export async function verifyT1ERoleProofCloud({fetchImpl=fetch}={}){
   const home=await request(path);
   check(home.code===200&&typeof home.body==='string'&&
    home.body.includes('T1-E')&&home.body.includes('Issuer')&&
+   home.body.includes('id="recipient-switch"')&&
+   home.body.includes('id="recipient-current-wallet"')&&
    home.headers.get('x-frame-options')==='DENY'&&
    home.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"),
    'T1E_CLOUD_TRACKED_PUBLIC_SITE_DENIED');
  }
- for(const path of ['/t1e-role-proof.mjs','/t1e-role-proof.css']){
+ for(const path of ['/t1e-role-proof.mjs','/t1e-role-proof.css','/t1e-wallet-roles.mjs']){
   const asset=await request(path);
   check(asset.code===200&&typeof asset.body==='string','T1E_CLOUD_ASSET_NOT_PUBLIC');
   if(path.endsWith('.mjs'))check(asset.body.includes('personal_sign')&&
