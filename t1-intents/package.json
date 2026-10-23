@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "scripts": {
     "test": "node --test --test-concurrency=1 *.test.mjs",
-    "check": "node --check core.mjs && node --check receipt.mjs && node --check http-auth-gateway.mjs && node --check http-auth.test.mjs && node --check read-only-server.mjs && node --check public/ui.mjs && node --check cloud-readonly-smoke.mjs && node --check operator-activate-readonly.mjs && node --check operator-diagnose-readonly.mjs && node --check supabase-tls.mjs && node --check supabase-tls.test.mjs && node --check testnet-funding-chain.mjs && node --check testnet-funding.test.mjs && node --check public/fund-testnet.mjs && node --check quote-protocol.mjs && node --check quote-protocol.test.mjs && node --check testnet-signed-quote.ci.mjs && node --check testnet-writer-migration.ci.mjs && node --check t1d-entrypoint.mjs && node --check t1d-entrypoint.test.mjs && node --check auth/t1d-db.mjs && node --check operator-activate-t1d.mjs && node --check operator-activate-t1d.test.mjs && node --check cloud-t1d-setup-smoke.mjs && node --check testnet-auth-only-http.ci.mjs && node --check cloud-t1d-siwe-smoke.mjs && node --check static-fetch-policy.mjs && node --check static-fetch-policy.test.mjs",
+    "check": "node --check core.mjs && node --check receipt.mjs && node --check http-auth-gateway.mjs && node --check http-auth.test.mjs && node --check read-only-server.mjs && node --check public/ui.mjs && node --check cloud-readonly-smoke.mjs && node --check operator-activate-readonly.mjs && node --check operator-diagnose-readonly.mjs && node --check supabase-tls.mjs && node --check supabase-tls.test.mjs && node --check testnet-funding-chain.mjs && node --check testnet-funding.test.mjs && node --check public/fund-testnet.mjs && node --check quote-protocol.mjs && node --check quote-protocol.test.mjs && node --check testnet-signed-quote.ci.mjs && node --check testnet-writer-migration.ci.mjs && node --check t1d-entrypoint.mjs && node --check t1d-entrypoint.test.mjs && node --check auth/t1d-db.mjs && node --check operator-activate-t1d.mjs && node --check operator-activate-t1d.test.mjs && node --check cloud-t1d-setup-smoke.mjs && node --check testnet-auth-only-http.ci.mjs && node --check cloud-t1d-siwe-smoke.mjs && node --check static-fetch-policy.mjs && node --check static-fetch-policy.test.mjs && node --check t1e-role-proof-server.mjs && node --check public/t1e-role-proof.mjs && node --check t1e-role-proof-server.test.mjs && node --check public/t1e-wallet-roles.mjs && node --check t1e-wallet-roles.test.mjs",
     "test:http": "node --test --test-concurrency=1 http-auth.test.mjs operator-activate-readonly.test.mjs supabase-tls.test.mjs",
     "start:readonly": "node read-only-server.mjs",
     "test:fund": "node --test testnet-funding.test.mjs quote-protocol.test.mjs",
@@ -13,7 +13,9 @@
     "start:t1d": "node t1d-entrypoint.mjs",
     "test:t1d:operator": "node --test operator-activate-t1d.test.mjs",
     "test:t1d:cloud": "node cloud-t1d-setup-smoke.mjs",
-    "test:t1d:cloud:siwe": "node cloud-t1d-siwe-smoke.mjs"
+    "test:t1d:cloud:siwe": "node cloud-t1d-siwe-smoke.mjs",
+    "start:t1e:proof": "node t1e-role-proof-server.mjs",
+    "test:t1e:proof": "node --test t1e-role-proof-server.test.mjs t1e-wallet-roles.test.mjs"
   },
   "dependencies": {
     "pg": "8.16.3",

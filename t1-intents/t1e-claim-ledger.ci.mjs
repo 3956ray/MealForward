@@ -46,7 +46,9 @@ try{
  strict(head.version>=170000&&head.version<180000,'Postgres17');
  strict(head.empty,'fresh database required');
  await c.query(await readFile(new URL('./schema.sql',import.meta.url),'utf8'));
- await c.query(`CREATE SCHEMA mf_t1d_auth;
+ await c.query(`CREATE SCHEMA mf_cp31_auth_pilot;
+  CREATE TABLE mf_cp31_auth_pilot.sessions(id text);
+  CREATE SCHEMA mf_t1d_auth;
   CREATE TABLE mf_t1d_auth.sessions (id text PRIMARY KEY);
   CREATE ROLE anon NOLOGIN;
   CREATE ROLE authenticated NOLOGIN;
@@ -82,6 +84,22 @@ try{
  assert.ok(!migration.includes('ALTER ROLE mf_t1d_fund_runtime'));
  assert.ok(!migration.includes('DROP SCHEMA mf_t1c'));
  await c.query(migration);
+ const newAuthMigration=await readFile(new URL('./supabase/010_t1e_auth_nologin.sql',import.meta.url),'utf8');
+ await c.query(newAuthMigration);
+ const role=(await c.query(`SELECT
+   (SELECT rolcanlogin FROM pg_roles WHERE rolname='mf_t1e_auth_runtime') AS login,
+   has_table_privilege('mf_t1e_auth_runtime','mf_t1e_auth.sessions','INSERT') AS auth_can_insert,
+   has_table_privilege('mf_t1e_auth_runtime','mf_t1e_auth.sessions','SELECT') AS auth_can_read,
+   has_table_privilege('mf_t1e_auth_runtime','mf_t1e_auth.sessions','UPDATE') AS auth_can_update,
+   has_schema_privilege('mf_t1e_auth_runtime','mf_t1e','USAGE') AS auth_can_claim,
+   has_schema_privilege('mf_t1e_auth_runtime','mf_t1c','USAGE') AS auth_can_finance,
+   has_schema_privilege('mf_t1e_claim_runtime','mf_t1e_auth','USAGE') AS claim_can_auth,
+   has_schema_privilege('mf_t1d_auth_runtime','mf_t1e_auth','USAGE') AS old_auth_can_new
+ `)).rows[0];
+ assert.deepEqual(role,{
+   login:false,auth_can_insert:true,auth_can_read:true,auth_can_update:true,
+   auth_can_claim:false,auth_can_finance:false,claim_can_auth:false,old_auth_can_new:false
+ });
  const p=(await c.query(`SELECT
   (SELECT rolcanlogin FROM pg_roles WHERE rolname='mf_t1e_claim_runtime') AS login,
   has_table_privilege('mf_t1e_claim_runtime','mf_t1e.recipient_claims','SELECT') AS can_read,
@@ -164,6 +182,7 @@ try{
   onlyOneFirstUnitClaim:true,differentBeneficiaryCannotReplace:true,
   consentBeforeIssueReserved:true,originalNonceCannotChange:true,
   originalTransactionHashCannotChange:true,appendOnlyClaimEvents:true,
+  separateAuthRoleIsNoLogin:true,noCrossRoleSessionAccess:true,
   noLiveDatabaseConnected:true,realVoucherIssued:false,
   onchainTransactionsSent:0
  }));

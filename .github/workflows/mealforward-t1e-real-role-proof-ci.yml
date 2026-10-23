@@ -1,0 +1,39 @@
+name: MealForward T1-E separate real human Issuer and recipient wallet-proof-only gate
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  dedicated-wallet-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact pinned dependencies without scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Full module syntax gate and no source wallet broadcaster
+        working-directory: t1-intents
+        run: |
+          npm run check
+          test -f public/t1e-role-proof.html
+          test -f public/t1e-role-proof.css
+          test -f public/t1e-role-proof.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|eth_signTypedData_v4|wallet_sendCalls|privateKeyToAccount' public/t1e-role-proof.mjs; then
+            echo "T1E_ROLE_PROOF_WALLET_ACTION_UNSAFE"
+            exit 1
+          fi
+      - name: Real EIP191 pinned Issuer spoof denial and recipient SIWE-style wallet proof
+        working-directory: t1-intents
+        run: npm run test:t1e:proof

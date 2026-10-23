@@ -51,6 +51,7 @@ const t0=new Interface([
  'function quoteUses(bytes32) view returns (bytes32 payloadHash,bytes32 batchId)',
  'function getUnit(uint8) view returns ((bytes32 batchId,uint8 localIndex,address payer,bytes32 mealId,uint256 version,bytes32 termsHash,uint256 unitPrice,uint8 bucket,uint256 generation,bytes32 voucherId))',
  'function getBatch(bytes32) view returns ((address payer,bytes32 mealId,uint256 version,bytes32 termsHash,uint256 unitPrice,uint256 quantity,uint256 firstUnit,uint16 refundedMask))',
+ 'function getVoucher(bytes32) view returns ((uint8 unitSeq,uint256 generation,bytes32 termsHash,uint256 issuedAt,uint256 expiresAt,address issuer,bytes32 lockId,uint256 lockedAt,address operator,address processor,bytes32 markerId,uint256 handoverRecordedAt,uint256 handoverBlock,bytes32 reportId,bytes32 settleId,bool expired))',
  'function getAccounting() view returns ((uint256 fundedUnits,uint256 fundedAmount,uint256[5] counts,uint256[5] amounts,uint256 liability))',
  'function issue(bytes32 opId,bytes32 mealId,uint8 expectedUnitSeq,uint256 expectedNextGeneration,bytes32 expectedTermsHash,uint256 deadline) returns (bytes32 voucherId)'
 ]);

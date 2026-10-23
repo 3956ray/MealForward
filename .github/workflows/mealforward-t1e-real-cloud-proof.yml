@@ -1,0 +1,30 @@
+name: MealForward T1-E live Render HTTPS synthetic EIP191 + zero funds gate
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  live-t1e-role-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact pinned dependencies
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Independently probe exact T1-E Render host, no chain transactions
+        working-directory: t1-intents
+        run: |
+          node --check t1e-role-proof-cloud-smoke.mjs
+          node t1e-role-proof-cloud-smoke.mjs
