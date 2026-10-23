@@ -58,7 +58,7 @@ Render 连接器工作空间 **LaoDao**：`tea-db7q3ou7bikc73bp2bt0`（已获用
 | T1-D 资助服务 | `srv-dbd0nl67bikc73a5grh0` | 原第一笔 Fund 已成功，不重复 |
 | T1-C Read-only | `srv-dbclmetg1s2s73dnl5h0` | 完全独立、只读 |
 
-当前 Render T1-E 是 `CLAIM_CONSENT`（真实上线旧 Commit `d5e0adf5`，部署 `dep-dbdj1sqvcj2c73fuq1pg`）；原环境已有 **私有的** T1E 双角色 DB 连接，Agent 不得提取或跨服务复制。
+**T1-F 第一道发布门禁已通过**：Render T1-E 仍是 `CLAIM_CONSENT`，已将测试过的 T1-F 代码以上线 staging release Commit `065d0ee5d824dbd0283387462fd0927c70f1aa67`、部署 `dep-dbdk657b9u1s73a00320` 在 **`T1F_ISSUE_WALLET_ENABLED=false`** 下真实 LIVE（Render 日志 `issuerTransactionEnabled:false`, `databaseConnected:true`），新 Issuer 页面及 API 仍关闭；原环境已有 **私有的** T1E 双角色 DB 连接，Agent 不得提取或跨服务复制。
 
 **T1-F 开关 `T1F_ISSUE_WALLET_ENABLED` 默认 `false`**：当 `false` 时不能暴露 Issuer 页面和接口；当 `true` 时必须仍满足 `T1E_DEPLOYMENT_STAGE=CLAIM_CONSENT`、`T1E_CLAIM_WRITES_ENABLED=true`、`T1E_WALLET_TX_ENABLED=false`、`T1E_SETTLEMENT_ENABLED=false`。后两项永远不允许变 true。Render autoDeploy OFF，每次推分支还须显式 trigger deploy。部署之前备份旧 Git commit、保留旧部署可回退。**切换前先证实最新提交、CI、安全网关和实库都合格。**
 
@@ -79,6 +79,8 @@ Supabase 隔离 Staging 项目 **`mealforward-t1-staging` / `ketfrukrcuosrqynnsa
 - 原 Quote/Donor：`0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`；原 Owner/Operator/Catalog 等均不同于 Issuer 和 Recipient。原 7 USDC voucherId 如上，不能换币、合约或重计价。
 - 任何真实链上操作都必须检查原 StoreEscrow Runtime SHA / Issuer authority / Unit 0 Available / 资金责任、白名单 RPC；不可凭页面余额发交易。
 
+**最近 live 发行入口负测（模式关闭）：**由 GitHub Actions [39945388495](https://github.com/3956ray/MealForward/actions/runs/39945388495) 执行且 PASS，但该 CI 开始时 Render 可能仍处于前一个版本，故不能取代部署后 exact SHA 的外部重跑。此次文档提交会再次触发本分支 CI。
+
 ## 4. 唯一 Claim → Issue 状态机及失败恢复
 
 `FUNDED (A)` → 受助者持久申请 `PREPARED` → EIP-712 本人领取授权 `CONSENT_VERIFIED`（**现已完成**）→ Issuer `ISSUE_UNKNOWN`（先记录 **独立 Issuer 交易截止时间**、唯一 Operation ID/Nonce/数据 Hash、从此不能重发）→ `ISSUE_HASH_BOUND`（只能将原链哈希独立比对后绑定）→ `ISSUED`（在 RPC Receipt、唯一 Issued Event、OperationExecuted、原 voucher、Bucket A→R 和链上余额/liability 核查后）→ **再另行设计领取凭证/商家核销**，现绝不操作 Settle。
@@ -92,7 +94,7 @@ Supabase 隔离 Staging 项目 **`mealforward-t1-staging` / `ketfrukrcuosrqynnsa
 
 ## 5. 当前开发 / 发布与验收操作序列
 
-当前目标是**在不触碰历史 CP30、不换钱包和不发任何交易的前提下**完成 T1-F 的独立云发布；下个 Agent 应：
+当前目标是**在不触碰历史 CP30、不换钱包和不发任何交易的前提下**完成 T1-F 独立云发布。已完成 step 1–3（含禁用状态部署）；**仍待外部本版本负测及 step 4–6**。下个 Agent 应：
 
 1. GitHub 获取 PR #40 最新 HEAD，审查 `t1f-issuer-http`、SQL012、`t1f-issue-ledger`、钱包 UI、公开负测脚本和当前 Handoff；跑 T1-F GitHub Actions exact-head，严格区分通过的 source/PG/RPC 与未测试的真实人的钱包。
 2. 只读 Supabase 检查 012 存在、唯一 Claim 仍 `CONSENT_VERIFIED` 且没有原 Issue Nonce、Hash、审计事件异常；确认最小权限、原 `FUNDED` 单份和安全 Advisor。出现未知已预留就**停止新 Issue**转恢复。
