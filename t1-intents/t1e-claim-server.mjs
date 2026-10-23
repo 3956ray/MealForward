@@ -16,6 +16,8 @@ import {claimStore} from './t1e-claim-store.mjs';
 import {makeT1EClaimGateway} from './t1e-claim-http.mjs';
 import {firstVoucherCandidate} from './t1e-first-issue-readiness.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
+import {originalIssueLedger} from './t1f-issue-ledger.mjs';
+import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
 export const T1E_CLAIM_ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const PROJECT='ketfrukrcuosrqynnsay';
 const DB_HOST='aws-0-ap-southeast-2.pooler.supabase.com';
@@ -28,6 +30,11 @@ const ci=(e)=>e.GITHUB_ACTIONS==='true'&&
 export function validateT1EClaimConfig(e=process.env){
  const testing=ci(e);
  const stage=e.T1E_DEPLOYMENT_STAGE;
+ const flag=e.T1F_ISSUE_WALLET_ENABLED??'false';
+ FAIL(['true','false'].includes(flag),'T1F_EXPLICIT_ISSUE_FLAG_REQUIRED');
+ const issueEnabled=flag==='true';
+ FAIL(!issueEnabled||stage==='CLAIM_CONSENT',
+  'T1F_ISSUE_REQUIRES_CONSENT_STAGE');
  FAIL(['CLAIM_SIWE_ONLY','CLAIM_CONSENT'].includes(stage),
   'T1E_CLAIM_STAGE_NOT_REVIEWED');
  const origin=e.PUBLIC_ORIGIN,port=Number(e.PORT);
@@ -69,7 +76,8 @@ export function validateT1EClaimConfig(e=process.env){
  }
  FAIL(chosen[0]!==chosen[1],'T1E_TWO_DISTINCT_PRIVATE_DB_ROLES_REQUIRED');
  return Object.freeze({
-  stage,origin,port,testing,authUrl:chosen[0],claimUrl:chosen[1],
+  stage,origin,port,testing,issueEnabled,
+  authUrl:chosen[0],claimUrl:chosen[1],
   expectedAuth:AUTH_ROLE,expectedClaim:CLAIM_ROLE
  });
 }
@@ -133,10 +141,21 @@ export async function startT1EClaimServer({env=process.env}={}){
    },verifyChallenge
   };
   const handler=makePilotHandler({store:auth,siwe,origin:cfg.origin});
+  const rpc=cfg.issueEnabled?makeReadOnlyPublicRpc():null;
+  const issuerLedger=cfg.issueEnabled?originalIssueLedger(claimPool):null;
+  if(cfg.issueEnabled){
+   // Deny startup when the exact 012 migration has not been applied.
+   const pinned=await claimPool.query(
+    "SELECT issuer_issue_deadline FROM mf_t1e.recipient_claims "+
+    "WHERE claim_id='fbab3b22-965d-44e2-b144-d7307b7aa8ea'::uuid");
+   FAIL(pinned.rowCount===1,'T1F_REVIEWED_DB_MIGRATION_AND_CLAIM_REQUIRED');
+  }
   const app=makeT1EClaimGateway({
    origin:cfg.origin,stage:cfg.stage,
    authStore:auth,claimStore:claims,loginHandler:handler,
-   readiness:()=>firstVoucherCandidate()
+   readiness:()=>firstVoucherCandidate(),
+   issueEnabled:cfg.issueEnabled,issuerLedger,issuerRpc:rpc,
+   issuerReadiness:()=>firstVoucherCandidate({rpc})
   });
   const files=new Map(await Promise.all([
    ['/','t1e-claim.html','text/html; charset=utf-8'],
@@ -183,7 +202,9 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
    status:'T1E_ISOLATED_CLAIM_SERVICE_READY',
    stage:app.config.stage,
    claimWritesEnabled:app.config.stage==='CLAIM_CONSENT',
-   fundEnabled:false,issuerTransactionsEnabled:false,settleEnabled:false,
+   fundEnabled:false,
+   issuerTransactionsEnabled:app.config.issueEnabled,
+   settleEnabled:false,
    originalCp30Connected:false
   })+'\n');
   let closing=false;
