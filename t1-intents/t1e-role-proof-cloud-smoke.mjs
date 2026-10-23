@@ -60,10 +60,18 @@ export async function verifyT1ERoleProofCloud({fetchImpl=fetch}={}){
  for(const path of ['/t1e-role-proof.mjs','/t1e-role-proof.css','/t1e-wallet-roles.mjs']){
   const asset=await request(path);
   check(asset.code===200&&typeof asset.body==='string','T1E_CLOUD_ASSET_NOT_PUBLIC');
-  if(path.endsWith('.mjs'))check(asset.body.includes('personal_sign')&&
+  if(path==='/t1e-role-proof.mjs')check(asset.body.includes('personal_sign')&&
+   asset.body.includes('wallet_requestPermissions')&&
+   asset.body.includes('classifyT1EWallet')&&
+   asset.body.includes('recipient-current-wallet')&&
    !asset.body.includes('eth_sendTransaction')&&
    !asset.body.includes('eth_signTypedData_v4'),
    'T1E_CLOUD_UNSAFE_PUBLIC_WALLET_API');
+  if(path==='/t1e-wallet-roles.mjs')check(
+   asset.body.includes('RECIPIENT_MUST_BE_INDEPENDENT')&&
+   asset.body.includes('REGISTERED_ROLES')&&
+   !asset.body.includes('eth_sendTransaction'),
+   'T1E_CLOUD_AUTHORITY_PREFLIGHT_NOT_DEPLOYED');
  }
  const fake=Wallet.createRandom();
  const challenge=await request('/v1/t1e/role/challenge',{
