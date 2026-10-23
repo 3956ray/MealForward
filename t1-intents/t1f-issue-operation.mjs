@@ -26,7 +26,8 @@ const abi=AbiCoder.defaultAbiCoder();
 const eq=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.toLowerCase()===b.toLowerCase();
 const check=(ok,reason)=>{if(!ok)throw Error(reason)};
 const u=x=>{
- check((typeof x==='string'&&/^(0|[1-9][0-9]*)$/.test(x))||
+ check((typeof x==='string'&&
+    (/^(0|[1-9][0-9]*)$/.test(x)||/^0x[0-9a-f]+$/i.test(x)))||
   (typeof x==='number'&&Number.isSafeInteger(x)&&x>=0)||
   (typeof x==='bigint'&&x>=0n),'T1F_UNSIGNED_INTEGER_REQUIRED');
  return BigInt(x);
