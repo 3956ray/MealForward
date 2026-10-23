@@ -26,3 +26,46 @@ jobs:
           node --check t1f-issue-operation.mjs
           node --test t1f-issue-operation.test.mjs
           node --test t1e-first-issue-readiness.test.mjs
+          node --check t1f-issue-ledger.mjs
+          node --check t1f-issuer-http.mjs
+          node --check t1e-claim-server.mjs
+          node --check t1e-claim-http.mjs
+          node --check t1e-claim-entrypoint.mjs
+          node --check testnet-readonly-rpc.mjs
+          node --test t1e-claim-http.test.mjs
+
+  original-issue-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      MF_T1F_DISPOSABLE_ONLY: ack-fresh-t1f-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5436/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start fresh one-off PostgreSQL17 ONLY on loopback 5436
+        run: |
+          docker run -d --rm --name t1f-issuer-disposable-pg17 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1e-disposable-only \
+            -e POSTGRES_DB=postgres \
+            -p 127.0.0.1:5436:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec t1f-issuer-disposable-pg17 pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned PostgreSQL and ethers libraries
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test exact 009–012 SQL with nonce permanence and role-isolation
+        working-directory: t1-intents
+        run: |
+          node --check t1f-issue-ledger.ci.mjs
+          node t1f-issue-ledger.ci.mjs
