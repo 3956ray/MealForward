@@ -32,14 +32,17 @@ export function validateSetupOnly(env=process.env){
 }
 const SAFE_HEADERS=Object.freeze({
  'Cache-Control':'no-store, max-age=0',
- 'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+ 'Content-Security-Policy':"default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
  'X-Content-Type-Options':'nosniff',
  'X-Frame-Options':'DENY',
  'Referrer-Policy':'no-referrer'
 });
 export async function startT1ESafeSetup({env=process.env}={}){
  const cfg=validateSetupOnly(env);
- const html=await readFile(new URL('./public/t1e-claim-setup.html',import.meta.url));
+ const [html,css]=await Promise.all([
+  readFile(new URL('./public/t1e-claim-setup.html',import.meta.url)),
+  readFile(new URL('./public/t1e-claim.css',import.meta.url))
+ ]);
  const host=new URL(cfg.origin).host;
  const server=http.createServer((req,res)=>{
   const u=new URL(req.url||'/',cfg.origin),path=u.pathname;
@@ -51,6 +54,11 @@ export async function startT1ESafeSetup({env=process.env}={}){
    res.writeHead(200,{...SAFE_HEADERS,
     'Content-Type':'text/html; charset=utf-8','Content-Length':html.length});
    res.end(req.method==='HEAD'?undefined:html);return;
+  }
+  if(path==='/t1e-claim.css'&&['GET','HEAD'].includes(req.method)&&!u.search){
+   res.writeHead(200,{...SAFE_HEADERS,
+    'Content-Type':'text/css; charset=utf-8','Content-Length':css.length});
+   res.end(req.method==='HEAD'?undefined:css);return;
   }
   if(u.search){res.writeHead(403,SAFE_HEADERS);res.end();return}
   if((path==='/health'||path==='/v1/t1e/status')&&req.method==='GET'){
