@@ -125,7 +125,9 @@ export function verifyRecipientConsent({
  strict(nonceReservedInPrivateDatabase===true,
   'T1E_DURABLE_NONCE_AND_CLAIM_REQUIRED');
  strict(Number.isSafeInteger(now)&&now>0,'T1E_SERVER_CLOCK_INVALID');
- strict(BigInt(prepared.expiry)>BigInt(now+5),
+ strict(BigInt(prepared.expiry)>BigInt(now+5)&&
+  BigInt(prepared.expiry)<=BigInt(now+600)&&
+  BigInt(prepared.message?.deadline??0)===BigInt(prepared.expiry),
   'T1E_RECIPIENT_CONSENT_EXPIRED');
  strict(HEX130.test(signature||''),'T1E_WRONG_ECDSA_SIGNATURE');
  const who=recipientAddress(sessionWallet);
