@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <title>留膳 · T1-E 独立领取服务 · 安全部署</title>
+ <link rel="stylesheet" href="/t1e-claim.css">
+</head>
+<body>
+ <div class="shell">
+  <header class="bar"><a href="/" class="brand"><span class="seal">膳</span><span>MEALFORWARD<small>留膳 · T1-E 独立领取服务</small></span></a><span class="network"><i></i> MONAD TESTNET · 10143</span></header>
+  <main>
+   <section class="hero">
+    <div class="overline">SAFE RELEASE · NO USER DATA</div>
+    <h1>一膳已留，<br><em>静候领取。</em></h1>
+    <p>第一份 7 Test USDC「暖心盖饭」已在原 StoreEscrow 链上托管。本服务的独立页面和安全门禁已准备就绪；受助者登录尚未开放。</p>
+    <div class="facts"><div><small>真实 Testnet 资助</small><strong>1 份 · 7 Test USDC</strong><span>原始资金无需重复支付</span></div><div><small>受助者 Claim</small><strong>未开放</strong><span>等待独立 SIWE 身份接入</span></div><div><small>链上 Issuer / 结算</small><strong>关闭</strong><span>不会发送交易</span></div></div>
+   </section>
+   <section class="flow">
+    <div class="section-top"><div><div class="overline">ISOLATED STAGING · ZERO DB CONNECTIONS</div><h2>从钱包证明到第一次领取</h2></div><span class="mode">T1E_SAFE_SETUP_ONLY</span></div>
+    <div class="panel">
+     <div class="index">01 / COMPLETED</div>
+     <h3>Issuer 与受助者的钱包控制权</h3>
+     <p>已经完成独立的 EIP-191 实人测试。新领取服务不会导入旧 T1-D Session，也不会继承既有资金数据库角色。</p>
+     <p><a href="https://mealforward-t1e-role-proof-laodao.onrender.com/" target="_blank" rel="noopener noreferrer">查看独立钱包证明站 ↗</a></p>
+    </div>
+    <div class="panel">
+     <div class="index">02 / PRIVATE ACTIVATION REQUIRED</div>
+     <h3>专用受助者 SIWE 与唯一 Claim</h3>
+     <p>独立的 PostgreSQL Schema 已创建，钱包登录与领取授权的代码也已准备；只有站点管理员在自己的 Mac 上启用两只最小权限账号后，才能开启正式 SIWE 测试。此页不会提供数据库操作。</p>
+    </div>
+    <div class="panel blocked">
+     <div class="index">03 / FINANCIAL HARD HOLD</div>
+     <h3>Issuer 发券与商家结算仍不开放</h3>
+     <p>原来 7 Test USDC 的一次资助已经结算进 StoreEscrow。本阶段不执行任何新的 Fund、Issue、Lock、Report 或 Settle 操作。</p>
+    </div>
+   </section>
+  </main>
+  <footer><span>留一膳，待一人，是为善。</span><span>安全测试网 · 不索取私钥 · 不包含旧 CP30</span><a href="https://mealforward-t1d-funding-laodao.onrender.com/" target="_blank" rel="noopener noreferrer">查看最初的真实资助记录 ↗</a></footer>
+ </div>
+</body>
+</html>
