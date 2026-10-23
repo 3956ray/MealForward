@@ -59,7 +59,8 @@ test('real page displays connected account and user-click permission chooser',()
  assert.match(html,/id="issuer-current-wallet"/);
  assert.match(html,/id="recipient-switch"/);
  assert.match(ui,/wallet_requestPermissions/);
- assert.match(ui,/classifyT1EWallet\(role,wallet\)/);
+ assert.match(ui,/classifyT1EWallet\(role,address\)/);
+ assert.match(ui,/const check=preview\(role,wallet\)/);
  assert.match(ui,/if\(!check\.ok\)/);
  assert.match(ui,/实际连接地址/);
  assert.match(ui,/await provider\.request\(\{method:'eth_accounts'\}\)/);
