@@ -203,14 +203,30 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
-  const runtime=await startT1ERoleProof();
-  process.stdout.write(JSON.stringify({status:'T1E_ROLE_PROOF_ONLY_READY',
-   noFinancialWrites:true,noDatabaseConnected:true,origin:runtime.origin})+'\n');
+  const stage=process.env.T1E_DEPLOYMENT_STAGE;
+  // The existing ROLE_PROOF_ONLY Render service stays isolated and
+  // credentials-free until the owner explicitly switches its stage.
+  // Dynamic imports prevent the claim server from booting or touching PG.
+  const runtime=stage==='ROLE_PROOF_ONLY'?
+   await startT1ERoleProof():
+   await (async()=>{
+    const {startT1EClaimServer}=await import('./t1e-claim-server.mjs');
+    return startT1EClaimServer();
+   })();
+  const claimMode=stage!=='ROLE_PROOF_ONLY';
+  process.stdout.write(JSON.stringify(claimMode?{
+   status:'T1E_ISOLATED_CLAIM_SERVICE_READY',stage,
+   claimWritesEnabled:stage==='CLAIM_CONSENT',
+   walletBroadcastEnabled:false,merchantSettlementEnabled:false
+  }:{
+   status:'T1E_ROLE_PROOF_ONLY_READY',
+   noFinancialWrites:true,noDatabaseConnected:true,origin:runtime.origin
+  })+'\n');
   let closing=false;
   const close=async()=>{if(closing)return;closing=true;await runtime.close();process.exit(0)};
   process.on('SIGTERM',close);process.on('SIGINT',close);
  }catch(e){
-  const reason=typeof e?.message==='string'&&/^T1E_[A-Z_]+$/.test(e.message)?
+  const reason=typeof e?.message==='string'&&/^T1E_[A-Z_]{4,100}$/.test(e.message)?
    e.message:'T1E_FAIL_CLOSED';
   process.stderr.write(reason+'\n');process.exitCode=1;
  }
