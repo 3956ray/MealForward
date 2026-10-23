@@ -17,3 +17,19 @@ export function allowStaticFetchSite({path,method,headers}={}){
  const site=headers?.['sec-fetch-site'];
  return site===undefined||site==='same-origin'||site==='none'||site==='same-site';
 }
+
+/**
+ * The public HTML response is byte-for-byte the same regardless of URL
+ * tracking parameters and never renders or stores them. ChatGPT may append
+ * ?utm_source=chatgpt.com when opening links.
+ *
+ * Keep parameterized API, private Intent, EIP-712 and JS/CSS paths denied.
+ * A conservative length bound prevents pathological request-target lengths;
+ * this is not a redirect, reflection or authorization decision.
+ */
+export function allowStaticQuery({path,search}={}){
+ if(typeof search!=='string')return false;
+ if(search==='')return true;
+ return (path==='/'||path==='/fund-testnet.html')&&
+  search.startsWith('?')&&search.length<=2048;
+}
