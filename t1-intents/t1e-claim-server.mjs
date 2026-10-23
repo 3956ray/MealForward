@@ -157,11 +157,17 @@ export async function startT1EClaimServer({env=process.env}={}){
    issueEnabled:cfg.issueEnabled,issuerLedger,issuerRpc:rpc,
    issuerReadiness:()=>firstVoucherCandidate({rpc})
   });
-  const files=new Map(await Promise.all([
+  const staticFiles=[
    ['/','t1e-claim.html','text/html; charset=utf-8'],
    ['/t1e-claim.mjs','t1e-claim.mjs','text/javascript; charset=utf-8'],
    ['/t1e-claim.css','t1e-claim.css','text/css; charset=utf-8']
-  ].map(async([url,file,type])=>[
+  ];
+  if(cfg.issueEnabled)staticFiles.push(
+   ['/t1f-issuer.html','t1f-issuer.html','text/html; charset=utf-8'],
+   ['/t1f-issuer.mjs','t1f-issuer.mjs','text/javascript; charset=utf-8']
+  );
+  const files=new Map(await Promise.all(
+   staticFiles.map(async([url,file,type])=>[
    url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}
   ])));
   server=http.createServer((req,res)=>{
