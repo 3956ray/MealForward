@@ -1,0 +1,190 @@
+/* MealForward T1-E isolated SIWE and recipient EIP-712. No TX broadcaster. */
+const $=id=>document.getElementById(id);
+const RECIPIENT='0x2539fefe77a5ce4d09d2225c2e8a7517b22b9135';
+const ISSUER='0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3';
+let wallet=null,sessionWallet=null,csrf=null,claim=null,consent=null;
+let mode=null,locked=false;
+function put(id,message){$(id).textContent=message}
+function manage(){
+ const logged=!!sessionWallet&&!!csrf&&sessionWallet===wallet;
+ $('login').disabled=!wallet||logged||locked;
+ $('who').disabled=!wallet||locked;
+ $('logout').disabled=!logged||locked;
+ $('inspect').disabled=!logged||locked;
+ $('prepare').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||locked||
+  !!claim;
+ $('consent').disabled=!logged||mode!=='CLAIM_CONSENT'||wallet!==RECIPIENT||
+  !consent||claim?.stage!=='PREPARED'||locked;
+}
+function guardProvider(){
+ if(!window.ethereum?.request||window.ethereum.isMetaMask!==true)
+  throw Error('需要 MetaMask 浏览器钱包。');
+ return window.ethereum;
+}
+async function send(path,method='GET',body=null,headers={}){
+ const res=await fetch(path,{
+  method,redirect:'error',credentials:'same-origin',cache:'no-store',
+  headers:{
+   Accept:'application/json',
+   ...(method==='POST'?{'Content-Type':'application/json'}:{}),
+   ...headers
+  },
+  ...(method==='POST'?{body:JSON.stringify(body)}:{}),
+  signal:AbortSignal.timeout(30000)
+ });
+ const data=await res.json();
+ if(!res.ok)throw Error((data?.error||'HTTP_'+res.status)+' · HTTP '+res.status);
+ return data;
+}
+async function checkWallet(expected){
+ const p=guardProvider();
+ const [accounts,chain]=await Promise.all([
+  p.request({method:'eth_accounts'}),p.request({method:'eth_chainId'})
+ ]);
+ if(BigInt(chain)!==10143n)throw Error('请切换到 Monad Testnet（Chain 10143）');
+ if(accounts?.[0]?.toLowerCase()!==expected)
+  throw Error('签名过程中钱包或账户发生切换，请重新登录');
+ return p;
+}
+async function perform(fn){
+ if(locked)return;
+ locked=true;manage();
+ try{await fn()}catch(e){put('login-result','操作未通过：'+String(e?.message||'未知错误'))}
+ finally{locked=false;manage()}
+}
+$('connect').addEventListener('click',()=>perform(async()=>{
+ const p=guardProvider();
+ const accounts=await p.request({method:'eth_requestAccounts'});
+ const chain=await p.request({method:'eth_chainId'});
+ if(BigInt(chain)!==10143n)throw Error('请切换到 Monad Testnet（10143）');
+ wallet=accounts?.[0]?.toLowerCase();
+ if(![RECIPIENT,ISSUER].includes(wallet))
+  throw Error('当前账户不是登记的测试受助者或 Issuer，请选择正确的独立钱包');
+ put('login-result','已连接：'+wallet+
+  '\n下一步需要 SIWE 登录证明。所有资金动作仍关闭。');
+}));
+$('login').addEventListener('click',()=>perform(async()=>{
+ if(!wallet)throw Error('请先连接 MetaMask');
+ const p=await checkWallet(wallet);
+ const pre=await send('/v1/auth/pre-session','POST',{},{
+  'X-C1-Bootstrap':'1'
+ });
+ const challenge=await send('/v1/identity/wallet/challenge','POST',{
+  address:wallet
+ },{'X-C1-CSRF':pre.csrf});
+ if(challenge.chainId!==10143||
+  challenge.address!==wallet||
+  !challenge.message.includes('Sign in to MealForward'))
+  throw Error('登录挑战内容与当前钱包不一致');
+ const signature=await p.request({
+  method:'personal_sign',
+  params:[challenge.message,wallet]
+ });
+ await checkWallet(wallet);
+ const logged=await send('/v1/identity/wallet/login','POST',{
+  challengeId:challenge.challengeId,signature
+ },{'X-C1-CSRF':pre.csrf});
+ if(typeof logged.csrf!=='string'||logged.csrf.length!==43)
+  throw Error('服务端没有发放有效 CSRF');
+ csrf=logged.csrf;
+ const me=await send('/v1/t1e/me');
+ if(me.walletAddress!==wallet||me.sessionScope!=='T1E_ISOLATED')
+  throw Error('服务端身份与当前钱包不一致');
+ sessionWallet=me.walletAddress;
+ put('login-result','SIWE PASS · '+sessionWallet+
+  '\nRole: '+me.role+'\nSession 使用独立 T1-E Auth，非 T1-D。');
+}));
+$('who').addEventListener('click',()=>perform(async()=>{
+ const me=await send('/v1/t1e/me');
+ if(me.walletAddress!==wallet)throw Error('当前钱包与 Session 不一致，请重新登录');
+ sessionWallet=me.walletAddress;
+ put('login-result','已认证：'+me.walletAddress+' · '+me.role);
+ if(me.role==='issuer'){
+  const ready=await send('/v1/t1e/issuer/readiness');
+  put('issuer-result','Issuer 权限已认证；当前仅可读取 Claim 状态。\n'+
+   '领取状态：'+(ready.issuance?.claimStage||'尚未创建')+
+   '\n链上 issue 禁止，原资金未转移。');
+ }
+}));
+$('logout').addEventListener('click',()=>perform(async()=>{
+ if(!csrf)throw Error('缺少 CSRF，刷新页面后请先重新登录');
+ await send('/v1/auth/logout','POST',{}, {'X-C1-CSRF':csrf});
+ csrf=null;sessionWallet=null;claim=null;consent=null;
+ put('login-result','本次 T1-E 登录已注销。');
+ put('claim-result','本次登录已退出；领取记录仍安全保存在独立数据库。');
+}));
+$('inspect').addEventListener('click',()=>perform(async()=>{
+ if(sessionWallet!==wallet)throw Error('当前钱包不是 Session 本人');
+ const data=await send('/v1/t1e/claim/me');
+ claim=data.claim;consent=data.consent;
+ put('claim-result',claim?
+  'Claim ID: '+claim.claimId+'\nStage: '+claim.stage+
+  '\nUnit 0 / Generation 1\nVoucher: '+claim.voucherId+
+  '\n不可自动更换 Nonce 或创建新的领取申请。':
+  '尚未创建测试受助者 Claim。');
+ if(consent)put('consent-result',
+  '已准备独立受助者授权，尚未签名。\n截止时间：'+
+  new Date(Number(consent.expiry)*1000).toLocaleString());
+}));
+$('prepare').addEventListener('click',()=>perform(async()=>{
+ if(wallet!==RECIPIENT||sessionWallet!==wallet||!csrf)
+  throw Error('只允许独立受助者测试钱包操作');
+ await checkWallet(wallet);
+ const data=await send('/v1/t1e/claim/prepare','POST',{},{
+  'X-C1-CSRF':csrf
+ });
+ claim=data.claim;consent=data.consent;
+ put('claim-result','原始 Claim 已持久创建：'+claim.claimId+
+  '\nStage: '+claim.stage+' · Voucher: '+claim.voucherId+
+  '\n再次点击不会创建第二份餐券。');
+ put('consent-result',consent?
+  'EIP-712 Consent 已准备（尚未签署）。截止：'+
+  new Date(Number(consent.expiry)*1000).toLocaleString():
+  '此 Claim 已进入 '+claim.stage+'，不能重复签署。');
+}));
+$('consent').addEventListener('click',()=>perform(async()=>{
+ if(wallet!==RECIPIENT||sessionWallet!==wallet||!csrf||
+   !claim||claim.stage!=='PREPARED'||!consent)
+  throw Error('尚未拥有有效的原始 Claim');
+ const p=await checkWallet(wallet);
+ if(consent.domain.chainId!==10143||
+  consent.metaMaskV4.primaryType!=='RecipientConsent'||
+  consent.message.recipient.toLowerCase()!==wallet)
+  throw Error('领取授权与当前钱包不符');
+ const signature=await p.request({
+  method:'eth_signTypedData_v4',
+  params:[wallet,JSON.stringify(consent.metaMaskV4)]
+ });
+ await checkWallet(wallet);
+ const result=await send('/v1/t1e/claim/consent','POST',{
+  claimId:claim.claimId,signature
+ },{'X-C1-CSRF':csrf});
+ if(result.status!=='T1E_OFFCHAIN_CONSENT_DURABLY_VERIFIED')
+  throw Error('领取签名未保存成功');
+ claim=result.claim;consent=null;
+ put('consent-result','PASS：独立 EIP-712 Consent 已验证并持久记录。\n'+
+  'Stage: '+claim.stage+'\n链上尚未 Issued，无法核销或结算。');
+}));
+function switched(){
+ wallet=null;sessionWallet=null;csrf=null;claim=null;consent=null;
+ put('login-result','钱包账户发生变化。为了避免跨账户访问，请重新完成 T1-E 登录。');
+ manage();
+}
+window.ethereum?.on?.('accountsChanged',switched);
+window.ethereum?.on?.('chainChanged',switched);
+(async()=>{
+ try{
+  const status=await send('/v1/t1e/status');
+  if(status.chainId!==10143||status.walletLoginEnabled!==true||
+   status.issuerIssueEnabled!==false||status.fundEnabled!==false||
+   status.settleEnabled!==false||status.originalCp30Connected!==false||
+   !['T1E_ISOLATED_SIWE_READ_ONLY','T1E_RECIPIENT_CONSENT_ONLY'].includes(status.status))
+   throw Error('服务安全配置不符合预期');
+  mode=status.status==='T1E_RECIPIENT_CONSENT_ONLY'?'CLAIM_CONSENT':'CLAIM_SIWE_ONLY';
+  $('server-mode').textContent=mode+' · 无链上资金或发券交易';
+  put('login-result','服务安全门禁 PASS，请选择独立测试钱包登录。');
+ }catch(e){
+  $('server-mode').textContent='未能确认 T1-E 安全门禁：'+String(e?.message||'错误');
+  $('connect').disabled=true;
+ }finally{manage()}
+})();
