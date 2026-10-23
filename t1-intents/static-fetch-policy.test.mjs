@@ -13,7 +13,7 @@ const entry=(path='/',over={})=>({
  }
 });
 test('public, unpersonalized document responds to all real browser link metadata',()=>{
- for(const path of ['/','/fund-testnet.html']){
+ for(const path of ['/','/fund-testnet.html','/t1f-issuer-proof.html']){
   for(const site of ['cross-site','same-site','same-origin','none',undefined]){
    for(const mode of ['navigate','cors','no-cors',undefined]){
     for(const dest of ['document','iframe','empty',undefined]){
@@ -31,7 +31,7 @@ test('public, unpersonalized document responds to all real browser link metadata
  }
 });
 test('cross-site JS/CSS remain blocked, even with fake navigation headers',()=>{
- for(const path of ['/ui.mjs','/ui.css']){
+ for(const path of ['/ui.mjs','/ui.css','/t1f-issuer-control.mjs','/t1f-ethers.umd.min.js']){
   for(const site of ['cross-site','opaque']){
    assert.equal(allowStaticFetchSite(entry(path,{
     'sec-fetch-site':site
@@ -45,7 +45,7 @@ test('cross-site JS/CSS remain blocked, even with fake navigation headers',()=>{
  }
 });
 test('policy cannot turn non-document API or any write method into a static fetch',()=>{
- for(const path of ['/','/fund-testnet.html']){
+ for(const path of ['/','/fund-testnet.html','/t1f-issuer-proof.html']){
   for(const method of ['POST','PUT','PATCH','DELETE']){
    assert.equal(allowStaticFetchSite({...entry(path),method}),false);
   }
@@ -64,7 +64,7 @@ test('ChatGPT UTM and other tracking params to unpersonalized HTML cannot produc
   '?ref=chatgpt.com',
   '?utm_source=chatgpt.com&fbclid=tracking-123'
  ];
- for(const path of ['/','/fund-testnet.html']){
+ for(const path of ['/','/fund-testnet.html','/t1f-issuer-proof.html']){
   for(const search of safe){
    assert.equal(allowStaticQuery({path,search}),true,
     JSON.stringify({path,search}));
@@ -72,12 +72,13 @@ test('ChatGPT UTM and other tracking params to unpersonalized HTML cannot produc
  }
 });
 test('tracking URLs cannot relax JS/CSS, API or excessive-query policy',()=>{
- for(const path of ['/ui.mjs','/ui.css','/v1/me',
+ for(const path of ['/ui.mjs','/ui.css','/t1f-issuer-control.mjs',
+  '/t1f-issuer-proof-ui.mjs','/t1f-ethers.umd.min.js','/v1/me',
   '/v1/t1/status','/v1/t1/fund/quote']){
   assert.equal(allowStaticQuery({path,search:'?utm_source=chatgpt.com'}),false,path);
   assert.equal(allowStaticQuery({path,search:''}),true,path);
  }
- for(const path of ['/','/fund-testnet.html']){
+ for(const path of ['/','/fund-testnet.html','/t1f-issuer-proof.html']){
   assert.equal(allowStaticQuery({path,search:'?'+ 'x'.repeat(2048)}),false);
   assert.equal(allowStaticQuery({path,search:null}),false);
   assert.equal(allowStaticQuery({path,search:'utm_source=chatgpt.com'}),false);
