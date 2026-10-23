@@ -209,7 +209,11 @@ export function makeT1EClaimGateway({
    return loginHandler(req,res);
   }catch(e){
    let status=Number.isInteger(e?.status)?e.status:503;
-   let code=typeof e?.code==='string'&&/^T1E_[A-Z_]{3,80}$/.test(e.code)?
+   // The isolated session gate intentionally returns a standard,
+   // non-sensitive 401. Do not mislabel it as a 503-style outage.
+   const safeSessionMissing=status===401&&e?.code==='UNAUTHENTICATED';
+   let code=safeSessionMissing?'UNAUTHENTICATED':
+    typeof e?.code==='string'&&/^T1E_[A-Z_]{3,80}$/.test(e.code)?
     e.code:'T1E_SERVICE_UNAVAILABLE';
    // Explicit safe programmatic state errors, no raw SQL or wallet data.
    if(status===503&&typeof e?.message==='string'&&/^T1E_[A-Z_]{3,80}$/.test(e.message)){
