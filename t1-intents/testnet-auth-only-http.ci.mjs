@@ -9,6 +9,9 @@ import {randomUUID} from 'node:crypto';
 import {Wallet} from 'ethers';
 import pg from 'pg';
 import {startT1ReadOnlyServer} from './read-only-server.mjs';
+import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
+import {pgStoreT1D} from './auth/t1d-db.mjs';
+import {makeChallenge,verifyChallenge} from './auth/siwe.mjs';
 
 assert.equal(process.env.GITHUB_ACTIONS,'true');
 assert.equal(process.env.MF_T1C_DISPOSABLE_ONLY,'ack-fresh-t1c-postgres17');
@@ -221,10 +224,66 @@ try{
  assert.equal(logout.status,200);
  assert.equal((await req('/v1/me',{cookie:a.cookie})).status,401);
  assert.equal((await req('/v1/me',{cookie:b.cookie})).status,200);
+ // A separate CI-only HTTP gateway configured in FUNDING mode must reject
+ // EVERY wallet that is not the original pinned Quote Authority, before
+ // it even performs a public RPC read, SQL INSERT, Quote signature handling
+ // or any wallet action. This fixture never signs or broadcasts a TX.
+ const fake=net.createServer();
+ await new Promise(resolve=>fake.listen(0,'127.0.0.1',resolve));
+ const denialPort=fake.address().port;
+ await new Promise(resolve=>fake.close(resolve));
+ const denyOrigin='http://127.0.0.1:'+denialPort;
+ let attemptedRpc=0;
+ const neverRpc={send:async()=>{attemptedRpc++;throw Error('FORBIDDEN_EARLY_CHAIN_READ')}};
+ const fundingHandler=makeT1CAuthenticatedGateway({
+  sessionPool:auth,intentPool:fund,authStore:pgStoreT1D(auth),
+  siwe:{makeChallenge,verifyChallenge},origin:denyOrigin,
+  mode:'testnet_fund',rpc:neverRpc
+ });
+ const denyServer=http.createServer(fundingHandler);
+ await new Promise(resolve=>denyServer.listen(denialPort,'127.0.0.1',resolve));
+ try{
+  for(const path of [
+   '/v1/t1/fund/readiness',
+   '/v1/t1/fund/quote/'+randomUUID()
+  ]){
+   const response=await fetch(denyOrigin+path,{
+    method:'GET',headers:{Cookie:b.cookie},redirect:'manual'
+   });
+   assert.equal(response.status,403,path);
+   assert.equal((await response.json()).error,
+    'TESTNET_FIRST_PAYER_NOT_QUOTE_AUTHORITY');
+  }
+  for(const path of [
+   '/v1/t1/fund/prepare','/v1/t1/fund/quote',
+   '/v1/t1/fund/approve-call','/v1/t1/fund/build-call',
+   '/v1/t1/fund/reserve','/v1/t1/fund/bind-hash',
+   '/v1/t1/fund/reconcile'
+  ]){
+   const response=await fetch(denyOrigin+path,{
+    method:'POST',
+    headers:{
+     Cookie:b.cookie,Origin:denyOrigin,
+     'Content-Type':'application/json','X-C1-CSRF':b.csrf
+    },
+    body:JSON.stringify({intentId:randomUUID()}),
+    redirect:'manual'
+   });
+   assert.equal(response.status,403,path);
+   assert.equal((await response.json()).error,
+    'TESTNET_FIRST_PAYER_NOT_QUOTE_AUTHORITY');
+  }
+  assert.equal(attemptedRpc,0,'non-authority must never reach chain gate');
+  assert.deepEqual((await fund.query(countsQuery)).rows[0],initialFinancialCounts,
+   'non-authority financial HTTP must not alter any Intent/Wallet Attempt');
+ }finally{
+  await new Promise(resolve=>denyServer.close(resolve));
+ }
  console.log(JSON.stringify({
   status:'T1D_DISPOSABLE_PG17_SIWE_ONLY_AB_HTTP_PASS',
   separateAuthAndFundRoles:true,realEphemeralEip191Wallets:2,
   thirdPartyPayerDenied:true,noFundingRoutes:true,
+  fundingGatewayRejectsAllNonQuoteWalletRequests:true,
   committedFundingIntents:0,transactionsBroadcast:0
  }));
 }finally{
