@@ -104,7 +104,7 @@ test('recipient and chain tampering or wrong wallet/expiry cannot propose a tran
   {...proof,issueSimulatedWithoutSend:false}
  ]){
   assert.throws(()=>proposeOriginalIssuerOperation({
-   claim:claim(),operationId:OP,issuerPendingNonce:9,
+   claim:claim(),operationId:OP,issuerPendingNonce:9,issuerDeadline:TIME+480,
    chainProof:bogus,now:TIME
   }),/T1F_FRESH_PINNED_READONLY_CHAIN_PROOF_REQUIRED/);
  }
@@ -114,6 +114,23 @@ test('recipient and chain tampering or wrong wallet/expiry cannot propose a tran
  error(()=>proposeOriginalIssuerOperation({
   claim:claim(),operationId:OP,issuerPendingNonce:-1,chainProof:proof,now:TIME
  }));
+});
+test('durably verified recipient Consent survives its signature window but new Issue deadline remains bounded',()=>{
+ const expired=proposeOriginalIssuerOperation({
+  claim:claim({consent_deadline:TIME-7200}),operationId:OP,
+  issuerPendingNonce:9,issuerDeadline:TIME+450,
+  chainProof:proof,now:TIME
+ });
+ assert.equal(expired.recipientConsentSigningDeadline,String(TIME-7200));
+ assert.equal(expired.issuerIssueDeadline,String(TIME+450));
+ assert.equal(expired.durableRecipientConsentAlreadyVerified,true);
+ assert.equal(t0.parseTransaction({data:expired.transaction.data}).args[5],BigInt(TIME+450));
+ for(const bad of [TIME-1,TIME+119,TIME+601]){
+  error(()=>proposeOriginalIssuerOperation({
+   claim:claim({consent_deadline:TIME-7200}),operationId:OP,
+   issuerPendingNonce:9,issuerDeadline:bad,chainProof:proof,now:TIME
+  }));
+ }
 });
 test('original reserved nonce/operation may be read after expiry but NEVER re-sent',()=>{
  const original=reserved();
