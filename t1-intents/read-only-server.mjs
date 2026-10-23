@@ -22,7 +22,7 @@ import {pgStoreT1D} from './auth/t1d-db.mjs';
 import {makeT1CAuthenticatedGateway} from './http-auth-gateway.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
-import {allowStaticFetchSite} from './static-fetch-policy.mjs';
+import {allowStaticFetchSite,allowStaticQuery} from './static-fetch-policy.mjs';
 import {assertRealT0IsOpen} from './testnet-funding-chain.mjs';
 import {QUOTE} from './core.mjs';
 
@@ -243,7 +243,8 @@ export async function startT1ReadOnlyServer({env=process.env}={}){
     // reject a normal browser link. Every API path still goes through the
     // original strict SIWE Origin, CSRF and per-wallet permission checks.
     const publicDocument=u.pathname==='/'||u.pathname==='/fund-testnet.html';
-    if(req.headers.host!==new URL(cfg.origin).host||u.search||u.hash||
+    if(req.headers.host!==new URL(cfg.origin).host||
+     !allowStaticQuery({path:u.pathname,search:u.search})||u.hash||
      (!publicDocument&&req.headers.origin&&req.headers.origin!==cfg.origin)||
      !allowStaticFetchSite({path:u.pathname,method:req.method,headers:req.headers})){
      res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
