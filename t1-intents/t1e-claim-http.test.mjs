@@ -118,9 +118,12 @@ test('EIP712 exact bytes roundtrip and original beneficiary pinned',()=>{
  assert.throws(()=>consentFromClaim(row,NOW+422),/T1E_/);
 });
 test('private authentication and role isolation on read-only stage',async()=>{
- assert.equal((await req('/v1/t1e/me')).status,401);
- assert.equal((await req('/v1/t1e/claim/me')).status,401);
- assert.equal((await req('/v1/t1e/issuer/readiness')).status,401);
+ for(const path of ['/v1/t1e/me','/v1/t1e/claim/me',
+  '/v1/t1e/issuer/readiness']){
+  const denied=await req(path);
+  assert.equal(denied.status,401,path);
+  assert.equal(denied.body.error,'UNAUTHENTICATED',path);
+ }
  assert.equal((await req('/v1/t1e/status')).body.recipientClaimWriteEnabled,false);
  assert.equal((await req('/v1/t1e/me','recipient')).body.walletAddress,PILOT_RECIPIENT);
  assert.equal((await req('/v1/t1e/me','issuer')).body.role,'issuer');
