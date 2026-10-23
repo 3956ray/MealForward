@@ -99,7 +99,7 @@ CREATE UNIQUE INDEX t1e_first_unit_generation_claim_unique
  ON mf_t1e.recipient_claims(chain_id,escrow,unit_seq,generation);
 
 CREATE FUNCTION mf_t1e.claim_before_insert() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $claim$
 DECLARE parent mf_t1c.intents;
 BEGIN
  SELECT * INTO parent FROM mf_t1c.intents
@@ -110,7 +110,7 @@ BEGIN
  THEN RAISE EXCEPTION USING ERRCODE='P0001',
   MESSAGE='T1E_ORIGINAL_FUNDED_INTENT_REQUIRED'; END IF;
  RETURN NEW;
-END $$;
+END $claim$;
 CREATE TRIGGER t1e_claim_funded_only BEFORE INSERT ON mf_t1e.recipient_claims
  FOR EACH ROW EXECUTE FUNCTION mf_t1e.claim_before_insert();
 REVOKE ALL ON FUNCTION mf_t1e.claim_before_insert() FROM PUBLIC,anon,authenticated,service_role;
