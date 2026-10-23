@@ -4,7 +4,29 @@
 >
 > **更新日期：2026-10-23（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前人工门槛：T1-F Issuer 专属云页面已经通过安全发布 Gate，用户下一步亲自 SIWE 登录并读取唯一原 Claim；先不要预留或发送 issue()。** 自动化工作已完成到需要真人钱包这一点。
+> **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
+
+## 2026-10-23 22:24（UTC+8）：真人已点击「一次性预留原始 Issue」— CRITICAL LIVE STATE
+
+**当前高优先级真相：原 Claim 已永久进入 `ISSUE_UNKNOWN`；后续所有“先预留一次”的旧步骤均被此状态覆盖。请先读本节，再看历史发布文档。**
+
+- 用户报告已亲自点击 T1-F Issuer 页「一次性预留原始 Issue」。同一轮实时 Supabase 只读证实数据库 Commit 真正发生：
+  - Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea`
+  - `stage=ISSUE_UNKNOWN`, `revision=2`, Voucher `0x170f16ef9ea00697bcfad635e33d521159db5e852b8b5499ddf8db819278b605`, Unit 0 / Generation 1
+  - 唯一 `issuer_op_id=0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`
+  - `issuer_tx_nonce=0`
+  - **单次 Issuer Issue 的不可变截止时间** `1792765625` Unix 秒，即 **2026-10-23 22:27:05 UTC+8** (`2026-10-23T14:27:05Z`)。
+  - 不可变 Calldata Hash `0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed`，`issuer_tx_hash=NULL`，`receipt_block=NULL`，DB 更新时间 2026-10-23T14:19:28.799469Z。
+  - 追加唯一 `ISSUE_RESERVED` 审计（event ID 3，时间 2026-10-23T14:19:29.012135Z）；历史 `CLAIM_PREPARED` 与 `CONSENT_VERIFIED` 不变。数据库仍只 1 FUNDED、1 Claim、1 VERIFIED round、3 audit events。
+- **重要：数据库 Hash=NULL 只表示没有持久记录 Hash，绝不能推断钱包一定没有广播**；必须检查用户本人 MetaMask Activity 与链上原 Issuer Nonce/Hash。不可自动重复提交。
+- **同期真实链上只读证据**：[GitHub Actions `39961919635` attempt 2](https://github.com/3956ray/MealForward/actions/runs/39961919635/attempts/2) 成功；UTC 2026-10-23T14:24:22 输出 Monad Testnet ChainId 10143、`eth_call` 只读原 T0 Runtime、Unit 0 `Available=1`、资金及负债都 7,000,000 base units、`issuedOnchain:false`、`rpcWriteMethodsCalled:0`。这说明该检查时尚未观察到上链 Issue，但**不是**对 MetaMask pending 交易存在与否的证明。
+- **当下人工操作边界**：绝对不可再按「一次性预留原始 Issue」、不可创建第二份餐券/Consent、不可自行改掉原 opId/nonce/deadline/hash、不可刷新或关闭仍持有一次性 transaction payload 的浏览器标签页（如果仍在发送决策期间）。
+  1. 若用户**仅预留、确认 MetaMask Activity 没有同 Issuer EOA / nonce 0 的 pending 或已发送原 Issue**，且在原交易有效期内、本人钱包与链 10143 正确，原页面尚持有唯一 `reservedTransaction`，可以经用户显式核对后由本人**仅一次** `eth_sendTransaction`；任何同 op 再次预留、拒绝/超时重发都不允许。此操作不能由 Agent 代执行。
+  2. 如果已经点击过发送，无论有没有收到 Hash，都只能以 MetaMask Activity / Explorer 找回**原交易**；用户提供公开 Tx Hash 后，后端 `/v1/t1f/issuer/bind` 只绑定实际匹配的 from/to/nonce/calldata/chainId 记录，并 `/reconcile` 只读原 Receipt。
+  3. 如果超过 **22:27:05** 仍未有效发送或未知，**禁止继续发送或重新预留**；原截止时间不可更改，重发原 calldata 会过期。保持 `ISSUE_UNKNOWN`，进入独立人工安全恢复设计（先核查是否有原链 Tx / Nonce 使用，再审查原 009–012 immutability 与数据保全），不得直接更新 DB 或再发券。当前来源未授权修改原 DB/回滚/发第二笔。
+- 该状态更新**仅更改 `HANDOFF.md` 文档，不推送代码到正在运行的 Render，不触碰原资金、Nonce/DB 或 T0 合约**。
+- 上一章的“用户可先预留/尚未预留”属于 22:19 之前历史快照，**现已作废**。所有新 Agent 在读到这个文档时都必须先实时查询这条 Claim，识别更进一步的 `ISSUE_HASH_BOUND` / `ISSUED` 或新增公共 Hash，再定下一步。
+- T1-F 原合约 `issue()` 不链上校验 Recipient Consent，180s 强制冷却仍缺失，**商家 Settle 严禁开放**；旧 CP30 PREPARED #3560 永久隔离。
 
 ## 2026-10-23 21:28（UTC+8）紧急修复：T1-F 链接附加参数导致 HTTP 403
 
