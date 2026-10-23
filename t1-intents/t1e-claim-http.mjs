@@ -103,6 +103,17 @@ export function makeT1EClaimGateway({
      role:wallet===FIXED.issuerAuthority?'issuer':'recipient',
      sessionScope:'T1E_ISOLATED',issuerIssueEnabled:false});
    }
+   if(path==='/v1/t1e/issuer/readiness'&&method==='GET'){
+    const wallet=await active(req);
+    if(wallet!==FIXED.issuerAuthority)throw ERR(403,'T1E_ISSUER_ROLE_REQUIRED');
+    const snapshot=await claimStore.issuerReadiness();
+    return writeJson(res,200,{
+     originalUnit:0,generation:1,issuance:snapshot,
+     issuerTransactionEnabled:false,
+     nextAction:snapshot?.claimStage==='CONSENT_VERIFIED'?
+      'AWAIT_EXPLICIT_WALLET_ISSUE_RELEASE':'AWAIT_BENEFICIARY_DURABLE_CONSENT'
+    });
+   }
    if(path==='/v1/t1e/claim/me'&&method==='GET'){
     const wallet=await active(req);
     if(wallet!==PILOT_RECIPIENT)throw ERR(403,'T1E_RECIPIENT_ROLE_REQUIRED');
