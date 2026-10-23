@@ -18,7 +18,7 @@ const PROJECT='ketfrukrcuosrqynnsay';
 const HOST='aws-0-ap-southeast-2.pooler.supabase.com';
 const AUTH='mf_t1e_auth_runtime';
 const CLAIM='mf_t1e_claim_runtime';
-const RENDER='https://dashboard.render.com/web/srv-dbdeuft9fdbs73atbvh0/env';
+const RENDER='https://dashboard.render.com/web/srv-dbdgstivcj2c73fnqcc0/env';
 const assert=(x,c)=>{if(!x)throw Error(c)};
 export function validateOwnerDSN(raw){
  let u;
