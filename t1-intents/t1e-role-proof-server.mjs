@@ -107,7 +107,8 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
  const pageFiles=[
   ['/', 't1e-role-proof.html','text/html; charset=utf-8'],
   ['/t1e-role-proof.css','t1e-role-proof.css','text/css; charset=utf-8'],
-  ['/t1e-role-proof.mjs','t1e-role-proof.mjs','text/javascript; charset=utf-8']
+  ['/t1e-role-proof.mjs','t1e-role-proof.mjs','text/javascript; charset=utf-8'],
+  ['/t1e-wallet-roles.mjs','t1e-wallet-roles.mjs','text/javascript; charset=utf-8']
  ];
  const files=new Map(await Promise.all(pageFiles.map(async([url,file,type])=>
   [url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}])));
