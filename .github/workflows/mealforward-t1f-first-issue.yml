@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-t1f-original-issue-recovery-20261023
+      - codex/mealforward-t1e-recipient-claim-http-20261023
   workflow_dispatch:
 permissions:
   contents: read

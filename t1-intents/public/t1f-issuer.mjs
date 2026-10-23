@@ -8,6 +8,16 @@ const $=id=>document.getElementById(id);
 let wallet=null,csrf=null,session=null,mode=false,busy=false;
 let claim=null,reservedTransaction=null,originalHash=null,submitted=false;
 const h32=/^0x[0-9a-f]{64}$/i;
+const SEND_WINDOW_MIN_SEC=90;
+// This guard is intentionally duplicated at click time, not just used to
+// disable a button. MetaMask can keep a page open past the transaction
+// deadline, and a pre-expiry reservation cannot be unreserved or replayed.
+function issueWindowOpen(row,now=Math.floor(Date.now()/1000)){
+ const expiry=Number(row?.issuerDeadline);
+ return row?.stage==='ISSUE_UNKNOWN'&&Number.isSafeInteger(now)&&
+  Number.isSafeInteger(expiry)&&expiry>now+SEND_WINDOW_MIN_SEC&&
+  expiry<=now+600;
+}
 const msg=(id,value)=>{$(id).textContent=value};
 function enable(){
  const eligible=wallet===issuer,logged=eligible&&session===issuer&&!!csrf;
@@ -18,7 +28,8 @@ function enable(){
  $('logout').disabled=!logged||busy;
  $('reserve').disabled=!logged||busy||claim?.stage!=='CONSENT_VERIFIED'||
    reservedTransaction!==null||submitted;
- $('send').disabled=!logged||busy||!reservedTransaction||submitted;
+ $('send').disabled=!logged||busy||!reservedTransaction||submitted||
+  !issueWindowOpen(claim);
  $('bind').disabled=!logged||busy||!h32.test($('original-hash').value||'');
  $('reconcile').disabled=!logged||busy||claim?.stage!=='ISSUE_HASH_BOUND';
 }
@@ -107,10 +118,13 @@ async function inspect(){
   originalHash=claim.originalTxHash;
   $('original-hash').value=originalHash;
  }
+ const expired=claim.stage==='ISSUE_UNKNOWN'&&!issueWindowOpen(claim);
+ if(expired){reservedTransaction=null;submitted=true;}
  msg('reservation','唯一 Claim：'+claim.claimId+
   '\nStage：'+claim.stage+
   '\nVoucher：'+claim.voucherId+
   '\n预留的 Nonce：'+(claim.originalNonce??'未预留')+
+  (expired?'\n原 Issue 交易截止时间已过：禁止发送或重新预留。':'')+
   '\n已预留后绝不再次发券。');
  return claim;
 }
@@ -125,9 +139,15 @@ $('reserve').addEventListener('click',()=>task(async()=>{
  const answer=await api('/v1/t1f/issuer/prepare','POST',{
   issuerPendingNonce:String(BigInt(pending))
  },{'X-C1-CSRF':csrf});
+ if(answer.created===false){
+  claim=answer.state;reservedTransaction=null;submitted=true;
+  msg('reservation','此 Claim 已存在唯一原始 Issue 预留（'+
+   claim?.stage+'）。第二次点击不会创建新 Nonce 或新交易；只能恢复原交易。');
+  return;
+ }
  if(answer.created!==true||answer.firstWalletSendPermitted!==true||
    answer.state?.stage!=='ISSUE_UNKNOWN')
-  throw Error('原交易已预留，不允许重新创建新的 Issue。');
+  throw Error('无法确认首次原始 Issue 预留，禁止发送。');
  const tx=answer.issueTransaction;
  if(!tx||tx.from?.toLowerCase()!==issuer||tx.to?.toLowerCase()!==escrow||
     BigInt(tx.chainId)!==10143n||BigInt(tx.value)!==0n||
@@ -136,6 +156,12 @@ $('reserve').addEventListener('click',()=>task(async()=>{
  // The server's ISSUE_UNKNOWN is now committed. Keep one wallet-send payload
  // in ephemeral memory only, not localStorage or an auto-resend queue.
  claim=answer.state;
+ if(!issueWindowOpen(claim)){
+  reservedTransaction=null;submitted=true;
+  msg('reservation','原始 Issue 已永久预留，但是剩余有效时间不足。'+
+   '\n为避免过期交易，已锁定发送；不可重试预留。');
+  return;
+ }
  reservedTransaction=tx;
  msg('reservation','已永久保存原始 Operation、Nonce 和发券截止时间。'+
   '\nNonce：'+answer.state.originalNonce+
@@ -145,7 +171,27 @@ $('reserve').addEventListener('click',()=>task(async()=>{
 $('send').addEventListener('click',()=>task(async()=>{
  if(!reservedTransaction||submitted||claim?.stage!=='ISSUE_UNKNOWN')
   throw Error('没有待发送的唯一已预留交易。');
+ if(!issueWindowOpen(claim)){
+  reservedTransaction=null;submitted=true;
+  throw Error('原始 Issue 截止时间已过或太近，禁止发送，保留 ISSUE_UNKNOWN 待核验。');
+ }
  const p=await checkWallet();
+ const latest=await api('/v1/t1f/issuer/status');
+ const latestClaim=latest.claim;
+ const serverNow=latest.serverTimeUnix;
+ // Query the independent server clock immediately before the one permitted
+ // wallet action. Reject stale or changed reservation without broadcasting.
+ if(!Number.isSafeInteger(serverNow)||!issueWindowOpen(latestClaim,serverNow)||
+  !issueWindowOpen(latestClaim)||
+  latestClaim.claimId!==claim.claimId||
+  latestClaim.originalOperationId!==claim.originalOperationId||
+  latestClaim.originalNonce!==claim.originalNonce||
+  latestClaim.issuerDeadline!==claim.issuerDeadline||
+  latestClaim.originalTxHash!==null){
+  reservedTransaction=null;submitted=true;
+  throw Error('原始 Issue 预留已过期或链下记录改变，已停止发送，请只恢复原交易。');
+ }
+ await checkWallet();
  const tx=reservedTransaction;
  // Clear the ONLY sendable payload BEFORE invoking MetaMask. Rejections,
  // timeouts, and ambiguous errors must never re-arm this transaction.
