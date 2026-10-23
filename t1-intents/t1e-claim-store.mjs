@@ -63,6 +63,27 @@ export function claimStore(pool){
    assert(eq(wallet,PILOT_RECIPIENT),'T1E_PILOT_RECIPIENT_ONLY');
    return get(pool,wallet);
   },
+  async issuerReadiness(){
+   // Isolated Issuer Session required by HTTP before this method can be called.
+   // Do not reveal beneficiary wallet, signature or consent nonce to public.
+   const result=await pool.query(
+    'SELECT '+columns+' FROM mf_t1e.recipient_claims WHERE funding_intent=$1::uuid LIMIT 2',
+    [ORIGINAL_INTENT]);
+   assert(result.rowCount<=1,'T1E_MULTIPLE_FIRST_UNIT_CLAIMS');
+   if(!result.rows[0])return null;
+   const row=validate(result.rows[0]);
+   return Object.freeze({
+    claimId:row.claim_id,unitSeq:0,generation:1,
+    voucherId:row.voucher_id,
+    claimStage:row.stage,
+    consentVerified:row.stage==='CONSENT_VERIFIED'||
+     ['ISSUE_UNKNOWN','ISSUE_HASH_BOUND','ISSUED'].includes(row.stage),
+    issuerWallet:row.issuer_wallet,
+    onchainIssued:row.stage==='ISSUED',
+    issuerTransactionEnabled:false,
+    merchantSettlementEnabled:false
+   });
+  },
   async prepare({wallet,now,proof}){
    assert(eq(wallet,PILOT_RECIPIENT),'T1E_PILOT_RECIPIENT_ONLY');
    assert(Number.isSafeInteger(now)&&now>0,'T1E_CLOCK_INVALID');
