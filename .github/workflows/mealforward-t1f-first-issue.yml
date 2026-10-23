@@ -42,6 +42,7 @@ jobs:
           node --test t1e-claim-http.test.mjs
           node --test t1f-issuer-http.test.mjs
           node --test t1f-issuer-page.test.mjs
+          node --test t1f-static-query.test.mjs
           node --check public/t1f-issuer.mjs
           node --check t1f-issuer-http.mjs
 

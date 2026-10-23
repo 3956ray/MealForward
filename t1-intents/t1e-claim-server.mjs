@@ -81,6 +81,30 @@ export function validateT1EClaimConfig(e=process.env){
   expectedAuth:AUTH_ROLE,expectedClaim:CLAIM_ROLE
  });
 }
+/**
+ * Static HTML may be opened through a referral URL. Permit harmless tracking
+ * params for the Issuer HTML only; scripts, APIs and wallet parameters remain
+ * strict. Never reflect query values or allow them to choose a wallet.
+ */
+export function safeStaticQuery(pathname,search){
+ if(typeof pathname!=='string'||typeof search!=='string'||search.length>400)
+  return false;
+ if(!search)return true;
+ if(pathname==='/')return true; // existing T1-E landing-page behavior
+ if(pathname!=='/t1f-issuer.html')return false;
+ const entries=[...new URLSearchParams(search).entries()];
+ if(entries.length===0||entries.length>5)return false;
+ const allowed=new Set([
+  'utm_source','utm_medium','utm_campaign','utm_content','utm_term'
+ ]);
+ const seen=new Set();
+ for(const [key,value] of entries){
+  if(!allowed.has(key)||seen.has(key)||
+   !/^[A-Za-z0-9._~-]{1,80}$/.test(value))return false;
+  seen.add(key);
+ }
+ return true;
+}
 const STATIC_HEADERS={
  'Cache-Control':'no-store',
  'Content-Security-Policy':"default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; script-src 'self'; style-src 'self'",
@@ -175,7 +199,7 @@ export async function startT1EClaimServer({env=process.env}={}){
    const item=files.get(u.pathname);
    if(item&&(req.method==='GET'||req.method==='HEAD')){
     if(req.headers.host!==new URL(cfg.origin).host||
-     (u.pathname!=='/'&&u.search)||u.search.length>400){
+     !safeStaticQuery(u.pathname,u.search)){
      res.writeHead(403,{'Cache-Control':'no-store'});res.end();return;
     }
     res.writeHead(200,{...STATIC_HEADERS,'Content-Type':item.type,
