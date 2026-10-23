@@ -1,4 +1,4 @@
-import test from 'node:test';
+import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import {readFileSync} from 'node:fs';
@@ -34,7 +34,7 @@ async function request(path,{method='GET',body=null,headers={},expectJson=true}=
  const payload=expectJson?JSON.parse(text):text;
  return {code:res.status,body:payload,headers:res.headers};
 }
-try{
+after(async()=>runtime.close());
 test('T1-E exact zero-finance config and role prohibitions',()=>{
  const cfg=validateT1EProofConfig(env);
  assert.equal(cfg.origin,uri);
@@ -162,8 +162,3 @@ test('issuer issuance, money, claims and settlement are not exposed by standalon
   assert.equal(out.body.error,'T1E_ROLE_PROOF_ONLY_NO_CLAIM_OR_ISSUE');
  }
 });
-}finally{
- // node --test top-level registration is async; on test runner lifecycle
- // close after the tests have run, not during discovery.
- import('node:test').then(({after})=>after(async()=>runtime.close()));
-}
