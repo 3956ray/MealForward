@@ -31,6 +31,8 @@ const nat=x=>{try{
  const v=BigInt(x);ok(v>=0n,'T1F_PHASE3_UINT_NONNEGATIVE_REQUIRED');return v
 }catch{throw Error('T1F_PHASE3_UINT_NONNEGATIVE_REQUIRED')}};
 const HEX32=/^0x[0-9a-f]{64}$/i;
+const ORIGINAL_INTENT='2b9ae6f1-2bb7-4096-8136-70f30f302eea';
+const RECIPIENT='0x2539fefe77a5ce4d09d2225c2e8a7517b22b9135';
 const STATUS_COLS='successor_id,claim_id,slot_id,release_id,'+
  'chain_id,escrow,voucher_id,issuer_wallet,operation_id,issuer_nonce,'+
  'issuer_issue_deadline,calldata_hash,stage,revision,tx_hash,'+
@@ -55,6 +57,13 @@ function checkOriginal(row){
   same(row.issuer_tx_data_hash,ORIGINAL_DATA_HASH)&&
   row.issuer_tx_hash==null&&row.receipt_block==null&&
   row.receipt_block_hash==null&&
+  row.funding_intent===ORIGINAL_INTENT&&
+  Number(row.chain_id)===CHAIN&&same(row.escrow,ESCROW)&&
+  same(row.meal_id,MEAL)&&same(row.terms_hash,TERMS)&&
+  Number(row.unit_seq)===0&&nat(row.generation)===1n&&
+  same(row.beneficiary_wallet,RECIPIENT)&&
+  HEX32.test(row.consent_digest||'')&&
+  HEX32.test(row.consent_signature_fingerprint||'')&&
   same(row.issuer_wallet,FIXED.issuerAuthority)&&
   same(row.voucher_id,originalVoucherId(0,1n)),
   'T1F_PHASE3_ORIGINAL_ISSUE_UNKNOWN_IMMUTABLE');
@@ -151,7 +160,10 @@ export function makeSuccessorIssuerLedger({pool,rpc,clock=()=>Math.floor(Date.no
     await c.query('BEGIN');
     const claim=await readOriginal(c);
     const review=await get(c,'expired_issue_reviews','*','claim_id=$1::uuid',ORIGINAL_CLAIM);
-    const slot=await get(c,'issuer_issue_attempts','*','claim_id=$1::uuid',ORIGINAL_CLAIM);
+    // Lock the immutable Review slot across first-time reservations.
+    // Two concurrent signed requests cannot each create their own release.
+    const slot=await get(c,'issuer_issue_attempts','*',
+     'claim_id=$1::uuid',ORIGINAL_CLAIM,'update');
     ok(review?.review_id&&slot?.review_id===review.review_id&&
      slot.stage==='REVIEW_HOLD','T1F_PHASE3_ADMIN_REVIEW_HOLD_REQUIRED');
     const already=await lookup(c,true);
