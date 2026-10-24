@@ -1,0 +1,86 @@
+name: MealForward T1-F Phase3 dual-approved successor Issue (SOURCE ONLY, NO LIVE)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-phase3-dual-approved-issue-20261024
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  phase3-protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require canonical HANDOFF before ending development
+        run: |
+          test -s HANDOFF.md
+          grep -q '强制每轮交接更新规范' HANDOFF.md
+      - name: Install pinned dependencies without lifecycle scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned EIP712 dual approval, nonce, claim, and canonical receipt tests
+        working-directory: t1-intents
+        run: |
+          node --check t1f-successor-dual-approval.mjs
+          node --check t1f-successor-issuer-ledger.mjs
+          node --check t1f-successor-issue-protocol.mjs
+          node --test t1f-successor-dual-approval.test.mjs
+          node --test t1f-successor-issuer-ledger.test.mjs
+          node --test t1f-successor-issue-protocol.test.mjs
+          node --test t1f-expired-recovery-review.test.mjs
+      - name: Ensure no backend wallet broadcaster, legacy claim rewrite or secret-key path
+        working-directory: t1-intents
+        run: |
+          for file in t1f-successor-dual-approval.mjs t1f-successor-issuer-ledger.mjs t1f-successor-issue-protocol.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet.fromPrivateKey|UPDATE mf_t1e.recipient_claims|DELETE FROM mf_t1e.recipient_claims' "$file"; then
+              echo T1F_SOURCE_ONLY_FORBIDDEN_SENDER
+              exit 1
+            fi
+          done
+  phase3-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      MF_T1F_DISPOSABLE_ONLY: ack-fresh-t1f-pg17
+      MF_T1F_REVIEW_DISPOSABLE_ONLY: ack-fresh-t1f-review-pg17
+      MF_T1F_SUCCESSOR_DISPOSABLE_ONLY: ack-fresh-successor-pg17
+      MF_T1F_PHASE3_DISPOSABLE_ONLY: ack-fresh-phase3-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5439/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start disposable PG17 on loopback only
+        run: |
+          docker run -d --rm --name t1f-phase3-pg17-fixture \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1e-disposable-only \
+            -e POSTGRES_DB=postgres \
+            -p 127.0.0.1:5439:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec t1f-phase3-pg17-fixture pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned PG and ABI libraries
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Exact 009-015 migrations, independent successor receipt and append-only history
+        working-directory: t1-intents
+        run: |
+          node --check t1f-successor-phase3.ci.mjs
+          node t1f-successor-phase3.ci.mjs
