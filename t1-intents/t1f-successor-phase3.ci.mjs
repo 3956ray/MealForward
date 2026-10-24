@@ -516,10 +516,13 @@ try{
   'DELETE FROM mf_t1e.successor_issue_events'),'P0001');
  await mustFail(()=>c.query(
   'TRUNCATE mf_t1e.successor_issue_events'),'P0001');
- await mustFail(()=>c.query(
-  'TRUNCATE mf_t1e.successor_issue_operations'),'P0001');
- await mustFail(()=>c.query(
-  'TRUNCATE mf_t1e.successor_issue_releases'),'P0001');
+ // Foreign-key denial may run before our own TRUNCATE trigger.
+ // Either PostgreSQL 0A000 or our explicit P0001 proves fail-closed.
+ for(const table of ['successor_issue_operations','successor_issue_releases']){
+  await assert.rejects(()=>c.query('TRUNCATE mf_t1e.'+table),
+   e=>['P0001','0A000'].includes(e?.code),
+   'append-only foreign keys or trigger must reject TRUNCATE');
+ }
  const immutableOriginal=(await c.query(
   'SELECT stage,revision,issuer_op_id,issuer_tx_nonce,issuer_tx_data_hash,'+
   'issuer_issue_deadline,issuer_tx_hash FROM mf_t1e.recipient_claims '+
