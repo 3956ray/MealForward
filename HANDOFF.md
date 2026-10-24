@@ -6,6 +6,22 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-24 当前最新：T1-F Phase 3 / 015 双人审批、独立发券状态机（仅源码，CI 通过）
+
+> **优先读此节；下文 Phase 2「还没有开发 015」是历史记录，已被本节取代。** Phase 3 的审批和继任 Issue 代码已经建好并通过隔离测试，但**绝对没有启用真实钱包/数据库的第二次发券**。
+
+- **GitHub 最新开发真源**：[Draft PR #43](https://github.com/3956ray/MealForward/pull/43)，分支 `codex/mealforward-t1f-phase3-dual-approved-issue-20261024`，base [Draft PR #42](https://github.com/3956ray/MealForward/pull/42)，上游 PR #41（013 审查）/ PR #40（原始 Issue）。PR #43 代码已测试提交 `b1049b9c56ace358b2f28b6a91bcfe4474d09c67`；后续文档提交会改变 HEAD，**每次接手先重新查询 PR HEAD 与 CI**。未 merge main、未合并到线上 staging。
+- **独立 015 SQL 草案**：`t1-intents/supabase/015_t1f_dual_release_successor_issue.sql` 新增 3 张私有表：`successor_issue_releases`（独立 Owner + Donor 两个 EIP712 签名核验结果及哈希指纹，仅留永久记录）、`successor_issue_operations`（每 Claim/Slot/Release 最多一条新操作，事务性 `ISSUE_UNKNOWN → ISSUE_HASH_BOUND → ISSUED` 或终止 `BLOCKED`）、`successor_issue_events`（触发器自动追加，不能删除/覆盖）。015 没有给任何 T1-E、T1-D、T1-C 运行角色新增读写权限；不改变 013/014 的永久 `REVIEW_HOLD`，**更不修改首次 `recipient_claims.ISSUE_UNKNOWN`**。只有未来单独审批并建立独立最小权限运行身份后才能操作。
+- **EIP-712 两人授权**：`t1-intents/t1f-successor-dual-approval.mjs` 固定原 Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b` 与原 Donor/Quote `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952` 两个不同钱包，与后续原 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` 交易钱包隔离。签名共同绑定 chain10143 / 原 StoreEscrow / 原 Claim / Review / Slot / 原 opId/nonce/deadline/dataHash / Voucher / 新 opId/nonce/deadline / 审批 nonce / 观察区块 hash / 短审批时效。只验证真实签名地址，仅存 digest 与签名指纹；**没有获得这两名真人的任何签名**。DB 自己无法验证 EIP712，未来授权服务必须先验签，这属于上线前风险门槛。
+- **独立操作源码**：`t1-intents/t1f-successor-issuer-ledger.mjs` 未接公网、无 live DB 权限。未来需先以固定只读 Monad RPC 重新核实原 op 未执行、Issuer latest/pending nonce、Unit 0 Available 与 7 Test USDC Liability，双 EIP712 有效、Slot 行锁、原子插入 Release+Successor Operation，**COMMIT 后只对首次调用返回一次由本人 MetaMask 发送的交易内容**。再次调用仅恢复既有 op/nonce/TxHash、绝不返回可再次广播字节；Hash 绑定与独立 Receipt/Canonical Block/Voucher 验证单独记录，**原 Claim 不会伪装为新 Issued**。源中无后端 signer 或链写 RPC。
+- **测试及可复核证据**：[Phase 3 CI PASS #40062881172](https://github.com/3956ray/MealForward/actions/runs/40062881172)，随后包含 Phase 3 合同文档的 [CI PASS #40063033832](https://github.com/3956ray/MealForward/actions/runs/40063033832)。通过双签名合成 EOA 正/负测试（冒充原 Owner/Donor 的假签名会被拒）、非 Issuer 角色拒绝、第二次预留仅恢复、Nonce 竞争、截止/签名/Receipt 篡改、Reorg 拒绝等；一次性 Docker PG17 **127.0.0.1:5439** 精确执行 **009–015** 全套迁移，报告 `T1F_SOURCE_ONLY_PG17_DUAL_RELEASE_SUCCESSOR_015_PASS`，原 Claim/Consent/Fund 不变、Role Release Grants=0、自动审计 3 条、Nonce/Hash/Deadline 不可改。**真实 SQL 015 的正例是模拟 Owner/Donor 已验签指纹，而非真 EOA 已在 DB 完成审批**；真实 Monad 上无新 Issue。
+- **特殊测试前提**：CI 需要模拟 012 旧 Issue 截止时间过去；仅在全新且固定 loopback DSN、带多重一次性 GitHub Actions guard 的 PG17 Fixture 中暂时关闭两个 Claim immutability trigger 来模拟经过时间，随后立刻恢复并验证均启用，再执行 013–015。**绝不可把 fixture 的停 Trigger/time travel 指令对真实 Supabase 执行**。部署环境不包含这段 CI 行为。
+- **最新实库只读核对（Source-only）**：项目 `ketfrukrcuosrqynnsay` 仍仅有 001–012 真实迁移，013/014/015 三张新表不存在。唯一资助 `FUNDED=1`，单一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 `ISSUE_UNKNOWN`、revision 2、原 opId `0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、Nonce 0、原截止 `1792765625` 已过期，原 Issuer TxHash NULL；单一 `ISSUE_RESERVED` 审计，Supabase Advisor 0 lints。Owner 报告的 MetaMask 未见交易 + 单节点 RPC 无 Pending 不是全球 mempool 不存在的形式化证明。
+- **最新部署原样未动**：Render LaoDao workspace `tea-db7q3ou7bikc73bp2bt0`，T1-E/T1-F service `srv-dbdgstivcj2c73fnqcc0` **Live** @ `dep-dbdto63rjlhs738br1sg`，Commit `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。只运行过期防误发送版本，**没有 013/014/015，也没有新的继任发券界面/授权 API**。不得误把 GitHub PR #43 源码视为已发布。
+- **下一步（未获正式链上/DB 发布许可）**：对 PR #41/#42/#43 进行独立安全审阅，开发专用最小权限的“Owner+Donor 双签 Release 服务”与分阶段钱包 UI，在隔离环境完成公网 SIWE/CSRF/403/429、跨角色、Nonce 并发、断线/重组/拒绝签名/Hash 丢失及回退验收。以后要在真库执行 013/014/015、激活新数据库 Login 或邀请真实 Owner/Donor/Issuer 签名，**必须获得用户对具体迁移与钱包操作的新明确批准**，绝不借“继续开发”自动开通。
+- **安全红线**：不修改原旧 Claim/Nonce/Receipt、旧 Mac CP30 `PREPARED #3560` Journal、原 T0 合约；不重复 Fund/Claim/Consent/Issue；原 `issue()` 不链上校验受助者 Consent、180s 结算约束 #17 仍有缺口，商家 Lock/Report/Settle 持续关闭。禁止任何无人值守服务器广播。
+- **更详细技术交接**：`docs/CP31-T1F-PHASE3-DUAL-RELEASE-GATE-2026-10-24.md`（在 PR #43 分支），精确项目 PR、服务、迁移/权限、可运行 CI 路径和后续发行 Gate 如本文件。**用户规则：每轮开发结束必须更新此根目录 `HANDOFF.md`**，不能只改历史 docs。
+
 ## 2026-10-24 最新工程里程碑：T1-F 第二阶段独立 Issue Attempt · REVIEW_HOLD 已完成
 
 **当前下一位 Agent 的第一任务：继续审查 Source-only PR #42 的 Phase 2 安全合同，为未来 Phase 3/015 制作独立授权与钱包恢复设计。绝不能把已有 014 源码误当作已安装的真实数据库迁移，更不能对过期原 Issue 重新预留或直接广播。**
