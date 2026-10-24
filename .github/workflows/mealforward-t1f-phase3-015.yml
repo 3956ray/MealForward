@@ -34,6 +34,7 @@ jobs:
           node --check t1f-successor-issuer-ledger.mjs
           node --check t1f-successor-issue-protocol.mjs
           node --test t1f-successor-dual-approval.test.mjs
+          node --test t1f-successor-issuer-ledger.test.mjs
           node --test t1f-successor-issue-protocol.test.mjs
           node --test t1f-expired-recovery-review.test.mjs
       - name: Ensure no backend wallet broadcaster, legacy claim rewrite or secret-key path
