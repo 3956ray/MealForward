@@ -6,6 +6,21 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-24（UTC+8）最新：原 Issuer 钱包无可见交易；T1-F 恢复 Review-only 已完成源码与隔离验收
+
+**本节是新的接手起点，覆盖历史“仍未收到用户 MetaMask 结果”的等待说明，但不能把“没有可见交易”提升为“全部 mempool 被证明为空”。**
+
+- **用户真实反馈：** Monad Testnet 原 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` 在 MetaMask Activity **没有任何交易**。此前两次按钮点击都只涉及「一次性预留原始 Issue」，并非两次发送。
+- **最新独立真实链上只读验收**：[Actions 40032638604 attempt 2](https://github.com/3956ray/MealForward/actions/runs/40032638604/attempts/2)，2026-10-24 09:53（UTC+8），Monad block `73688844`：原 Issuer `latestNonce=0` / `pendingNonce=0`，原 Operation 尚未执行，原 Unit 0 `Available`、`Issued=false`；结论 `T1F_EXPIRED_NO_ISSUE_OBSERVED_NOT_ABSENCE_PROOF`。**单一 RPC 的 pending 是节点本地视图，不是全球交易未广播的证明**。以太坊 JSON-RPC pending 语义参阅 https://ethereum.github.io/execution-apis/api/methods/eth_getTransactionCount/ 。
+- **最近 Supabase 实库只读状态**：`mealforward-t1-staging` `ketfrukrcuosrqynnsay`；仍只有 12 个真实迁移（至 `20261023105932` 的 T1-F 012），1 条原 `FUNDED`，1 条 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea`，`ISSUE_UNKNOWN` `revision=2`；原 opId `0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、nonce 0、不可变截止时间 `1792765625`（2026-10-23 22:27:05 UTC+8）、数据 Hash `0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed`，`issuer_tx_hash=NULL`，仅 1 条 `ISSUE_RESERVED`、合计 3 条原审计事件。无第二份 Claim/Fund/Issuer Attempt。
+- **现有 Render 真部署（本次未改）**：LaoDao `tea-db7q3ou7bikc73bp2bt0`、T1-E/T1-F `srv-dbdgstivcj2c73fnqcc0`，`dep-dbdto63rjlhs738br1sg` LIVE，部署 Commit `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。旧过期发送 UX 已防误发送。未开启新的恢复/重发 API；Fund/Settle 仍关闭。
+- **当前恢复工作分支**：`codex/mealforward-t1f-expired-review-ledger-20261024`，[Draft PR #41](https://github.com/3956ray/MealForward/pull/41)，base 旧 T1-F [PR #40](https://github.com/3956ray/MealForward/pull/40)，不可自动合并 main/staging。源文件 `t1-intents/supabase/013_t1f_expired_issue_review_only.sql`、`t1f-expired-recovery-review.mjs` + `.test.mjs`、`t1f-expired-recovery-review.ci.mjs`、`.github/workflows/mealforward-t1f-recovery-review-pg17.yml`；协议与后续阶段 Gate `docs/CP31-T1F-EXPIRED-ISSUE-RECOVERY-GATE-2026-10-24.md`。
+- **最新 CI**：[Actions 40052180388](https://github.com/3956ray/MealForward/actions/runs/40052180388) PASS（源代码 + 11 个 Node.js 测试（4 项 policy + 3 项链只读假 RPC + 4 项钱包 UI）；隔离 PostgreSQL17 009–013 精确迁移、旧 Claim 不变、独立审计只可 Admin/独立审批写、运行角色无法写 Review、新 Issue 永久 NO）。迁移 013 在 CI 的一次性数据库通过，**从未在真实 Supabase 运行**。
+- **严格边界**：新表 `mf_t1e.expired_issue_reviews` 只记录原 op、原 nonce、原 deadline、原 calldata hash 和可追溯的只读观察，全部恢复授权位硬锁 `false`。它不能让服务器签名、再发 Issue 或修改原 `ISSUE_UNKNOWN`。源代码纯策略 `T1F_REVIEWABLE_OFFLINE_SECURITY_REVIEW_ONLY` 只允许进入人类审查，绝非线上重试权限。
+- **下一步工程与人工 Gate**：先独立审查 PR #41 的 013 迁移与隔离测试，明确 **Phase 2** 另建 append-only `issuer_issue_attempts` 与安全的权威状态投影，不能让原 Claim `ISSUE_UNKNOWN` 与第二条尝试混为一个原 Hash。用户需单独明确批准任何真实 DB 013/未来014、T1-F Wallet release 或真实 Issuer `issue()` 操作。在此之前不得修改真实 Claim、清除旧 nonce、重复预留/Consent/Fund/Settle 或自动交易。
+- **重要缺口**：用户报告的 MetaMask 活动为空并非机器可重放的签名证据，网络监测不保证所有节点的 pending/mempool；不可把当前情况描述成“可直接重新发送”。需要继续人工审计并严格记录这层不确定性。
+
+
 ## 2026-10-24（UTC+8）最新：用户确认两次均为预留，过期发送已由新 UI 阻止
 
 **这是当前最高优先级接手真相，覆盖下文 2026-10-23 的历史人工疑问。** 用户明确回复：**“第二次点击的是『一次性预留原始 Issue』”**，而非第二次点击发送。不能据此推断 MetaMask Activity 绝对没有任何先前单独发送，仍须核对本人钱包记录。
