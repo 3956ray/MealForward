@@ -317,7 +317,7 @@ try{
  ]),'P0001');
  await mustFail(()=>c.query(
   "UPDATE mf_t1e.issuer_issue_attempts SET stage='ISSUE_HASH_BOUND'"+
-  ' WHERE attempt_id=$1::uuid',[attemptId]),'23514');
+  ' WHERE attempt_id=$1::uuid',[attemptId]),'P0001');
  await mustFail(()=>c.query(
   'UPDATE mf_t1e.issuer_issue_attempts SET created_at=clock_timestamp()'+
   ' WHERE attempt_id=$1::uuid',[attemptId]),'P0001');
