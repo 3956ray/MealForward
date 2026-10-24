@@ -6,6 +6,24 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-24 最新工程里程碑：T1-F 第二阶段独立 Issue Attempt · REVIEW_HOLD 已完成
+
+**当前下一位 Agent 的第一任务：继续审查 Source-only PR #42 的 Phase 2 安全合同，为未来 Phase 3/015 制作独立授权与钱包恢复设计。绝不能把已有 014 源码误当作已安装的真实数据库迁移，更不能对过期原 Issue 重新预留或直接广播。**
+
+- **GitHub 真源**：Repository `3956ray/MealForward`；T1-F Phase 2 工作分支 `codex/mealforward-t1f-successor-attempt-hold-20261024`，[Draft PR #42](https://github.com/3956ray/MealForward/pull/42)，基于 Phase 1 [Draft PR #41](https://github.com/3956ray/MealForward/pull/41)，再基于原 T1-F [PR #40](https://github.com/3956ray/MealForward/pull/40)；对应 T1-E 部署基线仍为 [Draft PR #38](https://github.com/3956ray/MealForward/pull/38)。本文件提交后必须重新实时查 PR HEAD，不能假设历史 SHA 最新。
+- **第二阶段具体代码**：
+  - `t1-intents/supabase/014_t1f_successor_attempt_review_hold.sql` —— 单独、不可变且一条 Claim 最多一个的 `issuer_issue_attempts` 审查槽；FK 原 013 `expired_issue_reviews`，Stage 只允许 `REVIEW_HOLD`，所有继任 opId/nonce/deadline/calldataHash/TxHash/Receipt/Release ID 必须 NULL；全部可发送/改写权限位强制 false，现有 Auth / Claim / Fund 运行角色均无法读写。
+  - `t1-intents/t1f-successor-issue-protocol.mjs` —— 经原 Claim + 013 Review + 014 Slot + 独立 Monad 只读证据校验后，只对**假设中的、不同于旧 opId 的新操作**产生 calldata Hash，返回 `T1F_SUCCESSOR_DESIGN_PREVIEW_NO_RELEASE`，不返回可发送交易字节，不修改 DB。
+  - `verifySuccessorReceiptReadOnly()`（同文件）—— 源码层已验证的只读 Receipt 适配器，复用旧 T1-F 的严格 Transaction / Canonical Block / Issued / OperationExecuted / Voucher / 7 Test USDC 责任校验；只有未来独立批准、已记录 `ISSUE_HASH_BOUND` 和 `security_release_id` 的继任 Attempt 才能触发。当前 014 数据库**不可能生成这一状态**；旧 `recipient_claims` 永远保留首次 `ISSUE_UNKNOWN`，成功后不能伪造旧 TxHash。
+  - `t1-intents/t1f-successor-issue-protocol.test.mjs`、`t1f-successor-attempt-hold.ci.mjs`、`.github/workflows/mealforward-t1f-successor-hold-014.yml` —— 模拟错误 signer/nonce/TxHash/calldata/reorg/重复/过期，PG17 精确 009–014 独立迁移与不可修改触发器。
+  - 完整 Phase 2 合同与 Phase 3 门槛：`docs/CP31-T1F-PHASE2-SUCCESSOR-ATTEMPT-GATE-2026-10-24.md`；不要仅从聊天摘要猜测约束。
+- **最新 CI 证据（源代码 + 一次性 PG17）**：[Actions 40054537423](https://github.com/3956ray/MealForward/actions/runs/40054537423) **两项 job PASS**：协议 6 项测试 + 历史守卫回归，通过；一次性 PostgreSQL 17.11 在仅 `127.0.0.1:5438` 运行准确 009–014 SQL，状态 `T1F_SUCCESSOR_PHASE2_014_DISPOSABLE_REVIEW_HOLD_PASS`，`originalClaimUnchanged=true`、`originalNoncePreserved=true`、`newOperationIdsCreated=0`、`newIssueAllowed=false`、`successorTransactionFieldsAllNull=true`、`runtimeReviewWritesDenied=true`。Receipt 正例是**合成 RPC**，不能替代真人 MetaMask 交易或真实已发券证据。
+- **再次只读 Supabase（真实项目）**：`mealforward-t1-staging` `ketfrukrcuosrqynnsay`，仍只有 **012** 为止的 12 条真实迁移；`mf_t1e.expired_issue_reviews`（013）不存在、`mf_t1e.issuer_issue_attempts`（014）不存在。唯一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 `ISSUE_UNKNOWN` revision2、原 Issuer opId `0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b`、nonce 0、已过期 deadline `1792765625`、`issuer_tx_hash=NULL`；1 原 Fund、1 Claim、1 Issue Reserve；Supabase Security Advisor 无 lints。绝不可对该实库直接运行审查草案而声称“Phase 2 已激活”。
+- **Render 原服务不变**：LaoDao `tea-db7q3ou7bikc73bp2bt0`，`srv-dbdgstivcj2c73fnqcc0`，最新真实 LIVE 部署 `dep-dbdto63rjlhs738br1sg` @ `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。这不是新 Phase 2 源码；T1-F 旧的过期发送 UX 拒绝逻辑已在线，但**没有继任发券入口或新 Attempt**。Render `T1E_WALLET_TX_ENABLED=false`、`T1E_SETTLEMENT_ENABLED=false` 边界不变。不得在本轮为 PR #42 改 Render/重启。
+- **Owner 与真实链**：用户已经查验原 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` 的 MetaMask Monad Testnet Activity，报告无交易；此前原 Issue 第二次点击也是预留，不是发送。此前只读 ChainId10143 / Unit 0 Available / issuer latest+pending Nonce 0 / 原 op 未执行，不能据单节点 pending 断言全网绝无未知 Tx。原 7 Test USDC Fund 仍唯一。原合约不链上强制 Recipient Consent、180 秒 Settlement Cooldown Issue #17 未修，结算绝不可放行。
+- **下一阶段 Phase 3/015（尚未取得具体运行批准）**：提出*专门的权限放行*、原始证据保留、仅一个新 Attempt 的严格事务状态机（原子记录新的 opId/nonce/短时 deadline/Hash，并发双击只恢复旧候选）、双 RPC 与独立签名钱包新鲜核验、唯一 Voucher 的独立 Receipt 权威投影、未知交易只查原 Hash、单一人工 MetaMask 交易。完整回退和负测试、第三方代码审查均应就绪后，**单独请求用户批准真实 Supabase 013/014/015 和实际钱包操作**。当前仅有继续开发许可，不是 DB/广播许可。
+- **交接强制规则**：本轮收尾必须再次更新根 `HANDOFF.md`，确保所有 Agent 开始先核对本段 PR42/CI 及真实 Render/Supabase。保留旧 CP30 Journal `PREPARED #3560` 冻结；禁止创建第二份 Claim、重新 Fund、覆盖原 Operation/Nonce 或开启商家 Settle。
+
 ## 2026-10-24（UTC+8）最新：原 Issuer 钱包无可见交易；T1-F 恢复 Review-only 已完成源码与隔离验收
 
 **本节是新的接手起点，覆盖历史“仍未收到用户 MetaMask 结果”的等待说明，但不能把“没有可见交易”提升为“全部 mempool 被证明为空”。**
