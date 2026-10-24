@@ -1,0 +1,79 @@
+name: MealForward T1-F review-only expired reservation audit (NO reissue)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-expired-review-ledger-20261024
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require canonical handoff and no-issuer-send policy
+        run: |
+          test -s HANDOFF.md
+          grep -q '强制每轮交接更新规范' HANDOFF.md
+      - name: Install pinned dependencies without lifecycle scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Read-only proof, wallet attestation uncertainty and protected original identity
+        working-directory: t1-intents
+        run: |
+          node --check t1f-expired-recovery-review.mjs
+          node --check t1f-expired-recovery-review.test.mjs
+          node --test t1f-expired-recovery-review.test.mjs
+          node --test t1f-expired-issuer-readonly.test.mjs
+          node --test t1f-issuer-page.test.mjs
+      - name: No server broadcaster or implicit reissue in new modules
+        working-directory: t1-intents
+        run: |
+          for f in t1f-expired-recovery-review.mjs t1f-expired-issuer-readonly.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|Wallet.fromPrivateKey|privateKeyToAccount|UPDATE mf_t1e' "$f"; then
+              echo T1F_REVIEW_WRITE_PATH_FORBIDDEN
+              exit 1
+            fi
+          done
+  review-ledger-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      MF_T1F_DISPOSABLE_ONLY: ack-fresh-t1f-pg17
+      MF_T1F_REVIEW_DISPOSABLE_ONLY: ack-fresh-t1f-review-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5437/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run NEW throwaway PG17, loopback only
+        run: |
+          docker run -d --rm --name t1f-recovery-review-fixture \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1e-disposable-only \
+            -e POSTGRES_DB=postgres \
+            -p 127.0.0.1:5437:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec t1f-recovery-review-fixture pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install pinned SQL and EVM libraries
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Exact 009–013 review-only migration / immutability / nonce audit
+        working-directory: t1-intents
+        run: |
+          node --check t1f-expired-recovery-review.ci.mjs
+          node t1f-expired-recovery-review.ci.mjs
