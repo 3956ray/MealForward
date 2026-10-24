@@ -475,7 +475,7 @@ try{
  await mustFail(()=>c.query(
   "UPDATE mf_t1e.successor_issue_operations "+
   "SET stage='ISSUED',revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId]),'23514');
+  [successorId]),'P0001');
  const tx='0x'+'9'.repeat(64);
  await c.query(
   "UPDATE mf_t1e.successor_issue_operations SET "+
