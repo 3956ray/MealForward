@@ -49,7 +49,7 @@ const SLOT_ROW={
  may_prepare_wallet_tx:false,may_sign_or_broadcast:false,
  may_mark_issued:false,legacy_claim_rewrite_allowed:false
 };
-const CHAIN={
+const CHAIN_STATE={
  status:'T1F_EXPIRED_NO_ISSUE_OBSERVED_NOT_ABSENCE_PROOF',
  chainId:10143,issuer:FIXED.issuerAuthority,escrow:ESCROW,
  originalOperationId:ORIGINAL_OPERATION,reservedOriginalNonce:'0',
@@ -62,7 +62,7 @@ const CHAIN={
  userWalletActivityMustBeChecked:true,canIssueOrResetAutomatically:false
 };
 const body=(over={})=>({
- claim:CLAIM,review:REVIEW_ROW,slot:SLOT_ROW,chain:CHAIN,
+ claim:CLAIM,review:REVIEW_ROW,slot:SLOT_ROW,chain:CHAIN_STATE,
  walletObservation:'OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE',
  nonceDomain:'0x'+'5'.repeat(64),
  candidateOperationId:OP,candidateNonce:'0',
@@ -82,7 +82,7 @@ const signed=async overrides=>{
 };
 test('immutable recovery release binds original op, new op, nonce, block, voucher and two distinct wallets',async()=>{
  const p=await signed();
- assert.equal(p.manifest.domain.chainId,CHAIN.chainId);
+ assert.equal(p.manifest.domain.chainId,CHAIN_STATE.chainId);
  assert.equal(p.manifest.domain.verifyingContract,ESCROW);
  assert.equal(p.manifest.value.originalOpId,ORIGINAL_OPERATION);
  assert.equal(p.manifest.value.originalDataHash,ORIGINAL_DATA_HASH);
@@ -136,10 +136,10 @@ test('replay, swapped signatures, typed-data change, cutoff and quote mismatch a
 });
 test('future EIP712 approval cannot be built from stale or insufficient chain evidence',()=>{
  for(const override of [
-  {chain:{...CHAIN,observedBlockTime:NOW-121}},
+  {chain:{...CHAIN_STATE,observedBlockTime:NOW-121}},
   {chain:{...CHAIN,observedBlockTime:NOW+1}},
-  {chain:{...CHAIN,issuerPendingNonce:'1'}},
-  {chain:{...CHAIN,unitIssued:true,unitAvailable:false}},
+  {chain:{...CHAIN_STATE,issuerPendingNonce:'1'}},
+  {chain:{...CHAIN_STATE,unitIssued:true,unitAvailable:false}},
   {claim:{...CLAIM,stage:'ISSUED'}},
   {candidateOperationId:ORIGINAL_OPERATION},
   {candidateNonce:'1'},
