@@ -165,6 +165,35 @@ try{
 
  // The first reservation exists (revision=2), but has not been broadcast.
  await c.query('RESET ROLE');
+ // DISPOSABLE-ONLY TIME TRAVEL: the original 012 reservation was freshly
+ // created in this CI fixture, while a real expired reservation is days old.
+ // PostgreSQL's clock_timestamp() cannot be mocked. In the isolated Docker
+ // PG17 ONLY, simulate passage of >480s by changing the synthetic deadline
+ // under explicitly disabled triggers, then restore both immutability
+ // triggers BEFORE running the real, unmodified 013–015 migrations.
+ // This is NEVER allowed against real Supabase. The exact loopback DSN and
+ // CI-only environment guards at file top make this nonproduction-only.
+ const timeTravelDeadline=realNow-7200;
+ try{
+  await c.query('ALTER TABLE mf_t1e.recipient_claims DISABLE TRIGGER t1e_claim_immutable');
+  await c.query('ALTER TABLE mf_t1e.recipient_claims DISABLE TRIGGER t1f_issuer_deadline_guard');
+  await c.query(
+   'UPDATE mf_t1e.recipient_claims SET issuer_issue_deadline=$2 '+
+   'WHERE claim_id=$1::uuid',[T1F_FIRST_CLAIM,timeTravelDeadline]
+  );
+ }finally{
+  await c.query('ALTER TABLE mf_t1e.recipient_claims ENABLE TRIGGER t1f_issuer_deadline_guard');
+  await c.query('ALTER TABLE mf_t1e.recipient_claims ENABLE TRIGGER t1e_claim_immutable');
+ }
+ const triggerStatus=(await c.query(
+  "SELECT tgname,tgenabled FROM pg_trigger "+
+  "WHERE tgrelid='mf_t1e.recipient_claims'::regclass "+
+  "AND tgname IN ('t1e_claim_immutable','t1f_issuer_deadline_guard') "+
+  "ORDER BY tgname"
+ )).rows;
+ assert.equal(triggerStatus.length,2);
+ assert.ok(triggerStatus.every(t=>t.tgenabled==='O'),
+  'immutable triggers restored before any subsequent migration');
  const before=(await c.query(
   'SELECT stage,revision,issuer_op_id,issuer_tx_nonce,issuer_tx_data_hash,'+
   'issuer_issue_deadline,issuer_tx_hash FROM mf_t1e.recipient_claims '+
