@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <title>留膳 · 领取第一张餐券 · T1-E</title>
+ <link href="/t1e-claim.css" rel="stylesheet">
+</head>
+<body>
+ <div class="shell">
+  <header class="bar">
+   <a class="brand" href="/"><span class="seal">膳</span><span>MEALFORWARD <small>留膳 · 安全测试网</small></span></a>
+   <span class="network"><i></i> MONAD TESTNET · 10143</span>
+  </header>
+  <main>
+   <section class="hero">
+    <div class="overline">A MEAL SET ASIDE, A PERSON IN MIND</div>
+    <h1>留一膳，<br><em>待一人。</em></h1>
+    <p>第一份「暖心盖饭」已经得到 7 Test USDC 资助，仍由原链上托管合约持有。本阶段只验证独立受助者登录、领取资格测试与签名授权。</p>
+    <div class="facts">
+     <div><small>原始资金</small><strong>7 Test USDC</strong><span>不再需要资助</span></div>
+     <div><small>餐券候选</small><strong>Unit 0</strong><span>Generation 1</span></div>
+     <div><small>商家结算</small><strong>关闭</strong><span>等待链上安全验收</span></div>
+    </div>
+   </section>
+   <section class="flow" aria-labelledby="flow-title">
+    <div class="section-top">
+     <div><div class="overline">ISOLATED AUTH · ONE TEST BENEFICIARY</div><h2 id="flow-title">第一张测试餐券 · 领取授权</h2></div>
+     <span id="server-mode" class="mode" role="status">检查服务模式…</span>
+    </div>
+    <div class="panel">
+     <div class="index">01 / WALLET</div>
+     <h3>登录你自己的受助者钱包</h3>
+     <p>首次测试只允许事先验证的独立受助者钱包。登录使用标准 SIWE（EIP-191），不是任何资金签名。</p>
+     <div class="wallet" aria-label="固定测试受助者钱包"><small>本次唯一受助者测试地址</small><code>0x2539fefe77a5ce4d09d2225c2e8a7517b22b9135</code></div>
+     <div class="actions"><button type="button" id="connect" disabled>连接 MetaMask</button><button type="button" id="choose-account" disabled>重新选择钱包</button><button type="button" id="login" disabled>本人 SIWE 登录</button><button type="button" id="who" disabled>检查登录身份</button><button type="button" id="logout" disabled>安全注销</button></div>
+     <pre id="login-result" class="feedback" role="status" aria-live="polite">尚未连接。</pre>
+    </div>
+    <div class="panel">
+     <div class="index">02 / CLAIM · FIRST ORIGINAL UNIT</div>
+     <h3>持久创建唯一领取申请</h3>
+     <p>服务器会先确认原资助 Unit 仍 Available，再以私有数据库保存唯一 Claim、Nonce 与截止时间。刷新后只能找回原申请，绝不再造第二份。若本人签名超时，可在同一 Claim 内恢复新的授权窗口（最多 3 轮）；原始 Nonce、受助者与餐券身份永久保留。</p>
+     <div class="actions"><button type="button" id="inspect" disabled>读取我的 Claim</button><button type="button" id="prepare" disabled>持久创建一次 Claim</button><button type="button" id="renew" disabled>原 Claim 授权过期后恢复（最多 3 次）</button></div>
+     <pre id="claim-result" class="feedback" role="status" aria-live="polite">登录后可以读取自己的领取记录。当前测试环境可能仅开放只读。</pre>
+    </div>
+    <div class="panel">
+     <div class="index">03 / CONSENT · OFFCHAIN ONLY</div>
+     <h3>亲自签署领取授权</h3>
+     <p>采用专属 EIP-712 领域，绑定原始 7 Test USDC 订单、Unit 0、Generation 1、受助者钱包及一次性 Nonce，且有短时有效期。此签名只证明本次领取申请得到钱包本人授权。</p>
+     <div class="actions"><button type="button" id="consent" disabled>本人签署领取 Consent（无转账）</button></div>
+     <pre id="consent-result" class="feedback" role="status" aria-live="polite">尚未创建 Claim，不能签名。</pre>
+    </div>
+    <div class="panel blocked">
+     <div class="index">04 / ISSUER · NEXT RELEASE</div>
+     <h3>发行者本人链上发券</h3>
+     <p>Issuer 将在单独的验收入口查看已核验的 Claim。只有它自己能够调用合约 issue()，且必须在发送前持久记录原交易与 Nonce。本页面绝不会广播交易，也不允许商家结算。</p>
+     <p id="issuer-result" class="feedback" role="status" aria-live="polite">ISSUE DISABLED · 仅显示信息，不提供链上写入。</p>
+    </div>
+   </section>
+  </main>
+  <footer><span>留一膳，待一人，是为善。</span><span>Testnet only · 不索取私钥 · 不包含旧 CP30</span><a href="https://mealforward-t1d-funding-laodao.onrender.com/" target="_blank" rel="noopener noreferrer">查看原资助凭据 ↗</a></footer>
+ </div>
+ <script type="module" src="/t1e-claim.mjs"></script>
+</body>
+</html>

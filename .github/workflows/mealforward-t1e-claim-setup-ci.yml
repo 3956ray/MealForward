@@ -1,0 +1,38 @@
+name: MealForward T1-E new isolated Claim Render SETUP_ONLY (no DB or funds)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1e-recipient-claim-http-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-claim-setup-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned non-script dependencies
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: No private claim wallet transactions or credentials in setup-only app
+        working-directory: t1-intents
+        run: |
+          node --check t1e-claim-entrypoint.mjs
+          node --check t1e-claim-setup.test.mjs
+          test -f public/t1e-claim-setup.html
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|eth_signTypedData_v4|privateKeyToAccount' public/t1e-claim-setup.html t1e-claim-entrypoint.mjs; then
+            echo T1E_SETUP_PRIVATE_WALLET_OP_DENIED
+            exit 1
+          fi
+      - name: Real isolated HTTP public homepage, no sessions, no Issue/Fund/Settle
+        working-directory: t1-intents
+        run: npm run test:t1e:claim:setup
