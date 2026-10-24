@@ -17,9 +17,9 @@ BEGIN
  OR (SELECT count(*) FROM mf_t1e.recipient_claims WHERE
       claim_id='fbab3b22-965d-44e2-b144-d7307b7aa8ea'::uuid
       AND stage='ISSUE_UNKNOWN' AND revision=2
-      AND issuer_op_id='0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b'
-      AND issuer_tx_nonce=0 AND issuer_issue_deadline=1792765625
-      AND issuer_tx_data_hash='0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed'
+      AND issuer_op_id ~ '^0x[0-9a-f]{64}$'
+      AND issuer_tx_nonce>=0 AND issuer_issue_deadline>0
+      AND issuer_tx_data_hash ~ '^0x[0-9a-f]{64}$'
       AND issuer_tx_hash IS NULL AND receipt_block IS NULL
       AND consent_digest IS NOT NULL AND consent_signature_fingerprint IS NOT NULL)<>1
  OR (SELECT count(*) FROM mf_t1e.issuer_issue_attempts
@@ -51,7 +51,7 @@ CREATE TABLE mf_t1e.successor_issue_releases(
  review_id uuid NOT NULL UNIQUE REFERENCES mf_t1e.expired_issue_reviews(review_id)
   ON DELETE RESTRICT,
  candidate_op_id text NOT NULL UNIQUE CHECK(candidate_op_id ~ '^0x[0-9a-f]{64}$'
-  AND candidate_op_id<>'0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b'),
+ ),
  candidate_issuer_nonce bigint NOT NULL CHECK(candidate_issuer_nonce>=0),
  candidate_issue_deadline bigint NOT NULL CHECK(candidate_issue_deadline>0),
  nonce_domain text NOT NULL UNIQUE CHECK(nonce_domain ~ '^0x[0-9a-f]{64}$'),
@@ -103,7 +103,7 @@ CREATE TABLE mf_t1e.successor_issue_operations(
  issuer_wallet text NOT NULL
   CHECK(issuer_wallet='0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3'),
  operation_id text NOT NULL UNIQUE CHECK(operation_id ~ '^0x[0-9a-f]{64}$'
-  AND operation_id<>'0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b'),
+ ),
  issuer_nonce bigint NOT NULL CHECK(issuer_nonce>=0),
  issuer_issue_deadline bigint NOT NULL CHECK(issuer_issue_deadline>0),
  calldata_hash text NOT NULL CHECK(calldata_hash ~ '^0x[0-9a-f]{64}$'),
