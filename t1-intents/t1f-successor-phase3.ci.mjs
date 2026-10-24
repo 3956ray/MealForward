@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import pg from 'pg';
+import {keccak256} from 'ethers';
 import {originalVoucherId} from './t1e-first-issue-readiness.mjs';
 import {PILOT_RECIPIENT,claimStore} from './t1e-claim-store.mjs';
 import {originalIssueLedger,T1F_FIRST_CLAIM} from './t1f-issue-ledger.mjs';
