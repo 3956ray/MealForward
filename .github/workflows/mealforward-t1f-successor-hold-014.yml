@@ -1,0 +1,84 @@
+name: MealForward T1-F Phase2 successor Issue HOLD 014 (never send)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-successor-attempt-hold-20261024
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  phase2-protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require updated canonical Handoff and fixed 013/014 schemas
+        run: |
+          test -s HANDOFF.md
+          grep -q '强制每轮交接更新规范' HANDOFF.md
+          test -s t1-intents/supabase/013_t1f_expired_issue_review_only.sql
+          test -s t1-intents/supabase/014_t1f_successor_attempt_review_hold.sql
+      - name: Install pinned dependencies without lifecycle scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Non-sendable successor preview, original and role isolation negative tests
+        working-directory: t1-intents
+        run: |
+          node --check t1f-successor-issue-protocol.mjs
+          node --check t1f-successor-issue-protocol.test.mjs
+          node --test t1f-successor-issue-protocol.test.mjs
+          node --test t1f-expired-recovery-review.test.mjs
+          node --test t1f-expired-issuer-readonly.test.mjs
+          node --test t1f-issuer-page.test.mjs
+      - name: Disallow wallet, chain writer, environment secrets and private DB calls
+        working-directory: t1-intents
+        run: |
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet.fromPrivateKey|UPDATE mf_t1e|INSERT INTO mf_t1e|process.env.PRIVATE_KEY' t1f-successor-issue-protocol.mjs; then
+            echo T1F_SUCCESSOR_POLICY_MUST_BE_PURE
+            exit 1
+          fi
+  phase2-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      GITHUB_ACTIONS: "true"
+      MF_T1E_DISPOSABLE_ONLY: ack-fresh-t1e-pg17
+      MF_T1F_DISPOSABLE_ONLY: ack-fresh-t1f-pg17
+      MF_T1F_REVIEW_DISPOSABLE_ONLY: ack-fresh-t1f-review-pg17
+      MF_T1F_SUCCESSOR_DISPOSABLE_ONLY: ack-fresh-successor-pg17
+      DATABASE_URL: postgres://postgres:t1e-disposable-only@127.0.0.1:5438/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Boot fresh, isolated PostgreSQL17 on loopback port5438
+        run: |
+          docker run -d --rm --name mf-t1f-phase2-only-pg17 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=t1e-disposable-only \
+            -e POSTGRES_DB=postgres \
+            -p 127.0.0.1:5438:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec mf-t1f-phase2-only-pg17 pg_isready -U postgres -d postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Install PostgreSQL and ABI libraries without scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test exact 009-014 migrations, 1 review slot, 0 wallet permissions
+        working-directory: t1-intents
+        run: |
+          node --check t1f-successor-attempt-hold.ci.mjs
+          node t1f-successor-attempt-hold.ci.mjs
