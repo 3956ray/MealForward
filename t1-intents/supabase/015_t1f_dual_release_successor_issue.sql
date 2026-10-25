@@ -243,6 +243,8 @@ BEGIN
   OR parent.issuer_op_id=NEW.operation_id
   OR parent.issuer_tx_hash IS NOT NULL OR parent.receipt_block IS NOT NULL
   OR slot.stage<>'REVIEW_HOLD' OR slot.successor_operation_id IS NOT NULL
+  OR approval.stage IS DISTINCT FROM 'RELEASED_FOR_ONE_ISSUE'
+  OR approval.may_release_to_wallet IS DISTINCT FROM true
   OR NEW.voucher_id IS DISTINCT FROM parent.voucher_id
   OR NEW.operation_id IS DISTINCT FROM approval.candidate_op_id
   OR NEW.issuer_nonce IS DISTINCT FROM approval.candidate_issuer_nonce
