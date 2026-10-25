@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      EXPECT_PHASE4_PROOF_ENABLED: "false"
+      EXPECT_PHASE4_PROOF_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
