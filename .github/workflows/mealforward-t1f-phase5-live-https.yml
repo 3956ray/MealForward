@@ -1,0 +1,37 @@
+name: MealForward T1-F Phase5 real typed EIP712 practice HTTPS (NO RELEASE)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-phase5-release-hold-hardening-20261025
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phase5-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXPECT_PHASE5_TYPED_PRACTICE: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check exact practice-only source and public smoke syntax
+        working-directory: t1-intents
+        run: |
+          node --check t1f-phase5-live-smoke.mjs
+          node --check t1f-phase5-typed-practice.mjs
+          node --check public/t1f-phase5.mjs
+          for source in t1f-phase5-typed-practice.mjs public/t1f-phase5.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|privateKeyToAccount' "$source"; then
+              echo T1F_PHASE5_SENDER_FORBIDDEN
+              exit 1
+            fi
+          done
+      - name: Actual public HTTPS stage, old T1E/Phase4 and negative financial gates
+        working-directory: t1-intents
+        run: node t1f-phase5-live-smoke.mjs
