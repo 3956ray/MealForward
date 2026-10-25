@@ -1,6 +1,6 @@
 /* T1-F Phase4: only ephemeral SIWE EIP-191 wallet possession proof.
  * Never ask for EIP-712 recovery release, approve(), or issue().
- * No localStorage, user secret persistence, wallet-sending method or session.
+ * No browser persistence, secrets, transaction methods or sessions.
  */
 const EXPECTED=Object.freeze({
  owner:'0xc4f8a468f10d5f98dcff3282516125e97f26433b',
