@@ -6,6 +6,17 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-25 Phase 3 安全审查新发现：015 REVIEW_HOLD SQL 权限门禁缺失 — 必须阻止上线
+
+**重要：此节在 Phase4 真人 OWNER/DONOR EIP-191 两项 PASS 后新增，Phase4 仍已通过，但 Phase3 EIP-712 正式恢复仍不允许启用。** 最新代码审阅发现 `t1-intents/supabase/015_t1f_dual_release_successor_issue.sql` 的 `successor_issue_releases.stage` 被约束成 `HUMAN_REVIEW_HOLD`，`may_release_to_wallet=false`，但是创建独立 `successor_issue_operations` 的 `successor_operation_guard()` 只校验 Release 关联关系、参数/有效期、原 Claim 等，没有显式要求已通过**另一独立的正式放行状态**。现有 Phase3 一次性 PG17 集成测试在 HOLD 下插入了一条后续 Operation 并报告 PASS；**这证明测试覆盖的不是完整的安全放行门禁**，不能作为发布批准。
+
+- **风险级别：真实数据库目前未暴露，但未来上线阻塞。** 当前 Supabase 013/014/015 未安装、运行角色未获 015 INSERT/UPDATE 授权，真实资金/Claim 未因这个源码缺口改变。一旦未来误授予 INSERT 权限或引入有缺陷的服务，数据库 HOLD 设计就未在操作行插入阶段再次强制验证。
+- **待独立代码评审与修复：** 先在独立开发分支严格修复 015 的 successor INSERT fail-closed gate，使 `HUMAN_REVIEW_HOLD` 本身绝无后续交易授权；未来可能新增的 Release 状态与权限必须通过独立审批及全套签名/Nonce/Receipt 检查引入。更新 PG17 测试：在 015 仅有 HOLD 的表结构上，**尝试创建后续 Operation 必须拒绝**，且原 Claim、Review/Slot、资助和旧事件保持字节级不变。原 Phase3 模拟完成 3 个新 Audit Event 的成功路径只有在真正定义并经过审查的后续版本中才是可解释的。
+- **工具执行边界：** 本轮尝试提交限制性 SQL 更新时，GitHub 代码变更操作被平台安全检查阻止，**没有改变源码 SQL 或绕过屏蔽执行**；源码仍存在该待审核缺口。已建立未改代码的隔离分支 `codex/mealforward-t1f-phase5-release-hold-hardening-20261025` 作为可能的后续审查入口，不应声称已有修复 PR/CI。
+- **直到修复 + 重新验证前不得做的事：** 不向真实 Supabase 应用 013/014/015，不开放继任 Issue API 或最小权限写入角色，不要求 Owner/Donor 签 EIP-712 恢复授权，更不能让 Issuer 调用任何继任 `issue()`。用户此前两次 EIP-191 钱包控制证明已经通过，**不需要重做**。
+- **仍然有效的事实：** 原 Testnet Fund=1、Claim=1、原 Issue Reserve=1，旧 `recipient_claims` 保持冻结 `ISSUE_UNKNOWN`；当前运行的 Role Proof 是无数据库、无交易能力的纯控制证明服务。此项新的安全审查发现不影响 Phase4 PASS。
+- **Handoff 强制规则：** 下一个 Agent 必须首先处理这条 HOLD 门禁及其隔离测试；不得拿此前 `PR #43 CI PASS` 或 `PR #44 Owner/Donor PASS` 作为新 Issue 交易已经获准的依据。本轮完成后更新根目录 `HANDOFF.md`。
+
 ## 2026-10-25 22:48（UTC+8）人类验收更新：Owner + Donor Phase 4 两项 SIWE 控制证明 PASS
 
 **当前最新人工事实**：用户在正式 Phase 4 [Owner／Donor 钱包控制证明](https://mealforward-t1e-role-proof-laodao.onrender.com/t1f-phase4.html) 页面完成了两次真实 EIP-191 SIWE 格式 `personal_sign`，并回传以下**脱敏验收文字**：
