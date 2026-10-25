@@ -1,0 +1,52 @@
+name: MealForward T1-F Phase4 Owner & Donor SIWE possession (NO RELEASE)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-phase4-owner-donor-proof-20261025
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  owner-donor-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require canonical HANDOFF at project root
+        run: |
+          test -s HANDOFF.md
+          grep -q '强制每轮交接更新规范' HANDOFF.md
+      - name: Install pinned test dependencies, no install scripts
+        working-directory: t1-intents
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Syntax check original and new isolated proof modules
+        working-directory: t1-intents
+        run: |
+          node --check t1f-phase4-proof.mjs
+          node --check t1e-role-proof-server.mjs
+          node --check t1f-phase4-proof.test.mjs
+          node --check public/t1f-phase4.mjs
+      - name: Real test EIP191 signatures and negative security HTTP gates
+        working-directory: t1-intents
+        run: |
+          node --test t1f-phase4-proof.test.mjs
+          node --test t1e-role-proof-server.test.mjs
+          node --test t1e-wallet-roles.test.mjs
+      - name: Ensure independent Role Proof never signs/approves/transfers or opens original financial operations
+        working-directory: t1-intents
+        run: |
+          for f in t1f-phase4-proof.mjs public/t1f-phase4.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|eth_signTypedData_v4|wallet_sendCalls|privateKeyToAccount|Wallet.fromPrivateKey|localStorage|sessionStorage' "$f"; then
+              echo T1F_PHASE4_PROOF_ONLY_SOURCE_VIOLATION
+              exit 1
+            fi
+          done
