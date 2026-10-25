@@ -1,0 +1,33 @@
+name: MealForward T1-F Phase4 real RoleProof HTTPS negative release gate
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-phase4-owner-donor-proof-20261025
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phase4-anonymous-https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXPECT_PHASE4_PROOF_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Ensure cloud gate sends no signatures or wallet transactions
+        working-directory: t1-intents
+        run: |
+          node --check t1f-phase4-live-smoke.mjs
+          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet.fromPrivateKey' t1f-phase4-live-smoke.mjs; then
+            echo PHASE4_LIVE_SMOKE_MUST_NOT_BROADCAST
+            exit 1
+          fi
+      - name: Actual Render external public HTTPS routes, strict no-funds and no DB
+        working-directory: t1-intents
+        run: node t1f-phase4-live-smoke.mjs
