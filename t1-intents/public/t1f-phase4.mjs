@@ -1,5 +1,5 @@
 /* T1-F Phase4: only ephemeral SIWE EIP-191 wallet possession proof.
- * Never ask for EIP-712 recovery release, approve(), or issue().
+ * Never ask for any recovery release, token authorization or Issue call.
  * No browser persistence, secrets, transaction methods or sessions.
  */
 const EXPECTED=Object.freeze({
