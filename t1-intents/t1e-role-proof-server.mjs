@@ -42,6 +42,24 @@ const json=(res,status,body,head=false)=>{
 const error=(status,code)=>Object.assign(Error(code),{status,code});
 const exact=(body,keys)=>body&&typeof body==='object'&&!Array.isArray(body)&&
  Object.keys(body).sort().join(',')===keys.slice().sort().join(',');
+export function safeT1FPhase4StaticQuery(path,search){
+ if(typeof path!=='string'||typeof search!=='string'||search.length>400)
+  return false;
+ if(!search)return true;
+ if(path==='/')return true;
+ if(path!=='/t1f-phase4.html')return false;
+ const entries=[...new URLSearchParams(search).entries()];
+ if(entries.length<1||entries.length>5)return false;
+ const allowed=new Set(['utm_source','utm_medium','utm_campaign',
+  'utm_content','utm_term']);
+ const keys=new Set();
+ for(const [key,value] of entries){
+  if(!allowed.has(key)||keys.has(key)||
+   !/^[A-Za-z0-9._~-]{1,80}$/.test(value))return false;
+  keys.add(key);
+ }
+ return true;
+}
 const originName=u=>new URL(u).host;
 export function proofWallet(role,address){
  if(!['issuer','recipient'].includes(role)||!HEX_ADDR.test(address||''))throw error(422,'ROLE_OR_ADDRESS_INVALID');
@@ -87,6 +105,8 @@ export function validateT1EProofConfig(env=process.env){
   'T1E_ROLE_PROOF_MUST_NOT_MUTATE');
  for(const key of [
   'T1E_AUTH_DB_URL','T1E_CLAIM_DB_URL',
+  'T1F_PHASE4_DB_URL','T1F_RELEASE_DB_URL',
+  'T1F_RELEASE_SIGNER_KEY','T1F_OWNER_PRIVATE_KEY',
   'T1E_SUPABASE_ADMIN_DSN','T1C_AUTH_DB_URL',
   'T1C_INTENT_DB_URL','T1C_SUPABASE_ADMIN_DSN'
  ])CHECK(!env[key],'T1E_ROLE_PROOF_DATABASE_SECRETS_FORBIDDEN');
@@ -143,7 +163,7 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
   const f=files.get(path);
   if(f&&(method==='GET'||method==='HEAD')){
    // Tracking params are discarded and never reflected into static HTML.
-   if((path!=='/'&&url.search)||url.search.length>400){
+   if(!safeT1FPhase4StaticQuery(path,url.search)){
     json(res,403,{error:'STATIC_QUERY_DENIED'});return;
    }
    res.writeHead(200,{...HEADERS,'Content-Type':f.type,'Content-Length':f.bytes.length});
