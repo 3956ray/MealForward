@@ -10,6 +10,7 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {getAddress,verifyMessage} from 'ethers';
+import {createPhase4Proof} from './t1f-phase4-proof.mjs';
 
 export const T1E_ORIGIN='https://mealforward-t1e-role-proof-laodao.onrender.com';
 export const AUTHORITY=Object.freeze({
@@ -70,6 +71,10 @@ export function challengeText({origin,role,wallet,id,nonce,issuedAt,expiresAt}){
 export function validateT1EProofConfig(env=process.env){
  const ci=env.GITHUB_ACTIONS==='true'&&env.T1E_ROLE_PROOF_CI==='ack-loopback-only';
  const origin=env.PUBLIC_ORIGIN,port=Number(env.PORT);
+ const phase4Flag=env.T1F_PHASE4_PROOF_ENABLED??'false';
+ CHECK(['false','true'].includes(phase4Flag),
+  'T1F_PHASE4_EXPLICIT_PROOF_FLAG_REQUIRED');
+ const phase4Enabled=phase4Flag==='true';
  CHECK(origin===T1E_ORIGIN||
   ci&&/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/.test(origin||''),
   'T1E_EXACT_ORIGIN_REQUIRED');
@@ -85,7 +90,7 @@ export function validateT1EProofConfig(env=process.env){
   'T1E_SUPABASE_ADMIN_DSN','T1C_AUTH_DB_URL',
   'T1C_INTENT_DB_URL','T1C_SUPABASE_ADMIN_DSN'
  ])CHECK(!env[key],'T1E_ROLE_PROOF_DATABASE_SECRETS_FORBIDDEN');
- return Object.freeze({origin,port,ci});
+ return Object.freeze({origin,port,ci,phase4Enabled});
 }
 async function readJson(req){
  if((req.headers['content-type']||'').split(';')[0].trim()!=='application/json')throw error(415,'JSON_REQUIRED');
@@ -104,12 +109,21 @@ async function readJson(req){
 export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Date.now()/1000)}={}){
  const cfg=validateT1EProofConfig(env);
  CHECK(typeof clock==='function','T1E_CLOCK_REQUIRED');
+ const fixtures=cfg.ci&&env.T1F_PHASE4_CI_ROLES==='ack-loopback-owner-donor'?
+  {owner:env.T1F_PHASE4_TEST_OWNER,donor:env.T1F_PHASE4_TEST_DONOR}:null;
+ const phase4=cfg.phase4Enabled?createPhase4Proof({
+  origin:cfg.origin,clock,testing:cfg.ci,roleFixtures:fixtures
+ }):null;
  const pageFiles=[
   ['/', 't1e-role-proof.html','text/html; charset=utf-8'],
   ['/t1e-role-proof.css','t1e-role-proof.css','text/css; charset=utf-8'],
   ['/t1e-role-proof.mjs','t1e-role-proof.mjs','text/javascript; charset=utf-8'],
   ['/t1e-wallet-roles.mjs','t1e-wallet-roles.mjs','text/javascript; charset=utf-8']
  ];
+ if(cfg.phase4Enabled)pageFiles.push(
+  ['/t1f-phase4.html','t1f-phase4.html','text/html; charset=utf-8'],
+  ['/t1f-phase4.mjs','t1f-phase4.mjs','text/javascript; charset=utf-8']
+ );
  const files=new Map(await Promise.all(pageFiles.map(async([url,file,type])=>
   [url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}])));
  const current=new Map(),maxPending=48;
@@ -138,6 +152,23 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
   if(url.search){json(res,403,{error:'QUERY_DENIED'});return}
   if(path==='/health'&&(method==='GET'||method==='HEAD')){
    json(res,200,{status:'T1E_ROLE_PROOF_ONLY_ALIVE',noDatabase:true,noFunds:true},method==='HEAD');return;
+  }
+  if(phase4&&path==='/v1/t1f/phase4/status'&&method==='GET'){
+   json(res,200,phase4.status());return;
+  }
+  if(phase4&&path==='/v1/t1f/phase4/challenge'&&method==='POST'){
+   return readJson(req).then(body=>json(res,200,phase4.challenge(body)))
+    .catch(err=>json(res,err.status||503,{
+     error:typeof err?.code==='string'&&/^T1F_PHASE4_[A-Z_]{4,90}$/.test(err.code)?
+      err.code:'T1F_PHASE4_UNAVAILABLE'
+    }));
+  }
+  if(phase4&&path==='/v1/t1f/phase4/verify'&&method==='POST'){
+   return readJson(req).then(body=>json(res,200,phase4.verify(body)))
+    .catch(err=>json(res,err.status||503,{
+     error:typeof err?.code==='string'&&/^T1F_PHASE4_[A-Z_]{4,90}$/.test(err.code)?
+      err.code:'T1F_PHASE4_UNAVAILABLE'
+    }));
   }
   if(path==='/v1/t1e/status'&&method==='GET'){
    json(res,200,{status:'T1E_ISSUER_RECIPIENT_WALLET_PROOF_READY',
@@ -198,7 +229,7 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
   server.listen(cfg.port,cfg.ci?'127.0.0.1':'0.0.0.0',resolve);
  });
  return Object.freeze({server,origin:cfg.origin,async close(){
-  await new Promise(resolve=>server.close(resolve));current.clear();
+  await new Promise(resolve=>server.close(resolve));current.clear();phase4?.close();
  }});
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
