@@ -49,9 +49,17 @@ jobs:
       - name: Ensure independent Role Proof never signs/approves/transfers or opens original financial operations
         working-directory: t1-intents
         run: |
-          for f in t1f-phase4-proof.mjs public/t1f-phase4.mjs t1f-phase5-typed-practice.mjs public/t1f-phase5.mjs; do
+          for f in t1f-phase4-proof.mjs public/t1f-phase4.mjs; do
             if grep -E 'eth_sendTransaction|eth_sendRawTransaction|eth_signTypedData_v4|wallet_sendCalls|privateKeyToAccount|Wallet.fromPrivateKey|localStorage|sessionStorage' "$f"; then
-              echo T1F_PHASE4_PROOF_ONLY_SOURCE_VIOLATION
+              echo PHASE4_EIP191_ONLY_SOURCE_VIOLATION
+              exit 1
+            fi
+          done
+          # EIP-712 practice REQUIRES eth_signTypedData_v4 on user click.
+          # Unlike real Recovery Release, it must never send chain writes.
+          for f in t1f-phase5-typed-practice.mjs public/t1f-phase5.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|privateKeyToAccount|Wallet.fromPrivateKey|localStorage|sessionStorage' "$f"; then
+              echo PHASE5_EIP712_PRACTICE_CHAIN_SENDER_VIOLATION
               exit 1
             fi
           done
