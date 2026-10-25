@@ -443,86 +443,37 @@ try{
   successorId,T1F_FIRST_CLAIM,attemptId,releaseId,
   escrow,voucherId,FIXED.issuerAuthority,phase3Op,9,issueDeadline,issueHash
  ];
- await c.query(opInsert,successorArgs);
- assert.deepEqual((await c.query(
-  'SELECT event_type FROM mf_t1e.successor_issue_events ORDER BY event_id'
- )).rows.map(x=>x.event_type),['ISSUE_RESERVED']);
- const queued=(await c.query(
-  'SELECT stage,revision,issuer_nonce,operation_id,tx_hash '+
-  'FROM mf_t1e.successor_issue_operations WHERE successor_id=$1::uuid',
-  [successorId]
+ // 015 HUMAN_REVIEW_HOLD cannot authorize any successor transaction,
+ // even for the synthetic PG17 administrator who inserted the approval.
+ await mustFail(()=>c.query(opInsert,successorArgs),'P0001');
+ const held=(await c.query(
+  'SELECT stage,may_release_to_wallet,may_broadcast_by_server,'+
+  'approved_for_settlement FROM mf_t1e.successor_issue_releases '+
+  'WHERE release_id=$1::uuid',[releaseId]
  )).rows[0];
- assert.equal(queued.stage,'ISSUE_UNKNOWN');
- assert.equal(queued.revision,'0');
- assert.equal(queued.issuer_nonce,'9');
- assert.equal(queued.operation_id,phase3Op);
- assert.equal(queued.tx_hash,null);
- await mustFail(()=>c.query(opInsert,[
-  randomUUID(),...successorArgs.slice(1)
- ]),'23505');
- await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET operation_id=$2,revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId,'0x'+'f'.repeat(64)]),'P0001');
- await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET issuer_nonce=10,revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId]),'P0001');
- await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET issuer_issue_deadline=$2,revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId,issueDeadline+10]),'P0001');
- await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET stage='ISSUED',revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId]),'P0001');
- const tx='0x'+'9'.repeat(64);
- await c.query(
-  "UPDATE mf_t1e.successor_issue_operations SET "+
-  "stage='ISSUE_HASH_BOUND',tx_hash=$2,revision=revision+1 "+
-  "WHERE successor_id=$1::uuid",[successorId,tx]
- );
- await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET stage='ISSUE_HASH_BOUND',tx_hash=$2,revision=revision+1 "+
-  "WHERE successor_id=$1::uuid",[successorId,'0x'+'8'.repeat(64)]
- ),'P0001');
- await c.query(
-  "UPDATE mf_t1e.successor_issue_operations SET "+
-  "stage='ISSUED',receipt_block=$2,receipt_block_hash=$3,"+
-  "revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId,73645550,'0x'+'7'.repeat(64)]
- );
- const finalSucc=(await c.query(
-  "SELECT stage,revision,tx_hash,receipt_block,receipt_block_hash "+
-  "FROM mf_t1e.successor_issue_operations WHERE successor_id=$1::uuid",
-  [successorId]
- )).rows[0];
- assert.deepEqual(finalSucc,{
-  stage:'ISSUED',revision:'2',tx_hash:tx,
-  receipt_block:'73645550',receipt_block_hash:'0x'+'7'.repeat(64)
+ assert.deepEqual(held,{
+  stage:'HUMAN_REVIEW_HOLD',may_release_to_wallet:false,
+  may_broadcast_by_server:false,approved_for_settlement:false
  });
- assert.deepEqual((await c.query(
-  'SELECT event_type FROM mf_t1e.successor_issue_events ORDER BY event_id'
- )).rows.map(x=>x.event_type),
- ['ISSUE_RESERVED','ISSUE_HASH_BOUND','ISSUED_CONFIRMED']);
  await mustFail(()=>c.query(
-  "UPDATE mf_t1e.successor_issue_operations "+
-  "SET stage='BLOCKED',revision=revision+1 WHERE successor_id=$1::uuid",
-  [successorId]),'P0001');
+  "UPDATE mf_t1e.successor_issue_releases "+
+  "SET stage='RELEASED_FOR_ONE_ISSUE' WHERE release_id=$1::uuid",
+  [releaseId]),'P0001');
  await mustFail(()=>c.query(
-  "DELETE FROM mf_t1e.successor_issue_operations"),'P0001');
+  "UPDATE mf_t1e.successor_issue_releases "+
+  "SET may_release_to_wallet=true WHERE release_id=$1::uuid",
+  [releaseId]),'P0001');
  await mustFail(()=>c.query(
-  'DELETE FROM mf_t1e.successor_issue_events'),'P0001');
- await mustFail(()=>c.query(
-  'TRUNCATE mf_t1e.successor_issue_events'),'P0001');
- // Foreign-key denial may run before our own TRUNCATE trigger.
- // Either PostgreSQL 0A000 or our explicit P0001 proves fail-closed.
- for(const table of ['successor_issue_operations','successor_issue_releases']){
-  await assert.rejects(()=>c.query('TRUNCATE mf_t1e.'+table),
-   e=>['P0001','0A000'].includes(e?.code),
-   'append-only foreign keys or trigger must reject TRUNCATE');
+  'DELETE FROM mf_t1e.successor_issue_releases'),'P0001');
+ for(const name of ['successor_issue_operations','successor_issue_events']){
+  assert.equal((await c.query(
+   'SELECT count(*)::int AS count FROM mf_t1e.'+name)).rows[0].count,0);
  }
+ assert.deepEqual((await c.query(
+  'SELECT stage,successor_operation_id,may_sign_or_broadcast '+
+  'FROM mf_t1e.issuer_issue_attempts')).rows,
+  [{stage:'REVIEW_HOLD',successor_operation_id:null,
+   may_sign_or_broadcast:false}]);
  const immutableOriginal=(await c.query(
   'SELECT stage,revision,issuer_op_id,issuer_tx_nonce,issuer_tx_data_hash,'+
   'issuer_issue_deadline,issuer_tx_hash FROM mf_t1e.recipient_claims '+
@@ -539,17 +490,14 @@ try{
   'SELECT stage FROM mf_t1e.issuer_issue_attempts'
  )).rows.map(x=>x.stage),['REVIEW_HOLD']);
  console.log(JSON.stringify({
-  status:'T1F_SOURCE_ONLY_PG17_DUAL_RELEASE_SUCCESSOR_015_PASS',
-  migrations:'009-015 exact',
-  realSupabaseModified:false,realIssuerWalletUsed:false,
-  onchainTransactionsSent:0,
-  ownerAndDonorSignatures:'fixture fingerprints only, not cryptographic approval',
+  status:'T1F_SOURCE_ONLY_PG17_HOLD_DENIES_SUCCESSOR_INSERT_PASS',
+  migrations:'009-015 exact',realSupabaseModified:false,
+  realIssuerWalletUsed:false,onchainTransactionsSent:0,
+  ownerAndDonorSignatures:'synthetic fingerprints are not approval',
   runtimeReleaseGrants:0,originalClaimStillIssueUnknown:true,
-  oldFundsAndConsentIntact:true,distinctSuccessorOpId:true,
-  successorOperationNonceImmutable:true,successorDeadlineImmutable:true,
-  hashBoundOnlyOnce:true,receiptAppendOnly:true,autoAuditEvents:3,
-  merchantSettlementEnabled:false,
-  preparedWalletTransactionOnLive:false
+  oldFundsAndConsentIntact:true,holdCannotAuthorizeIssue:true,
+  successorOperationRows:0,successorAuditRows:0,
+  merchantSettlementEnabled:false,preparedWalletTransactionOnLive:false
  }));
  console.log(JSON.stringify({
   status:'T1F_SUCCESSOR_PHASE2_014_DISPOSABLE_REVIEW_HOLD_PASS',
