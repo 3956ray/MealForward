@@ -6,6 +6,18 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-25 接续核验：Phase 4 已就绪，等待真人 Owner / Donor SIWE 控制证明
+
+- **最新实际状态：** 不需要新的自动部署或实库写入。Owner／Donor Phase4 控制证明网页 `https://mealforward-t1e-role-proof-laodao.onrender.com/t1f-phase4.html` 已可测试，使用原 Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b` 与原 Donor／Quote `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`，两只不同钱包，Monad Testnet ChainId 10143。**只做两次 SIWE 格式 EIP-191 `personal_sign` 钱包控制证明，不签 EIP-712 Recovery Release，不进行任何链上交易。**
+- **GitHub 源码：** [PR #44](https://github.com/3956ray/MealForward/pull/44) 开发分支 `codex/mealforward-t1f-phase4-owner-donor-proof-20261025`，核验前 HEAD `e35aa92f5c06175a226244da28ddf5b9b2d08788`；专用 Role Proof Render 发布分支 `codex/mealforward-t1e-issuer-original-tx-verifier-20261023`，核验前 HEAD `a332bc151ad500dcd3de416f0d2c960379bc6924`。Handoff 更新后 HEAD 会变化；下个 Agent 必须实时查分支 SHA，不要把文档 HEAD 当作部署 Commit。
+- **已部署版本：** Render LaoDao `srv-dbdeuft9fdbs73atbvh0`，`dep-dbf0ti9srm7s73bcm5j0` **Live**，实际应用 Commit **`c382884c0a22413acded671d2e2f292e7bd63aec`**，公开 URL 同上。服务分支准确为 `codex/mealforward-t1e-issuer-original-tx-verifier-20261023`，`autoDeploy=no`，运行日志 `T1E_ROLE_PROOF_ONLY_READY`、`noDatabaseConnected=true`、`noFinancialWrites=true`。该服务 Phase4 已开启，但依然**无 Supabase 凭据、无持久登录、无 EIP-712 双人批准、无 Fund/Issue/Settle**。
+- **最新与 HEAD 对齐的 CI：** [Phase4 公网 HTTPS #40201811694](https://github.com/3956ray/MealForward/actions/runs/40201811694) **PASS**，服务开启状态实际发出 **21 次 HTTP 请求**，返回 `T1F_PHASE4_OWNER_DONOR_PUBLIC_PROOF_NEGATIVE_PASS`，`nonceReservations=0`、`walletSignaturesCollected=0`、`onchainTransactions=0`、`liveRecoveryReleased=false`；[Phase4 Owner/Donor SIWE 回归 #40201811737](https://github.com/3956ray/MealForward/actions/runs/40201811737) **PASS**，原 Issuer/Recipient 兼容及接入协议另见本文件之前的 CI 链接。这些是合成签名与无 Session 匿名公网门禁，**不能替代真实 Owner/Donor 钱包操作**。
+- **数据库只读实况：** Supabase `ketfrukrcuosrqynnsay` 仍只有 001–012 已上线迁移；013/014/015 未部署（相关表 `to_regclass` 均不存在）。原 7 Test USDC 只有一笔 `FUNDED`，唯一 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 为 `ISSUE_UNKNOWN` revision2，原固定 Issuer Nonce 0、过期截止 `1792765625`、TxHash/Receipt 均 NULL，`ISSUE_RESERVED` 仍只有 1 条。Claim 发行与商家结算服务 `srv-dbdgstivcj2c73fnqcc0` 仍在原 `dep-dbdto63rjlhs738br1sg` Live；Phase4 没有触碰它。
+- **唯一未完成的人类验收：** 用户本人先在固定 Owner 钱包点击“本人 SIWE 控制证明”，页面应显示 Owner `PASS`；再切换固定 Donor 钱包单独签同类 EIP-191，页面应显示 Donor `PASS` 和 `2/2`。要求只回传页面脱敏结果、失败代码和账户切换情况。**不要**发送 Cookie、签名、私钥、助记词、口令；如用户不能控制原任一钱包，应立即停住，不能代选别的钱包。
+- **后续开发严格停点：** 真人两个 PASS 后才继续审查 EIP-712 恢复签署与独立授权服务。EIP-191 控制证明并非任何继任新 Issue 的授权。真实库 013–015 迁移、新角色凭据、新授权签名及真实 MetaMask `issue()` 必须分别审查并获新明确许可；禁止重置原 `ISSUE_UNKNOWN`、重用过期 nonce/op/deadline、重做 Fund 或开启商家 Lock/Report/Settle。原合约没有链上强制 Recipient Consent 和 180 秒 Settle 门槛，仍是安全阻塞。
+- **接手规则：** 任一新的 Agent 接手先查 `HANDOFF.md` 本段，核对真实 Render/Supabase/Actions，再等待真人控制证明反馈；每次开发、部署、人工验收后必须再更新根 `HANDOFF.md`。旧 Mac CP30 Journal `PREPARED #3560` 冻结且与这项云试点分离。
+
+
 ## 2026-10-25（UTC+8）最新：Phase 4 已在独立 Role Proof 云端上线，等待两位真人钱包验收
 
 **这是当前最高优先级的人工测试入口。** 已开发并上线原 Owner 与原 Donor 的**独立 SIWE 格式 EIP-191 钱包控制证明**，不是 Phase3 EIP-712 Recovery Release、不创建 Session/数据库记录、不能发新 Issue 或结算。旧 `recipient_claims.ISSUE_UNKNOWN` 的第一次过期预留仍保持冻结，所有旧 Fund、Nonce、Operation 和 CP30 Journal 均不变。后文 Phase 3「下一步要开发 Phase 4」是历史状态，以本段实时结果为准。
