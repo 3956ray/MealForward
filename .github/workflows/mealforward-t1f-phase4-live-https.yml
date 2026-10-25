@@ -24,10 +24,14 @@ jobs:
         working-directory: t1-intents
         run: |
           node --check t1f-phase4-live-smoke.mjs
-          if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet.fromPrivateKey' t1f-phase4-live-smoke.mjs; then
-            echo PHASE4_LIVE_SMOKE_MUST_NOT_BROADCAST
-            exit 1
-          fi
+          # The negative test intentionally *asserts* that wallet
+          # broadcaster primitives are absent. Inspect runtime source only.
+          for source in t1f-phase4-proof.mjs public/t1f-phase4.mjs; do
+            if grep -E 'eth_sendTransaction|eth_sendRawTransaction|privateKeyToAccount|Wallet.fromPrivateKey' "$source"; then
+              echo PHASE4_RUNTIME_MUST_NOT_BROADCAST
+              exit 1
+            fi
+          done
       - name: Actual Render external public HTTPS routes, strict no-funds and no DB
         working-directory: t1-intents
         run: node t1f-phase4-live-smoke.mjs
