@@ -6,6 +6,34 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-25 当前最新：Phase 5 EIP-712 PRACTICE 已上线，等待 Owner + Donor 本人新测试
+
+**这是全项目当前真人测试 Stop Point。** 用户此前已完成两只钱包的 **Phase 4 EIP-191 控制权 PASS**，不要重新要求那两次签名。本阶段不是恢复授权：在独立无数据库的 RoleProof 服务新增 EIP-712 **练习专用**挑战，原 Claim `ISSUE_UNKNOWN` 依旧冻结，永久禁止拿已过期的原 Issue 参数发交易。
+
+### Phase 5 安全修复 / 开发与源码 CI
+
+- 新开发：[Draft PR #45](https://github.com/3956ray/MealForward/pull/45)，工作分支 `codex/mealforward-t1f-phase5-release-hold-hardening-20261025`，base Phase4 [PR #44](https://github.com/3956ray/MealForward/pull/44)。代码涉及 `t1-intents/supabase/015_t1f_dual_release_successor_issue.sql`、`t1f-successor-issuer-ledger.mjs`、`t1f-successor-phase3.ci.mjs`：为 015 的 `HUMAN_REVIEW_HOLD` 添加明确禁止继任 Issue INSERT 的数据库触发器门禁，JS 源码镜像 fail-closed。015 本身没有放行状态，因此无论任何未来误授予的写权限，都不能仅凭 HOLD 创建第二次 Issue。真正放行必须先另写经过独立审查的 **016+ 迁移/权限规则**；不能直接把 015 当作已经获得正式授权。
+- 安全修复 CI：[Actions 40205800527](https://github.com/3956ray/MealForward/actions/runs/40205800527) **PASS**，在 127.0.0.1:5439 的独立 PostgreSQL17 运行 009–015，模拟管理员持有合成双人 fingerprint 后尝试创建继任 Issue 仍被拒绝；`T1F_SOURCE_ONLY_PG17_HOLD_DENIES_SUCCESSOR_INSERT_PASS`，`successorOperationRows=0`、`successorAuditRows=0`，原 Claim/Consent/Fund 不变。该测试表示 **HOLD 安全**，不表示新 Issue 能正常发行。
+- 新 `t1-intents/t1f-phase5-typed-practice.mjs` 与 `public/t1f-phase5.html`/`t1f-phase5.mjs`、HTTP/签名测试和外部 HTTPS 门禁：固定原 Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b` 和 Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`，每人单独随机 32 byte nonce、120s 时限与一次性消费，用 ethers `verifyTypedData` 核验真实 EIP-712 签名地址。限制 Origin/ChainID/钱包切换、错误角色、重放、过期和每分钟请求数；没有 Cookie/Session、没有数据库、没有写链 RPC。测试 `T1F_PHASE5_OWNER_TYPED_PRACTICE_PASS` / `T1F_PHASE5_DONOR_TYPED_PRACTICE_PASS` 仅在用户本人签名后出现。
+- **务必区别正式 Recovery Release**：Phase5 Domain 为 **`MealForward Phase5 Typed Wallet Practice` / version `0` / primary `PracticeControl`**，与真实 EIP712 Recovery 的 `MealForward T1F Recovery` / version `1` / `SuccessorIssueRelease` 完全不同，练习签名不能用于批准恢复、发券、资金或结算。
+- 开发/CI 实证：[Phase5 角色 HTTP 与模拟真实 EIP712 CI 40207373717](https://github.com/3956ray/MealForward/actions/runs/40207373717) **PASS**；[SQL 015 + 完整源码 PG17 回归 40207373725](https://github.com/3956ray/MealForward/actions/runs/40207373725) **PASS**。Phase 4 EIP-191 原功能同步通过。
+- 更详细技术、安全界限与用户测试步骤：`docs/CP31-T1F-PHASE5-TYPED-PRACTICE-AND-HOLD-HANDOFF-2026-10-25.md`（PR #45 分支）。本 Handoff 更新后 GitHub 分支 HEAD 会变化，要实时查询 exact SHA/CI；不能把文档更新误认为新的 Render 部署 Commit。
+
+### 真实云发布（只选择安全的无数据库 RoleProof 文件）
+
+- RoleProof 连接器 Render 工作区 LaoDao `tea-db7q3ou7bikc73bp2bt0`，服务 **`srv-dbdeuft9fdbs73atbvh0`**，本次**真实已 Live** Commit `7a5ee5e1f9d796e743f6b128e856f86473a2e856`；目前启用部署 **`dep-dbf2125g1s2s73e6r1u0`**（前一关闭阶段 `dep-dbf204m7bikc73bt2o8g`）。仅 RoleProof 服务 `T1F_PHASE5_TYPED_PRACTICE_ENABLED=true`；原 `T1F_PHASE4_PROOF_ENABLED=true` 仍正常、`T1E_DEPLOYMENT_STAGE=ROLE_PROOF_ONLY`；原服务保持 `noFinancialWrites=true,noDatabaseConnected=true`。**绝没有**在 Render 引入 PR #45 的 015 SQL、新发券 runtime 或数据库 Secret。
+- 正式 Phase5 入口：**https://mealforward-t1e-role-proof-laodao.onrender.com/t1f-phase5.html**。Phase4 原入口 `/t1f-phase4.html` 不需重测。新接口仅 `/v1/t1f/phase5/status`、`/challenge`、`/verify`，其他 `/release`、`/issue` 等仍禁用。
+- **真实启用阶段公网 CI**：[Actions 40207354606](https://github.com/3956ray/MealForward/actions/runs/40207354606) **PASS**，实际 21 次 HTTPS 请求，`T1F_PHASE5_TYPED_PRACTICE_PUBLIC_NEGATIVE_PASS`，`realWalletSignaturesCollected=0`、`dbWrites=0`、`onchainTransactions=0`、`recoveryApproved=false`；[RoleProof 功能回归 40207354573](https://github.com/3956ray/MealForward/actions/runs/40207354573) PASS、[Issuer/Recipient 兼容 40207354550](https://github.com/3956ray/MealForward/actions/runs/40207354550) PASS。关闭阶段部署后的 [Actions 40207044017 attempt 2](https://github.com/3956ray/MealForward/actions/runs/40207044017/attempts/2) PASS。
+- 回滚门槛：若新练习页面有异常，只在 `srv-dbdeuft9fdbs73atbvh0` 把 `T1F_PHASE5_TYPED_PRACTICE_ENABLED=false`，确认 Render 自动部署后 Phase5 URL 不可用而 Phase4 仍可用。原 RoleProof 代码备份分支 `codex/mealforward-roleproof-before-phase5-20261025` @ `49fdcd99af2d39ea726cf8f7c9dd111b53351a88`。不修改 Supabase、旧 CP30 或 Claim 服务。
+
+### 实库安全边界与下一步唯一人工测试
+
+- 实际 Supabase 项目 `ketfrukrcuosrqynnsay` **仍只应用至第 012 条迁移**。013 Review / 014 Slot / 015 Release 全部**未安装**；原 7 Test USDC 仅 1 条 `FUNDED`，1 Claim `ISSUE_UNKNOWN`、1 `ISSUE_RESERVED`，无真实继任 Issue、TxHash 或二次资助。原 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea`、原 Issuer Nonce0、已过期的 deadline1792765625 冻结。Supabase Security Advisor 0 lints。
+- Claim/Issuer 资金隔离 Render 服务 `srv-dbdgstivcj2c73fnqcc0` **仍旧 Live** `dep-dbdto63rjlhs738br1sg` @ `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`，此次没有碰它；旧 Mac CP30 Journal `PREPARED #3560` 未恢复/未重放。
+- **真人新测试**：Owner 本人用原 EOA 在 Monad10143 打开 Phase5 入口，只在 MetaMask 消息域/类型明确 **Practice**、purpose 写着 `PRACTICE ONLY - NO RECOVERY RELEASE, NO ISSUE, NO FUNDS` 时点击“本人 EIP-712 练习签名”，预期 OWNER PASS；随后 Donor 另一个 EOA 独立做一次，预期 DONOR PASS、`2/2`。只发页面的脱敏结果/错误，不提供原始签名、Cookie 或私钥。遇到真实 Recovery Release 域请停止签名并反馈。
+- **Phase5 通过仍不放行真实第二次 Issue**：之后仍需要单独审查 016+ 正式审批状态迁移/最小权限角色、完整双 EIP712 Recovery Release 与新 Issuer 交易安全流程。必须额外获得用户对实库 013–015/016+ 迁移、真钱包批准、合约 Testnet Issue 的独立明确许可。严禁重复 Fund/Claim/Consent、重置旧 `ISSUE_UNKNOWN`、广播过期旧 nonce/op/deadline、开放商家 Settle（原合约 180s Cooldown Issue #17 尚未解决）。
+- **用户固定要求：每轮开发/部署/验收/回退最后都必须更新根 `HANDOFF.md`，使另一 Agent 不用聊天也可接手**。接手请从这段开始，再看 PR #45、精确 CI、已部署 Commit 和实库快照。
+
 ## 2026-10-25 22:48（UTC+8）人类验收更新：Owner + Donor Phase 4 两项 SIWE 控制证明 PASS
 
 **当前最新人工事实**：用户在正式 Phase 4 [Owner／Donor 钱包控制证明](https://mealforward-t1e-role-proof-laodao.onrender.com/t1f-phase4.html) 页面完成了两次真实 EIP-191 SIWE 格式 `personal_sign`，并回传以下**脱敏验收文字**：
