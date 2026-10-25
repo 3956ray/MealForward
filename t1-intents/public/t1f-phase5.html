@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>留膳 | Phase5 EIP-712 练习签名</title>
+<link rel="stylesheet" href="/t1e-role-proof.css"></head>
+<body><div class="shell">
+<header class="topbar"><a class="wordmark" href="/"><span class="emblem">膳</span><span>MEALFORWARD<small>留膳 · Phase 5</small></span></a>
+<div class="stage">MONAD TESTNET · 10143</div></header>
+<main><section class="hero">
+<div class="intro"><div class="overline">TYPED SIGNATURE PRACTICE · NOT A RELEASE</div>
+<h1>练习结构化签名，<br><em>不代表批准发券。</em></h1>
+<p class="lead">Owner 和 Donor 的 EIP-191 控制证明已经通过。这一步仅验证 <strong>EIP-712 / MetaMask 结构化签名</strong>是否兼容。签名域使用 <code>MealForward Phase5 Typed Wallet Practice</code>，与真实的 Recovery Release 完全不同。</p>
+<div class="divider"></div>
+<div class="facts"><div><span>签名性质</span><strong>练习专用</strong><small>不能授权 Issue</small></div>
+<div><span>持久记录</span><strong>无</strong><small>不保存签名或 Session</small></div>
+<div><span>资金与合约</span><strong>不碰</strong><small>不转账、不结算</small></div></div></div>
+<aside class="aside"><div class="aside-top"><span class="index">T1-F / 05</span><span class="eyebrow">PRACTICE ONLY</span></div>
+<div class="art" aria-hidden="true"><div class="art-circle"><span>留</span><span>膳</span></div></div>
+<p>留一膳，待一人，是为善。</p></aside>
+</section>
+<section class="verification">
+<div class="section-heading"><div><span class="overline">NO EIP-712 RECOVERY AUTHORIZATION</span><h2>两位独立钱包的结构化签名测试</h2></div><span class="section-n">01 / 02</span></div>
+<p class="helper">两次签名都有全新随机 nonce，120 秒后自动过期，且只能使用一次。请核对 MetaMask 消息包含 <strong>PRACTICE ONLY</strong>；绝对不要在本页签署真正的恢复授权。</p>
+<div class="two-cards">
+<article class="panel" aria-labelledby="owner-title"><div class="panel-number">01 <span class="line"></span> ORIGINAL OWNER</div>
+<h3 id="owner-title">Owner · EIP-712 练习</h3>
+<p>必须使用原 StoreEscrow Owner 钱包。签名不会批准任何新的 Issue。</p>
+<div class="address"><small>固定 Owner</small><code>0xc4f8a468…e97f26433b</code></div>
+<div class="current-wallet"><small>MetaMask</small><code id="owner-wallet">尚未连接</code></div>
+<div class="recipient-actions"><button id="owner-switch" type="button" disabled>选择 Owner 钱包</button>
+<button id="owner-sign" class="primary" type="button" disabled>本人 EIP-712 练习签名</button></div>
+<div class="result" id="owner-result" role="status" aria-live="polite">等待安全服务核验。</div></article>
+<article class="panel" aria-labelledby="donor-title"><div class="panel-number">02 <span class="line"></span> ORIGINAL DONOR</div>
+<h3 id="donor-title">Donor · EIP-712 练习</h3>
+<p>必须使用原 Donor／Quote 钱包，不会重复支付 7 Test USDC。</p>
+<div class="address"><small>固定 Donor</small><code>0xcc5c1ce8…fc7282952</code></div>
+<div class="current-wallet"><small>MetaMask</small><code id="donor-wallet">尚未连接</code></div>
+<div class="recipient-actions"><button id="donor-switch" type="button" disabled>选择 Donor 钱包</button>
+<button id="donor-sign" class="secondary" type="button" disabled>本人 EIP-712 练习签名</button></div>
+<div class="result" id="donor-result" role="status" aria-live="polite">等待安全服务核验。</div></article>
+</div><div class="status-panel"><div class="status-left"><span class="dot"></span><span>独立无数据库练习服务</span></div>
+<span id="phase5-status" role="status" aria-live="polite">检查安全门禁…</span></div>
+</section>
+<section class="next"><div><span class="overline">HARD STOP · NO NEW ISSUE</span>
+<h2>两次 PASS 仍不是恢复授权。</h2>
+<p>真实发券恢复需另行批准 013–015 数据库迁移、安全审查、Owner／Donor 正式 EIP-712 Recovery Release，以及 Issuer 本人确认的一次新交易。本页的签名永远不能用于这些步骤。</p></div>
+<ol class="steps">
+<li><span>01</span><b>钱包控制权</b><small>Phase4 EIP-191：已验证</small></li>
+<li><span>02</span><b>结构化签名能力</b><small>Phase5：练习签名</small></li>
+<li><span>03</span><b>真实恢复批准和交易</b><small>未开放，须另行审查</small></li></ol></section>
+</main><footer><p>一膳之微，亦可为善。</p><p>NO STORAGE · NO FUNDS · NO ISSUE</p></footer>
+</div><script type="module" src="/t1f-phase5.mjs"></script></body></html>
