@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-t1f-phase4-owner-donor-proof-20261025
+      - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
   workflow_dispatch:
 permissions:
   contents: read
