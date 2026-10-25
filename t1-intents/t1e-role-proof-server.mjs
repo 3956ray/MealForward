@@ -11,6 +11,7 @@ import {readFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {getAddress,verifyMessage} from 'ethers';
 import {createPhase4Proof} from './t1f-phase4-proof.mjs';
+import {makePhase5TypedPractice} from './t1f-phase5-typed-practice.mjs';
 
 export const T1E_ORIGIN='https://mealforward-t1e-role-proof-laodao.onrender.com';
 export const AUTHORITY=Object.freeze({
@@ -47,7 +48,7 @@ export function safeT1FPhase4StaticQuery(path,search){
   return false;
  if(!search)return true;
  if(path==='/')return true;
- if(path!=='/t1f-phase4.html')return false;
+ if(!['/t1f-phase4.html','/t1f-phase5.html'].includes(path))return false;
  const entries=[...new URLSearchParams(search).entries()];
  if(entries.length<1||entries.length>5)return false;
  const allowed=new Set(['utm_source','utm_medium','utm_campaign',
@@ -93,6 +94,12 @@ export function validateT1EProofConfig(env=process.env){
  CHECK(['false','true'].includes(phase4Flag),
   'T1F_PHASE4_EXPLICIT_PROOF_FLAG_REQUIRED');
  const phase4Enabled=phase4Flag==='true';
+ const phase5Flag=env.T1F_PHASE5_TYPED_PRACTICE_ENABLED??'false';
+ CHECK(['false','true'].includes(phase5Flag),
+  'T1F_PHASE5_EXPLICIT_PRACTICE_FLAG_REQUIRED');
+ const phase5Enabled=phase5Flag==='true';
+ CHECK(!phase5Enabled||phase4Enabled,
+  'T1F_PHASE5_REQUIRES_ORIGINAL_PHASE4_ROLE_GATE');
  CHECK(origin===T1E_ORIGIN||
   ci&&/^http:\/\/127\.0\.0\.1:[0-9]{2,5}$/.test(origin||''),
   'T1E_EXACT_ORIGIN_REQUIRED');
@@ -107,10 +114,11 @@ export function validateT1EProofConfig(env=process.env){
   'T1E_AUTH_DB_URL','T1E_CLAIM_DB_URL',
   'T1F_PHASE4_DB_URL','T1F_RELEASE_DB_URL',
   'T1F_RELEASE_SIGNER_KEY','T1F_OWNER_PRIVATE_KEY',
+  'T1F_PHASE5_DB_URL','T1F_PHASE5_SIGNER_KEY',
   'T1E_SUPABASE_ADMIN_DSN','T1C_AUTH_DB_URL',
   'T1C_INTENT_DB_URL','T1C_SUPABASE_ADMIN_DSN'
  ])CHECK(!env[key],'T1E_ROLE_PROOF_DATABASE_SECRETS_FORBIDDEN');
- return Object.freeze({origin,port,ci,phase4Enabled});
+ return Object.freeze({origin,port,ci,phase4Enabled,phase5Enabled});
 }
 async function readJson(req){
  if((req.headers['content-type']||'').split(';')[0].trim()!=='application/json')throw error(415,'JSON_REQUIRED');
@@ -134,6 +142,9 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
  const phase4=cfg.phase4Enabled?createPhase4Proof({
   origin:cfg.origin,clock,testing:cfg.ci,roleFixtures:fixtures
  }):null;
+ const phase5=cfg.phase5Enabled?makePhase5TypedPractice({
+  origin:cfg.origin,clock,testing:cfg.ci,roleFixtures:fixtures
+ }):null;
  const pageFiles=[
   ['/', 't1e-role-proof.html','text/html; charset=utf-8'],
   ['/t1e-role-proof.css','t1e-role-proof.css','text/css; charset=utf-8'],
@@ -143,6 +154,10 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
  if(cfg.phase4Enabled)pageFiles.push(
   ['/t1f-phase4.html','t1f-phase4.html','text/html; charset=utf-8'],
   ['/t1f-phase4.mjs','t1f-phase4.mjs','text/javascript; charset=utf-8']
+ );
+ if(cfg.phase5Enabled)pageFiles.push(
+  ['/t1f-phase5.html','t1f-phase5.html','text/html; charset=utf-8'],
+  ['/t1f-phase5.mjs','t1f-phase5.mjs','text/javascript; charset=utf-8']
  );
  const files=new Map(await Promise.all(pageFiles.map(async([url,file,type])=>
   [url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}])));
@@ -188,6 +203,23 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
     .catch(err=>json(res,err.status||503,{
      error:typeof err?.code==='string'&&/^T1F_PHASE4_[A-Z_]{4,90}$/.test(err.code)?
       err.code:'T1F_PHASE4_UNAVAILABLE'
+    }));
+  }
+  if(phase5&&path==='/v1/t1f/phase5/status'&&method==='GET'){
+   json(res,200,phase5.status());return;
+  }
+  if(phase5&&path==='/v1/t1f/phase5/challenge'&&method==='POST'){
+   return readJson(req).then(body=>json(res,200,phase5.challenge(body)))
+    .catch(err=>json(res,err.status||503,{
+     error:typeof err?.code==='string'&&/^T1F_PHASE5_[A-Z_]{4,90}$/.test(err.code)?
+      err.code:'T1F_PHASE5_UNAVAILABLE'
+    }));
+  }
+  if(phase5&&path==='/v1/t1f/phase5/verify'&&method==='POST'){
+   return readJson(req).then(body=>json(res,200,phase5.verify(body)))
+    .catch(err=>json(res,err.status||503,{
+     error:typeof err?.code==='string'&&/^T1F_PHASE5_[A-Z_]{4,90}$/.test(err.code)?
+      err.code:'T1F_PHASE5_UNAVAILABLE'
     }));
   }
   if(path==='/v1/t1e/status'&&method==='GET'){
@@ -249,7 +281,7 @@ export async function startT1ERoleProof({env=process.env,clock=()=>Math.floor(Da
   server.listen(cfg.port,cfg.ci?'127.0.0.1':'0.0.0.0',resolve);
  });
  return Object.freeze({server,origin:cfg.origin,async close(){
-  await new Promise(resolve=>server.close(resolve));current.clear();phase4?.close();
+  await new Promise(resolve=>server.close(resolve));current.clear();phase4?.close();phase5?.close();
  }});
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
