@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/mealforward-t1f-phase3-dual-approved-issue-20261024
+      - codex/mealforward-t1f-phase5-release-hold-hardening-20261025
   workflow_dispatch:
 permissions:
   contents: read
@@ -79,7 +80,7 @@ jobs:
       - name: Install pinned PG and ABI libraries
         working-directory: t1-intents
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Exact 009-015 migrations, independent successor receipt and append-only history
+      - name: Exact 009-015 migrations; HOLD denies successor operations and tx
         working-directory: t1-intents
         run: |
           node --check t1f-successor-phase3.ci.mjs

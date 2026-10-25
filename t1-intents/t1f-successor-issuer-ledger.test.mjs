@@ -106,5 +106,7 @@ test('source contains no backend broadcaster or legacy Claim mutation',()=>{
  ])assert.equal(s.includes(val),false,val);
  assert.match(s,/FOR UPDATE/);
  assert.match(s,/firstHumanWalletSendOnly:true/);
+ assert.match(s,/T1F_PHASE5_SUCCESSOR_RELEASE_HOLD_NOT_CLEARED/);
+ assert.match(s,/release\.rows\[0\]\?\.stage==='RELEASED_FOR_ONE_ISSUE'/);
  assert.match(s,/recoveryOnly:true,issueTransaction:undefined/);
 });

@@ -213,11 +213,19 @@ export function makeSuccessorIssuerLedger({pool,rpc,clock=()=>Math.floor(Date.no
      proof.ownerSignatureFingerprint,proof.donorSignatureFingerprint,
      'T1F_EIP712_TWO_INDEPENDENT_EOA_V1'
     ];
-    await c.query(
+    const release=await c.query(
      'INSERT INTO mf_t1e.successor_issue_releases(release_id,'+RELEASE_COLS+
-      ') VALUES($1::uuid,'+Array.from({length:16},(_,i)=>'$'+(i+2)).join(',')+')',
+      ') VALUES($1::uuid,'+Array.from({length:16},(_,i)=>'$'+(i+2)).join(',')+')'+
+      ' RETURNING stage,may_release_to_wallet,may_broadcast_by_server',
      [releaseId,...values]
     );
+    // 015 only permits HUMAN_REVIEW_HOLD. Future separately approved
+    // migration must define the release state before any transaction.
+    ok(release.rowCount===1&&
+     release.rows[0]?.stage==='RELEASED_FOR_ONE_ISSUE'&&
+     release.rows[0]?.may_release_to_wallet===true&&
+     release.rows[0]?.may_broadcast_by_server===false,
+     'T1F_PHASE5_SUCCESSOR_RELEASE_HOLD_NOT_CLEARED');
     const inserted=await c.query(
      'INSERT INTO mf_t1e.successor_issue_operations('+
       'successor_id,claim_id,slot_id,release_id,chain_id,'+
