@@ -92,7 +92,7 @@ export function makeApprovalService({store,rpc=makeApprovalPublicRpc(),clock=()=
     const manifest=buildSuccessorReleaseManifest({...freshContext,chain,walletObservation:walletObservation.value,nonceDomain:'0x'+randomBytes(32).toString('hex'),candidateOperationId:'0x'+randomBytes(32).toString('hex'),candidateNonce:'0',candidateDeadline:createdAt+480,approvalExpiresAt:createdAt+300,now:createdAt});
     bounded.check();
     // No Promise.race around writes. A transport loss is ambiguous: recover by read only.
-    const row=await store.create({roundId:randomUUID(),manifest,createdAt,observedBlockTime:chain.observedBlockTime});
+    const row=await store.create({roundId:randomUUID(),manifest,createdAt,observedBlockTime:chain.observedBlockTime,beforeExecute:bounded.check});
     return await dto(row);
    }finally{bounded.close()}
   }),
@@ -113,7 +113,7 @@ export function makeApprovalService({store,rpc=makeApprovalPublicRpc(),clock=()=
     check(assessExpiredOriginalReview({...freshContext,chain,walletObservation:WALLET_OBSERVATION,now:clock()}).status==='T1F_REVIEWABLE_OFFLINE_SECURITY_REVIEW_ONLY','CONTEXT_CHANGED');
     bounded.check();
     active();
-    const accepted=await store.record({roundId:row.round_id,digest:manifest.digest,...attestation});
+    const accepted=await store.record({roundId:row.round_id,digest:manifest.digest,...attestation,beforeExecute:()=>{active();bounded.check()}});
     return await dto(accepted);
    }finally{bounded.close()}
   })

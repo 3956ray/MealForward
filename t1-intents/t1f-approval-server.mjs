@@ -57,10 +57,12 @@ export async function verifyApprovalRuntime(pool){
  */
 export function approvalCapabilityPool(raw){
  return Object.freeze({
-  async query(sql,args){
+  async query(sql,args,{beforeExecute}={}){
    const client=await raw.connect();let failed=true;
    try{
     await client.query("SET ROLE mf_t1f_approval_runtime; SET statement_timeout='5s'; SET lock_timeout='2s'");
+    // Synchronous guard runs after every awaited acquisition/setup step.
+    beforeExecute?.();
     const result=await client.query(sql,args);failed=false;return result;
    }finally{client.release(failed)}
   },

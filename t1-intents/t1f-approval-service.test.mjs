@@ -75,3 +75,15 @@ test('bounded read cancelled while in flight rejects its delayed continuation',a
  const bounded=boundedApprovalRpc({rpc:{send:async()=>pending},budgetMs:100,signal:abort.signal});
  try{const work=bounded.rpc.send('eth_chainId',[]);await new Promise(r=>setTimeout(r,0));abort.abort();release('0x279f');await assert.rejects(()=>work,/TIMEOUT/)}finally{bounded.close()}
 });
+
+test('operator passes a live deadline guard to the persistence boundary',async()=>{
+ const {approvalRpcFixture}=await import('./t1f-approval-test-fixture.mjs');const fake=await approvalRpcFixture(),f=memory();let writes=0;
+ f.store.create=async p=>{
+  assert.equal(typeof p.beforeExecute,'function');
+  await new Promise(r=>setTimeout(r,150));
+  p.beforeExecute();writes++;return f.row;
+ };
+ const service=makeApprovalService({store:f.store,rpc:fake.rpc,clock:()=>NOW,rpcBudgetMs:100});
+ await assert.rejects(()=>service.createRound({walletObservation:{value:'OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE',observedAt:NOW}}),/RPC_TIMEOUT/);
+ assert.equal(writes,0);
+});

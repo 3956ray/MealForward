@@ -99,3 +99,15 @@ test('failed runtime selection destroys the client before any application query'
  await assert.rejects(()=>pool.query('SELECT forbidden_application_query'),/SET denied/);
  assert.equal(queries.length,1);assert.deepEqual(releases,[true]);
 });
+
+test('abort during acquisition or capability setup prevents application SQL and destroys acquired client',async()=>{
+ for(const waitAt of ['acquire','setup']){
+  let unblock,entered;const waiting=new Promise(r=>entered=r),gate=new Promise(r=>unblock=r);
+  const abort=new AbortController(),queries=[],releases=[];
+  const client={query:async sql=>{queries.push(sql);if(waitAt==='setup'){entered();await gate;}return {rows:[]};},release:x=>releases.push(x)};
+  const pool=approvalCapabilityPool({connect:async()=>{if(waitAt==='acquire'){entered();await gate;}return client;},end:async()=>{}});
+  const work=pool.query('SELECT durable_write',[],{beforeExecute:()=>{if(abort.signal.aborted)throw Error('cancelled before SQL')}});
+  await waiting;abort.abort();unblock();await assert.rejects(()=>work,/cancelled before SQL/);
+  assert.equal(queries.length,1);assert.match(queries[0],/^SET ROLE/);assert.deepEqual(releases,[true]);
+ }
+});
