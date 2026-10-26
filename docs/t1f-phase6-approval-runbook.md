@@ -2,6 +2,8 @@
 
 Status: activated with explicit user approval on2026-10-26. Supabase013–016 and the dedicated login are live; the separate Render collector runs commit `953fea650834aa475520819f0eec5763df54fc24`. Public31-check smoke and source CI207 tests/15 PG groups passed. Current state is **NO_ROUND · NO RELEASE**; real MetaMask acceptance remains pending after a reported connection-feedback defect. The corrected UI passed real Chrome synthetic-wallet desktop/390px checks; this is not real wallet acceptance. Phase5 Owner/Donor practice result is **USER-REPORTED 2/2 PASS · NO RELEASE**; it is not a formal Recovery signature. Exact resource IDs and evidence are in root HANDOFF.
 
+**Current human gate (2026-10-26 16:00 UTC+8):** MetaMask dapp scanning returns BLOCK for this hostname. Pause formal signing/round creation while the domain classification is reviewed. The user independently continued a warning, after which Owner connection correctly rejected the selected Donor account; this is not approval to ignore future warnings. See HANDOFF and the prepared, unsent domain-review request.
+
 ## Reviewable boundary
 
 The collector persists an immutable manifest and one verified fingerprint for each fixed role. Its private schema is `mf_t1f_recovery`; capability roles are `mf_t1f_approval_owner` and `mf_t1f_approval_runtime`, both NOLOGIN. The separate NOINHERIT login has only runtime SET membership. SQL trusts the reviewed collector to verify EIP-712. A fingerprint is an attestation, not independently verifiable cryptographic proof in PostgreSQL.
