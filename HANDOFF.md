@@ -8,6 +8,21 @@
 
 
 
+
+## 2026-10-27 05:30 Phase7 源码与隔离验收完成，等待线上执行权限激活确认
+
+用户已授权自主开发到本人测试。本轮完成受控恢复执行：017 原子消费批准并只预留一个 successor；独立执行权限及现有 Issuer SIWE 登录接入；一次性 prepare/send、原哈希绑定和链上回执核验；批准消费后的历史展示；刷新后从钱包记录找回原交易哈希。原 Claim 始终 ISSUE_UNKNOWN，不自动广播，不开放商家结算。**这是源码与隔离测试完成，Phase7 尚未上线启用，也未发券。**
+
+- **确切源码**：`a527feff5e5ff89a5dd4c83964bd5713e8288829`，仓库 `3956ray/MealForward`，分支 `codex/mealforward-t1f-phase6-release-review-20261026`，继续使用 [Draft PR #47](https://github.com/3956ray/MealForward/pull/47)。后续纯交接文档提交使用[skip ci]，不冒称文档HEAD另跑应用CI。
+- **验收**：[CI 40404621279](https://github.com/3956ray/MealForward/actions/runs/40404621279) 对该源码六个作业全部SUCCESS：311项测试（61钱包客户端、221非PG、16旧core、13旧HTTP）及42组隔离PG17.11检查（18收集、16执行、8真实HTTP+PG）。类型检查、重建逐字节一致通过。三任务独审、整阶段审查及最终修复范围复审全部PASS，无遗留重要发现。修复了函数重载权限漏检、HTTP超时无响应、登录前错误误锁恢复、刷新丢失哈希后无恢复入口、能力日志漏报。
+- **浏览器**：最终a527fef本地真实gateway/service＋合成钱包走通“发送→绑定故障→刷新→重新登录→无关哈希拒绝→原哈希恢复→canonical ISSUED”；原UNKNOWN不变，发送始终禁止重试。390px下client/scroll=375/375，无console error/warn。测试服务/标签页已关闭、视口复原。该结果不是用户真实钱包或公网交易验收。
+- **线上实况（本轮收尾只读复核）**：Supabase `ketfrukrcuosrqynnsay` PG17.11，轮次1、批准2，successor release/operation/event=0/0/0，尚无017执行schema/角色。原六表指纹 `c0dd34d6df6ad76a43f79bc435cd0b4f` 前后相同（含review/slot，口径不同于旧四表01556b指纹）。Collector `srv-dbfflq5g1s2s73fl05fg` 仍live `6f4710c` / `dep-dbfnnc59el5s73fumd50`；Claim/SIWE `srv-dbdgstivcj2c73fnqcc0` 仍live `c8723c2` / `dep-dbdto63rjlhs738br1sg`。本轮未迁移、授权登录角色、改环境、部署、新建正式轮次、预留真实successor或交易。
+- **迁移与复现**：逻辑017路径 `t1-intents/supabase/migrations/20261026201810_t1f_controlled_successor_execution.sql`；SHA256 `9c9f5abf9980e4164d6e526f6824788e150cfb51b668615c4a8ade7875092100`。固定源码的[验证记录](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase7-verification.md)与[具体激活包/回退步骤](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase7-activation-review.md)是下一步入口。
+
+**下一步需要确认具体的线上权限变化**：按激活包部署消费感知collector与默认关闭的Claim源码，应用已审查017，配置只有执行runtime成员资格的专用登录，再启用 `T1F_SUCCESSOR_EXECUTION_ENABLED` 并关闭旧original Issue入口；完成权限/公网门禁后，请本人先测试Issuer登录与读取，再依据新鲜钱包活动报告创建新轮次，让Owner/Donor批准、Issuer本人明确准备并发送一次。未来入口为 `https://mealforward-t1e-claim-laodao.onrender.com/t1f-execution.html`，目前尚未部署，勿把现有页面当作Phase7验收入口。Superpowers SDD把security-sensitive action列为暂停确认点；新增执行能力属于该点，源码开发的自主授权未被当作真实执行授权。
+
+已通过的 `79e1b5e5-ba34-4387-805b-e2eb7d00300d` 双签收集测试保持PASS，但批准已过期不可复用；不要求重复已完成的历史验收。域名风险不再作为阻塞，不向MetaMask外部提交材料。回退只关闭执行入口/权限，保留全部回执和操作；有预留后仅恢复同一操作，不删除、重置、重新预留或发送。旧CP30与商家结算#17保持原边界。
+
 ## 2026-10-27 04:07 正式Recovery双钱包测试通过：用户回报＋实库2/2核验 · NO RELEASE
 
 用户回传Owner已记录与Donor最终COLLECTED_NO_RELEASE页面，均为构建wallet-v2-517b10f150aa4b8939162ef6939d22369a25c529c2159432c78b8f6a84aafcb2。Agent只读实库独立确认同一轮次`79e1b5e5-ba34-4387-805b-e2eb7d00300d`、同一摘要`0x83c97ca5e3cb5ffebc934406773ef4246159a7e1117f059ad470515f8473ba9c`的两个固定角色均已由服务验证记录：Owner于04:06:26、Donor于04:06:55（UTC+8），均早于04:08:05截止。审计事件共3条（轮次＋两角色）。
