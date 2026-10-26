@@ -1,6 +1,6 @@
 # Phase6 live activation proposal — NO RELEASE
 
-Prepared after the user reported no Issuer wallet activity on 2026-10-26. This document is a reviewable proposal, not a record of activation. No real migration, new login, service or approval round has been created.
+The user explicitly approved this proposal on2026-10-26 and asked to continue until human testing. The staged database and dedicated-login activation described below has now been executed. The new Render service is live at https://mealforward-t1f-approval-laodao.onrender.com, running `cb974115c3bf5198499394bf75ad455e47bdc2cc`; actual31-check public smoke, CI200 tests/15 PG groups and independent database audit passed. Public browser display and formal wallet signatures remain untested. No approval round has been created. See root HANDOFF for exact migration/deployment/test evidence. Historical proposal wording below describes the approved sequence and its pre-activation baseline; it must not be mistaken for current state or rerun.
 
 ## Live preflight findings fixed before activation
 
@@ -37,7 +37,7 @@ These findings were discovered before any live write. The non-superuser migratio
 6. Deploy the separate service at the pinned reviewed source. Verify actual deployed commit, static asset bytes, health, same-origin session/state, cross-origin/body/cookie/forbidden-route rejection, and zero transaction routes. Initial state must be NO_ROUND. Browser desktop/mobile and real public availability are separate checks from the completed source CI.
 7. Only when all prior checks pass, obtain a **new** wallet observation immediately before creating the300-second round; the operator requires age≤120seconds. The present report is historical once stale. Then give the user the verified URL and exact Owner/Donor signing steps. No automatic signature or round rollover.
 
-## Reviewed record insertion templates (not executed)
+## Reviewed record insertion templates (executed with verified live values)
 
 Execute these only after the corresponding migration and fresh read-only evidence checks. Bind parameters using the private operator client, never concatenate browser/user strings. Require exactly one RETURNING row, then read back every invariant before the next migration. A lost response is ambiguous: inspect existing unique claim/review/slot state instead of generating another ID or retrying automatically.
 
@@ -79,7 +79,7 @@ RETURNING attempt_id,stage,successor_operation_id,successor_nonce,
  may_sign_or_broadcast,may_mark_issued,legacy_claim_rewrite_allowed;
 ```
 
-Private login provisioning must use `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`; grant only `mf_t1f_approval_runtime` with `ADMIN FALSE, INHERIT FALSE, SET TRUE`. Credentials must be generated/injected through a private procedure that does not return them into connector transcripts. If that procedure is unavailable, stop at the completed schema/HOLD stage and request the user's direct secret entry; do not use a shared elevated login as a shortcut. No credential has been generated or requested in this proposal.
+Private login provisioning must use `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`; grant only `mf_t1f_approval_runtime` with `ADMIN FALSE, INHERIT FALSE, SET TRUE`. Credentials must be generated/injected through a private procedure that does not return them into connector transcripts. If that procedure is unavailable, stop at the completed schema/HOLD stage and request the user's direct secret entry; do not use a shared elevated login as a shortcut. The dedicated credential has since been generated through an ephemeral private provisioning flow, delivered only to its authorized Supabase/Render configuration, and retained in an owner-only local operator file outside Git. Values were not displayed or checked into source. Only the nonsecret role creation is in migration history; password configuration was separate.
 
 ## Evidence collected before this proposal
 
@@ -91,3 +91,20 @@ Private login provisioning must use `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOC
 ## Failure handling
 
 Stop only the new service or revoke its new dedicated login if needed. Keep immutable review/slot/round/audit rows. No reset, delete, old-operation retry, release or merchant settlement. Actual Issue remains a separate future reviewed and human-confirmed transaction.
+
+## Dedicated identity activation (nonsecret migration record)
+
+Applied migration `20261026064853 mealforward_t1f_approval_dedicated_login_role_v1` created the role disabled, then a separate private account-configuration step set its credential and enabled LOGIN. This SQL contains no password:
+
+```sql
+BEGIN;
+CREATE ROLE mf_t1f_approval_login NOLOGIN NOINHERIT NOSUPERUSER
+ NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 4;
+GRANT mf_t1f_approval_runtime TO mf_t1f_approval_login
+ WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+COMMENT ON ROLE mf_t1f_approval_login IS
+ 'Dedicated Phase6 collector identity, runtime capability only; credential privately provisioned separately, NO RELEASE';
+COMMIT;
+```
+
+The actual session pooler ignores the startup `options` role field, unlike native PG. The deployed candidate therefore explicitly awaits fixed runtime SET ROLE and5s/2s time limits after every acquired connection, checks cancellation/deadline again immediately before a write, and discards clients on setup/query failure. Actual TLS login verification showed session_user=dedicated login, current_user=runtime, NO_ROUND. Private operator config is `/Users/mili/.mealforward-phase6-20261026/runtime.json` (directory0700, file0600). Never print or copy its contents into logs, GitHub or chat. Future operator commands must load it directly in-process, not place a DSN in shell arguments.

@@ -1,14 +1,14 @@
 # Phase6 Recovery approval collector — deployment and human gate
 
-Status: source-only development. No new cloud service or real database migration has been activated by this change. Phase5 Owner/Donor practice result is **USER-REPORTED 2/2 PASS · NO RELEASE**; it is not a formal Recovery signature.
+Status: activated with explicit user approval on2026-10-26. Supabase013–016 and the dedicated login are live; the separate Render collector runs commit `cb974115c3bf5198499394bf75ad455e47bdc2cc`. Public31-check smoke and source CI200 tests/15 PG groups passed. Current state is **NO_ROUND · NO RELEASE**; public browser rendering/wallet acceptance remains NOT_RUN because browser automation could not open the page. Phase5 Owner/Donor practice result is **USER-REPORTED 2/2 PASS · NO RELEASE**; it is not a formal Recovery signature. Exact resource IDs and evidence are in root HANDOFF.
 
 ## Reviewable boundary
 
-The collector persists an immutable manifest and one verified fingerprint for each fixed role. Its private schema is `mf_t1f_recovery`; capability roles are `mf_t1f_approval_owner` and `mf_t1f_approval_runtime`, both created NOLOGIN with no runtime membership activation. SQL trusts the reviewed collector to verify EIP-712. A fingerprint is an attestation, not independently verifiable cryptographic proof in PostgreSQL.
+The collector persists an immutable manifest and one verified fingerprint for each fixed role. Its private schema is `mf_t1f_recovery`; capability roles are `mf_t1f_approval_owner` and `mf_t1f_approval_runtime`, both NOLOGIN. The separate NOINHERIT login has only runtime SET membership. SQL trusts the reviewed collector to verify EIP-712. A fingerprint is an attestation, not independently verifiable cryptographic proof in PostgreSQL.
 
 `2/2` means two verified offchain approvals for that exact unexpired round. It never grants permission to issue, fund, settle, or prepare a wallet transaction. 015 stays `HUMAN_REVIEW_HOLD`; Phase6 does not insert a release or successor operation. All original Fund/Claim/Consent records remain untouched.
 
-## Before any live activation
+## Activation checklist (completed; historical baseline, do not rerun)
 
 1. Review the source PR, independent review and all CI results at the exact candidate commit. Do not merge this entire source branch into the existing curated Render release branch.
 2. Obtain explicit approval for the specific database/service activation. Existing developer authorization and practice PASS do not activate real migrations or formal signatures.
@@ -24,11 +24,13 @@ The collector persists an immutable manifest and one verified fingerprint for ea
 Build in `t1-intents`: `npm install --ignore-scripts --no-audit --no-fund --package-lock=false`.
 Start: `node t1f-approval-server.mjs`. Configure `T1F_APPROVAL_MODE=COLLECTION_NO_RELEASE`, `T1F_APPROVAL_ORIGIN` as the exact separate HTTPS origin, platform `PORT`, and private `T1F_APPROVAL_DB_URL`. The URL must use the dedicated `mf_t1f_approval_login.ketfrukrcuosrqynnsay` identity at the pinned Supabase session pooler; strict TLS and effective catalog privilege checks are mandatory. Never enable the local fixture flag in cloud. The service refuses legacy/admin credentials and overprivileged identities.
 
-After a new explicit Issuer wallet observation, create one round using `node t1f-approval-operator.mjs create --wallet-observation OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE --observed-at <actual-observation-epoch-seconds>`. The observation must be no older than 120 seconds; do not substitute the current time for an old report. A round lasts 300 seconds. If the command is uncertain, read current state before any further action.
+The session pooler ignores startup role options. The reviewed runtime therefore awaits fixed SET ROLE and5s/2s limits for every acquired connection, and checks cancellation/deadline again immediately before write SQL. Do not bypass its wrapper.
+
+Only after a new explicit Issuer wallet observation and human readiness, call `runApprovalOperator({args,env})` from `t1f-approval-operator.mjs`. Load `env` directly in-process with `JSON.parse(await readFile('/Users/mili/.mealforward-phase6-20261026/runtime.json','utf8'))`; do not print the config or put the DSN in shell arguments. `args` is `['create','--wallet-observation','OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE','--observed-at',String(actualObservationEpochSeconds)]`. Use the actual report timestamp, never the current time substituted for an old report. The observation must be no older than120seconds. A round lasts300seconds. Catch errors with a generic message, without dumping environment or raw connection errors. If creation is uncertain, use the same reviewed runtime to read `service.status()` before any further action; do not blindly retry.
 
 ## Formal signature test, only after activation checks
 
-The exact public URL and approved commit must be supplied after deployment; no unverified Phase6 URL is prescribed here.
+Verified public URL: **https://mealforward-t1f-approval-laodao.onrender.com**. It serves commit `cb974115c3bf5198499394bf75ad455e47bdc2cc`, Render deploy `dep-dbfflqtg1s2s73fl07m0`. Before a round exists, expect `NO_ROUND · 0/2 · NO RELEASE`; wallet connection is available but formal signing is disabled. On a cold free instance allow about1–2minutes for the page to load, then refresh once if needed. First confirm actual browser display and readiness before starting the five-minute round.
 
 1. Explicitly inspect the Issuer wallet activity and report the current observation before the operator creates a fresh round. Page loads and refreshes must never create a round. A failed/expired round cannot roll over automatically.
 2. Open the verified Phase6 page. Confirm it says **formal Recovery approval**, `MealForward T1F Recovery`, version `1`, `SuccessorIssueRelease`, Monad Testnet `10143`, and the fixed escrow `0xcf0c8827c8610eeff1ecbd9719e559d805fafe58`.
