@@ -98,6 +98,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  }
  async function refresh(){
   const generation=++apiGeneration;
+  const negativeEligible=uncertain&&!uncertain.pending?uncertain:null;
   apiAbort?.abort();apiAbort=new AbortController();
   validatedFresh=false;validationCode=null;
   backendPhase='loading';backendCode=null;backendProgress='正在读取服务状态';roundProgress='正在核对正式轮次';publish();
@@ -110,7 +111,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
     const fresh=validate(value,clock());
     state=fresh;scheduleExpiry();validatedFresh=true;roundProgress=fresh.round?'已核对正式轮次与摘要':'尚无正式轮次';
     if(uncertain&&roundKey(fresh)===uncertain.key){
-     if(fresh.roles[uncertain.role]||(fresh.status==='COLLECTING'&&!uncertain.pending))uncertain=null;
+     if(fresh.roles[uncertain.role]||(fresh.status==='COLLECTING'&&uncertain===negativeEligible))uncertain=null;
     }
    }catch(error){
     validationCode=safeCode(error,'VALIDATION_INVALID_STATE');

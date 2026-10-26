@@ -235,3 +235,35 @@ test('raw service response without signing validator is visible but never signab
  assert.equal(c.snapshot().round.state,null);
  assert.equal(c.snapshot().round.canSign,false);
 });
+test('negative read begun during pending submit cannot clear uncertainty after response loss',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();x.reads[1].resolve(round());await flush();
+ x.signatures[0].resolve('0x'+'e'.repeat(130));await flush();
+ assert.equal(x.submits.length,1);
+ const olderRead=x.controller.refresh();
+ assert.equal(x.reads.length,3);
+ x.submits[0].reject(Error('API_NETWORK'));await signing;
+ x.reads[2].resolve(round());await olderRead;
+ assert.equal(x.controller.snapshot().round.reason,'RESULT_UNCERTAIN');
+ assert.equal(x.controller.snapshot().round.canSign,false);
+ const freshNegative=x.controller.refresh();x.reads[3].resolve(round());await freshNegative;
+ assert.equal(x.controller.snapshot().round.reason,'READY');
+ assert.equal(x.controller.snapshot().round.canSign,true);
+ const freshPositive=x.controller.refresh();x.reads[4].resolve({...round(),roles:{owner:true,donor:false}});await freshPositive;
+ assert.equal(x.controller.snapshot().round.reason,'ALREADY_RECORDED');
+ assert.equal(x.controller.snapshot().round.canSign,false);
+ assert.equal(x.signatures.length,1);
+});
+test('same-round positive read may resolve uncertainty while submit is pending',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();x.reads[1].resolve(round());await flush();
+ x.signatures[0].resolve('0x'+'e'.repeat(130));await flush();
+ const positive=x.controller.refresh();x.reads[2].resolve({...round(),roles:{owner:true,donor:false}});await positive;
+ assert.equal(x.controller.snapshot().round.state?.roles.owner,true);
+ assert.equal(x.controller.snapshot().round.uncertain,false);
+ x.submits[0].reject(Error('API_NETWORK'));await signing;
+ assert.equal(x.controller.snapshot().round.reason,'ALREADY_RECORDED');
+ assert.equal(x.controller.snapshot().round.uncertain,false);
+});
