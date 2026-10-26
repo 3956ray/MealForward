@@ -28,7 +28,11 @@ export function validateApprovalConfig(env=process.env){
  check(testing?u.hostname==='127.0.0.1'&&u.port==='15439'&&u.username===LOGIN:u.hostname===HOST&&u.port==='5432'&&u.username===LOGIN+'.'+PROJECT,'DB_IDENTITY');
  return Object.freeze({origin,port,testing,login:LOGIN,dbUrl:env.T1F_APPROVAL_DB_URL});
 }
-/** Actual catalog capability audit, including PUBLIC and indirect role memberships. */
+/** Actual catalog capability audit, including PUBLIC and indirect role memberships.
+ * Inaccessible ambient PUBLIC table grants do not confer access. Explicit grants,
+ * ownership and legacy application-table privileges remain forbidden even when
+ * schema USAGE is absent. No platform-wide ACLs are changed or allowlisted.
+ */
 export async function verifyApprovalRuntime(pool){
  const {rows}=await pool.query(`WITH RECURSIVE memberships AS (
   SELECT oid FROM pg_roles WHERE rolname='mf_t1f_approval_login'
@@ -37,7 +41,11 @@ export async function verifyApprovalRuntime(pool){
  SELECT session_user,current_user,
  (SELECT count(*)=3 AND bool_and(NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolinherit AND rolcanlogin=(rolname='mf_t1f_approval_login')) FROM pg_roles WHERE rolname IN ('mf_t1f_approval_login','mf_t1f_approval_runtime','mf_t1f_approval_owner')) AS role_safe,
  (SELECT count(*)=2 AND bool_and(r.rolname IN ('mf_t1f_approval_login','mf_t1f_approval_runtime')) FROM memberships m JOIN pg_roles r ON r.oid=m.oid) AS membership_safe,
- NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN principals r WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r','p','v','m','f') AND (has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))) AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN principals r WHERE c.relkind='S' AND n.nspname NOT LIKE 'pg_%' AND has_sequence_privilege(r.oid,c.oid,'USAGE,SELECT,UPDATE')) AS tables_safe,
+ NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN principals r WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r','p','v','m','f')
+ AND (has_schema_privilege(r.oid,n.oid,'USAGE') OR n.nspname LIKE 'mf_%' OR c.relowner=r.oid
+  OR EXISTS(SELECT 1 FROM aclexplode(c.relacl) acl WHERE acl.grantee=r.oid)
+  OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND acl.grantee=r.oid))
+ AND (has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))) AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN principals r WHERE c.relkind='S' AND n.nspname NOT LIKE 'pg_%' AND has_sequence_privilege(r.oid,c.oid,'USAGE,SELECT,UPDATE')) AS tables_safe,
  ((SELECT count(*)=5 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mf_t1f_recovery' AND has_function_privilege('mf_t1f_approval_runtime',p.oid,'EXECUTE') AND p.proname IN ('context','current_round','get_round','create_round','record_approval') AND p.prosecdef AND p.proowner=(SELECT oid FROM pg_roles WHERE rolname='mf_t1f_approval_owner') AND p.proconfig @> ARRAY['search_path=pg_catalog','statement_timeout=5s','lock_timeout=2s'])
  AND NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace CROSS JOIN principals r WHERE n.nspname LIKE 'mf_%' AND has_schema_privilege(r.oid,n.oid,'USAGE') AND has_function_privilege(r.oid,p.oid,'EXECUTE') AND NOT (r.oid=(SELECT oid FROM pg_roles WHERE rolname='mf_t1f_approval_runtime') AND n.nspname='mf_t1f_recovery' AND p.proname IN ('context','current_round','get_round','create_round','record_approval')))) AS functions_safe,
  NOT EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN principals r WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND (has_schema_privilege(r.oid,n.oid,'CREATE') OR (n.nspname LIKE 'mf_%' AND has_schema_privilege(r.oid,n.oid,'USAGE') AND NOT (n.nspname='mf_t1f_recovery' AND r.oid=(SELECT oid FROM pg_roles WHERE rolname='mf_t1f_approval_runtime'))))) AS schema_safe`);
