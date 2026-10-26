@@ -7,6 +7,16 @@
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
 
+
+## 2026-10-26 Phase5 真人验收通过，进入 Phase6 隔离开发
+
+用户在本聊天明确回传：**“Owner 和 Donor 都已显示练习签名验证成功，页面是 2/2 PASS · NO RELEASE。”** 因此将 Phase5 Owner、Donor 两项真人 MetaMask EIP-712 练习验收记为 **USER-REPORTED PASS**，覆盖下文 PENDING 状态。证据是用户本人回传的页面结果；服务无持久 Session/签名记录，不冒充服务器永久批准，也不要求提交原始签名。Phase4 原双 EIP191 PASS 保留，无需重做。
+
+用户同时授权继续按 superpowers 开发到下一次确需本人测试，并已允许使用 agent。当前开始 Phase6 的独立恢复批准服务、016+ 最小权限规则与隔离测试设计/实现；具体完成状态以后续本文件新增条目为准，此刻不宣称已交付。本轮新查 RoleProof 仍 Live dep-dbfbvi4s728c73erotl0 @ c1b99b5ed66831c364ba51d23653854756c6d1f4，原 Claim 仍 ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625/无 hash。
+
+此用户反馈只完成练习兼容性验收。继续开发不自动批准真实 Supabase 013–016+ 迁移、新运行凭据、正式 Owner/Donor Recovery Release 签名或 Issuer 链上交易；这些到具体可审查、可执行步骤时再交用户确认。旧 Fund/Claim/Consent/Nonce 保持冻结，不重发旧 UNKNOWN、不开放商家结算。
+
+
 ## 2026-10-26 11:40（UTC+8）Phase5 公网核验完成 — 可开始双钱包真人练习，尚非真人 PASS
 
 **本节取代下文“公网超时待验证”“部署进行中”“不要重签”的旧阶段判断，仅适用于 Phase5 无资金练习。** 本轮用户授权继续按 superpowers 排障及创建 agent；已执行 systematic-debugging、verification-before-completion，并由只读 agent 独立复核练习签名源码和操作步骤。真人 Owner/Donor 的新版 Phase5 验收仍为 **PENDING**，Phase4 两次原 EIP191 PASS 保留，不重做。
