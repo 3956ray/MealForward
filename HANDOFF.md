@@ -2,9 +2,74 @@
 
 > **本文件是当前项目唯一的高优先级跨 Agent 接手入口。** 从仓库根目录打开 `HANDOFF.md`，先核对实时 GitHub / Render / Supabase，再继续任何开发。此文件随每次开发、迁移、部署和用户验收更新。历史 `docs/agent-handoff-2026-10-16/` 与原 CP30 合同不得当作 2026-10-23 的实时云状态。
 >
-> **更新日期：2026-10-25（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
+> **更新日期：2026-10-26（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
+
+
+
+## 2026-10-26 Phase5 真人验收通过，进入 Phase6 隔离开发
+
+用户在本聊天明确回传：**“Owner 和 Donor 都已显示练习签名验证成功，页面是 2/2 PASS · NO RELEASE。”** 因此将 Phase5 Owner、Donor 两项真人 MetaMask EIP-712 练习验收记为 **USER-REPORTED PASS**，覆盖下文 PENDING 状态。证据是用户本人回传的页面结果；服务无持久 Session/签名记录，不冒充服务器永久批准，也不要求提交原始签名。Phase4 原双 EIP191 PASS 保留，无需重做。
+
+用户同时授权继续按 superpowers 开发到下一次确需本人测试，并已允许使用 agent。当前开始 Phase6 的独立恢复批准服务、016+ 最小权限规则与隔离测试设计/实现；具体完成状态以后续本文件新增条目为准，此刻不宣称已交付。本轮新查 RoleProof 仍 Live dep-dbfbvi4s728c73erotl0 @ c1b99b5ed66831c364ba51d23653854756c6d1f4，原 Claim 仍 ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625/无 hash。
+
+此用户反馈只完成练习兼容性验收。继续开发不自动批准真实 Supabase 013–016+ 迁移、新运行凭据、正式 Owner/Donor Recovery Release 签名或 Issuer 链上交易；这些到具体可审查、可执行步骤时再交用户确认。旧 Fund/Claim/Consent/Nonce 保持冻结，不重发旧 UNKNOWN、不开放商家结算。
+
+
+## 2026-10-26 11:40（UTC+8）Phase5 公网核验完成 — 可开始双钱包真人练习，尚非真人 PASS
+
+**本节取代下文“公网超时待验证”“部署进行中”“不要重签”的旧阶段判断，仅适用于 Phase5 无资金练习。** 本轮用户授权继续按 superpowers 排障及创建 agent；已执行 systematic-debugging、verification-before-completion，并由只读 agent 独立复核练习签名源码和操作步骤。真人 Owner/Donor 的新版 Phase5 验收仍为 **PENDING**，Phase4 两次原 EIP191 PASS 保留，不重做。
+
+**11:42（UTC+8）收尾 CI 补记：** 本轮文档提交后的发布 HEAD `e8d24c537e8044e24f2cf41482e385583ef9e222` 七组 workflow 全部 completed/success，包含新的真实公网 [Phase5 #40265313353](https://github.com/3956ray/MealForward/actions/runs/40265313353)、[Phase4 #40265313412](https://github.com/3956ray/MealForward/actions/runs/40265313412)、[签名回归 #40265313491](https://github.com/3956ray/MealForward/actions/runs/40265313491) 和只读链/PG17 #40265313407。规范交接分支文档提交 `c30cb69e422f7395456e02b144cbfcbd239491f6` 的三组 CI 也全部成功，包含 [公网 #40265311001](https://github.com/3956ray/MealForward/actions/runs/40265311001)。本补记为 `[skip ci]` 的纯文档提交，避免记录结果再触发同样检查；不冒充补记 HEAD 另跑了测试。实际部署仍 c1b99b5 / dep-dbfbvi4s728c73erotl0，真人两次 Phase5 仍待用户执行。
+
+### 当前运行与 CI 的准确区分
+
+- **Render 工作区/服务**：LaoDao `tea-db7q3ou7bikc73bp2bt0`，RoleProof `srv-dbdeuft9fdbs73atbvh0`，URL https://mealforward-t1e-role-proof-laodao.onrender.com 。再次查询确认 Live 部署仍是 `dep-dbfbvi4s728c73erotl0`，实际运行 Commit **`c1b99b5ed66831c364ba51d23653854756c6d1f4`**；未重新部署。服务为 free、Singapore、autoDeploy=off、非暂停、maintenance=false，启动命令仍 `cd t1-intents && npm run start:t1e:proof`。
+- **发布源码 HEAD**：文档更新前发布分支 `codex/mealforward-t1e-issuer-original-tx-verifier-20261023` 为 **`9824bf09a87c207c6186bee8c9f2f30a093e2318`**。与运行 Commit c1b99b5 比较仅增加一个 workflow 配置提交，将 `.github/workflows/mealforward-t1f-phase5-live-https.yml` 的 EXPECT 改为 true；应用源码一致。因此当前线上**已启用** Phase5 是本次实际观测结果，不再按旧文档 false 假定。该开关/该配置提交在本轮开始前已存在，本轮没有改开关或发布源码。
+- **GitHub 重新查询**：9824bf09 上七个 workflow 全部 completed/success。关键独立公网 [Phase5 #40261154801](https://github.com/3956ray/MealForward/actions/runs/40261154801)、[Phase4 #40261154748](https://github.com/3956ray/MealForward/actions/runs/40261154748)、[Owner/Donor 签名回归 #40261154732](https://github.com/3956ray/MealForward/actions/runs/40261154732)。这些是已有 CI 的实时查询，不冒充本轮新运行。此文件文档提交会使分支 HEAD 变化；该文档提交的 CI 在写入时尚未检查，不能自动继承上述 PASS。部署 Commit 不因文档更新自动变化。
+- **独立源码审查**：部署 c1b99b5 的 Phase5 module、frontend、public smoke 与 PR #46 源码一致；完整四字段 EIP712Domain、Practice v0、PracticeControl、10143、固定 escrow 皆存在。PR #46 与发布分支其余内容显著分叉，**不可整支合并到 Render**，更不能附带 013–015 SQL 或 successor runtime。
+
+### 超时调查结论及本次新鲜公网证据
+
+- 原先每次 25 秒无响应的故障本轮未持续复现。当前 DNS 正常、无进程代理变量，IPv4 与默认 HTTPS 请求均成功；Phase4/Phase5 status 200，延迟约 0.8–1.4 秒；额外页面/脚本/health GET 200，约 0.4–3.3 秒。未发现需要修复的持续应用错误，因此未盲目重启或改业务代码。
+- Render app 日志显示 03:11:13 UTC（北京时间 11:11:13）新进程启动，03:11:16 输出 `T1E_ROLE_PROOF_ONLY_READY,noFinancialWrites=true,noDatabaseConnected=true`，在上一轮超时之后。结合实际 free 实例与 [Render 官方说明](https://render.com/docs/free#spinning-down-on-idle)：空闲 15 分钟可休眠，首次请求唤醒通常约一分钟，**证据支持冷启动超出原 25 秒探测窗口的解释；缺少当时边缘请求追踪，不能把它写成已证明的唯一网络根因**。
+- **本轮实际执行**发布源码 `t1-intents/t1f-phase5-live-smoke.mjs` 的 `attestPhase5Live`（EXPECT=true），返回 **`T1F_PHASE5_TYPED_PRACTICE_PUBLIC_NEGATIVE_PASS`**，enabled=true、requests=23、realWalletSignaturesCollected=0、dbWrites=0、onchainTransactions=0、recoveryApproved=false。本地执行时显式 import 调用入口，避免 macOS /tmp 符号链接与 import.meta.url 判定导致“exit0却未执行”的误报。
+- 23 次真实 HTTPS 检查已覆盖 Owner 与 Donor 挑战：固定钱包、`MealForward Phase5 Typed Wallet Practice` / version0 / primary PracticeControl、chain10143、原 escrow `0xcf0c8827c8610eeff1ecbd9719e559d805fafe58`、purpose 为 `PRACTICE ONLY - NO RECOVERY RELEASE, NO ISSUE, NO FUNDS`，以及按顺序 name:string / version:string / chainId:uint256 / verifyingContract:address 四个 Domain 字段。
+- 同次检查确认错误钱包、未签名 verify、跨站 Origin、伪造钱包 header、恶意 query 被拒绝；六个 release/issue/claim/settle/fund 路由均405；旧 T1E 和 Phase4 兼容；无 Cookie。只产生两条 120 秒内存挑战，无真人签名、数据库或链上动作。
+- 额外公开 GET 的 Git blob 指纹：线上 `/t1f-phase5.mjs` = `19de769c30bcfe5ccc4a5980db4582523abcbd51`，`/t1f-phase5.html` = `fffeea47b4ec69b773996151b7c66d3b080dfe25`，与部署源码逐字节相同；无 Set-Cookie，Cache-Control no-store，CSP frame-ancestors none。浏览器自动化打开超时，故本轮不声称完成真实浏览器或真人 MetaMask 验收。
+- **以后公网核验操作**：先对同源 `/health` 做有界只读预热，确认200/noDatabase/noFunds后再跑完整 smoke。休眠时让首页完成加载，约等待1分钟，必要时1–2分钟后手动刷新一次；不要为唤醒反复点签名或发券。现有 smoke 首批并发中只有 health 用120秒，其余40秒，未来可另做小范围测试改进；本轮已预热并实际通过，不因这个观察引入新的发布。
+- 可重跑命令：在准确发布源码的 `t1-intents` 目录，`EXPECT_PHASE5_TYPED_PRACTICE=true node t1f-phase5-live-smoke.mjs`；只读预热可用 `curl --connect-timeout 10 --max-time 120 https://mealforward-t1e-role-proof-laodao.onrender.com/health`。不要在当前 enabled 服务错误运行 EXPECT=false 检查。
+
+### 实库冻结再核与本轮变更范围
+
+Supabase `ketfrukrcuosrqynnsay` 本轮只读确认：12 条既有迁移，末条 `20261023105932 mealforward_t1f_issuer_issue_deadline_immutable_v1`；013–015 未安装。FUNDED=1、Claim ISSUE_UNKNOWN=1、CLAIM_PREPARED=1、CONSENT_VERIFIED=1、ISSUE_RESERVED=1。原 Claim revision2、issuer nonce0、deadline1792765625、无 issuer_tx_hash；Security Advisors lints=[]。未重新核链上状态，不能仅据无 hash 断言未广播。
+
+本轮只读排障、临时源码核验和更新 HANDOFF；**无运行配置写入、无新部署、无实库写入/迁移、无资金或链上交易**。旧 Claim/Issuer 服务和 Mac CP30 不动。正式 Recovery Release、第二次 Issue、Lock/Report/Settle 继续禁用，未知原操作不重发。接手授权与练习验收不等于真实恢复批准。
+
+### 用户下一步：同一页面完成 Owner + Donor 两次练习
+
+1. 用有 MetaMask 的浏览器打开 **https://mealforward-t1e-role-proof-laodao.onrender.com/t1f-phase5.html**。首次冷启动按上述等待页面就绪，页首应为 `PHASE5 EIP-712 PRACTICE · 0/2 PASS · NO RELEASE`；保留本页，刷新会清空本页计数。
+2. 在 MetaMask 选择 **Monad Testnet，Chain ID 10143**。点击 **“选择 Owner 钱包”**，选择原 Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b`，该卡应显示“钱包和网络正确”。
+3. 点击 Owner 卡 **“本人 EIP-712 练习签名”**。本人核对弹窗域是 **MealForward Phase5 Typed Wallet Practice**、version **0**、类型 **PracticeControl**，purpose 是 **PRACTICE ONLY - NO RECOVERY RELEASE, NO ISSUE, NO FUNDS**，再确认签名。挑战有效120秒；超时只在此练习卡重新发起，不碰 Issue 页面。
+4. 同页点击 **“选择 Donor 钱包”**，选原 Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`；确认10143和“钱包和网络正确”，点击 Donor 卡 **“本人 EIP-712 练习签名”**，核对相同 Practice 域和用途后本人确认。
+5. 成功应分别显示 `PASS · OWNER EIP-712 练习签名验证成功`、`PASS · DONOR EIP-712 练习签名验证成功`，页首变为 **`2/2 PASS · NO RELEASE`**。仅回传这些脱敏结果或错误文字；不要回传原始签名、私钥或 Cookie。
+6. 若出现真正 `MealForward T1F Recovery` / `SuccessorIssueRelease`、交易/代币授权请求或资金动作，不签并反馈。Phase5 只是无 gas 的练习签名，2/2 PASS 仍不是恢复批准。收到用户结果后再更新本 HANDOFF 的真人验收状态；目前仍 PENDING。
+
+
+## 2026-10-26 11:10（UTC+8）Codex 接手核验 — 云连接已确认，Phase5 公网仍待验证
+
+**本段为本次接手的最新只读证据，优先于下文旧部署“进行中”描述。** 用户已授权接手项目、使用 obra/superpowers 工作流程，以及连接 GitHub / Vercel / Render / Supabase。本轮只做接手核验与本文件更新，未改服务配置、未启用 Phase5、未迁移实库、未签名或发送链上交易。已读取 superpowers 的 using-superpowers、Codex 工具适配与 verification-before-completion；未来实现按相应技能执行。
+
+- **GitHub**：连接器确认 3956ray/MealForward 可读写，默认分支 main；本文件所在 PR #45 仍 Open Draft，更新前 HEAD `0bf83bcc007307a45161aaf65fa624e385bd2295`。签名修复 PR #46 仍 Open Draft，HEAD `c3a6bf0beecd30d5ac53479f16dfcb38a68b6c03`，应用修复提交仍为 `fbbc5c3f77b2466f5de66cb295d783eb6e35d652`。这次文档提交会改变 PR #45 HEAD，后续须实时重新查询。只检查了 PR 元数据，没有完成新的全量代码审查或合并。
+- **CI 重新核实**：通过 GitHub job API 查到 [40259382619](https://github.com/3956ray/MealForward/actions/runs/40259382619) 的 owner-donor-proof、[40259671961](https://github.com/3956ray/MealForward/actions/runs/40259671961) 的 phase5-public 均 completed/success。这是既有运行结果的重新查询，不是本次重跑，也不表示本次文档 HEAD 或当前公网已通过测试。按 commit 列举 workflow 的连接器仅过滤 pull_request 事件，本次返回空，不能据此断言所有 CI 不存在或失败。
+- **Render 实况已前进**：RoleProof `srv-dbdeuft9fdbs73atbvh0` 最新部署 `dep-dbfbvi4s728c73erotl0` 为 **live**，Commit `c1b99b5ed66831c364ba51d23653854756c6d1f4`，deploy_ended 事件为 succeeded（北京时间 10:50:36）。下文 `dep-dbfboglg1s2s73f6mh20` 已成功后被替换，当前为 deactivated；其应用 Commit `6d085568d802725f7281439005d0f20c6ffe32ca` 不可冒充当前部署 HEAD。Claim/Issuer 服务 `srv-dbdgstivcj2c73fnqcc0` 仍 Live `dep-dbdto63rjlhs738br1sg` @ `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。
+- **公网未通过本次核验**：对 RoleProof 的 `/v1/t1f/phase5/status` 与 `/v1/t1f/phase4/status` 两次独立 HTTPS GET 各等待 25 秒，均超时、未收到 HTTP 响应；另一网页读取工具也无法访问。故只能确认 Render 控制面 Live，不能声称当前公网健康、Phase5 flag 当前值或两角色 typed challenge 已验收。没有读取环境变量值；启动日志查询因工作区未选择返回错误，未将其当作有效日志证据。不要仅据 Live 邀请用户重新签名。
+- **Supabase 本次只读确认**：`mealforward-t1-staging` / `ketfrukrcuosrqynnsay` 为 ACTIVE_HEALTHY；迁移列表恰为原 12 条，最后 `20261023105932 mealforward_t1f_issuer_issue_deadline_immutable_v1`，013–015 未安装。聚合查询确认 FUNDED=1、Claim ISSUE_UNKNOWN=1、CLAIM_PREPARED=1、CONSENT_VERIFIED=1、ISSUE_RESERVED=1。原 Claim revision=2、Issuer nonce=0、deadline=1792765625、无 issuer_tx_hash；Security Advisors lints=[]。本次没有链上 RPC 复核，因此数据库无 hash 不能解释为链上一定未广播。
+- **Vercel**：已能列出同团队的 mealforward、mealforward-experience-sandbox、mealforward-real-testnet-pilot 三项目；本轮未改部署、域名、环境变量，也未审计前端生产健康。
+- **本地状态**：发现旧 checkout `/Users/mili/Documents/Developer/mealforward` 停在 `codex/mcpay-local-mvp`，不是上述云试点最新分支。本次没有切换或覆盖它；后续开发须取得最新目标 ref 并按工作区规则隔离，不得直接在旧版本实施本轮修复。
+
+**下一步顺序**：先排查并重新取得公网 Phase4/Phase5 响应，确认 RoleProof 的实际部署源码、Phase5 flag 和无数据库/资金写入边界；完成关闭模式的 HTTPS 门禁后，才能按既有安全发布流程推进练习启用、校验 Owner/Donor 四字段 EIP712Domain 及资金路由拒绝，再邀请两位本人重做 Phase5 练习签名。Phase4 的两次真人 PASS 不重做。真正 Recovery Release、实库新迁移及第二次 Issue 仍未获本轮授权，不重复 Fund/Claim/Consent、不重置旧 UNKNOWN、不开放 Lock/Report/Settle；未来每轮仍须更新本文件。
 
 ## 2026-10-26 MetaMask V4 实际双钱包 401 修复进度 — CI PASS，RoleProof 安全灰度中
 
