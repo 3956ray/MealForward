@@ -8,6 +8,17 @@
 
 
 
+## 2026-10-26 16:00（UTC+8）真人复测定位账户不匹配；域名扫描BLOCK，暂停正式签名
+
+**覆盖下文继续连接/准备正式轮次的操作建议。** 用户回传新页仍“没有任何连接”，并说明已亲自点击MetaMask风险警告的继续操作。Agent只读观察实际Chrome页面：最初页面为“正在连接OWNER”，MetaMask停在“继续操作，风险自负”的钓鱼/清空钱包警告。随后用户本人继续后，页面明确返回 **账户不匹配**，读取账户为固定Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`，而请求角色为Owner。MetaMask网站连接栏显示Account2、Monad Testnet与“断开连接”。因此已观察到网站连接及账户读取返回，不能继续描述为无响应；尚未通过Owner角色核对，也不能把连接认作签名批准。资产列表的Sepolia筛选不代表该网站当前链。
+
+- **风险检测实证**：MetaMask官方 `dapp-scanning.api.cx.metamask.io/v2/scan` 对该完整HTTPS域名返回 `{hostname:"mealforward-t1f-approval-laodao.onrender.com",recommendedAction:"BLOCK"}`。同次读取公开 `MetaMask/eth-phishing-detect/main/src/config.json`，blocklist/allowlist/fuzzylist没有该精确域名、onrender.com父域或含mealforward的条目。仅说明该静态名单未命中，不证明误报，不说明其他检测规则。未修改/关闭MetaMask安全设置，未代点“仍然连接”，未换域名规避检测。
+- **源码与公网复核**：独立只读agent核查953fea6连接只请求eth_accounts权限，typed-data签名仍需另一次明确点击、有效COLLECTING轮次、固定角色/链/摘要及前后校验；没有交易方法。当前部署仍 `dep-dbfgcng473hc73d399g0` / `953fea650834aa475520819f0eec5763df54fc24`。本轮再次执行31项真实HTTPS smoke全部PASS，四资产逐字节匹配，NO_ROUND/noRelease=true、零签名/链交易/持久写请求。上述事实可支持厂商复核，不能证明域名误报或整个系统绝对安全。
+- **实库只读复查**：旧业务整体指纹仍 `01556b358764d9c262f96c90f75cafcc`；successor release/operation/event仍0/0/0。无运行代码、部署、配置、权限或数据库写入；没有创建正式轮次。应用CI仍属上一节953fea6的207测试+15PG，本轮只有文档更新。
+- **已准备但未发送的复核材料**：[MetaMask域名复核草稿](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase6-domain-review-request.md)。目标为MetaMask/eth-phishing-detect官方blocklist-removal issue，包含公开域名、官方扫描结果、固定源码及CI证据，不含钱包截图/活动、签名或秘密。精确域名issue搜索0条；提交前应再查重。需用户明确授权以其GitHub身份向第三方公开提交后才能发送，不因项目开发授权擅自联系外部维护者。
+
+**当前门槛**：先处理域名风险分类，正式连接复测/Recovery双签暂缓，不创建300秒轮次、不发券。不能将用户曾自行继续视为今后自动忽略警告的批准。待风险复核后，正确的角色映射仍是Owner=`0xc4f8a468f10d5f98dcff3282516125e97f26433b`、Donor=`0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`；不能用Donor账户通过Owner按钮。Phase5练习的USER-REPORTED 2/2 PASS保持历史结果，无需重做。正式Recovery真人签名仍NOT_RUN、NO RELEASE。
+
 ## 2026-10-26 15:53（UTC+8）Phase6 钱包连接反馈修复上线，等待真人复测
 
 **用户实际验收发现问题**：电脑浏览器MetaMask扩展弹出账户选择，但回到页面没有明显连接结果。该反馈不记为真人连接PASS，也不能由此前HTTP/合成测试推断真人钱包已连通。通过superpowers systematic-debugging、TDD及独立只读agent复核，确认源码缺失连接状态：成功后只设置needsRefresh，页面仍显示固定期望地址和“尚未记录批准”；错误账户/网络也被统一吞为刷新提示。没有证据证明MetaMask授权协议本身失败，故保留与已通过Phase5相同的权限请求流程。
