@@ -8,8 +8,8 @@ This record separates source acceptance from live activation and human-wallet ac
 |---|---|---|---|
 | Atomic SQL capability/store | d1473a9 | FreshPG17.11 16 groups; main rerun EXIT0 | Full task plus exact-function-identity fix PASS |
 | Execution service/HTTP/config | 1848a85 | 22 targeted tests; actualHTTP+freshPG8 groups | Full task plus timeout fix PASS |
-| Collector history / Issuer client | Pending | Pending | Pending |
-| Whole Phase7 change | Pending | Exact CI/browser pending | Pending |
+| Collector history / Issuer client | 0938dfa | 214 nonPG / 61 WalletV2; typecheck and deterministic builds; synthetic browser PASS | Task review pending |
+| Whole Phase7 change | d0fd6e6 | CI40401826273 all6 jobs PASS:304 tests +42 PG groups | Whole-phase review pending |
 
 Database fixtures use synthetic verification attestations and RPC results. The HTTP lifecycle uses the actual gateway, capability store and exact009-017 migrations in a disposable database. It does not exercise a live SIWE session, real MetaMask or Monad transaction.
 
@@ -34,3 +34,7 @@ Existing collector regression uses its own fresh instance and `node t1f-approval
 Read-only hosted preflight at2026-10-27 04:56 UTC+8: PostgreSQL17.11; rounds1, approvals2; successor release/operation/event0/0/0; no mf_t1f_execution schema or execution roles. Collector owner/runtime remain NOLOGIN/NOINHERIT and login remains NOINHERIT; none has superuser/CREATEROLE/BYPASSRLS. Original/successor tables owned bypostgres, collector tables bymf_t1f_approval_owner. No live mutation performed.
 
 Additional source-phase baseline: six-table original fingerprint `c0dd34d6df6ad76a43f79bc435cd0b4f`, computed as MD5 of a JSONB object containing claims,consents,funds,events,reviews,slots, each array ordered by to_jsonb(row)::text. It includes the review/hold tables and is a different scope from the earlier four-table `01556b...` fingerprint; do not compare the two hashes. Only the hash was returned, not private row contents. Final same-query recheck pending.
+
+Exact remote CI: https://github.com/3956ray/MealForward/actions/runs/40401826273 at d0fd6e6613facd1dca3131ca02dfe5a694d1ad1d, six jobs SUCCESS. Test totals61 WalletV2+214 nonPG+16 legacycore+13 legacyHTTP=304; separate freshPG groups18 collector+16 execution+8 executionHTTP=42. Typecheck and rebuild diff gatesPASS.
+
+Main CUA browser on frozen0938dfa source: explicit fake SIWE/prepare/send-refusal/reload recovery; prepare/send disabled after refusal and after reload, originalUNKNOWN preserved;390px viewport client/scroll375/375; console errors/warnings empty. Pre-final cosmetic/connection addition, same controller path also traversed fake send, intentional bind failure, same-hashretry and canonicalISSUED; this is synthetic evidence only. Screenshots in docs/evidence/phase7-synthetic-desktop.png and phase7-synthetic-mobile.png.

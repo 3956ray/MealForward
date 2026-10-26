@@ -35,8 +35,8 @@ Interfaces: makeExecutionService({store,rpc,clock}) => status/prepare/bind/recon
 ### Task 3: consumed collector and one-shot fixture
 Files: collectorprotocol/service/tests; wallet-v2 contract/validation/controller/tests; legacyapprovalclient consumed handling; newexecutionclient/controller/fixture/tests. Main rebuildsassets.
 Interfaces: strict optional consumptionreceipt, CONSUMED_NO_RELEASE, canIssuefalse/noReleasetrue. Localfixture actualroute plus syntheticauth/provider, nevercloud.
-- [ ] RED/GREEN consumedread invariants and fakewallet one-shot/rejection/reload/account-chainchanges.
-- [ ] Browserdesktop/mobilefixture,rebuild/typecheck.
+- [x] RED/GREEN consumedread invariants and fakewallet one-shot/rejection/reload/account-chainchanges.
+- [x] Browserdesktop/mobilefixture,rebuild/typecheck.
 - [ ] Full exactCI includingPG and independentfinalreview.
 
 ### Delivery
