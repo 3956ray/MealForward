@@ -82,6 +82,36 @@ export async function attestPhase5Live({
   assert((await get(unsafe)).status===403,
    'T1F_PHASE5_WALLET_QUERY_OR_SCRIPT_OVERRIDE_ALLOWED');
  }
+ // The previous anonymous smoke only tested status/HTML, so it missed
+ // the actual MetaMask V4 challenge's missing EIP712Domain type. Verify
+ // real public challenge envelopes for BOTH fixed wallets, without signing.
+ if(enabled){
+  for(const [role,address] of [
+   ['owner','0xc4f8a468f10d5f98dcff3282516125e97f26433b'],
+   ['donor','0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952']
+  ]){
+   const ch=await get('/v1/t1f/phase5/challenge',{
+    method:'POST',body:{role,address}
+   });
+   const t=ch.body?.typedData;
+   assert(ch.status===200&&
+    ch.body.status==='T1F_PHASE5_TYPED_PRACTICE_CHALLENGE'&&
+    ch.body.notRecoveryRelease===true&&ch.body.notTransaction===true&&
+    ch.body.role===role&&ch.body.address===address&&
+    t?.domain?.name==='MealForward Phase5 Typed Wallet Practice'&&
+    t.domain.version==='0'&&t.domain.chainId===10143&&
+    t.domain.verifyingContract?.toLowerCase()==='0xcf0c8827c8610eeff1ecbd9719e559d805fafe58'&&
+    t.primaryType==='PracticeControl'&&
+    t.message?.purpose==='PRACTICE ONLY - NO RECOVERY RELEASE, NO ISSUE, NO FUNDS'&&
+    JSON.stringify(t.types?.EIP712Domain)===JSON.stringify([
+     {name:'name',type:'string'},
+     {name:'version',type:'string'},
+     {name:'chainId',type:'uint256'},
+     {name:'verifyingContract',type:'address'}
+    ]),
+    'T1F_PHASE5_LIVE_METAMASK_V4_DOMAIN_REQUIRED');
+  }
+ }
  const forbidden=await get('/v1/t1f/phase5/challenge',{method:'POST',
   body:{role:'owner',address:'0x'+'8'.repeat(40)}});
  assert(enabled?forbidden.status===403:[404,405].includes(forbidden.status),

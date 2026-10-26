@@ -6,6 +6,11 @@ const WALLET=Object.freeze({
  donor:'0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952'
 });
 const DOMAIN='MealForward Phase5 Typed Wallet Practice';
+const ESCROW='0xcf0c8827c8610eeff1ecbd9719e559d805fafe58';
+const REQUIRED_DOMAIN_FIELDS=[
+ ['name','string'],['version','string'],
+ ['chainId','uint256'],['verifyingContract','address']
+];
 const PURPOSE='PRACTICE ONLY - NO RECOVERY RELEASE, NO ISSUE, NO FUNDS';
 const $=id=>document.getElementById(id);
 let ready=false,busy=false,revision=0,account=null;
@@ -75,6 +80,12 @@ async function prove(role){
   ch.chainId!==10143||ch.notRecoveryRelease!==true||
   ch.notTransaction!==true||typed?.domain?.name!==DOMAIN||
   typed.domain.version!=='0'||typed.domain.chainId!==10143||
+  typed.domain.verifyingContract?.toLowerCase()!==ESCROW||
+  !Array.isArray(typed.types?.EIP712Domain)||
+  typed.types.EIP712Domain.length!==REQUIRED_DOMAIN_FIELDS.length||
+  !typed.types.EIP712Domain.every((field,i)=>
+   field?.name===REQUIRED_DOMAIN_FIELDS[i][0]&&
+   field?.type===REQUIRED_DOMAIN_FIELDS[i][1])||
   typed.primaryType!=='PracticeControl'||
   typed.message?.role!==role.toUpperCase()||
   typed.message?.wallet!==WALLET[role]||

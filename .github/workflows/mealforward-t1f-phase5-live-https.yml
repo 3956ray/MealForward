@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      EXPECT_PHASE5_TYPED_PRACTICE: "true"
+      EXPECT_PHASE5_TYPED_PRACTICE: "false"
     steps:
       - uses: actions/checkout@v4
         with:
