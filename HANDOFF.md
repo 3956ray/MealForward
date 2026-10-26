@@ -8,6 +8,23 @@
 
 
 
+## 2026-10-26 15:11（UTC+8）Phase6 已实际启用；公网通过，等待本人测试
+
+**本节覆盖下文“真实环境等待批准”“源码未部署”“数据库仅001–012”的历史状态。** 用户明确回传“批准 并继续下一阶段开发 直到需要我进行测试”，批准了已提供的分步启用方案。现已完成013–016、专用最小权限账号、独立免费Render服务及实际公网验证。Phase5练习仍为USER-REPORTED 2/2 PASS，无需重做；**正式Recovery签名仍NOT_RUN，当前NO_ROUND，始终NO RELEASE**。
+
+- **真实入口**：[Phase6正式恢复批准页面](https://mealforward-t1f-approval-laodao.onrender.com)。Render LaoDao服务 `srv-dbfflq5g1s2s73fl05fg`，部署 `dep-dbfflqtg1s2s73fl07m0`，2026-10-26 07:03:04 UTC进入live；实际应用提交 **`cb974115c3bf5198499394bf75ad455e47bdc2cc`**。Node22、Singapore、free、autoDeploy=off。源码分支 `codex/mealforward-t1f-phase6-release-review-20261026`，仍为 [Draft PR #47](https://github.com/3956ray/MealForward/pull/47)，未整支合并到旧发布分支。后续文档提交不改变此运行版本。
+- **实际迁移**：Supabase `ketfrukrcuosrqynnsay` 顺序执行013=`20261026064525`、014=`20261026064614`、015=`20261026064724`、016=`20261026064745`，另专用角色非秘密迁移=`20261026064853`，合计17条。013审查 `bc78fcf5-a76c-4301-b0c3-5fcd37411d30` 为 `MANUAL_REVIEW_ONLY_NO_NEW_ISSUE`，所有may_*为false；014槽位 `e197f0cb-412e-4412-b8d5-9c15059e21e7` 为 `REVIEW_HOLD`，所有successor/receipt/release字段为空、权限false。015保持HOLD，release/operation/event行数 **0/0/0**；016当前round为空，没有创建正式轮次。
+- **启用前新鲜链核验**：2026-10-26T06:44:03.510Z，同一canonical block **74312720** / **`0xb04560b3ddfbfce507f4ad411823d203f5320ad2e6ab5b076bfeb5741c50aa4e`**，固定合约/权限/Funding receipt/账目匹配，Issuer latest/pending nonce均0、unit available且未issued、余额7000000。仅只读检查，关闭issuer simulation。本人此前空活动报告仍只是历史人工观察，非所有mempool为空证明；正式轮次必须重新取得120秒内的观察。
+- **真实连接修复**：Supabase session pooler忽略启动options里的role，实际专用连接先复现启动拒绝。`732e719` 改为每次取得连接后显式等待固定SET ROLE及5s/2s限制，再查询；交叉审查发现该等待会跨过取消/到期门槛，`cb97411` 在实际写SQL前再次检查取消及deadline。先复现再修复，新增5项回归；不增加运行权限，不用Promise.race伪装取消写入。
+- **专用身份与独立实库审查**：login仅可SET到runtime，无管理/建库/建角色/绕过RLS权限；owner/runtime均NOLOGIN。五个受限函数、私有表/列/序列、固定search_path、不可变触发器及旧业务禁止写入均核对通过，security advisors lints=[]。凭据私密生成并仅配置到批准的Supabase/Render；角色迁移不含密码，凭据未显示或进入Git。私有操作员配置在 `/Users/mili/.mealforward-phase6-20261026/runtime.json`（目录0700、文件0600），必须进程内读取，禁止打印内容或把DSN放入命令参数。实际TLS连接验证session_user=专用login、current_user=runtime、NO_ROUND。
+- **验证证据**：[CI #40283157818](https://github.com/3956ray/MealForward/actions/runs/40283157818) 在上述实际应用提交四作业全部completed/success：**200项测试（171+16+13）及15组真实隔离PG17行为检查全部PASS**。实际运行 `t1f-approval-live-smoke.mjs` 返回 `T1F_PHASE6_PUBLIC_NO_ROUND_NEGATIVE_PASS`，**31次真实HTTPS检查PASS**，覆盖health、session/state、同源/跨源/请求体/cookie/禁用路由，以及四个静态资源与部署源码逐字节相符。realSignatures=0、onchainTransactions=0、durableWritesRequested=0。它是实际本地执行的公网检查，不冒充GitHub公网CI或真人钱包验收。
+- **浏览器验证边界**：桌面浏览器自动化两次打开超时，未取得新服务实际渲染证据；真实页面显示、MetaMask连接及正式双签仍待本人测试。既有隔离预览不替代公网浏览器PASS。网络/HTTP验证已通过，不能据自动化超时判断用户浏览器必然失败。
+- **收尾复查**：旧Claim/Fund/Consent/Event整体指纹仍 `01556b358764d9c262f96c90f75cafcc`，原Claim仍ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625/无hash或receipt。RoleProof仍 `dep-dbfbvi4s728c73erotl0` / `c1b99b5ed66831c364ba51d23653854756c6d1f4`；旧Claim仍 `dep-dbdto63rjlhs738br1sg` / `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。未发券、未发送链交易、未开放结算。下文已记录的非阻断历史唯一约束测试缺口与未来原子释放门槛仍适用。
+
+**现在交给本人的测试：** 在有MetaMask的浏览器打开新入口，等待免费实例唤醒，确认 `NO_ROUND · 0/2 · NO RELEASE`。可分别连接固定Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b` 和Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952` 并刷新状态；正式签名按钮此时应禁用。选择Monad Testnet（10143），重新查看Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` 的活动/待处理队列，并在已准备好连续完成双方签名时回传页面和钱包现状。若有交易回传公开hash即可。不能以旧报告伪造新时间。
+
+**收到新鲜观察及就绪回传后**：操作员依[runbook](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase6-approval-runbook.md)重新只读核验并明确创建一轮300秒正式批准，再提供同轮Owner→Donor签名步骤。不得提前让计时耗尽、自动续轮或自动签名。2/2只代表本轮批准收集完成，仍NO RELEASE；真实Issue是未来独立门槛。本节是 `[skip ci]` 文档更新，不宣称文档HEAD另跑过应用CI。
+
 ## 2026-10-26 14:37（UTC+8）Issuer 空活动回传已核对；Supabase 兼容性修复通过
 
 **覆盖下文“等待 Issuer 活动核对”状态。** 用户针对 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` / Monad Testnet 的活动与待处理队列检查回传：**“没有任何的内容和活动在这个地址里面。”** 记为 `OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE`（本人回传，非 Agent 直接查看钱包、非全部节点 mempool 为空的证明）。当前回传用于恢复前检查；不得将其时间伪装为后续新观察，创建正式300秒轮次时仍须满足120秒新鲜度。
