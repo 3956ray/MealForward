@@ -189,7 +189,11 @@ export async function startT1EClaimServer({env=process.env}={}){
   }
   let executionService=null;
   if(cfg.successorEnabled){
-   executionPool=executionCapabilityPool(new pg.Pool(options(cfg.executionUrl)));
+   // Server statement_timeout cannot bound a lost established-connection
+   // response. Client timeout covers SET ROLE, audit and execution queries;
+   // the capability adapter destroys a failed connection. A lost COMMIT
+   // response remains ambiguous and can only recover the stored operation.
+   executionPool=executionCapabilityPool(new pg.Pool({...options(cfg.executionUrl),query_timeout:8000}));
    await verifyExecutionRuntime(executionPool);
    executionService=makeExecutionService({store:makeExecutionStore({pool:executionPool})});
   }
