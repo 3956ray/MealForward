@@ -20,17 +20,17 @@ No real migration, grant, deployment, successor reservation or transaction in th
 ### Task 1: atomic execution capability and store
 Files: t1-intents/supabase/migrations/20261026201810_t1f_controlled_successor_execution.sql (CLI-created logical017), t1-intents/t1f-execution-store.mjs, t1-intents/t1f-execution-phase7.ci.mjs; isolated fixture helper if needed.
 Interfaces: SQL/store exactly as Spec. Define exact versioned evidence/receipt schemas in shared t1f-execution-contract.mjs forTask2. Roles mf_t1f_execution_owner/runtime NOLOGIN. Five collector functions unchanged; split readonly context from strict writeguard.
-- [ ] PG failing test RED then implement migration/store.
-- [ ] Fresh PG17.11 tests: concurrency,expiry,provenance,rollback,leastprivileges,postconsume collectorreads/deniedwrites,oldrecordhash equality,bind/reconcileCAS.
-- [ ] Independent review.
+- [x] PG failing test RED then implement migration/store.
+- [x] Fresh PG17.11 tests: concurrency,expiry,provenance,rollback,leastprivileges,postconsume collectorreads/deniedwrites,oldrecordhash equality,bind/reconcileCAS.
+- [x] Independent review.
 
 ### Task 2: execution service and authenticated HTTP
 Files: t1-intents/t1f-execution-service.mjs,t1f-execution-http.mjs and tests; shared contract; disabled integration in t1e-claim-http.mjs / t1e-claim-server.mjs and configuration tests.
 Interfaces: makeExecutionService({store,rpc,clock}) => status/prepare/bind/reconcile; handler takes trusted issuer from existingSIWE verification, exactorigin/CSRF; explicit enabledfalse default. Transaction bytes only on createdtrue. Reuse receipt oracle, never oldreserve.
-- [ ] RED/GREEN service negatives: historical/fresh anchor split,cancellation,expiry,commit ambiguity.
-- [ ] RED/GREEN HTTP identity/origin/CSRF/body/mode and actualHTTP+PG+syntheticRPC lifecycle.
-- [ ] Source integration with existing SIWE middleware and separate audited execution pool, default disabled; no live configuration.
-- [ ] Independent review.
+- [x] RED/GREEN service negatives: historical/fresh anchor split,cancellation,expiry,commit ambiguity.
+- [x] RED/GREEN HTTP identity/origin/CSRF/body/mode and actualHTTP+PG+syntheticRPC lifecycle.
+- [x] Source integration with existing SIWE middleware and separate audited execution pool, default disabled; no live configuration.
+- [x] Independent review.
 
 ### Task 3: consumed collector and one-shot fixture
 Files: collectorprotocol/service/tests; wallet-v2 contract/validation/controller/tests; legacyapprovalclient consumed handling; newexecutionclient/controller/fixture/tests. Main rebuildsassets.
