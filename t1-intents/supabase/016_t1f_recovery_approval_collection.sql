@@ -1,5 +1,5 @@
 -- SOURCE ONLY. Durable OFFCHAIN approval collection, NEVER an Issue release.
--- Apply only to an independently approved database. No LOGIN or membership.
+-- Apply only to an independently approved database. No runtime LOGIN/membership.
 -- Cryptographic verification is the reviewed collector's responsibility;
 -- fingerprints accepted by these functions are attestations, not SQL proofs.
 BEGIN;
@@ -18,14 +18,20 @@ CREATE ROLE mf_t1f_approval_owner NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS
  NOCREATEDB NOCREATEROLE NOREPLICATION;
 CREATE ROLE mf_t1f_approval_runtime NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS
  NOCREATEDB NOCREATEROLE NOREPLICATION;
+-- PG17 hosted migration users have CREATEROLE but are not superusers.
+-- Native creator ADMIN membership has SET FALSE. Borrow only the new owner
+-- for this transaction; remove this executor-granted membership before commit.
+-- The bootstrap-granted creator ADMIN-only membership remains unchanged.
+GRANT mf_t1f_approval_owner TO CURRENT_USER WITH INHERIT FALSE GRANTED BY CURRENT_USER;
+GRANT mf_t1f_approval_owner TO CURRENT_USER WITH SET TRUE GRANTED BY CURRENT_USER;
 CREATE SCHEMA mf_t1f_recovery AUTHORIZATION mf_t1f_approval_owner;
-REVOKE ALL ON SCHEMA mf_t1f_recovery FROM PUBLIC;
 GRANT USAGE ON SCHEMA mf_t1e,mf_t1c TO mf_t1f_approval_owner;
 GRANT SELECT ON mf_t1e.recipient_claims,mf_t1e.consent_rounds,
  mf_t1e.claim_events,mf_t1e.expired_issue_reviews,mf_t1e.issuer_issue_attempts,
  mf_t1e.successor_issue_releases,mf_t1e.successor_issue_operations,
  mf_t1e.successor_issue_events,mf_t1c.intents TO mf_t1f_approval_owner;
 SET LOCAL ROLE mf_t1f_approval_owner;
+REVOKE ALL ON SCHEMA mf_t1f_recovery FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 CREATE FUNCTION mf_t1f_recovery.context() RETURNS jsonb
@@ -292,4 +298,5 @@ GRANT EXECUTE ON FUNCTION mf_t1f_recovery.context(),mf_t1f_recovery.current_roun
 COMMENT ON SCHEMA mf_t1f_recovery IS
  'Source-only durable OFFCHAIN dual approvals. Trusted service attestations, not SQL signature proof. No release, raw signature, Issue reservation, broadcast or settlement. No live LOGIN or grants to existing runtimes.';
 RESET ROLE;
+REVOKE mf_t1f_approval_owner FROM CURRENT_USER GRANTED BY CURRENT_USER;
 COMMIT;

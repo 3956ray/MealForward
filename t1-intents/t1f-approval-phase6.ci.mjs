@@ -33,7 +33,35 @@ try{
   'reviews',(SELECT jsonb_agg(to_jsonb(t)) FROM mf_t1e.expired_issue_reviews t),
   'slots',(SELECT jsonb_agg(to_jsonb(t)) FROM mf_t1e.issuer_issue_attempts t)) AS value`)).rows[0].value;
  const before=await legacy();
- await admin.query(await readFile(new URL('./supabase/016_t1f_recovery_approval_collection.sql',import.meta.url),'utf8'));
+ // Supabase's postgres is CREATEROLE, not SUPERUSER, with no automatic SET grant.
+ // Give a separate synthetic executor only the existing-object grants needed by016.
+ await admin.query('CREATE ROLE mf_t1f_fixture_migrator LOGIN NOINHERIT NOSUPERUSER CREATEROLE NOBYPASSRLS');
+ await admin.query('GRANT CREATE ON DATABASE postgres TO mf_t1f_fixture_migrator');
+ await admin.query('GRANT USAGE ON SCHEMA mf_t1e,mf_t1c TO mf_t1f_fixture_migrator WITH GRANT OPTION');
+ await admin.query(`GRANT SELECT ON mf_t1e.recipient_claims,mf_t1e.consent_rounds,
+  mf_t1e.claim_events,mf_t1e.expired_issue_reviews,mf_t1e.issuer_issue_attempts,
+  mf_t1e.successor_issue_releases,mf_t1e.successor_issue_operations,
+  mf_t1e.successor_issue_events,mf_t1c.intents TO mf_t1f_fixture_migrator WITH GRANT OPTION`);
+ const migrator=new pg.Client({...config,user:'mf_t1f_fixture_migrator'});
+ try{
+  await migrator.connect();
+  await migrator.query("SET createrole_self_grant=''");
+  const meta=(await migrator.query(`SELECT current_user,session_user,rolsuper,rolcreaterole,
+   current_setting('createrole_self_grant') AS self_grant FROM pg_roles WHERE rolname=current_user`)).rows[0];
+  assert.deepEqual(meta,{current_user:'mf_t1f_fixture_migrator',session_user:'mf_t1f_fixture_migrator',rolsuper:false,rolcreaterole:true,self_grant:''});
+  await migrator.query(await readFile(new URL('./supabase/016_t1f_recovery_approval_collection.sql',import.meta.url),'utf8'));
+  const memberships=(await admin.query(`SELECT parent.rolname AS role_name,grantor.rolname AS grantor,
+   m.admin_option,m.inherit_option,m.set_option FROM pg_auth_members m
+   JOIN pg_roles parent ON parent.oid=m.roleid JOIN pg_roles grantor ON grantor.oid=m.grantor
+   WHERE m.member=(SELECT oid FROM pg_roles WHERE rolname='mf_t1f_fixture_migrator')
+   ORDER BY parent.rolname,grantor.rolname`)).rows;
+  assert.equal(memberships.length,2);
+  assert.ok(memberships.every(m=>['mf_t1f_approval_owner','mf_t1f_approval_runtime'].includes(m.role_name)&&m.admin_option&&!m.inherit_option&&!m.set_option&&m.grantor==='postgres'));
+  await fail(()=>migrator.query('SET ROLE mf_t1f_approval_owner'),'42501');
+  await fail(()=>migrator.query('SELECT * FROM mf_t1f_recovery.approval_rounds'),'42501');
+  passed('exact016 non-superuser CREATEROLE migration; temporary owner membership removed, native ADMIN-only memberships preserved');
+ }finally{await migrator.end();}
+
  const {makeApprovalStore}=await import('./t1f-approval-store.mjs');
  // Synthetic local login tests real role membership, not superuser SET ROLE.
  await admin.query('CREATE ROLE mf_t1f_approval_login LOGIN NOINHERIT; GRANT mf_t1f_approval_runtime TO mf_t1f_approval_login');
@@ -58,6 +86,25 @@ try{
  }
  await verifyApprovalRuntime(pool);
  passed('actual dedicated runtime startup and column/sequence/old-schema escalation denial');
+ // Hosted PostgreSQL can expose PUBLIC SELECT on platform views whose schema
+ // is private. Inaccessible ambient grants differ from direct app capability.
+ await admin.query('CREATE SCHEMA platform_diagnostics; REVOKE ALL ON SCHEMA platform_diagnostics FROM PUBLIC');
+ await admin.query('CREATE VIEW platform_diagnostics.stats AS SELECT 1 AS sample; GRANT SELECT ON platform_diagnostics.stats TO PUBLIC');
+ try{
+  await verifyApprovalRuntime(pool);
+  for(const [grant,revoke] of [
+   ['GRANT USAGE ON SCHEMA platform_diagnostics TO mf_t1f_approval_runtime','REVOKE USAGE ON SCHEMA platform_diagnostics FROM mf_t1f_approval_runtime'],
+   ['GRANT SELECT ON platform_diagnostics.stats TO mf_t1f_approval_login','REVOKE SELECT ON platform_diagnostics.stats FROM mf_t1f_approval_login'],
+   ['GRANT SELECT(sample) ON platform_diagnostics.stats TO mf_t1f_approval_runtime','REVOKE SELECT(sample) ON platform_diagnostics.stats FROM mf_t1f_approval_runtime']
+  ]){
+   await admin.query(grant);
+   try{await assert.rejects(()=>verifyApprovalRuntime(pool),/RUNTIME_CAPABILITY/);}
+   finally{await admin.query(revoke);}
+   await verifyApprovalRuntime(pool);
+  }
+ }finally{await admin.query('DROP VIEW platform_diagnostics.stats; DROP SCHEMA platform_diagnostics');}
+ passed('inaccessible platform PUBLIC view reads tolerated; schema access and direct table/column grants rejected');
+
  const context=await store.context();
  assert.equal(context.claim.issuer_tx_nonce,0);
  assert.equal(context.claim.issuer_op_id,ORIGINAL_OPERATION);
