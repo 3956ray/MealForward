@@ -4,7 +4,7 @@ Status: user selected approach A and requested development on2026-10-26. This do
 
 用户确认摘要：全新客户端使用Wagmi Core＋viem，不复制旧Phase6前端；先检查已经授权的钱包，仅未授权时提供连接动作；钱包/后台/轮次/批准记录独立显示；后台或签名组件卡住不锁钱包检查；所有等待有可见反馈，不自动重复请求；沿用后台验签与保存接口，正式双签/发券操作仍遵守原有门槛。验收覆盖实际页面初始化和点击，不以内部函数测试代替浏览器验收。
 
-Independent builder check: a fresh reviewer reported “nothing important left” on2026-10-26. Detailed-design human approval remains pending; no replacement product code or dependency installation has started.
+Independent builder check: a fresh reviewer reported “nothing important left” on2026-10-26. The user explicitly approved this design and autonomous planning, development and independent acceptance until human testing is needed. Implementation authorization is recorded in HANDOFF; subsequent engineering choices are delegated.
 
 ## Intent and selected scope
 
