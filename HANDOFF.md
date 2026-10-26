@@ -11,6 +11,8 @@
 
 **本节取代下文“公网超时待验证”“部署进行中”“不要重签”的旧阶段判断，仅适用于 Phase5 无资金练习。** 本轮用户授权继续按 superpowers 排障及创建 agent；已执行 systematic-debugging、verification-before-completion，并由只读 agent 独立复核练习签名源码和操作步骤。真人 Owner/Donor 的新版 Phase5 验收仍为 **PENDING**，Phase4 两次原 EIP191 PASS 保留，不重做。
 
+**11:42（UTC+8）收尾 CI 补记：** 本轮文档提交后的发布 HEAD `e8d24c537e8044e24f2cf41482e385583ef9e222` 七组 workflow 全部 completed/success，包含新的真实公网 [Phase5 #40265313353](https://github.com/3956ray/MealForward/actions/runs/40265313353)、[Phase4 #40265313412](https://github.com/3956ray/MealForward/actions/runs/40265313412)、[签名回归 #40265313491](https://github.com/3956ray/MealForward/actions/runs/40265313491) 和只读链/PG17 #40265313407。规范交接分支文档提交 `c30cb69e422f7395456e02b144cbfcbd239491f6` 的三组 CI 也全部成功，包含 [公网 #40265311001](https://github.com/3956ray/MealForward/actions/runs/40265311001)。本补记为 `[skip ci]` 的纯文档提交，避免记录结果再触发同样检查；不冒充补记 HEAD 另跑了测试。实际部署仍 c1b99b5 / dep-dbfbvi4s728c73erotl0，真人两次 Phase5 仍待用户执行。
+
 ### 当前运行与 CI 的准确区分
 
 - **Render 工作区/服务**：LaoDao `tea-db7q3ou7bikc73bp2bt0`，RoleProof `srv-dbdeuft9fdbs73atbvh0`，URL https://mealforward-t1e-role-proof-laodao.onrender.com 。再次查询确认 Live 部署仍是 `dep-dbfbvi4s728c73erotl0`，实际运行 Commit **`c1b99b5ed66831c364ba51d23653854756c6d1f4`**；未重新部署。服务为 free、Singapore、autoDeploy=off、非暂停、maintenance=false，启动命令仍 `cd t1-intents && npm run start:t1e:proof`。
