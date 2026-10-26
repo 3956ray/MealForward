@@ -9,6 +9,7 @@ import {consentFromClaim} from './t1e-consent-payload.mjs';
 import {publicClaim,PILOT_RECIPIENT} from './t1e-claim-store.mjs';
 import {FIXED} from './t1e-first-issue-readiness.mjs';
 import {t1fIssuerRoute} from './t1f-issuer-http.mjs';
+import {makeExecutionHttp} from './t1f-execution-http.mjs';
 
 const HASH=x=>createHash('sha256').update(x,'utf8').digest('hex');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
@@ -53,6 +54,7 @@ async function requestJson(req){
 export function makeT1EClaimGateway({
  origin,stage,authStore,claimStore,readiness,loginHandler,
  issueEnabled=false,issuerLedger=null,issuerRpc=null,issuerReadiness=null,
+ successorEnabled=false,executionService=null,
  clock=()=>Math.floor(Date.now()/1000)
 }={}){
  const isConsent=stage==='CLAIM_CONSENT';
@@ -67,6 +69,8 @@ export function makeT1EClaimGateway({
    typeof issuerRpc?.send!=='function'||typeof issuerReadiness!=='function'
  ))throw Error('T1F_ISSUE_CONFIG_NOT_READY');
  const host=new URL(origin).host;
+ if(successorEnabled&&stage!=='CLAIM_CONSENT')throw Error('T1F_EXECUTION_REQUIRES_CONSENT_STAGE');
+ const execution=makeExecutionHttp({enabled:successorEnabled,service:executionService,origin});
  const active=async(req,csrf=false)=>{
   const cookies=cookieMap(req.headers.cookie);
   const token=cookies['__Host-mcpay_c1_session'];
@@ -209,6 +213,11 @@ export function makeT1EClaimGateway({
      onchainIssued:false,issuerIssueEnabled:false,
      beneficiaryEligibilityVerified:false
     });
+   }
+   if(path.startsWith('/v1/t1f/successor/')){
+    if(!successorEnabled)throw ERR(405,'T1F_EXECUTION_DISABLED');
+    const issuer=await active(req,method==='POST');
+    return await execution({request:req,response:res,issuer,path,method,readBody:requestJson});
    }
    if(path.startsWith('/v1/t1f/')){
     if(!issueEnabled)throw ERR(405,'T1F_ISSUE_NOT_RELEASED');

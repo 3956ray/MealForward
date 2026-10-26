@@ -17,6 +17,8 @@ import {makeT1EClaimGateway} from './t1e-claim-http.mjs';
 import {firstVoucherCandidate} from './t1e-first-issue-readiness.mjs';
 import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {originalIssueLedger} from './t1f-issue-ledger.mjs';
+import {executionCapabilityPool,verifyExecutionRuntime,makeExecutionStore} from './t1f-execution-store.mjs';
+import {makeExecutionService} from './t1f-execution-service.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
 export const T1E_CLAIM_ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const PROJECT='ketfrukrcuosrqynnsay';
@@ -33,6 +35,10 @@ export function validateT1EClaimConfig(e=process.env){
  const flag=e.T1F_ISSUE_WALLET_ENABLED??'false';
  FAIL(['true','false'].includes(flag),'T1F_EXPLICIT_ISSUE_FLAG_REQUIRED');
  const issueEnabled=flag==='true';
+ const successorFlag=e.T1F_SUCCESSOR_EXECUTION_ENABLED??'false';
+ FAIL(['true','false'].includes(successorFlag),'T1F_EXPLICIT_SUCCESSOR_FLAG_REQUIRED');
+ const successorEnabled=successorFlag==='true';
+ FAIL(!successorEnabled||stage==='CLAIM_CONSENT','T1F_EXECUTION_REQUIRES_CONSENT_STAGE');
  FAIL(!issueEnabled||stage==='CLAIM_CONSENT',
   'T1F_ISSUE_REQUIRES_CONSENT_STAGE');
  FAIL(['CLAIM_SIWE_ONLY','CLAIM_CONSENT'].includes(stage),
@@ -75,8 +81,15 @@ export function validateT1EClaimConfig(e=process.env){
   chosen.push(e[key]);
  }
  FAIL(chosen[0]!==chosen[1],'T1E_TWO_DISTINCT_PRIVATE_DB_ROLES_REQUIRED');
+ let executionUrl=null;
+ if(successorEnabled){
+  let u;try{u=new URL(e.T1F_EXECUTION_DB_URL)}catch{throw Error('T1F_EXECUTION_DSN_REQUIRED')}
+  FAIL(['postgres:','postgresql:'].includes(u.protocol)&&u.pathname==='/postgres'&&!u.search&&!u.hash&&u.password.length>=12,'T1F_EXECUTION_DSN_INVALID');
+  FAIL(testing?u.hostname==='127.0.0.1'&&u.port==='5435'&&u.username==='mf_t1f_execution_login':u.hostname===DB_HOST&&u.port==='5432'&&u.username==='mf_t1f_execution_login.'+PROJECT,'T1F_EXECUTION_ROLE_OR_PROJECT_DENIED');
+  executionUrl=e.T1F_EXECUTION_DB_URL;
+ }
  return Object.freeze({
-  stage,origin,port,testing,issueEnabled,
+  stage,origin,port,testing,issueEnabled,successorEnabled,executionUrl,
   authUrl:chosen[0],claimUrl:chosen[1],
   expectedAuth:AUTH_ROLE,expectedClaim:CLAIM_ROLE
  });
@@ -123,7 +136,7 @@ export async function startT1EClaimServer({env=process.env}={}){
  });
  const authPool=new pg.Pool(options(cfg.authUrl));
  const claimPool=new pg.Pool(options(cfg.claimUrl));
- let server;
+ let server,executionPool;
  try{
   const [a,b]=await Promise.all([
    authPool.query('SELECT current_user AS who'),
@@ -174,7 +187,14 @@ export async function startT1EClaimServer({env=process.env}={}){
     "WHERE claim_id='fbab3b22-965d-44e2-b144-d7307b7aa8ea'::uuid");
    FAIL(pinned.rowCount===1,'T1F_REVIEWED_DB_MIGRATION_AND_CLAIM_REQUIRED');
   }
+  let executionService=null;
+  if(cfg.successorEnabled){
+   executionPool=executionCapabilityPool(new pg.Pool(options(cfg.executionUrl)));
+   await verifyExecutionRuntime(executionPool);
+   executionService=makeExecutionService({store:makeExecutionStore({pool:executionPool})});
+  }
   const app=makeT1EClaimGateway({
+   successorEnabled:cfg.successorEnabled,executionService,
    origin:cfg.origin,stage:cfg.stage,
    authStore:auth,claimStore:claims,loginHandler:handler,
    readiness:()=>firstVoucherCandidate(),
@@ -217,11 +237,11 @@ export async function startT1EClaimServer({env=process.env}={}){
    server,config:cfg,
    async close(){
     await new Promise(resolve=>server.close(resolve));
-    await Promise.all([authPool.end(),claimPool.end()]);
+    await Promise.all([authPool.end(),claimPool.end(),executionPool?.end()]);
    }
   });
  }catch(e){
-  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{})]);
+  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{}),executionPool?.end().catch(()=>{})]);
   throw e;
  }
 }
