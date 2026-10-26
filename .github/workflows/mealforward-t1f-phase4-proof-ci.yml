@@ -4,6 +4,7 @@ on:
     branches:
       - codex/mealforward-t1f-phase4-owner-donor-proof-20261025
       - codex/mealforward-t1f-phase5-release-hold-hardening-20261025
+      - codex/mealforward-phase5-metamask-v4-domain-fix-20261026
       - codex/mealforward-t1e-issuer-original-tx-verifier-20261023
   workflow_dispatch:
 permissions:
@@ -37,6 +38,7 @@ jobs:
           node --check t1f-phase4-proof.test.mjs
           node --check t1f-phase5-typed-practice.mjs
           node --check t1f-phase5-typed-practice.test.mjs
+          node --check t1f-phase5-metamask-v4-domain.test.mjs
           node --check public/t1f-phase5.mjs
           node --check public/t1f-phase4.mjs
       - name: Real test EIP191 signatures and negative security HTTP gates
@@ -44,6 +46,7 @@ jobs:
         run: |
           node --test t1f-phase4-proof.test.mjs
           node --test t1f-phase5-typed-practice.test.mjs
+          node --test t1f-phase5-metamask-v4-domain.test.mjs
           node --test t1e-role-proof-server.test.mjs
           node --test t1e-wallet-roles.test.mjs
       - name: Ensure independent Role Proof never signs/approves/transfers or opens original financial operations

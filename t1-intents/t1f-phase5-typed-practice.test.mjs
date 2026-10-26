@@ -114,7 +114,7 @@ test('actual EIP712 signatures of independent synthetic Owner and Donor pass exa
   assert.match(challenge.body.typedData.message.purpose,/PRACTICE ONLY/);
   sigs.add(challenge.body.typedData.message.nonce);
   const signature=await wallet.signTypedData(
-   challenge.body.typedData.domain,challenge.body.typedData.types,
+   challenge.body.typedData.domain,{PracticeControl:challenge.body.typedData.types.PracticeControl},
    challenge.body.typedData.message
   );
   const verified=await request('/v1/t1f/phase5/verify',{method:'POST',body:{
@@ -143,13 +143,13 @@ test('forged signatures, role swap, URL injection and origin override are denied
   role:'owner',address:owner.address
  }});
  const sig=await donor.signTypedData(chal.body.typedData.domain,
-  chal.body.typedData.types,chal.body.typedData.message);
+  {PracticeControl:chal.body.typedData.types.PracticeControl},chal.body.typedData.message);
  const mismatch=await request('/v1/t1f/phase5/verify',{method:'POST',body:{
   challengeId:chal.body.challengeId,signature:sig
  }});
  assert.equal(mismatch.code,401);
  const ownerSig=await owner.signTypedData(chal.body.typedData.domain,
-  chal.body.typedData.types,chal.body.typedData.message);
+  {PracticeControl:chal.body.typedData.types.PracticeControl},chal.body.typedData.message);
  assert.equal((await request('/v1/t1f/phase5/verify',{method:'POST',body:{
   challengeId:chal.body.challengeId,signature:ownerSig
  }})).code,409,'invalid attempt consumes nonce');
@@ -173,7 +173,7 @@ test('typed proof expires and bounds outstanding challenges',async()=>{
  assert.equal(first.code,200);
  now+=121;
  const signature=await owner.signTypedData(first.body.typedData.domain,
-  first.body.typedData.types,first.body.typedData.message);
+  {PracticeControl:first.body.typedData.types.PracticeControl},first.body.typedData.message);
  const old=await request('/v1/t1f/phase5/verify',{method:'POST',body:{
   challengeId:first.body.challengeId,signature
  }});
