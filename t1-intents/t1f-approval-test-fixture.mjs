@@ -2,6 +2,7 @@
 import {CHAIN,ESCROW} from './core.mjs';
 import {FIXED,originalVoucherId} from './t1e-first-issue-readiness.mjs';
 import {ORIGINAL_CLAIM,ORIGINAL_OPERATION,ORIGINAL_DATA_HASH,ORIGINAL_DEADLINE} from './t1f-successor-issue-protocol.mjs';
+import {APPROVAL_WALLETS} from './t1f-approval-protocol.mjs';
 import {buildSuccessorReleaseManifest} from './t1f-successor-dual-approval.mjs';
 export const NOW=1792792000,HEX=n=>'0x'+n.repeat(64),ROUND='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 export function fixture(){
@@ -44,3 +45,5 @@ export async function approvalRpcFixture({pending=0,blockTime=NOW-10,reorg=false
  }};
  return {rpc,calls};
 }
+
+export function consumed(){const f=fixture();f.row.approvals=Object.entries(APPROVAL_WALLETS).map(([role,wallet])=>({role,wallet,fingerprint:HEX('a')}));const c={consumption_id:'ffffffff-ffff-4fff-8fff-ffffffffffff',version:'T1F_CONSUMPTION_V1',round_id:ROUND,digest:f.row.digest,claim_id:f.context.claim.claim_id,slot_id:f.context.slot.attempt_id,release_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',successor_id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',consumed_at_epoch:NOW,no_release:true,can_issue:false,may_broadcast_by_server:false,approved_for_settlement:false};f.context.consumption=c;f.row.consumption=c;return f;}

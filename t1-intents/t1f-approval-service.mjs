@@ -4,7 +4,7 @@ import {firstVoucherCandidate} from './t1e-first-issue-readiness.mjs';
 import {inspectExpiredOriginalIssuer} from './t1f-expired-issuer-readonly.mjs';
 import {assessExpiredOriginalReview} from './t1f-expired-recovery-review.mjs';
 import {buildSuccessorReleaseManifest} from './t1f-successor-dual-approval.mjs';
-import {requireApproval as check,exactKeys,reconstructApproval,verifyApprovalRole,publicApproval,validRoundId,WALLET_OBSERVATION,APPROVAL_WALLETS} from './t1f-approval-protocol.mjs';
+import {requireApproval as check,exactKeys,reconstructApproval,verifyApprovalRole,publicApproval,validRoundId,WALLET_OBSERVATION,APPROVAL_WALLETS,collectorConsumption} from './t1f-approval-protocol.mjs';
 const METHODS=new Set(['eth_chainId','eth_blockNumber','eth_getBlockByNumber','eth_getCode','eth_call','eth_getTransactionReceipt','eth_getTransactionCount']);
 const integer=x=>{const n=Number(BigInt(x));check(Number.isSafeInteger(n)&&n>=0,'RPC_INTEGER');return n};
 const tag=x=>'0x'+BigInt(x).toString(16);
@@ -83,11 +83,12 @@ export function makeApprovalService({store,rpc=makeApprovalPublicRpc(),clock=()=
   createRound:({walletObservation}={})=>exclusive(async()=>{
    const now=clock();
    check(exactKeys(walletObservation,['value','observedAt'])&&walletObservation.value===WALLET_OBSERVATION&&Number.isSafeInteger(walletObservation.observedAt)&&walletObservation.observedAt<=now&&now-walletObservation.observedAt<=120,'WALLET_OBSERVATION');
-   const context=await store.context(),bounded=boundedApprovalRpc({rpc,budgetMs:rpcBudgetMs});
+   const context=await store.context();collectorConsumption(null,context);check(!context.consumption,'CONSUMED');
+   const bounded=boundedApprovalRpc({rpc,budgetMs:rpcBudgetMs});
    try{
     const chain=await observe(bounded.rpc,null,clock),createdAt=clock();
     check(createdAt-walletObservation.observedAt<=120,'WALLET_OBSERVATION');
-    const freshContext=await store.context();bounded.check();
+    const freshContext=await store.context();bounded.check();collectorConsumption(null,freshContext);check(!freshContext.consumption,'CONSUMED');
     check(JSON.stringify(context)===JSON.stringify(freshContext),'CONTEXT_CHANGED');
     const manifest=buildSuccessorReleaseManifest({...freshContext,chain,walletObservation:walletObservation.value,nonceDomain:'0x'+randomBytes(32).toString('hex'),candidateOperationId:'0x'+randomBytes(32).toString('hex'),candidateNonce:'0',candidateDeadline:createdAt+480,approvalExpiresAt:createdAt+300,now:createdAt});
     bounded.check();
@@ -102,13 +103,14 @@ export function makeApprovalService({store,rpc=makeApprovalPublicRpc(),clock=()=
    active();
    check(exactKeys(body,['role','roundId','digest','signature'])&&validRoundId(body.roundId),'SUBMISSION');
    const row=await store.get(body.roundId);check(row?.round_id===body.roundId&&row.digest===body.digest,'ROUND_MISMATCH');
-   const context=await store.context(),manifest=reconstructApproval({row,context,now:clock()});
+   const context=await store.context();collectorConsumption(row,context);check(!context.consumption,'CONSUMED');
+   const manifest=reconstructApproval({row,context,now:clock()});
    const attestation=verifyApprovalRole({manifest,role:body.role,signature:body.signature});
    const bounded=boundedApprovalRpc({rpc,budgetMs:rpcBudgetMs,signal});
    try{
     active();
     const chain=await observe(bounded.rpc,row,clock);
-    const freshContext=await store.context();bounded.check();
+    const freshContext=await store.context();bounded.check();collectorConsumption(null,freshContext);check(!freshContext.consumption,'CONSUMED');
     reconstructApproval({row,context:freshContext,now:clock()});
     check(assessExpiredOriginalReview({...freshContext,chain,walletObservation:WALLET_OBSERVATION,now:clock()}).status==='T1F_REVIEWABLE_OFFLINE_SECURITY_REVIEW_ONLY','CONTEXT_CHANGED');
     bounded.check();

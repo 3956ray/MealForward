@@ -35,3 +35,11 @@ test('expired manifest is represented as expired, never signable by validation a
  const s=valid();s.status='EXPIRED';s.serverTime=NOW+301;
  const x=validateState(s,NOW+301);assert.equal(x.status,'EXPIRED');assert.ok(x.round!.expiresAt<=x.serverTime);
 });
+test('strict consumed receipt survives expiry and rejects every corrupted field',async()=>{
+ // @ts-ignore backend fixture has no declarations
+ const {consumed}=await import('../../t1f-approval-test-fixture.mjs');
+ const f=consumed(),s=publicApproval({...f,now:NOW+1000});
+ assert.equal(validateState(s,NOW+1000).status,'CONSUMED_NO_RELEASE');
+ for(const key of Object.keys(s.consumption)){const x=structuredClone(s);x.consumption[key]=null;assert.throws(()=>validateState(x,NOW+1000));}
+ for(const x of [{...s,status:'EXPIRED'},{...s,unknown:1},{...s,consumption:undefined}])assert.throws(()=>validateState(x,NOW+1000));
+});

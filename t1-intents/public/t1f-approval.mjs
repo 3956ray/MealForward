@@ -20,9 +20,9 @@ const keys=(o,k)=>!!o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).so
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(x);
 const bytes=x=>typeof x==='string'&&/^0x[0-9a-f]{64}$/.test(x)&&x!=='0x'+'0'.repeat(64);
 export function validateApprovalState(s,{hashTypedData,now}){
- check(keys(s,['noRelease','canIssue','chainId','wallets','roles','serverTime','status','round'])&&s.noRelease===true&&s.canIssue===false&&s.chainId===10143&&Number.isSafeInteger(s.serverTime)&&Math.abs(s.serverTime-now)<=30);
+ check((keys(s,['noRelease','canIssue','chainId','wallets','roles','serverTime','status','round'])||keys(s,['consumption','noRelease','canIssue','chainId','wallets','roles','serverTime','status','round']))&&s.noRelease===true&&s.canIssue===false&&s.chainId===10143&&Number.isSafeInteger(s.serverTime)&&Math.abs(s.serverTime-now)<=30);
  check(keys(s.wallets,['owner','donor'])&&Object.keys(WALLETS).every(k=>s.wallets[k]===WALLETS[k])&&keys(s.roles,['owner','donor'])&&Object.values(s.roles).every(v=>typeof v==='boolean'));
- if(s.round===null){check(s.status==='NO_ROUND'&&!s.roles.owner&&!s.roles.donor);return s}
+ if(s.round===null){check(s.status==='NO_ROUND'&&!s.roles.owner&&!s.roles.donor&&!Object.hasOwn(s,'consumption'));return s}
  const r=s.round,t=r.typedData;
  check(keys(r,['id','digest','expiresAt','typedData'])&&uuid(r.id)&&bytes(r.digest)&&Number.isSafeInteger(r.expiresAt));
  check(keys(t,['domain','types','primaryType','message'])&&t.primaryType==='SuccessorIssueRelease'&&keys(t.domain,Object.keys(DOMAIN))&&Object.keys(DOMAIN).every(k=>t.domain[k]===DOMAIN[k]));
@@ -31,12 +31,13 @@ export function validateApprovalState(s,{hashTypedData,now}){
  for(const f of FIELDS){const value=t.message[f.name];check(typeof value==='string');if(f.type==='bytes32')check(bytes(value));if(f.type==='uint256')check(/^(0|[1-9][0-9]{0,15})$/.test(value))}
  check(uuid(t.message.reviewId)&&uuid(t.message.slotId)&&t.message.newOpId!==PINS.originalOpId&&t.message.observedBlockNumber!=='0');
  check(Number(t.message.approvalExpiresAt)===r.expiresAt&&Number(t.message.newDeadline)===r.expiresAt+180&&r.expiresAt<=s.serverTime+300&&hashTypedData(t)===r.digest);
- const expected=s.serverTime>=r.expiresAt?'EXPIRED':s.roles.owner&&s.roles.donor?'COLLECTED_NO_RELEASE':'COLLECTING';check(s.status===expected);return s;
+ if(Object.hasOwn(s,'consumption')){const c=s.consumption;check(keys(c,['consumption_id','version','round_id','digest','claim_id','slot_id','release_id','successor_id','consumed_at_epoch','no_release','can_issue','may_broadcast_by_server','approved_for_settlement'])&&c.version==='T1F_CONSUMPTION_V1'&&['consumption_id','round_id','claim_id','slot_id','release_id','successor_id'].every(k=>uuid(c[k]))&&c.round_id===r.id&&c.digest===r.digest&&c.claim_id===t.message.claimId&&c.slot_id===t.message.slotId&&Number.isSafeInteger(c.consumed_at_epoch)&&c.consumed_at_epoch>0&&c.no_release===true&&c.can_issue===false&&c.may_broadcast_by_server===false&&c.approved_for_settlement===false&&s.roles.owner&&s.roles.donor);}
+ const expected=s.consumption?'CONSUMED_NO_RELEASE':s.serverTime>=r.expiresAt?'EXPIRED':s.roles.owner&&s.roles.donor?'COLLECTED_NO_RELEASE':'COLLECTING';check(s.status===expected);return s;
 }
 export function createApprovalClient({provider,request,hashTypedData,clock=()=>Math.floor(Date.now()/1000),render=()=>{}}){
  let revision=0,busy=false,state=null,csrf=null,sessionExpiry=0,needsRefresh=true,wallet={status:'unverified'};
  // Historical role proofs remain visible, but never look valid past the deadline.
- const snapshot=()=>({busy,state:state?.round&&clock()>=state.round.expiresAt?{...state,status:'EXPIRED'}:state,needsRefresh,wallet:{...wallet}});const notify=()=>render(snapshot());
+ const snapshot=()=>({busy,state:state?.status!=='CONSUMED_NO_RELEASE'&&state?.round&&clock()>=state.round.expiresAt?{...state,status:'EXPIRED'}:state,needsRefresh,wallet:{...wallet}});const notify=()=>render(snapshot());
  const invalid=()=>{revision++;needsRefresh=true;wallet={status:'unverified'};notify()};
  for(const event of ['accountsChanged','chainChanged','disconnect'])provider?.on?.(event,invalid);
  const unchanged=version=>check(version===revision);
@@ -107,6 +108,7 @@ export function drawApprovalRoles(snapshot,$,now=Math.floor(Date.now()/1000)){
   let reason='';
   if(!state)reason='请先刷新持久状态，核对签名轮次。';
   else if(state.status==='NO_ROUND')reason='尚无正式签名轮次，签名按钮暂不可用；连接钱包不会创建轮次。';
+  else if(state.status==='CONSUMED_NO_RELEASE')reason='本轮已消费；保留历史批准，禁止再次签署。NO RELEASE。';
   else if(state.status==='EXPIRED'||state.round.expiresAt<=now)reason='本轮已过期，签名按钮暂不可用，请等待新轮次。';
   else if(state.roles[role])reason='本角色的批准已记录，无需重复签署。';
   else if(busy)reason='正在处理，请等待当前操作完成。';

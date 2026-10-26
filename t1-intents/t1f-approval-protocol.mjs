@@ -1,3 +1,4 @@
+import {validateConsumption} from './t1f-execution-contract.mjs';
 /** Formal Recovery approvals only. This module cannot release or prepare Issue. */
 import {verifyTypedData,keccak256} from 'ethers';
 import {CHAIN,ESCROW} from './core.mjs';
@@ -55,16 +56,26 @@ export function verifyApprovalRole({manifest,role,signature}){
  requireApproval(recovered.wallet===APPROVAL_WALLETS[role],'SIGNER');
  return {role,...recovered};
 }
+export function collectorConsumption(row,context){
+ const c=context?.consumption,r=row?.consumption;
+ if(context&&Object.hasOwn(context,'consumption'))validateConsumption(c,{context});
+ if(row&&Object.hasOwn(row,'consumption'))validateConsumption(r,{round:row,context});
+ if(r)requireApproval(!!c&&Object.keys(r).every(k=>r[k]===c[k]),'CONSUMPTION_CONTEXT');
+ if(c&&row?.round_id===c.round_id){validateConsumption(c,{round:row,context});return c;}
+ return null;
+}
 export function publicApproval({row,context,now}){
  const base={noRelease:true,canIssue:false,chainId:CHAIN,wallets:APPROVAL_WALLETS,roles:{owner:false,donor:false},serverTime:now};
- if(!row)return {...base,status:'NO_ROUND',round:null};
+ const consumption=collectorConsumption(row,context);
+ if(!row){requireApproval(!context?.consumption,'CONSUMPTION_ROUND');return {...base,status:'NO_ROUND',round:null};}
  const m=reconstructApproval({row,context,now,allowExpired:true});
  requireApproval(Array.isArray(row.approvals)&&row.approvals.length<=2,'APPROVAL_ROWS');
  for(const a of row.approvals){
   requireApproval(Object.hasOwn(APPROVAL_WALLETS,a.role)&&a.wallet===APPROVAL_WALLETS[a.role]&&!base.roles[a.role]&&H32.test(a.fingerprint),'APPROVAL_ROW');
   base.roles[a.role]=true;
  }
+ if(consumption)requireApproval(base.roles.owner&&base.roles.donor,'CONSUMPTION_APPROVALS');
  const expired=now>=Number(m.value.approvalExpiresAt);
- return {...base,status:expired?'EXPIRED':base.roles.owner&&base.roles.donor?'COLLECTED_NO_RELEASE':'COLLECTING',
+ return {...base,...(consumption?{consumption}:{}),status:consumption?'CONSUMED_NO_RELEASE':expired?'EXPIRED':base.roles.owner&&base.roles.donor?'COLLECTED_NO_RELEASE':'COLLECTING',
   round:{id:row.round_id,digest:m.digest,expiresAt:Number(m.value.approvalExpiresAt),typedData:approvalTypedData(m)}};
 }

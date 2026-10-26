@@ -1,3 +1,4 @@
+import {publicApproval} from './t1f-approval-protocol.mjs';
 /** Standalone exact009–017 fresh PG17 + actual HTTP + synthetic read-only RPC. */
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -60,6 +61,6 @@ try{
  fake.setMode('reverted');result=await http.request('reconcile',{body:reconcile});assert.equal(result.body.operation.stage,'ISSUE_HASH_BOUND');assert.equal(result.body.receiptStatus,'REVERTED_NO_AUTORETRY');
  for(const mode of ['wrongEvents','noncanonical','operationMismatch','accountingMismatch']){fake.setMode(mode);assert.equal((await http.request('reconcile',{body:reconcile})).status,503,mode);assert.equal((await store.context()).operation.stage,'ISSUE_HASH_BOUND')}pass('pending/reverted/noncanonical/wrong events/operation/accounting never mark issued or resend');
  fake.setMode('issued');result=await http.request('reconcile',{body:reconcile});assert.equal(result.status,200,JSON.stringify(result.body));assert.equal(result.body.operation.stage,'ISSUED');assert.equal(result.body.transaction,undefined);assert.deepEqual(await counts(),{c:1,r:1,o:1,e:3});pass('canonical receipt, unique events, operation, voucher and accounting mark successorISSUED only');
- assert.deepEqual(await fingerprint(),before);assert.equal((await a.get(roundId)).consumption.successor_id,first.operation.id);pass('all original Claim/Consent/Fund/events/review/slot fingerprints unchanged; collector reads survive');
+ assert.deepEqual(await fingerprint(),before);assert.equal((await a.get(roundId)).consumption.successor_id,first.operation.id);const collectorDto=publicApproval({row:await a.current(),context:await a.context(),now:Math.floor(Date.now()/1000)});assert.equal(collectorDto.status,'CONSUMED_NO_RELEASE');assert.equal(collectorDto.canIssue,false);assert.equal(collectorDto.noRelease,true);pass('all original Claim/Consent/Fund/events/review/slot fingerprints unchanged; collector reads survive');
  console.log(JSON.stringify({status:'T1F_PHASE7_EXECUTION_HTTP_PG17_PASS',tests:count,actualHttp:true,exactMigrations:'009-017',liveDatabaseUsed:false,realSignatures:0,transactions:0}));
 }finally{await http?.close();await approvalPool?.end();await executionPool?.end();await admin.end().catch(()=>{});}

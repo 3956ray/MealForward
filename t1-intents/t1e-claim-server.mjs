@@ -214,6 +214,11 @@ export async function startT1EClaimServer({env=process.env}={}){
    ['/t1f-issuer.html','t1f-issuer.html','text/html; charset=utf-8'],
    ['/t1f-issuer.mjs','t1f-issuer.mjs','text/javascript; charset=utf-8']
   );
+  if(cfg.successorEnabled)staticFiles.push(
+   ['/t1f-execution.html','t1f-execution.html','text/html; charset=utf-8'],
+   ['/t1f-execution.css','t1f-execution.css','text/css; charset=utf-8'],
+   ...['controller','page','crypto'].map(name=>['/t1f-execution-'+name+'.mjs','t1f-execution-'+name+'.mjs','text/javascript; charset=utf-8'])
+  );
   const files=new Map(await Promise.all(
    staticFiles.map(async([url,file,type])=>[
    url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}

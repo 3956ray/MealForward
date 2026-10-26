@@ -40,7 +40,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  function scheduleExpiry(){
   if(expiryTimer)timers.clearTimeout(expiryTimer);
   expiryTimer=null;
-  if(!state?.round)return;
+  if(!state?.round||state.status==='CONSUMED_NO_RELEASE')return;
   const delay=(state.round.expiresAt-clock())*1000;
   if(delay<=0)return;
   expiryTimer=timers.setTimeout(()=>{expiryTimer=null;roundProgress='轮次已过期';publish()},delay);
@@ -50,6 +50,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   if(backendPhase!=='ready')return 'BACKEND_UNAVAILABLE';
   if(!validatedFresh)return validationCode||'VALIDATION_UNAVAILABLE';
   if(!state?.round)return 'NO_ROUND';
+  if(state.status==='CONSUMED_NO_RELEASE')return 'CONSUMED_NO_RELEASE';
   if(state.status==='EXPIRED'||clock()>=state.round.expiresAt)return 'EXPIRED';
   if(state.status==='COLLECTED_NO_RELEASE')return 'COLLECTED_NO_RELEASE';
   if(state.status!=='COLLECTING')return 'ROUND_NOT_COLLECTING';

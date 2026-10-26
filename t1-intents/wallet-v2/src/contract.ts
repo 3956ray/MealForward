@@ -26,4 +26,4 @@ export type MessageField=(typeof MESSAGE_FIELDS)[number]['name'];
 export type ApprovalMessage=Record<MessageField,string>;
 export type ApprovalTypedData={domain:typeof DOMAIN;types:{EIP712Domain:typeof DOMAIN_FIELDS;SuccessorIssueRelease:typeof MESSAGE_FIELDS};primaryType:'SuccessorIssueRelease';message:ApprovalMessage};
 export type ApprovalRound={id:string;digest:`0x${string}`;expiresAt:number;typedData:ApprovalTypedData};
-export type PublicState={noRelease:true;canIssue:false;chainId:10143;wallets:{owner:string;donor:string};roles:{owner:boolean;donor:boolean};serverTime:number;status:'NO_ROUND'|'COLLECTING'|'COLLECTED_NO_RELEASE'|'EXPIRED';round:ApprovalRound|null};
+export type PublicState={noRelease:true;canIssue:false;chainId:10143;wallets:{owner:string;donor:string};roles:{owner:boolean;donor:boolean};serverTime:number;consumption?:Record<string,unknown>;status:'CONSUMED_NO_RELEASE'|'NO_ROUND'|'COLLECTING'|'COLLECTED_NO_RELEASE'|'EXPIRED';round:ApprovalRound|null};

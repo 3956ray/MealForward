@@ -15,7 +15,7 @@ const transaction=v=>({from:FIXED.issuerAuthority,to:ESCROW,chainId:hex(CHAIN),v
 /** Deliberate allowlist: no claim privacy, signature fingerprints or transaction bytes. */
 export function publicExecution({context,round,consumption,operation},now){
  if(consumption)validateConsumption(consumption,{context,operation});
- const collected=round?publicApproval({row:round,context,now}):null;
+ const collected=round?publicApproval({row:round,context:consumption?{...context,consumption}:context,now}):null;
  const o=operation;
  return {status:o?'RECOVERY_ONLY':!round?'NO_ROUND':now>=Number(round.value.approvalExpiresAt)-90?'PREPARE_WINDOW_CLOSED':collected.roles.owner&&collected.roles.donor?'READY_TO_PREPARE':'AWAIT_APPROVALS',
   originalClaimStage:'ISSUE_UNKNOWN',serverTime:now,chainId:CHAIN,issuer:FIXED.issuerAuthority,target:ESCROW,
