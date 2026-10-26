@@ -86,7 +86,7 @@ export function makePhase5TypedPractice({
    purpose:PURPOSE
   };
   const typedData=Object.freeze({
-   domain:DOMAIN,types:TYPES,primaryType:'PracticeControl',message
+   domain:DOMAIN,types:{...TYPES,EIP712Domain:[{name:'name',type:'string'},{name:'version',type:'string'},{name:'chainId',type:'uint256'},{name:'verifyingContract',type:'address'}]},primaryType:'PracticeControl',message
   });
   pending.set(challengeId,{
    role:body.role,address:registered[body.role],issuedAt,expiresAt,
