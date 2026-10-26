@@ -8,6 +8,20 @@
 
 
 
+## 2026-10-26 15:53（UTC+8）Phase6 钱包连接反馈修复上线，等待真人复测
+
+**用户实际验收发现问题**：电脑浏览器MetaMask扩展弹出账户选择，但回到页面没有明显连接结果。该反馈不记为真人连接PASS，也不能由此前HTTP/合成测试推断真人钱包已连通。通过superpowers systematic-debugging、TDD及独立只读agent复核，确认源码缺失连接状态：成功后只设置needsRefresh，页面仍显示固定期望地址和“尚未记录批准”；错误账户/网络也被统一吞为刷新提示。没有证据证明MetaMask授权协议本身失败，故保留与已通过Phase5相同的权限请求流程。
+
+- **修复范围**：`t1-intents/public/t1f-approval.{html,mjs}` 与页面测试。独立显示“当前钱包连接”的实际账户、角色、网络；错误账户/网络、拒绝、待处理请求、未安装/断开均给出安全提示。切换账户/网络/断开立即撤销旧连接确认，只显示当前角色；连接状态与持久批准分开。NO_ROUND时解释签名按钮禁用。独立审查发现通用消息会残留旧成功文字，已改为中性提示，事实只从实时连接区域读取。长地址沿用现有窄屏换行样式。
+- **应用提交与CI**：连接修复 `536085437cadaf7a781f6bd53860ed4198fde57b`，窄屏修复 **`953fea650834aa475520819f0eec5763df54fc24`**；最终 [CI #40288180862](https://github.com/3956ray/MealForward/actions/runs/40288180862) 四作业全部success，日志确认 **207项测试（178+16+13）及15组真实隔离PG检查PASS**。页面16项测试含7项新增覆盖；前5项先在旧实现观察到预期失败，再修复转绿。初次本地全量非PG测试遗漏 `GITHUB_ACTIONS=true`，3项旧quote fixture按守卫拒绝；补齐既有CI要求后178项全通过，没有修改旧资金校验。语法与diff检查通过。
+- **浏览器证据**：真实Chrome无痕窗口运行仅绑定127.0.0.1的合成钱包fixture，直接使用实际页面模块和HTTP处理器；验证Owner成功、账户变化撤销、Donor成功、错误网络提示、NO_ROUND始终禁签；390px设备预览确认完整地址和提示可换行。fixture没有真实钱包、数据库、RPC或签名，已停止进程。实际用户页面只读截图证明旧页的连接反馈缺口；不能据钱包资产筛选显示Sepolia就断言dapp实际网络。新版真人扩展连接仍待用户复测。
+- **实际部署**：同一Phase6服务 `srv-dbfflq5g1s2s73fl05fg`，新部署 **`dep-dbfgcng473hc73d399g0`**，2026-10-26T07:51:47.007579Z进入live，实际运行上述953fea6完整SHA；autoDeploy仍off。入口仍 [Phase6正式恢复批准](https://mealforward-t1f-approval-laodao.onrender.com)。仅更新该服务，无环境/凭据/迁移变化，旧RoleProof和Claim部署仍分别c1b99b5/dep-dbfbvi4s728c73erotl0、c8723c2/dep-dbdto63rjlhs738br1sg。
+- **真实公网与实库收尾**：实际执行 `t1f-approval-live-smoke.mjs` 返回 `T1F_PHASE6_PUBLIC_NO_ROUND_NEGATIVE_PASS`，31项HTTPS检查通过，四个静态资源与953fea6源码逐字节匹配，状态NO_ROUND、realSignatures/onchainTransactions/durableWritesRequested均0；实库旧Claim/Fund/Consent/Event指纹仍 `01556b358764d9c262f96c90f75cafcc`，successor release/operation/event仍0/0/0。未创建正式轮次、未签名或发送交易；数据库17条迁移及权限保持上一节实况。NO RELEASE不变。
+
+**本人下一步**：刷新原入口，确认出现“当前钱包连接”；在MetaMask选择Monad Testnet（10143），只选择本页对应的固定Owner或Donor账户并确认连接。返回页面应显示“已连接 OWNER/DONOR”及实际地址；两角色逐个测试，不要求同时连接。若失败，回传该区域的完整提示文字即可，不需原始签名、cookie或开发者工具内容。`NO_ROUND · 0/2 · NO RELEASE`和签名按钮禁用仍属预期，“尚未记录”指尚未签署批准。真实连接通过、取得新鲜Issuer活动观察且用户准备好后，才明确创建300秒轮次；不要用之前的空活动回传伪造新观察时间。正式双签及实际Issue门槛保持不变。
+
+此节为 `[skip ci]` 文档提交；应用验证属于953fea6，不冒称后续文档HEAD另跑CI。
+
 ## 2026-10-26 15:11（UTC+8）Phase6 已实际启用；公网通过，等待本人测试
 
 **本节覆盖下文“真实环境等待批准”“源码未部署”“数据库仅001–012”的历史状态。** 用户明确回传“批准 并继续下一阶段开发 直到需要我进行测试”，批准了已提供的分步启用方案。现已完成013–016、专用最小权限账号、独立免费Render服务及实际公网验证。Phase5练习仍为USER-REPORTED 2/2 PASS，无需重做；**正式Recovery签名仍NOT_RUN，当前NO_ROUND，始终NO RELEASE**。

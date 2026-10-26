@@ -1,6 +1,6 @@
 # Phase6 Recovery approval collector — deployment and human gate
 
-Status: activated with explicit user approval on2026-10-26. Supabase013–016 and the dedicated login are live; the separate Render collector runs commit `cb974115c3bf5198499394bf75ad455e47bdc2cc`. Public31-check smoke and source CI200 tests/15 PG groups passed. Current state is **NO_ROUND · NO RELEASE**; public browser rendering/wallet acceptance remains NOT_RUN because browser automation could not open the page. Phase5 Owner/Donor practice result is **USER-REPORTED 2/2 PASS · NO RELEASE**; it is not a formal Recovery signature. Exact resource IDs and evidence are in root HANDOFF.
+Status: activated with explicit user approval on2026-10-26. Supabase013–016 and the dedicated login are live; the separate Render collector runs commit `953fea650834aa475520819f0eec5763df54fc24`. Public31-check smoke and source CI207 tests/15 PG groups passed. Current state is **NO_ROUND · NO RELEASE**; real MetaMask acceptance remains pending after a reported connection-feedback defect. The corrected UI passed real Chrome synthetic-wallet desktop/390px checks; this is not real wallet acceptance. Phase5 Owner/Donor practice result is **USER-REPORTED 2/2 PASS · NO RELEASE**; it is not a formal Recovery signature. Exact resource IDs and evidence are in root HANDOFF.
 
 ## Reviewable boundary
 
@@ -30,7 +30,7 @@ Only after a new explicit Issuer wallet observation and human readiness, call `r
 
 ## Formal signature test, only after activation checks
 
-Verified public URL: **https://mealforward-t1f-approval-laodao.onrender.com**. It serves commit `cb974115c3bf5198499394bf75ad455e47bdc2cc`, Render deploy `dep-dbfflqtg1s2s73fl07m0`. Before a round exists, expect `NO_ROUND · 0/2 · NO RELEASE`; wallet connection is available but formal signing is disabled. On a cold free instance allow about1–2minutes for the page to load, then refresh once if needed. First confirm actual browser display and readiness before starting the five-minute round.
+Verified public URL: **https://mealforward-t1f-approval-laodao.onrender.com**. It serves commit `953fea650834aa475520819f0eec5763df54fc24`, Render deploy `dep-dbfgcng473hc73d399g0`. The page now shows an independent “当前钱包连接” region with the verified current role, actual account and network, or an actionable connection error. “尚未记录” below each role refers to approval signatures, not connection. Switching accounts invalidates the old connection confirmation; test one role at a time. Before a round exists, expect `NO_ROUND · 0/2 · NO RELEASE`; wallet connection is available but formal signing is disabled. On a cold free instance allow about1–2minutes for the page to load, then refresh once if needed. First confirm actual browser display and readiness before starting the five-minute round.
 
 1. Explicitly inspect the Issuer wallet activity and report the current observation before the operator creates a fresh round. Page loads and refreshes must never create a round. A failed/expired round cannot roll over automatically.
 2. Open the verified Phase6 page. Confirm it says **formal Recovery approval**, `MealForward T1F Recovery`, version `1`, `SuccessorIssueRelease`, Monad Testnet `10143`, and the fixed escrow `0xcf0c8827c8610eeff1ecbd9719e559d805fafe58`.
