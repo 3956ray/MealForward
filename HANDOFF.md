@@ -8,6 +8,21 @@
 
 
 
+## 2026-10-26 Wallet V2 已上线；独立验收完成，等待真人只读钱包测试
+
+用户已确认方案A具体设计并授权自主推进到真人测试。本轮完成全新客户端，使用固定版本 Wagmi Core/viem；旧前端未被复制为实现模板。钱包、服务、轮次、批准记录分开显示；按钮先绑定再异步加载，后台或校验故障不锁钱包检查；提供方显式选择，当前首账户/实际网络核对、观察时间、阶段等待提示及源码构建指纹可见。正式生产签名仍保持关闭，NO RELEASE。
+
+- **源码与审查**：应用提交 `75cdd9ce913b442a67a4674fc5e109d504c08d28`；源码分支 `codex/mealforward-t1f-phase6-release-review-20261026`，既有 [Draft PR #47](https://github.com/3956ray/MealForward/pull/47)。三个任务各自独审及最终全量/修复范围复查已通过，未留未解决发现。已修复提供方竞态、会话取消隔离、迟到API结果覆盖、提交不确定读回时序，以及适配器延迟后仍弹出过期/旧轮次签名框的问题。最终真实controller+adapter合成回归：失效路径0弹窗/0提交，有效路径1/1；不是用户真实签名证据。
+- **确切 CI**：[run40336371458](https://github.com/3956ray/MealForward/actions/runs/40336371458) 对上述提交四作业全部success；日志确认272项测试（59客户端+184非PG+16旧core+13旧HTTP）及15组隔离PG17检查PASS。固定依赖、typecheck、六资源重建逐字节diff均PASS。后续交接文档提交使用[skip ci]，不冒称文档HEAD另跑应用CI。
+- **实际部署**：Render `srv-dbfflq5g1s2s73fl05fg` / `dep-dbflt5gu01pc73bodam0`，2026-10-26T14:07:56.371206Z live，实际commit为75cdd9c；autoDeploy仍off，运行构建/环境/权限未改。入口 https://mealforward-t1f-approval-laodao.onrender.com/ 已切到Wallet V2；`/wallet-v2.html`同内容；`/t1f-approval.html`及旧资产保留回退。旧RoleProof/Claim服务没有操作。
+- **公网**：新脚本 `node t1f-wallet-v2-live-smoke.mjs` 33项真实HTTPS检查 `T1F_WALLET_V2_PUBLIC_NO_ROUND_NEGATIVE_PASS`，六资产与源码一致，NO_ROUND/noRelease=true，realSignatures/onchainTransactions/durableWritesRequested均0。HTML SHA256 `e4b473da3ab0cb07d091804d81f1310680903811b29e3696f406f4510e58b572`，bootstrap `301c93a874ae524c7dc4e20e8c5814c45fab7bef680ec5328da872b2a1bc73a0`。
+- **浏览器边界**：本机真实HTTP handler+实际构建bootstrap+合成provider验收Owner/Donor10143、错误链/账户、未授权、挂起API时钱包可用、NO_ROUND禁签；最终390px无横向溢出（client/scroll均375）、观察时间切账户后失效、控制台无error/warn。临时fixture已停止、视口已复原。公网IAB导航超时，未标公网浏览器PASS；真人MetaMask新版验收仍NOT_RUN，不能用上述合成结果替代。
+- **实库**：部署后只读原Claim/Fund/Consent/Event指纹仍 `01556b358764d9c262f96c90f75cafcc`，successor release/operation/event=0/0/0；没有新迁移、正式轮次、签名、交易或持久写入。原UNKNOWN及商家结算#17限制不变。
+- **识别新版**：页面四区域＋观察时间；安全诊断构建ID为 `wallet-v2-d1beddb91a74549b3cb3a2ce2e31c34a7c6c8d506be970c5d463da7fb0acbd98`。该ID由客户端源码/模板/构建配置/依赖锁计算，不随纯文档提交改变。
+- **下一步仅需本人测试**：在同一公开页选择MetaMask提供方，分别在扩展中选择已授权Owner/Donor及Monad10143，点击“检查当前 MetaMask”，回报实际角色/网络/提示和观察时间。NO_ROUND与禁签是预期。若未授权或有风险警告，回报页面状态即可，不要求重复越过警告。详细步骤见源码分支 `docs/wallet-v2-verification.md`。正式签名/创建轮次继续暂停；用户“暂不提交MetaMask官方复核”决定保持，未向第三方发消息。
+
+工程裁定：为满足已批准的可取消请求设计，API read/submit增加可选AbortSignal，原无参数调用保持兼容；若撤回该选择，代价为下游接口/测试返工，无后台变更。Git推送对象成功后本机OAuth缺workflow权限，使用已授权GitHub连接按旧HEAD lease做非强制快进至同一75cdd9c；未重写历史或扩大权限。
+
 ## 2026-10-26 Wallet V2设计已确认，授权自主实施到真人测试门槛
 
 用户明确回答“确认设计，自主推进到需要我测试”。此前待设计确认状态已结束；方案A及具体设计均获批准，实施计划、编码、独立审查与必要的同服务部署可自主推进，不再次请求相同计划授权。执行计划：`docs/superpowers/plans/2026-10-26-wallet-client-v2.md`，3任务串行实现/独立审查：adapter+API+validation、bootstrap+controller+UI、static+CI+live验证。工作区继续复用现有Phase6隔离checkout，不触碰旧CP30。

@@ -1,6 +1,6 @@
 # Wallet Client V2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the inert Phase6 wallet client with an independently initialized, observable client using mature wallet tooling.
 
@@ -48,11 +48,11 @@
 
 **Interfaces:** Produce WalletPort, ApprovalApi and validation exports above. Accept actual spec values verbatim. Backend fixture imports may be used in tests, never production browser bundles.
 
-- [ ] Write failing tests for: exact backend public fixture accepted/digest matches ethers; tampered domain/fields/pins/digest and malformed state rejected; NO_ROUND accepted; expiry represented safely. Verify no test imports old frontend.
-- [ ] Write failing wallet tests with synthetic EIP1193 announcements: late/multiple provider discovery, inspect reads `eth_accounts`/`eth_chainId` without permission/signing, explicit connect only prompts on user action, actual wrong chain/account preserved, events trigger changed, no forbidden methods. Wagmi Core must be exercised, not replaced entirely by a mock adapter.
-- [ ] Write failing API tests: exact same-origin route/header/body/fetch security options, session reused while valid,401 clears session for next explicit read, cancellation/timeout sanitized, submit never automatically retried, no signature in error/diagnostics.
-- [ ] Run focused tests before implementation and record relevant RED. Implement minimal exact contract/adapter/API with official packages. Pin valid compatible dependencies and lock; candidate dev packages esbuild0.25.12,typescript5.9.3,tsx4.20.6,jsdom27.0.1; if registry compatibility differs, report before substituting. Use no root dependency changes.
-- [ ] Run focused tests and typecheck. Run all current isolated client tests once before commit. Document interfaces/test evidence in report; commit only task files.
+- [x] Write failing tests for: exact backend public fixture accepted/digest matches ethers; tampered domain/fields/pins/digest and malformed state rejected; NO_ROUND accepted; expiry represented safely. Verify no test imports old frontend.
+- [x] Write failing wallet tests with synthetic EIP1193 announcements: late/multiple provider discovery, inspect reads `eth_accounts`/`eth_chainId` without permission/signing, explicit connect only prompts on user action, actual wrong chain/account preserved, events trigger changed, no forbidden methods. Wagmi Core must be exercised, not replaced entirely by a mock adapter.
+- [x] Write failing API tests: exact same-origin route/header/body/fetch security options, session reused while valid,401 clears session for next explicit read, cancellation/timeout sanitized, submit never automatically retried, no signature in error/diagnostics.
+- [x] Run focused tests before implementation and record relevant RED. Implement minimal exact contract/adapter/API with official packages. Pin valid compatible dependencies and lock; candidate dev packages esbuild0.25.12,typescript5.9.3,tsx4.20.6,jsdom27.0.1; if registry compatibility differs, report before substituting. Use no root dependency changes.
+- [x] Run focused tests and typecheck. Run all current isolated client tests once before commit. Document interfaces/test evidence in report; commit only task files.
 
 ### Task 2: Independent initialization, visible UI and safe signing controller
 
@@ -60,11 +60,11 @@
 
 **Interfaces:** Consume Task1 WalletPort/API/validator. Export controller factory with injected loaders, render, clock/timers and snapshot; document exact factory/operations in report. Export/bootstrap test seam that mounts the actual shipped entry against jsdom with controlled dynamic loaders. Production bootstrap entry automatically mounts actual HTML.
 
-- [ ] Write actual DOM startup tests using the new HTML and bootstrap: handlers exist before loaders settle; rejected/unresolved wallet import produces visible dependency status; delayed/failing validation only blocks signing; pending API session/state leaves wallet inspect usable; immediate progress text appears on click. Record RED before implementation.
-- [ ] Write controller tests with deferred provider/API promises: correct Owner/Donor +10143, NO_ROUND, independent backend error, wrong role/chain, provider/account change, read delay, permission/sign outstanding lock, no duplicate prompt, late result ignored, local expiry/completed expiry. Tests use short injected timer durations, not real10/30s waits.
-- [ ] Write signing tests for exact validated same round, before/after current account+chain and time checks, backend round swap, rejected wallet, submit response loss followed by positive/negative readback, server unavailability keeps readiness false. Assert signature cannot submit after invalidation/expiry and cannot auto-retry.
-- [ ] Implement a small readable controller and Chinese four-region UI. Show complete typed domain/message/digest before explicit signing; textContent for untrusted values. Diagnostic copy contains only build/phase/timing/safe codes. Keep wallet/API controls independent. Bootstrap has no static imports and reports initialization errors without a generic silent catch.
-- [ ] Build all six assets with esbuild. Run all client tests/typecheck/build; verify no forbidden transaction or external request methods and no old frontend imports. Commit task files and fixed build outputs. Report exact bootstrap/controller interfaces and how synthetic browser testing can control a provider without changing production behavior.
+- [x] Write actual DOM startup tests using the new HTML and bootstrap: handlers exist before loaders settle; rejected/unresolved wallet import produces visible dependency status; delayed/failing validation only blocks signing; pending API session/state leaves wallet inspect usable; immediate progress text appears on click. Record RED before implementation.
+- [x] Write controller tests with deferred provider/API promises: correct Owner/Donor +10143, NO_ROUND, independent backend error, wrong role/chain, provider/account change, read delay, permission/sign outstanding lock, no duplicate prompt, late result ignored, local expiry/completed expiry. Tests use short injected timer durations, not real10/30s waits.
+- [x] Write signing tests for exact validated same round, before/after current account+chain and time checks, backend round swap, rejected wallet, submit response loss followed by positive/negative readback, server unavailability keeps readiness false. Assert signature cannot submit after invalidation/expiry and cannot auto-retry.
+- [x] Implement a small readable controller and Chinese four-region UI. Show complete typed domain/message/digest before explicit signing; textContent for untrusted values. Diagnostic copy contains only build/phase/timing/safe codes. Keep wallet/API controls independent. Bootstrap has no static imports and reports initialization errors without a generic silent catch.
+- [x] Build all six assets with esbuild. Run all client tests/typecheck/build; verify no forbidden transaction or external request methods and no old frontend imports. Commit task files and fixed build outputs. Report exact bootstrap/controller interfaces and how synthetic browser testing can control a provider without changing production behavior.
 
 ### Task 3: Same-service static integration, CI and deployment evidence
 
@@ -72,12 +72,16 @@
 
 **Interfaces:** Serve six exact assets and route root to new HTML after client acceptance. Existing `/t1f-approval.html` and its assets remain served. Reuse actual makeApprovalHttpHandler with a synthetic service for browser fixture; loopback only, no real wallet/DB/RPC/signatures. Synthetic controls can be injected into fixture HTML only, never cloud mode. Live smoke uses public HTTP and no valid signature/durable write.
 
-- [ ] Write RED HTTP tests proving new root/new assets MIME/security headers, exact mappings, path traversal/unlisted chunks rejection, old rollback entry remains, API behavior unchanged.
-- [ ] Implement minimal static mapping. Add client CI install (`npm ci --ignore-scripts` with explicit reviewed build binary provisioning if required), test/typecheck, build and git-diff asset verification. Use the isolated package lock, no broad dependency scripts. Confirm esbuild binary availability under ignore-scripts; fail clearly rather than silently enabling install scripts.
-- [ ] Extend live attestation to compare all new assets byte-for-byte (<1MiB each), root equals new HTML, health/session/NO_ROUND state and existing forbidden routes remain denied; no signature or write requests. Preserve old smoke or adapt assertions compatibly so it does not falsely expect old root.
-- [ ] Run client suite/build and full non-PG suite once with existing `GITHUB_ACTIONS=true MF_T1D_DISPOSABLE_ONLY=ack-ephemeral-quote-key`; run syntax/diff checks. Commit integration files. Main obtains independent task and whole-change review before push/CI/deploy.
-- [ ] Main executes desktop/390px browser fixture with CUA, confirms actual buttons/progress, then stops fixture. Push and await exact CI (including15 isolated PG checks). Deploy only existing approved Phase6 service with autoDeploy off; verify actual commit/live status, execute public smoke, read original-record fingerprint and zero successor counts. No formal round or human prompt. Update HANDOFF and provide only the necessary human read-only wallet inspection steps; domain hold still governs formal signing.
+- [x] Write RED HTTP tests proving new root/new assets MIME/security headers, exact mappings, path traversal/unlisted chunks rejection, old rollback entry remains, API behavior unchanged.
+- [x] Implement minimal static mapping. Add client CI install (`npm ci --ignore-scripts` with explicit reviewed build binary provisioning if required), test/typecheck, build and git-diff asset verification. Use the isolated package lock, no broad dependency scripts. Confirm esbuild binary availability under ignore-scripts; fail clearly rather than silently enabling install scripts.
+- [x] Extend live attestation to compare all new assets byte-for-byte (<1MiB each), root equals new HTML, health/session/NO_ROUND state and existing forbidden routes remain denied; no signature or write requests. Preserve old smoke or adapt assertions compatibly so it does not falsely expect old root.
+- [x] Run client suite/build and full non-PG suite once with existing `GITHUB_ACTIONS=true MF_T1D_DISPOSABLE_ONLY=ack-ephemeral-quote-key`; run syntax/diff checks. Commit integration files. Main obtains independent task and whole-change review before push/CI/deploy.
+- [x] Main executes desktop/390px browser fixture with CUA, confirms actual buttons/progress, then stops fixture. Push and await exact CI (including15 isolated PG checks). Deploy only existing approved Phase6 service with autoDeploy off; verify actual commit/live status, execute public smoke, read original-record fingerprint and zero successor counts. No formal round or human prompt. Update HANDOFF and provide only the necessary human read-only wallet inspection steps; domain hold still governs formal signing.
 
 ## Execution authorization
 
 User explicitly chose the subagent workflow earlier and now approved autonomous implementation planning/development/independent acceptance until human testing. Routine plan/interface/build choices are delegated; do not pause to ask for another plan approval. Preserve exact design semantics, log material rulings, and stop only for a genuinely new security-sensitive/destructive action outside that authorization.
+
+## Completion evidence
+
+Implementation and independent reviews accepted at75cdd9ce913b442a67a4674fc5e109d504c08d28; CI40336371458 all four jobs PASS (272tests+15PGgroups). Renderdep-dbflt5gu01pc73bodam0 live at that commit;33 HTTPS checks and unchanged original-record fingerprint verified. Main synthetic desktop/390px browser checks passed. Public IAB navigation timed out; real MetaMask read-only acceptance is the next human gate, NOT_RUN. Formal production signing remains held. HANDOFF and docs/wallet-v2-verification.md contain the current instructions.
