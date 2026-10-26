@@ -2,9 +2,23 @@
 
 > **本文件是当前项目唯一的高优先级跨 Agent 接手入口。** 从仓库根目录打开 `HANDOFF.md`，先核对实时 GitHub / Render / Supabase，再继续任何开发。此文件随每次开发、迁移、部署和用户验收更新。历史 `docs/agent-handoff-2026-10-16/` 与原 CP30 合同不得当作 2026-10-23 的实时云状态。
 >
-> **更新日期：2026-10-25（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
+> **更新日期：2026-10-26（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
+
+## 2026-10-26 11:10（UTC+8）Codex 接手核验 — 云连接已确认，Phase5 公网仍待验证
+
+**本段为本次接手的最新只读证据，优先于下文旧部署“进行中”描述。** 用户已授权接手项目、使用 obra/superpowers 工作流程，以及连接 GitHub / Vercel / Render / Supabase。本轮只做接手核验与本文件更新，未改服务配置、未启用 Phase5、未迁移实库、未签名或发送链上交易。已读取 superpowers 的 using-superpowers、Codex 工具适配与 verification-before-completion；未来实现按相应技能执行。
+
+- **GitHub**：连接器确认 3956ray/MealForward 可读写，默认分支 main；本文件所在 PR #45 仍 Open Draft，更新前 HEAD `0bf83bcc007307a45161aaf65fa624e385bd2295`。签名修复 PR #46 仍 Open Draft，HEAD `c3a6bf0beecd30d5ac53479f16dfcb38a68b6c03`，应用修复提交仍为 `fbbc5c3f77b2466f5de66cb295d783eb6e35d652`。这次文档提交会改变 PR #45 HEAD，后续须实时重新查询。只检查了 PR 元数据，没有完成新的全量代码审查或合并。
+- **CI 重新核实**：通过 GitHub job API 查到 [40259382619](https://github.com/3956ray/MealForward/actions/runs/40259382619) 的 owner-donor-proof、[40259671961](https://github.com/3956ray/MealForward/actions/runs/40259671961) 的 phase5-public 均 completed/success。这是既有运行结果的重新查询，不是本次重跑，也不表示本次文档 HEAD 或当前公网已通过测试。按 commit 列举 workflow 的连接器仅过滤 pull_request 事件，本次返回空，不能据此断言所有 CI 不存在或失败。
+- **Render 实况已前进**：RoleProof `srv-dbdeuft9fdbs73atbvh0` 最新部署 `dep-dbfbvi4s728c73erotl0` 为 **live**，Commit `c1b99b5ed66831c364ba51d23653854756c6d1f4`，deploy_ended 事件为 succeeded（北京时间 10:50:36）。下文 `dep-dbfboglg1s2s73f6mh20` 已成功后被替换，当前为 deactivated；其应用 Commit `6d085568d802725f7281439005d0f20c6ffe32ca` 不可冒充当前部署 HEAD。Claim/Issuer 服务 `srv-dbdgstivcj2c73fnqcc0` 仍 Live `dep-dbdto63rjlhs738br1sg` @ `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。
+- **公网未通过本次核验**：对 RoleProof 的 `/v1/t1f/phase5/status` 与 `/v1/t1f/phase4/status` 两次独立 HTTPS GET 各等待 25 秒，均超时、未收到 HTTP 响应；另一网页读取工具也无法访问。故只能确认 Render 控制面 Live，不能声称当前公网健康、Phase5 flag 当前值或两角色 typed challenge 已验收。没有读取环境变量值；启动日志查询因工作区未选择返回错误，未将其当作有效日志证据。不要仅据 Live 邀请用户重新签名。
+- **Supabase 本次只读确认**：`mealforward-t1-staging` / `ketfrukrcuosrqynnsay` 为 ACTIVE_HEALTHY；迁移列表恰为原 12 条，最后 `20261023105932 mealforward_t1f_issuer_issue_deadline_immutable_v1`，013–015 未安装。聚合查询确认 FUNDED=1、Claim ISSUE_UNKNOWN=1、CLAIM_PREPARED=1、CONSENT_VERIFIED=1、ISSUE_RESERVED=1。原 Claim revision=2、Issuer nonce=0、deadline=1792765625、无 issuer_tx_hash；Security Advisors lints=[]。本次没有链上 RPC 复核，因此数据库无 hash 不能解释为链上一定未广播。
+- **Vercel**：已能列出同团队的 mealforward、mealforward-experience-sandbox、mealforward-real-testnet-pilot 三项目；本轮未改部署、域名、环境变量，也未审计前端生产健康。
+- **本地状态**：发现旧 checkout `/Users/mili/Documents/Developer/mealforward` 停在 `codex/mcpay-local-mvp`，不是上述云试点最新分支。本次没有切换或覆盖它；后续开发须取得最新目标 ref 并按工作区规则隔离，不得直接在旧版本实施本轮修复。
+
+**下一步顺序**：先排查并重新取得公网 Phase4/Phase5 响应，确认 RoleProof 的实际部署源码、Phase5 flag 和无数据库/资金写入边界；完成关闭模式的 HTTPS 门禁后，才能按既有安全发布流程推进练习启用、校验 Owner/Donor 四字段 EIP712Domain 及资金路由拒绝，再邀请两位本人重做 Phase5 练习签名。Phase4 的两次真人 PASS 不重做。真正 Recovery Release、实库新迁移及第二次 Issue 仍未获本轮授权，不重复 Fund/Claim/Consent、不重置旧 UNKNOWN、不开放 Lock/Report/Settle；未来每轮仍须更新本文件。
 
 ## 2026-10-26 MetaMask V4 实际双钱包 401 修复进度 — CI PASS，RoleProof 安全灰度中
 
