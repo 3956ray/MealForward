@@ -8,6 +8,24 @@
 
 
 
+## 2026-10-26 Phase6 源码交付候选 — 正式批准收集，始终 NO RELEASE
+
+**Phase5 真人练习：USER-REPORTED 2/2 PASS · NO RELEASE，无需重做。正式 Recovery 真人签名仍 NOT_RUN。** 本节优先于下文“开始开发”记录；本轮完成源码和隔离验证，尚未启用真实 Phase6 服务。
+
+- 新分支 `codex/mealforward-t1f-phase6-release-review-20261026`，基于 PR #46 的 `c3a6bf0beecd30d5ac53479f16dfcb38a68b6c03`；数据库实现 `024c702`，服务实现 `3ec8c1b`，最终审查修复 `6a42dc3`。[Draft PR #47](https://github.com/3956ray/MealForward/pull/47) 已创建；已测试 HEAD **`b666d10dfe523c1093722e52f10566d378efef76`** 的 [CI #40270078908](https://github.com/3956ray/MealForward/actions/runs/40270078908) 四作业全部 completed/success（2026-10-26 12:38 UTC+8），云端同样189测试+13组PG通过。后续仅本交接和计划勾选的 `[skip ci]` 文档提交，不能宣称文档HEAD另跑CI。独立工作区 `/Users/mili/Documents/Developer/mealforward-phase6-release`，保留旧 checkout/CP30。
+- 新增 `016_t1f_recovery_approval_collection.sql`、`t1f-approval-{store,protocol,service,server,operator}.mjs`、独立 `public/t1f-approval.*`、测试及四作业 workflow。完整操作步骤见 [Phase6 runbook](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase6-approval-runbook.md)，设计/计划在 `docs/superpowers/`。
+- `mf_t1f_recovery` 保存不可变轮次及双方验证指纹，不保存原始签名。NOLOGIN 的 owner/runtime 角色仅获必要能力；运行账户须独立最小权限，启动检查实际权限与严格 TLS。013–015 文件字节未改，015 仍 HOLD，旧 Fund/Claim/Consent 不写，不产生 release/successor/交易数据。
+- Owner/Donor 使用同一正式 `MealForward T1F Recovery` v1 / `SuccessorIssueRelease` 摘要；仅操作员凭新鲜钱包观察创建300秒轮次，不自动换轮。刷新可以读回已存结果，过期显示 EXPIRED；完成状态 `COLLECTED_NO_RELEASE` 仍不能 Issue。
+- superpowers 已完成设计、计划、分工实现、RED→GREEN、独立数据库及全分支审查。最终审查两个 Important（到期后缓存2/2、签名前展示不完整）均先复现再修复；无未解决 Critical/Important。完整签名域及15项内容现展示在签名按钮之前。
+- **本地最终验证：189项测试全通过**（非PG160、旧core16、旧HTTP13，按不同固定DSN分开运行，无跳过），另 **真实临时 PostgreSQL17.11 的13组行为检查通过**（精确009–016、角色权限、并发/重放/过期/不可变/零释放）。`npm run check`、新模块语法、YAML与diff检查通过。命令/环境由 `.github/workflows/mealforward-t1f-phase6-approval.yml` 完整固定；无锁文件，沿用仓库CI的无脚本 npm install。
+- 真浏览器隔离预览完成桌面/390px手机布局、会话刷新、完整内容换行、模拟2/2自动过期检查。预览使用合成批准，无真实钱包/实库/RPC，不能作为真人正式验收。截图保存在本任务 visualizations 目录；临时服务/PG/标签已关闭。
+- 非阻断待补：PG套件未专门覆盖“历史轮次 fingerprint/nonceDomain/newOpId 被新轮复用”的三项独立回归，唯一约束已审查。数据库信任受审服务的密码学验证；旧记录检查是快照，不保证跨提交冻结。因当前严格 NO_RELEASE 可接受，未来释放必须另做原子新鲜校验，不能复用此结论直接发券。
+- 推送及CI后再次只读复查（12:39 UTC+8）：Supabase `ketfrukrcuosrqynnsay` 仍001–012，security advisors无告警；RoleProof仍 `dep-dbfbvi4s728c73erotl0` / `c1b99b5ed66831c364ba51d23653854756c6d1f4`，无新部署；旧Claim服务仍 `dep-dbdto63rjlhs738br1sg` / `c8723c2f280e4b72ff067e0be08f5bf1c4a15412`。原 Claim `fbab3b22-965d-44e2-b144-d7307b7aa8ea` 仍 ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625/无hash与receipt。无hash不等于未广播；本轮未作全链恢复证明。
+
+**当前需要用户的人工核对：** 打开 MetaMask 的 Monad Testnet，选择 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3`，查看活动记录及待处理队列，回传与原 Issue 有关的状态；若有交易，回传公开交易hash即可。不要点击加速、取消、重试或重置账户。仅本人的钱包可显示本地待处理/未广播请求，链上查询或数据库无hash不能替代。此步是恢复前检查，尚非正式签名测试；创建300秒正式轮次前仍须重新取得120秒内的新鲜观察。
+
+**下一实际门槛：**按 runbook 审查并逐步启用013→审查记录→014 held slot→015 HOLD→016、专用最小权限账号和独立服务，不能整分支合并到原Render发布。此前先取得新鲜 Issuer 钱包活动观察并复核链上原操作；缺任一项停止。真实迁移/凭据/服务启用、正式双签与实际Issue是不同门槛。此轮未做任何实库写入、正式签名或链交易。失败时仅停用新collector，保留审计，不删除记录或重发UNKNOWN。
+
 ## 2026-10-26 Phase5 真人验收通过，进入 Phase6 隔离开发
 
 用户在本聊天明确回传：**“Owner 和 Donor 都已显示练习签名验证成功，页面是 2/2 PASS · NO RELEASE。”** 因此将 Phase5 Owner、Donor 两项真人 MetaMask EIP-712 练习验收记为 **USER-REPORTED PASS**，覆盖下文 PENDING 状态。证据是用户本人回传的页面结果；服务无持久 Session/签名记录，不冒充服务器永久批准，也不要求提交原始签名。Phase4 原双 EIP191 PASS 保留，无需重做。
