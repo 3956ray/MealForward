@@ -1,5 +1,7 @@
 # Wallet V2 verification and human handoff
 
+Latest activation evidence (2026-10-27): production explicit signing capability enabled at6f4710c / dep-dbfnnc59el5s73fumd50; CI40356359749 passes273 tests+18 PG groups;33 public checks pass with NO_ROUND. Build `wallet-v2-517b10f150aa4b8939162ef6939d22369a25c529c2159432c78b8f6a84aafcb2`. Formal signatures NOT_RUN; fresh Issuer observation/readiness is the next human step. The75cdd9c evidence below is historical read-only acceptance.
+
 > 2026-10-27 authorization update: the user explicitly removed domain classification as a project blocker. Historical domain-hold statements below are superseded by `docs/superpowers/plans/2026-10-27-formal-signing-enable.md` and the newest HANDOFF entry. Formal approval capability may be enabled after review and verification; fresh Issuer observation, explicit valid-round signing, NO RELEASE and original UNKNOWN protections remain. External review stays unsent; no claim that the domain classification changed.
 
 Latest human evidence: Owner (2026/10/26 23:31:22) and Donor (23:37:50) read-only inspection **USER-REPORTED 2/2 PASS**. Both exact fixed accounts/roles, Monad10143, ready/ready/NO_ROUND, codeNONE and matching deployed build were reported. No repeated read-only test is required. This does not accept a new permission request, formal signature or issuance; formal signing remains held.

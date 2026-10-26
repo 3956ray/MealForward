@@ -17,6 +17,6 @@ No automatic signature after load/inspect/refresh; no no-round bypass; no relaxa
 ## Progress
 
 - Implementation: production bootstrap default enabled; controller default and backend unchanged. Default-bootstrap valid-round test observed RED before activation and GREEN after.60/60 client tests, typecheck and six-asset reproducible build PASS.
-- Independent review: pending.
-- CI/deploy/public verification: pending.
+- Independent review of60d9b35..6f4710c: clean, no important findings. Generated differences independently checked.
+- Exact CI40356359749 on6f4710c: all four jobs success,273 tests and18 PG groups. Render deploy dep-dbfnnc59el5s73fumd50 live at exact6f4710c;33 public HTTPS checks PASS, six assets match. Original fingerprint unchanged; successor0/0/0 and round/approval0/0. Await fresh human Issuer report/readiness before round creation.
 - Real formal signatures: NOT_RUN.

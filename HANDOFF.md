@@ -8,11 +8,19 @@
 
 
 
-## 2026-10-27 用户解除域名项目阻塞，继续正式签名能力上线（实施中）
+## 2026-10-27 正式批准能力已上线，等待本人新鲜Issuer观察与双签测试
 
-用户明确说“继续开发，域名风险……不需要管”。这覆盖此前要求先解除域名分类再开发/启用正式签名的项目门槛；不是官方风险分类已解除的证据。无需继续扫描或催促外部复核，仍不向第三方提交。按已批准Phase6/Wallet V2设计，准备启用现有显式签名能力，经独立审查、CI及同服务部署/公网验证后交给本人测试。
+用户明确要求“继续开发，域名风险……不需要管”，已覆盖此前域名风险必须先解除的项目门槛。本轮不再扫描或催促域名复核，也未提交此前被拒绝的外部复核；不宣称官方分类已解除。生产bootstrap已启用既有明确签署能力，controller默认仍关闭，账户/网络10143/摘要/有效期/提供方及实际请求前检查全部保留。无后台或迁移变更，无自动签名、创建轮次或发券。
 
-仅允许有效轮次中的本人明确点击签署；没有轮次仍禁签。不会代操作扩展提示、签名或链交易，不修改原UNKNOWN或015 HOLD。轮次创建仍需要本人新鲜Issuer活动报告（120秒以内）和测试准备就绪；此前历史报告不能换成新时间复用。计划：`docs/superpowers/plans/2026-10-27-formal-signing-enable.md`。本节为实施中记录，实际运行仍75cdd9c，正式签名NOT_RUN。新增默认bootstrap合成回归先RED后GREEN；完整客户端60/60、typecheck与六资源可重复构建PASS。源码构建ID为`wallet-v2-517b10f150aa4b8939162ef6939d22369a25c529c2159432c78b8f6a84aafcb2`，尚待独审/CI/部署验证。
+- **源码/独审**：应用`6f4710c86cff1db806f71c4a0cc616dab70ea042`，同一源码分支和[Draft PR47](https://github.com/3956ray/MealForward/pull/47)。新默认bootstrap回归观察RED→GREEN；有效合成轮次加载/检查不自动签名，明确点击仅一次签名/提交，NO_ROUND禁签。独立最终审查无重要发现；生成资产核对仅启用标志/构建ID改变。
+- **验证**：[CI40356359749](https://github.com/3956ray/MealForward/actions/runs/40356359749)对该应用提交四作业success：273项测试（60客户端+184非PG+16core+13HTTP）、18组隔离PG检查、typecheck和六资产可重复构建PASS。本轮客户端交互新增证据为JSDOM合成测试；没有宣称真实扩展签名或公网浏览器验收。
+- **部署**：Render`srv-dbfflq5g1s2s73fl05fg`，`dep-dbfnnc59el5s73fumd50`，实际应用提交6f4710c，2026-10-27 00:12:21 UTC+8 live。原URL https://mealforward-t1f-approval-laodao.onrender.com/ ，autoDeploy仍off，构建命令、环境和权限未改。旧服务未操作。
+- **公网**：`node t1f-wallet-v2-live-smoke.mjs`33项HTTPS检查PASS、NO_ROUND/noRelease=true、六资产与源码一致、真实签名/链交易/持久业务写请求均0。HTML SHA256 `3fc4c0704322e4d70a7c55cb05df156610c70e1ed5e5bad4bb2d402b9fd2cfe6`；bootstrap `16e1ae7fb14f4557da90d898b5e47ab2c97f07311600992c87c18c41135dad77`。构建ID `wallet-v2-517b10f150aa4b8939162ef6939d22369a25c529c2159432c78b8f6a84aafcb2`。
+- **部署后实库**：原Claim/Fund/Consent/Event指纹仍`01556b358764d9c262f96c90f75cafcc`；successor release/operation/event=0/0/0，approval_rounds/role_approvals=0/0。原ISSUE_UNKNOWN、015 HUMAN_REVIEW_HOLD、NO RELEASE及商家结算#17限制保持。
+
+**下一步需本人参与**：无需重复已通过的Owner/Donor只读验收。本人在Monad Testnet核对Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` 当前活动，报告是否有待处理/已发送交易，并表示已准备好测试。只在真实报告≤120秒内调用现有operator；不得给旧报告换时间。工具会重新核对链与原记录，再建立300秒正式轮次；建立结果不确定先读回，不盲重试。此时才让本人按同一摘要先Owner后Donor点击“检查当前 MetaMask”与“明确签署当前轮次”。目标COLLECTED_NO_RELEASE，两角色已记录；这不自动发券。具体步骤及私密配置的不回显调用见`docs/t1f-phase6-approval-runbook.md`。当前正式签名NOT_RUN。
+
+计划`docs/superpowers/plans/2026-10-27-formal-signing-enable.md`。回退仅恢复前一客户端应用75cdd9c或关闭显式签名能力；保留全部业务/批准历史，不重置UNKNOWN。后续交接文档使用[skip ci]，不把文档HEAD当作另跑应用CI。
 
 ## 2026-10-27 历史轮次防重放回归完成：CI PASS · NO RELEASE
 
