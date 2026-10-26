@@ -37,6 +37,6 @@ Files: .github/workflows/mealforward-t1f-phase6-approval.yml; HANDOFF.md; docs/t
 Interfaces: consumes complete Task1+2; produces source-only Draft PR and concrete next human deployment/test gate.
 - [x] Fresh strongest-model reviewer checks whole branch and listed Review Focus.
 - [x] Important findings get reproducing RED→GREEN tests and final full suite.
-- [ ] Push isolated branch, inspect CI (PASS only once complete), refresh live read-only truth.
-- [ ] Update HANDOFF and report next needed user action; no misleading live approval claims.
+- [x] Push isolated branch, inspect CI (PASS only once complete), refresh live read-only truth.
+- [x] Update HANDOFF and report next needed user action; no misleading live approval claims.
 
