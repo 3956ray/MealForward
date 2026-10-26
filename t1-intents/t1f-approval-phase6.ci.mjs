@@ -36,9 +36,28 @@ try{
  await admin.query(await readFile(new URL('./supabase/016_t1f_recovery_approval_collection.sql',import.meta.url),'utf8'));
  const {makeApprovalStore}=await import('./t1f-approval-store.mjs');
  // Synthetic local login tests real role membership, not superuser SET ROLE.
- await admin.query('CREATE ROLE mf_phase6_ci_client LOGIN NOINHERIT; GRANT mf_t1f_approval_runtime TO mf_phase6_ci_client');
- pool=new pg.Pool({...config,user:'mf_phase6_ci_client',options:'-c role=mf_t1f_approval_runtime',max:8});
+ await admin.query('CREATE ROLE mf_t1f_approval_login LOGIN NOINHERIT; GRANT mf_t1f_approval_runtime TO mf_t1f_approval_login');
+ pool=new pg.Pool({...config,user:'mf_t1f_approval_login',options:'-c role=mf_t1f_approval_runtime',max:8});
  const store=makeApprovalStore({pool});
+ const {openApprovalRuntime,verifyApprovalRuntime}=await import('./t1f-approval-server.mjs');
+ const runtime=await openApprovalRuntime({env:{
+  T1F_APPROVAL_MODE:'COLLECTION_NO_RELEASE',MF_T1F_APPROVAL_FIXTURE:'ack-local-phase6-fixture',
+  T1F_APPROVAL_ORIGIN:'http://127.0.0.1:15440',PORT:'15440',
+  T1F_APPROVAL_DB_URL:'postgresql://mf_t1f_approval_login:synthetic-local-password@127.0.0.1:15439/postgres'
+ }});
+ try{assert.equal((await runtime.service.status()).status,'NO_ROUND');}
+ finally{await runtime.pool.end();}
+ for(const [grant,revoke] of [
+  ['GRANT UPDATE(issuer_tx_hash) ON mf_t1e.recipient_claims TO mf_t1f_approval_login','REVOKE UPDATE(issuer_tx_hash) ON mf_t1e.recipient_claims FROM mf_t1f_approval_login'],
+  ['GRANT USAGE ON SCHEMA mf_t1e TO mf_t1f_approval_runtime','REVOKE USAGE ON SCHEMA mf_t1e FROM mf_t1f_approval_runtime'],
+  ['GRANT SELECT ON SEQUENCE mf_t1f_recovery.approval_events_event_id_seq TO mf_t1f_approval_runtime','REVOKE SELECT ON SEQUENCE mf_t1f_recovery.approval_events_event_id_seq FROM mf_t1f_approval_runtime']
+ ]){
+  await admin.query(grant);
+  try{await assert.rejects(()=>verifyApprovalRuntime(pool),/RUNTIME_CAPABILITY/);}
+  finally{await admin.query(revoke);}
+ }
+ await verifyApprovalRuntime(pool);
+ passed('actual dedicated runtime startup and column/sequence/old-schema escalation denial');
  const context=await store.context();
  assert.equal(context.claim.issuer_tx_nonce,0);
  assert.equal(context.claim.issuer_op_id,ORIGINAL_OPERATION);
