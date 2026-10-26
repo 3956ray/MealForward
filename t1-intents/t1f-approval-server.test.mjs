@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {makeApprovalHttpHandler,validateApprovalConfig,verifyApprovalRuntime} from './t1f-approval-server.mjs';
+import {makeApprovalHttpHandler,validateApprovalConfig,verifyApprovalRuntime,approvalCapabilityPool} from './t1f-approval-server.mjs';
 const env=()=>({T1F_APPROVAL_MODE:'COLLECTION_NO_RELEASE',T1F_APPROVAL_ORIGIN:'https://approval.example.org',PORT:'8080',T1F_APPROVAL_DB_URL:'postgresql://mf_t1f_approval_login.ketfrukrcuosrqynnsay:synthetic-long-password@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres'});
 test('startup requires isolated explicit mode, origin, project, role and verified TLS',()=>{
  const cfg=validateApprovalConfig(env());assert.equal(cfg.testing,false);assert.equal(cfg.login,'mf_t1f_approval_login');
@@ -81,4 +81,21 @@ test('session cookie coexists with unrelated host cookies while duplicate target
  const headers={Cookie:'__sites_local_auth=synthetic; '+s.cookie+'; edge_hint=ok','X-Approval-CSRF':s.csrf};
  assert.equal((await h.req('/v1/approval/state','GET',undefined,headers)).status,200);
  assert.equal((await h.req('/v1/approval/state','GET',undefined,{...headers,Cookie:headers.Cookie+'; '+s.cookie})).status,401);
+});
+
+test('pool explicitly selects runtime and time limits before every query even when startup options are ignored',async()=>{
+ const calls=[],releases=[];let releaseSetup;
+ const ready=new Promise(r=>releaseSetup=r);
+ const client={query:async(sql,args)=>{calls.push([sql,args]);if(calls.length===1)await ready;return {rows:[{ok:true}]};},release:destroy=>releases.push(destroy)};
+ const pool=approvalCapabilityPool({connect:async()=>client,end:async()=>calls.push(['end'])});
+ const pending=pool.query('SELECT application_result',[]);
+ await new Promise(r=>setImmediate(r));assert.equal(calls.length,1);assert.match(calls[0][0],/SET ROLE mf_t1f_approval_runtime/);assert.match(calls[0][0],/statement_timeout/);assert.match(calls[0][0],/lock_timeout/);
+ releaseSetup();await pending;assert.equal(calls[1][0],'SELECT application_result');
+ await pool.query('SELECT second_result');assert.match(calls[2][0],/SET ROLE mf_t1f_approval_runtime/);assert.equal(calls[3][0],'SELECT second_result');assert.deepEqual(releases,[false,false]);await pool.end();assert.equal(calls.at(-1)[0],'end');
+});
+test('failed runtime selection destroys the client before any application query',async()=>{
+ const queries=[],releases=[];
+ const pool=approvalCapabilityPool({connect:async()=>({query:async sql=>{queries.push(sql);throw Error('SET denied')},release:x=>releases.push(x)}),end:async()=>{}});
+ await assert.rejects(()=>pool.query('SELECT forbidden_application_query'),/SET denied/);
+ assert.equal(queries.length,1);assert.deepEqual(releases,[true]);
 });

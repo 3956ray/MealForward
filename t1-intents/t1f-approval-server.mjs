@@ -51,11 +51,28 @@ export async function verifyApprovalRuntime(pool){
  NOT EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN principals r WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND (has_schema_privilege(r.oid,n.oid,'CREATE') OR (n.nspname LIKE 'mf_%' AND has_schema_privilege(r.oid,n.oid,'USAGE') AND NOT (n.nspname='mf_t1f_recovery' AND r.oid=(SELECT oid FROM pg_roles WHERE rolname='mf_t1f_approval_runtime'))))) AS schema_safe`);
  const r=rows[0];check(rows.length===1&&r?.session_user===LOGIN&&r.current_user===ROLE&&['role_safe','membership_safe','tables_safe','functions_safe','schema_safe'].every(k=>r[k]===true),'RUNTIME_CAPABILITY');
 }
+/** Session poolers may ignore startup options. Await least-privilege selection
+ * on the acquired connection before each application query; never use an async
+ * Pool connect-event listener whose completion is not awaited by borrowers.
+ */
+export function approvalCapabilityPool(raw){
+ return Object.freeze({
+  async query(sql,args){
+   const client=await raw.connect();let failed=true;
+   try{
+    await client.query("SET ROLE mf_t1f_approval_runtime; SET statement_timeout='5s'; SET lock_timeout='2s'");
+    const result=await client.query(sql,args);failed=false;return result;
+   }finally{client.release(failed)}
+  },
+  end:()=>raw.end()
+ });
+}
 export async function openApprovalRuntime({env=process.env}={}){
  const cfg=validateApprovalConfig(env);
- const pool=new pg.Pool({connectionString:cfg.dbUrl,max:2,connectionTimeoutMillis:5000,idleTimeoutMillis:20000,statement_timeout:5000,lock_timeout:2000,options:'-c role='+ROLE,...(cfg.testing?{ssl:false}:{ssl:verifiedSupabasePoolerTls({host:HOST})})});
+ const rawPool=new pg.Pool({connectionString:cfg.dbUrl,max:2,connectionTimeoutMillis:5000,idleTimeoutMillis:20000,...(cfg.testing?{ssl:false}:{ssl:verifiedSupabasePoolerTls({host:HOST})})});
  // Suppress raw database error events. Request handlers expose only generic errors.
- pool.on('error',()=>{});
+ rawPool.on('error',()=>{});
+ const pool=approvalCapabilityPool(rawPool);
  try{await verifyApprovalRuntime(pool);const store=makeApprovalStore({pool});await store.context();return {cfg,pool,service:makeApprovalService({store})}}
  catch{await pool.end();throw Error('T1F_APPROVAL_RUNTIME_UNAVAILABLE')}
 }
