@@ -19,24 +19,24 @@ Single production writer at a time. No real migrations/deploy/credentials/signat
 ### Task 1: Immutable approval store and PG17 tests
 Files: t1-intents/supabase/016_t1f_recovery_approval_collection.sql; t1-intents/t1f-approval-store.mjs; t1-intents/t1f-approval-phase6.ci.mjs; optional test fixture utility.
 Interfaces: consumes fixed 009–015 context; produces context(), current(), create(round), record(attestation), with rows containing round_id, value, digest, created_at/expiry, approvals.
-- [ ] Write failing disposable PG17 tests and observe missing feature failure.
-- [ ] Implement explicit-function least privileges, immutable records and atomic acceptance; all existing pins remain.
-- [ ] Verify real roles, concurrent replay, expiry and untouched legacy. Expected: PASS, zero release/operation.
-- [ ] Commit task with test evidence.
+- [x] Write failing disposable PG17 tests and observe missing feature failure.
+- [x] Implement explicit-function least privileges, immutable records and atomic acceptance; all existing pins remain.
+- [x] Verify real roles, concurrent replay, expiry and untouched legacy. Expected: PASS, zero release/operation.
+- [x] Commit task with test evidence.
 
 ### Task 2: Pinned service, HTTP and browser
 Files: t1-intents/t1f-approval-{protocol,service,server}.mjs and tests; public/t1f-approval.{html,mjs,css}; operator tool and tests.
 Interfaces: consumes Task1 store; produces same-origin session/state/submit endpoints and explicit operator create-round API.
-- [ ] Write failing tests for stored canonical verification, expired/swapped/changed manifests, retries, HTTP attacks and wallet changes.
-- [ ] Implement service and explicit UI with no sending capabilities.
-- [ ] Run tests and whole t1-intents suite. Expected: PASS; real signatures NOT RUN.
-- [ ] Commit integration.
+- [x] Write failing tests for stored canonical verification, expired/swapped/changed manifests, retries, HTTP attacks and wallet changes.
+- [x] Implement service and explicit UI with no sending capabilities.
+- [x] Run tests and whole t1-intents suite. Expected: PASS; real signatures NOT RUN.
+- [x] Commit integration.
 
 ### Task 3: Independent review, CI and handoff
 Files: .github/workflows/mealforward-t1f-phase6-approval.yml; HANDOFF.md; docs/t1f-phase6-approval-runbook.md.
 Interfaces: consumes complete Task1+2; produces source-only Draft PR and concrete next human deployment/test gate.
-- [ ] Fresh strongest-model reviewer checks whole branch and listed Review Focus.
-- [ ] Important findings get reproducing RED→GREEN tests and final full suite.
+- [x] Fresh strongest-model reviewer checks whole branch and listed Review Focus.
+- [x] Important findings get reproducing RED→GREEN tests and final full suite.
 - [ ] Push isolated branch, inspect CI (PASS only once complete), refresh live read-only truth.
 - [ ] Update HANDOFF and report next needed user action; no misleading live approval claims.
 
