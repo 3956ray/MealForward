@@ -1,6 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {TypedDataEncoder} from 'ethers';
 import {fixture,NOW} from './t1f-approval-test-fixture.mjs';import {publicApproval} from './t1f-approval-protocol.mjs';
 import {createApprovalClient,validateApprovalState} from './public/t1f-approval.mjs';
+import * as page from './public/t1f-approval.mjs';
+import {readFile} from 'node:fs/promises';
 const hash=t=>TypedDataEncoder.hash(t.domain,{SuccessorIssueRelease:t.types.SuccessorIssueRelease},t.message);
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve}};
 function harness({hook}={}){
@@ -39,4 +41,25 @@ test('expiry and completed round prohibit prompts; ambiguous submit requires exp
 test('sign click cannot silently replace the displayed round with a new server round',async()=>{
  const h=harness();await h.client.refresh();h.state.round.id='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
  await assert.rejects(()=>h.client.sign('owner'));assert.equal(h.signs,0);assert.equal(h.posts,0);
+});
+test('completed 2/2 display expires without a refresh or network request',async()=>{
+ const h=harness();h.state.roles={owner:true,donor:true};h.state.status='COLLECTED_NO_RELEASE';
+ await h.client.refresh();assert.equal(h.client.snapshot().state.status,'COLLECTED_NO_RELEASE');
+ const reads=h.reads;h.expire();
+ assert.equal(h.client.snapshot().state.status,'EXPIRED');
+ assert.deepEqual(h.client.snapshot().state.roles,{owner:true,donor:true});
+ assert.equal(h.reads,reads);assert.equal(h.posts,0);assert.equal(h.signs,0);
+});
+test('formal review text exposes the fixed domain and every signed field, not private records',()=>{
+ const h=harness(),text=page.approvalReviewText?.(h.state)??'';
+ assert.ok(text.includes(h.state.round.typedData.domain.verifyingContract),'verifying contract must be reviewable');
+ for(const [name,value] of Object.entries(h.state.round.typedData.domain))assert.ok(text.includes(name)&&text.includes(String(value)),name);
+ for(const [name,value] of Object.entries(h.state.round.typedData.message))assert.ok(text.includes(name)&&text.includes(String(value)),name);
+ assert.ok(text.includes('SuccessorIssueRelease'));assert.ok(text.includes(h.state.round.digest));
+ assert.doesNotMatch(text,/PRIVATE_BENEFICIARY|consent|fingerprint|signature/);
+});
+test('complete manifest review is visible before either formal signature control',async()=>{
+ const html=await readFile(new URL('./public/t1f-approval.html',import.meta.url),'utf8');
+ const review=html.indexOf('id="manifest"');assert.ok(review>=0,'manifest review region must exist');
+ assert.ok(review<html.indexOf('id="owner-sign"')&&review<html.indexOf('id="donor-sign"'));
 });

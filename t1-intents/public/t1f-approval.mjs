@@ -24,7 +24,8 @@ export function validateApprovalState(s,{hashTypedData,now}){
 }
 export function createApprovalClient({provider,request,hashTypedData,clock=()=>Math.floor(Date.now()/1000),render=()=>{}}){
  let revision=0,busy=false,state=null,csrf=null,sessionExpiry=0,needsRefresh=true;
- const snapshot=()=>({busy,state,needsRefresh});const notify=()=>render(snapshot());
+ // Historical role proofs remain visible, but never look valid past the deadline.
+ const snapshot=()=>({busy,state:state?.round&&clock()>=state.round.expiresAt?{...state,status:'EXPIRED'}:state,needsRefresh});const notify=()=>render(snapshot());
  const invalid=()=>{revision++;needsRefresh=true;notify()};
  for(const event of ['accountsChanged','chainChanged','disconnect'])provider?.on?.(event,invalid);
  const unchanged=version=>check(version===revision);
@@ -56,6 +57,15 @@ export function createApprovalClient({provider,request,hashTypedData,clock=()=>M
   })
  });
 }
+export function approvalReviewText(state){
+ if(!state?.round)return '尚无批准轮次。创建后会在这里展示双方必须核对的相同内容。';
+ const {typedData,digest}=state.round;
+ const labels={claimId:'原申领记录',reviewId:'独立审查记录',slotId:'恢复审查位置',voucherId:'餐券编号',originalOpId:'原操作编号',originalNonce:'原 Issuer Nonce',originalDeadline:'原截止时间（Unix 秒）',originalDataHash:'原调用摘要',newOpId:'候选操作编号',newNonce:'候选 Issuer Nonce',newDeadline:'候选截止时间（Unix 秒）',nonceDomain:'本轮唯一随机域',observedBlockNumber:'观察区块号',observedBlockHash:'观察区块哈希',approvalExpiresAt:'本轮批准到期时间（Unix 秒）'};
+ const lines=['固定签名域',...Object.entries(typedData.domain).map(([name,value])=>name+': '+value),
+  'primaryType: '+typedData.primaryType,'','双方相同的摘要 digest: '+digest,'','逐项签名内容'];
+ for(const {name} of FIELDS)lines.push(labels[name]+' ('+name+')',typedData.message[name],'');
+ return lines.join('\n');
+}
 async function browserRequest(path,method,body,csrf){
  const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json',...(method==='POST'?{'Content-Type':'application/json'}:{}),...(csrf?{'X-Approval-CSRF':csrf}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(80000)});
  check(response.ok);return response.json();
@@ -67,6 +77,7 @@ if(typeof document!=='undefined'){
   $('status').textContent=(state?.status||'待核对')+' · '+count+'/2 · NO RELEASE';
   $('digest').textContent=state?.round?.digest||'尚无批准轮次';
   $('expires').textContent=state?.round?new Date(state.round.expiresAt*1000).toLocaleString():'—';
+  $('manifest').textContent=approvalReviewText(state);
   $('refresh').disabled=busy;
   for(const role of Object.keys(WALLETS)){
    $(role+'-wallet').textContent=WALLETS[role];$(role+'-progress').textContent=state?.roles[role]?'已记录批准':'尚未记录';
