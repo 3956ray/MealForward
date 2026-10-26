@@ -124,3 +124,48 @@ test('account selection event inside the permission picker is accepted before ve
  assert.equal(h.client.snapshot().wallet.status,'connected');assert.equal(h.client.snapshot().wallet.role,'donor');
  assert.equal(h.signs,0);assert.equal(h.posts,0);
 });
+
+async function roleView(h){
+ const html=await readFile(new URL('./public/t1f-approval.html',import.meta.url),'utf8');
+ const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],{textContent:'',disabled:false}]));
+ page.drawApprovalRoles(h.client.snapshot(),id=>{assert.ok(elements[id],'missing page element '+id);return elements[id]},NOW);
+ return elements;
+}
+test('role controls show connection success beside the button and explain absent signatures',async()=>{
+ const h=harness();h.state.round=null;h.state.status='NO_ROUND';await h.client.refresh();await h.client.connect('owner');
+ const e=await roleView(h);
+ assert.match(e['owner-connection'].textContent,/已连接 OWNER/);
+ assert.ok(e['owner-connection'].textContent.includes(h.state.wallets.owner));
+ assert.match(e['owner-connect'].textContent,/重新核对/);
+ assert.match(e['owner-progress'].textContent,/签名批准：尚未记录/);
+ assert.match(e['owner-sign-reason'].textContent,/尚无正式签名轮次/);
+ assert.equal(e['owner-sign'].disabled,true);assert.equal(e['donor-sign'].disabled,true);
+ assert.doesNotMatch(e['donor-connection'].textContent,/已连接/);
+ assert.equal(h.signs,0);assert.equal(h.posts,0);
+});
+test('switching roles and disconnecting clear the previous inline connected state',async()=>{
+ const h=harness();await h.client.refresh();await h.client.connect('owner');h.changeAccount();
+ let e=await roleView(h);assert.doesNotMatch(e['owner-connection'].textContent,/已连接/);
+ await h.client.connect('donor');e=await roleView(h);
+ assert.match(e['donor-connection'].textContent,/已连接 DONOR/);assert.doesNotMatch(e['owner-connection'].textContent,/已连接/);
+ assert.match(e['owner-connect'].textContent,/连接本人 Owner/);
+ h.events.disconnect();e=await roleView(h);assert.doesNotMatch(e['donor-connection'].textContent,/已连接/);
+});
+test('pending and rejected connection are visible beside the requested role without a signature prompt',async()=>{
+ const gate=deferred();const h=harness({hook:async method=>{if(method==='wallet_requestPermissions'){await gate.promise;throw {code:4001}}}});
+ const pending=h.client.connect('owner');let e=await roleView(h);
+ assert.match(e['owner-connection'].textContent,/正在连接 OWNER/);assert.match(e['owner-connect'].textContent,/正在连接/);
+ assert.equal(e['owner-connect'].disabled,true);assert.equal(e['donor-connect'].disabled,true);
+ gate.resolve();await assert.rejects(()=>pending);e=await roleView(h);
+ assert.match(e['owner-connection'].textContent,/已取消连接/);assert.equal(e['owner-connect'].disabled,false);
+ assert.doesNotMatch(e['donor-connection'].textContent,/已取消连接/);assert.equal(h.signs,0);assert.equal(h.posts,0);
+});
+test('wallet invalidation during connection preserves the role for inline errors only',async()=>{
+ for(const event of ['accountsChanged','chainChanged','disconnect']){
+  const gate=deferred();const h=harness({hook:async method=>{if(method==='wallet_requestPermissions'){await gate.promise;throw {code:4001}}}});
+  const pending=h.client.connect('owner');h.events[event]([]);gate.resolve();await assert.rejects(()=>pending);
+  const e=await roleView(h);assert.match(e['owner-connection'].textContent,/已取消连接/);
+  assert.doesNotMatch(e['owner-connect'].textContent,/已连接/);assert.equal(h.client.snapshot().wallet.status,'error');
+  assert.equal(h.signs,0);assert.equal(h.posts,0);
+ }
+});

@@ -48,11 +48,11 @@ export function createApprovalClient({provider,request,hashTypedData,clock=()=>M
  const session=async()=>{const s=await request('/v1/approval/session','POST',{});check(keys(s,['csrf','expiresAt'])&&/^[0-9a-f]{64}$/.test(s.csrf)&&Number.isSafeInteger(s.expiresAt)&&s.expiresAt>clock());csrf=s.csrf;sessionExpiry=s.expiresAt};
  const read=async()=>validateApprovalState(await request('/v1/approval/state','GET',undefined,csrf),{hashTypedData,now:clock()});
  const eligible=(s,role)=>check(s&&s.status==='COLLECTING'&&!s.roles[role]&&s.round.expiresAt>clock());
- const action=async(fn,connection=false)=>{check(!busy);busy=true;notify();try{return await fn()}catch(e){
+ const action=async(fn,connectionRole=null)=>{check(!busy);busy=true;notify();try{return await fn()}catch(e){
   needsRefresh=true;
-  if(connection){
+  if(connectionRole){
    const code=e instanceof WalletConnectionError?e.message:({4001:'WALLET_REJECTED','-32002':'WALLET_REQUEST_PENDING',4900:'WALLET_DISCONNECTED',4901:'WALLET_DISCONNECTED'}[e?.code]||'WALLET_CONNECTION_FAILED');
-   wallet={...wallet,status:'error',code};throw Error(code);
+   wallet={...wallet,role:connectionRole,status:'error',code};throw Error(code);
   }
   throw Error('APPROVAL_NOT_CONFIRMED_REFRESH_STATE');
  }finally{busy=false;notify()}};
@@ -71,7 +71,7 @@ export function createApprovalClient({provider,request,hashTypedData,clock=()=>M
    const chainId=BigInt(chain).toString();wallet={...wallet,chainId};
    if(chainId!=='10143')throw new WalletConnectionError('WALLET_NETWORK_MISMATCH');
    wallet={status:'connected',role,account,chainId};needsRefresh=true;
-  },true),
+  },role),
   sign:role=>action(async()=>{
    check(!needsRefresh);eligible(state,role);const v=revision,shownId=state.round.id,shownDigest=state.round.digest;
    await current(role,v);unchanged(v);
@@ -94,6 +94,27 @@ export function approvalWalletText({wallet,state,needsRefresh}){
  if(wallet.status!=='connected')return '尚未连接或账户/网络已变化，请点击对应角色的连接按钮核对。';
  return '已连接 '+wallet.role.toUpperCase()+'：'+wallet.account+' · Monad Testnet '+wallet.chainId+'。'+
   (needsRefresh?'请点击「刷新持久状态」。':'')+(state?.status==='NO_ROUND'?'尚无正式签名轮次，签名按钮暂不可用；连接不会创建轮次。':'连接成功不代表已签署批准。');
+}
+export function drawApprovalRoles(snapshot,$,now=Math.floor(Date.now()/1000)){
+ const {state,busy,needsRefresh,wallet}=snapshot;
+ for(const role of Object.keys(WALLETS)){
+  const label=role==='owner'?'Owner':'Donor',active=wallet.role===role;
+  $(role+'-wallet').textContent=WALLETS[role];
+  $(role+'-connection').textContent=active?approvalWalletText(snapshot):'钱包连接：尚未核对此角色，请点击下方连接按钮。';
+  $(role+'-connect').textContent=active&&wallet.status==='connected'?'已连接 · 重新核对 '+label+' 钱包':active&&wallet.status==='checking'?'正在连接 '+label+'…':'连接本人 '+label+' 钱包';
+  $(role+'-connect').disabled=busy;
+  $(role+'-progress').textContent='签名批准：'+(state?.roles[role]?'已记录批准':'尚未记录');
+  let reason='';
+  if(!state)reason='请先刷新持久状态，核对签名轮次。';
+  else if(state.status==='NO_ROUND')reason='尚无正式签名轮次，签名按钮暂不可用；连接钱包不会创建轮次。';
+  else if(state.status==='EXPIRED'||state.round.expiresAt<=now)reason='本轮已过期，签名按钮暂不可用，请等待新轮次。';
+  else if(state.roles[role])reason='本角色的批准已记录，无需重复签署。';
+  else if(busy)reason='正在处理，请等待当前操作完成。';
+  else if(needsRefresh)reason='请先点击上方「刷新持久状态」，再核对并签署。';
+  else if(state.status!=='COLLECTING')reason='当前轮次不可签署，请刷新持久状态。';
+  $(role+'-sign-reason').textContent=reason;
+  $(role+'-sign').disabled=busy||needsRefresh||state?.status!=='COLLECTING'||state.roles[role]||state.round.expiresAt<=now;
+ }
 }
 export function approvalReviewText(state){
  if(!state?.round)return '尚无批准轮次。创建后会在这里展示双方必须核对的相同内容。';
@@ -118,10 +139,7 @@ if(typeof document!=='undefined'){
   $('manifest').textContent=approvalReviewText(state);
   $('wallet-status').textContent=approvalWalletText(client.snapshot());
   $('refresh').disabled=busy;
-  for(const role of Object.keys(WALLETS)){
-   $(role+'-wallet').textContent=WALLETS[role];$(role+'-progress').textContent=state?.roles[role]?'已记录批准':'尚未记录';
-   $(role+'-connect').disabled=busy;$(role+'-sign').disabled=busy||needsRefresh||state?.status!=='COLLECTING'||state.roles[role]||state.round.expiresAt<=Math.floor(Date.now()/1000);
-  }
+  drawApprovalRoles(client.snapshot(),$);
  }
  const act=async(fn,connection=false)=>{try{$('message').textContent='处理中，请勿重复点击。';await fn();$('message').textContent=connection?'连接核对完成，请查看下方「当前钱包连接」。':'状态已核对。双人批准仍不释放或发送 Issue。'}catch{$('message').textContent=connection?'连接未确认，请查看下方「当前钱包连接」中的原因。':'本次未确认。请先点击「刷新持久状态」核对结果；不会自动重试签名或提交。'}finally{draw()}};
  try{
