@@ -8,6 +8,10 @@
 
 ## 2026-10-26 Phase5 真实 MetaMask EIP-712 签名 401 — 当前 BLOCKED，修复尚未提交
 
+**2026-10-26 最新处置：** 代码更新操作连续被工具安全检查拒绝；尝试把独立 Render 服务的 `T1F_PHASE5_TYPED_PRACTICE_ENABLED` 调整为 `false` 也被相同检查拒绝，因此**不能声称入口已经关闭**，当前应视为旧错误版本仍对外开放，用户不得继续签署 Phase5 练习。已在本次聊天提供本地可审查的最小修复脚本（仅练习 JSON-RPC 域与对应验证前校验、回归测试），但尚未推送 GitHub、未跑项目 CI 或部署。下一个 Agent 需在获得允许的写入路径后执行正规 code review→CI→关闭模式部署→开启模式公网验收，绝不能绕过检查或启用真正的 Recovery Release。
+
+
+
 **真人结果（不要重复签名直到修复部署）：** 用户分别使用原 Owner 与 Donor 钱包在已上线 `/t1f-phase5.html` 签署 EIP-712 Practice 后，两者均返回 `T1F_PHASE5_SIGNATURE_INVALID · 401`。Phase4 两角色原先的 EIP-191 控制证明仍为 PASS，不需要重复做。错误发生在 Phase5 服务端校验，而不代表真实恢复批准失败；本次无数据库、无链上交易。
 
 **高度可信的共同根因（需自动回归确认）：** 正在运行的 RoleProof 代码 `t1-intents/t1f-phase5-typed-practice.mjs` 在 JSON-RPC `eth_signTypedData_v4` 挑战中只声明 `types.PracticeControl`，**未声明 `types.EIP712Domain`**，但后端 `ethers.verifyTypedData` 使用包含 `name/version/chainId/verifyingContract` 的完整 Domain。MetaMask 的签名工具对未声明 `EIP712Domain` 的消息可能按空 Domain Struct 编码，与后端验签摘要不一致。MetaMask 官方开发规范要求显式 `EIP712Domain` 类型，域字段顺序建议 `name:string,version:string,chainId:uint256,verifyingContract:address`。此推断与两只独立 EOA 同样失败高度吻合；之前的 CI 使用 ethers.signTypedData 而非 MetaMask JSON-RPC V4 严格格式，未覆盖真实钱包。
