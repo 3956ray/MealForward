@@ -8,13 +8,13 @@
 
 
 
-## 2026-10-26 下一阶段：历史轮次防重放回归补齐（源码验证中）
+## 2026-10-27 历史轮次防重放回归完成：CI PASS · NO RELEASE
 
 用户批准继续开发至需要本人测试。独立差距审查确认现有Phase6收集器已实现；本轮补齐先前遗漏的跨轮次nonceDomain、newOpId与签名fingerprint复用回归，仅修改`t1-intents/t1f-approval-phase6.ci.mjs`。每例使用有效新轮次输入、要求准确的23505唯一约束错误，并逐字比较全部轮次/批准/事件快照不变。
 
-全新本机隔离PostgreSQL17.11执行精确009–016迁移，18组检查PASS；旧数据快照不变、successor release/operation/event为0/0/0。另用三个独立临时库分别移除对应唯一约束，新测试均因缺少预期拒绝而失败，证明能捕获防重放约束退化。临时数据库均已停止并清理，未使用云数据库或真实签名。独立复查及远端CI待完成，不冒称已通过。
+全新本机隔离PostgreSQL17.11执行精确009–016迁移，18组检查PASS；旧数据快照不变、successor release/operation/event为0/0/0。另用三个独立临时库分别移除对应唯一约束，新测试均因缺少预期拒绝而失败，证明能捕获防重放约束退化。临时数据库均已停止并清理，未使用云数据库或真实签名。独立只读复查无重要发现。提交`374d2e2e1c7653a11422158256f8ed964f3d66bc`的[CI run40354717215](https://github.com/3956ray/MealForward/actions/runs/40354717215)四作业全部success：272项测试（59客户端+184非PG+16core+13HTTP）和18组隔离PG检查PASS，typecheck与六资产重建diff通过。源码保留既有Draft PR #47。后续纯文档提交使用[skip ci]，不冒称另跑应用CI。
 
-启动时只读核对源HEAD0ceca5e、Render仍为75cdd9c/dep-dbflt5gu01pc73bodam0；实库原业务指纹01556b358764d9c262f96c90f75cafcc，successor三表0/0/0。本轮无应用改动、部署、云迁移或持久业务写入。域名扫描重查连接超时，不能视为风险解除，也不能当作钱包无响应根因。用户暂不提交官方复核的决定保持。
+启动时核对源HEAD0ceca5e，推送后确认远端为374d2e2；再次只读核对Render仍为75cdd9c/dep-dbflt5gu01pc73bodam0；实库原业务指纹01556b358764d9c262f96c90f75cafcc，successor三表0/0/0。本轮无应用改动、部署、云迁移或持久业务写入。域名扫描重查连接超时，不能视为风险解除，也不能当作钱包无响应根因。用户暂不提交官方复核的决定保持。
 
 下一实际人类阶段是正式Recovery双钱包签名，不是重复已通过的Owner/Donor读取。其前置仍为域名/签名暂停解除、审查后显式启用签名、本人提供新鲜Issuer活动观察、建立同一有效轮次。当前不具备这些条件，不创建轮次或要求忽略警告。还须明确：successor ledger未挂载且015 HUMAN_REVIEW_HOLD仍拒绝reserve；Phase6仅保存签名指纹，不能直接满足ledger所需原始双签。即使未来批准2/2，也不能自动进入发券；真实恢复需要另行设计审查的执行协议。原UNKNOWN、NO RELEASE及商家结算#17限制保持。
 

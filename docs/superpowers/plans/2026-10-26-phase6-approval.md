@@ -49,6 +49,6 @@ Scope: complete Task 1 regression coverage only, following the user's authorizat
 - [x] Attempt reuse of the historical Owner fingerprint before fresh role acceptance. Require exact SQLSTATE23505/constraint and unchanged round/approval/event snapshots for all three cases.
 - [x] Fresh isolated PostgreSQL17.11 exact009–016 suite:18/18 PASS; legacy snapshot unchanged and successor rows0/0/0.
 - [x] Three disposable mutation runs: remove each corresponding UNIQUE constraint only in a temporary fixture; each new assertion fails with Missing expected rejection. No tracked migration edits.
-- [ ] Independent review and exact-commit CI.
+- [x] Independent read-only review: no important findings. Exact commit374d2e2 CI run40354717215: four jobs success,272 tests plus18 PG groups; typecheck and reproducible assets pass.
 
 Ruling: continue the existing approved collector scope with these recorded coverage gaps; do not treat two wallet inspections as authorization to enable signing or mount the successor ledger. No user-facing behavior changes; a broader release protocol remains separate work.
