@@ -8,6 +8,10 @@
 
 
 
+## 2026-10-26 用户决定：暂不提交 MetaMask 官方复核
+
+用户明确回答“暂不提交”。复核材料继续保留为未发送草稿，不向MetaMask或其他第三方创建issue、发消息或自动提交，也不再次催促同一授权。此前“尚待回答”已被本决定覆盖。正式签名/新轮次继续暂停，NO RELEASE；没有解除域名风险分类的证据。本轮仅更新交接与草稿状态，没有应用、部署、钱包或数据库操作；应用验证仍属于下文8500627及其CI/公网记录，不宣称新验收。
+
 ## 2026-10-26 18:21（UTC+8）Owner 真实连接确认；角色旁反馈修复已上线
 
 用户将问题页置前台后，Agent只读Chrome确认：页面显示“已连接 OWNER”、固定Owner地址及Monad Testnet 10143；MetaMask网站连接栏为Account1、Monad Testnet并有“断开连接”。本次Owner真实连接成功有直接证据；此前所有尝试不能因此概括成功，Donor真实连接本轮未验收。未点击真实连接/钱包/签名按钮。NO_ROUND时正式签名禁用，“尚未记录”指签名批准，不是连接状态。
@@ -18,7 +22,7 @@
 - **实际部署**：同一服务 `srv-dbfflq5g1s2s73fl05fg`，部署 `dep-dbfiinuc6qcc739rqdr0` 于2026-10-26T10:21:01.024459Z live，实际commit为上述8500627；autoDeploy仍off，无环境/权限/数据库迁移改动。入口仍 https://mealforward-t1f-approval-laodao.onrender.com 。旧RoleProof/Claim服务本轮没有操作。
 - **验证边界**：31项真实HTTPS检查 `T1F_PHASE6_PUBLIC_NO_ROUND_NEGATIVE_PASS`，4资产与源码逐字节一致，NO_ROUND/noRelease=true、realSignatures/onchainTransactions/durableWritesRequested均0。HTML SHA256 `98c8d54296117f0f1c07d416bcb56bed9bc404d1c26ce8667e1d04c0e3085bc1`，JS `b45991a36d14dda4b10736aea61817ce8416ba8b42acc06f67725bd9315d6bdc`。本机独立IAB合成钱包UI验证通过；公网IAB只读导航超时，未将其标成浏览器验收，真实新版反馈尚待人工观察。合成fixture已停止，没有操作真人MetaMask。
 - **实库收尾**：部署后只读旧Claim/Fund/Consent/Event指纹仍 `01556b358764d9c262f96c90f75cafcc`，successor release/operation/event仍0/0/0。没有创建正式轮次或持久写入。
-- **当前门槛**：此前实证MetaMask扫描BLOCK尚无解除证据；本轮补查API超时，不能解释为已解除。复核草稿已更新公开源码/CI证据，仍未发送；已向用户提出单独第三方提交授权，尚待回答。不要请求重复连接、忽略警告或创建正式轮次；待域名复核后安排剩余Donor及新版反馈人工观察。正式Recovery双签NOT_RUN、Phase5历史USER-REPORTED 2/2 PASS保留，NO RELEASE。
+- **当前门槛**：此前实证MetaMask扫描BLOCK尚无解除证据；本轮补查API超时，不能解释为已解除。复核草稿已更新公开源码/CI证据，仍未发送；用户随后明确选择“暂不提交”，保持草稿未发送。不要请求重复连接、忽略警告或创建正式轮次；待域名复核后安排剩余Donor及新版反馈人工观察。正式Recovery双签NOT_RUN、Phase5历史USER-REPORTED 2/2 PASS保留，NO RELEASE。
 
 本轮后续文档提交使用[skip ci]，不把文档HEAD冒称另跑应用CI。
 

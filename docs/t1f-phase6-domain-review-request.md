@@ -1,6 +1,6 @@
 # Draft: MetaMask dapp-scanning review request
 
-**Status: prepared, NOT submitted.** Intended recipient: MetaMask/eth-phishing-detect maintainers, via their public blocklist-removal issue template. External submission requires the user's explicit authorization; project development authorization alone does not authorize posting to a third party. This draft contains only the public domain, public source/deployment evidence and the requested review. Do not attach wallet screenshots, signatures, account activity, credentials, cookies or database identifiers.
+**Status: ON HOLD at the user’s explicit request on2026-10-26 (“暂不提交”); NOT submitted.** Do not submit or repeat the authorization request unless the user revisits this decision. Intended recipient: MetaMask/eth-phishing-detect maintainers, via their public blocklist-removal issue template. External submission requires the user's explicit authorization; project development authorization alone does not authorize posting to a third party. This draft contains only the public domain, public source/deployment evidence and the requested review. Do not attach wallet screenshots, signatures, account activity, credentials, cookies or database identifiers.
 
 Proposed title: **Domain classification review: mealforward-t1f-approval-laodao.onrender.com (dapp scan BLOCK)**
 
