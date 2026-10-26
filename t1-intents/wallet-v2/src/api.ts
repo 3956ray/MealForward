@@ -37,14 +37,19 @@ export function createApprovalApi({fetchImpl=fetch,clock=()=>Math.floor(Date.now
   if(signal?.aborted)fail('CANCELLED');
   if(session&&session.expiresAt>clock()+1)return session;
   if(opening)return awaitOpening(opening,signal);
-  opening=(async()=>{
-   const r=await request('/v1/approval/session','POST',undefined,{},signal);
+  const pending=(async()=>{
+   // A shared session fetch has its own deadline. One cancelled waiter must
+   // not abort a concurrent live caller or force a second session request.
+   const r=await request('/v1/approval/session','POST',undefined,{});
    if(r.status!==200||!r.value||typeof r.value!=='object'||Array.isArray(r.value)||Object.keys(r.value).sort().join(',')!=='csrf,expiresAt')fail('SESSION');
    const x=r.value as Record<string,unknown>;
    if(typeof x.csrf!=='string'||!CSRF.test(x.csrf)||!Number.isSafeInteger(x.expiresAt)||Number(x.expiresAt)<=clock())fail('SESSION');
    const fresh:Session={csrf:x.csrf as string,expiresAt:Number(x.expiresAt)};session=fresh;return fresh;
   })();
-  try{return await opening}finally{opening=null}
+  opening=pending;
+  const clear=()=>{if(opening===pending)opening=null};
+  void pending.then(clear,clear);
+  return awaitOpening(pending,signal);
  }
  async function awaitOpening(promise:Promise<Session>,signal?:AbortSignal):Promise<Session>{
   if(!signal)return promise;

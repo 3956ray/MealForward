@@ -43,3 +43,22 @@ test('caller can cancel pending submit without retry or signature leak',async()=
  await assert.rejects(pending,e=>String(e)==='Error: API_CANCELLED'&&!String(e).includes(secret));
  assert.deepEqual(calls,['/v1/approval/session','/v1/approval/submit']);
 });
+test('cancelled first session waiter does not poison a second live read',async()=>{
+ const calls:string[]=[];const firstAbort=new AbortController();let resolveSession:(r:Response)=>void=()=>{};let sessionSignal:AbortSignal|undefined;
+ const fetchImpl=(async(path:any,init:any)=>{
+  calls.push(path);
+  if(path==='/v1/approval/session'){
+   sessionSignal=init.signal;
+   return new Promise<Response>((resolve,reject)=>{resolveSession=resolve;init.signal.addEventListener('abort',()=>reject(Error('private session error')))});
+  }
+  return {ok:true,status:200,json:async()=>({state:'ready'})} as Response;
+ }) as typeof fetch;
+ const api=createApprovalApi({fetchImpl,clock:()=>1000,timeoutMs:1000});
+ const first=api.read(firstAbort.signal);
+ const second=api.read();const secondResult=second.then(value=>({value}),error=>({error:String(error)}));
+ firstAbort.abort();await assert.rejects(first,/API_CANCELLED/);
+ assert.equal(sessionSignal?.aborted,false);
+ resolveSession({ok:true,status:200,json:async()=>({csrf,expiresAt:1300})} as Response);
+ assert.deepEqual(await secondResult,{value:{state:'ready'}});
+ assert.deepEqual(calls,['/v1/approval/session','/v1/approval/state']);
+});
