@@ -155,6 +155,20 @@ try{
  ['GRANT SELECT ON SEQUENCE mf_t1e.successor_issue_events_event_id_seq TO mf_t1f_execution_runtime','REVOKE SELECT ON SEQUENCE mf_t1e.successor_issue_events_event_id_seq FROM mf_t1f_execution_runtime']]){
  await admin.query(grant);try{await assert.rejects(()=>verifyExecutionRuntime(executionPool),/RUNTIME_CAPABILITY/);}finally{await admin.query(revoke);}}
  await verifyExecutionRuntime(executionPool);passed('execution catalog audit rejects login table grants, extra schema and sequence capabilities');
+ // A reviewed name never authorizes an extra SQL signature, even if its
+ // definer, ownership or configuration keeps it out of the positive count.
+ for(const attributes of [
+  'SECURITY INVOKER',
+  "SECURITY DEFINER SET search_path=public"
+ ]){
+  await admin.query(`CREATE FUNCTION mf_t1f_execution.execution_context(text) RETURNS jsonb LANGUAGE sql ${attributes} AS $$ SELECT '{}'::jsonb $$;
+   REVOKE ALL ON FUNCTION mf_t1f_execution.execution_context(text) FROM PUBLIC;
+   GRANT EXECUTE ON FUNCTION mf_t1f_execution.execution_context(text) TO mf_t1f_execution_runtime`);
+  try{await assert.rejects(()=>verifyExecutionRuntime(executionPool),/RUNTIME_CAPABILITY/);}
+  finally{await admin.query('DROP FUNCTION mf_t1f_execution.execution_context(text)');}
+  await verifyExecutionRuntime(executionPool);
+ }
+ passed('execution catalog audit rejects callable overloads regardless of security mode, owner or configuration');
  // Every audit row must point to exactly the consumed successor and hash.
  await admin.query('BEGIN');try{await admin.query("INSERT INTO mf_t1e.successor_issue_events(successor_id,event_type,tx_hash) VALUES($1,'ISSUE_HASH_BOUND',$2)",[o.successor_id,hex()]);
  await admin.query('SET LOCAL ROLE mf_t1f_approval_runtime');await reject(()=>admin.query('SELECT mf_t1f_recovery.context()'));}finally{await admin.query('ROLLBACK');}
