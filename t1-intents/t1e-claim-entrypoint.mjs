@@ -68,7 +68,7 @@ export async function startT1ESafeSetup({env=process.env}={}){
      status:'T1E_SAFE_SETUP_ONLY_NO_SESSIONS',
      chainId:10143,originalUnit:0,originalGeneration:1,
      independentRecipientLoginEnabled:false,
-     claimWriteEnabled:false,issuerIssueEnabled:false,
+     claimWriteEnabled:false,...issuerCapabilities({},true),
      fundingEnabled:false,settleEnabled:false,
      originalCp30Connected:false
     };
@@ -99,6 +99,10 @@ export async function startT1EClaimEntrypoint({env=process.env}={}){
  const {startT1EClaimServer}=await import('./t1e-claim-server.mjs');
  return startT1EClaimServer({env});
 }
+export function issuerCapabilities(config={},setup=false){
+ const issuerIssueEnabled=!setup&&config.issueEnabled===true,successorEnabled=!setup&&config.successorEnabled===true;
+ return {issuerTransactionEnabled:issuerIssueEnabled||successorEnabled,issuerIssueEnabled,successorEnabled};
+}
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{
   const runtime=await startT1EClaimEntrypoint();
@@ -107,7 +111,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
    status:setup?'T1E_SAFE_SETUP_ONLY_READY':'T1E_PRIVATE_SIWE_STAGE_READY',
    stage:process.env.T1E_DEPLOYMENT_STAGE,
    fundingEnabled:false,
-   issuerTransactionEnabled:!setup&&runtime.config?.issueEnabled===true,
+   ...issuerCapabilities(runtime.config,setup),
    merchantSettlementEnabled:false,
    databaseConnected:!setup
   })+'\n');

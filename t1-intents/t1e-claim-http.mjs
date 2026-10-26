@@ -102,7 +102,7 @@ export function makeT1EClaimGateway({
     status:isConsent?'T1E_RECIPIENT_CONSENT_ONLY':'T1E_ISOLATED_SIWE_READ_ONLY',
     chainId:10143,pinnedRecipient:PILOT_RECIPIENT,
     walletLoginEnabled:true,recipientClaimWriteEnabled:isConsent,
-    issuerIssueEnabled:issueEnabled,fundEnabled:false,settleEnabled:false,
+    issuerIssueEnabled:issueEnabled,successorEnabled,issuerTransactionEnabled:issueEnabled||successorEnabled,fundEnabled:false,settleEnabled:false,
     beneficiaryEligibilityVerified:false,
     onchainRecipientSignatureEnforced:false,
     originalCp30Connected:false
@@ -119,7 +119,7 @@ export function makeT1EClaimGateway({
     const snapshot=await claimStore.issuerReadiness();
     return writeJson(res,200,{
      originalUnit:0,generation:1,issuance:snapshot,
-     issuerTransactionEnabled:issueEnabled,
+     issuerTransactionEnabled:issueEnabled||successorEnabled,issuerIssueEnabled:issueEnabled,successorEnabled,
      nextAction:snapshot?.claimStage==='CONSENT_VERIFIED'?
       'AWAIT_EXPLICIT_WALLET_ISSUE_RELEASE':'AWAIT_BENEFICIARY_DURABLE_CONSENT'
     });

@@ -54,3 +54,13 @@ test('prepare dispatch loss/timeout and postprepare refusal/bind uncertainty sta
   pretendReady=true;await active.challenge();await active.login();await active.refresh();assert.equal(active.snapshot().authenticated,true);assert.equal(active.snapshot().state.status,'READY_TO_PREPARE');assert.equal(active.snapshot().recovery,true);await assert.rejects(()=>active.prepare());assert.equal(active.snapshot().canSend,false);
  }
 });
+
+test('reload/relogin can explicitly recover original hash; malformed input does not bind or enable send',async()=>{
+ const f=setup();await login(f);await f.client.prepare();f.failBind(true);await assert.rejects(()=>f.client.send());f.failBind(false);
+ const c=createExecutionController(f.opts);await c.challenge();await c.login();await c.refresh();assert.equal(c.snapshot().receivedHash,null);
+ const before=f.requests.length;await assert.rejects(()=>c.recoverHash('bad'));assert.equal(c.snapshot().error,'ORIGINAL_TRANSACTION_HASH_INVALID');assert.equal(f.requests.length,before);
+ await c.recoverHash(H);assert.equal(c.snapshot().state.operation.txHash,H);assert.equal(c.snapshot().canSend,false);await assert.rejects(()=>c.recoverHash('0x'+'8'.repeat(64)));await c.reconcile();assert.equal(f.calls.filter(q=>q.method==='eth_sendTransaction').length,1);
+});
+test('account change or provider retirement during hash recovery suppresses late UI application',async()=>{
+ for(const kind of ['account','provider','unannounced']){const f=setup();await login(f);await f.client.prepare();await f.client.refresh();let release;const original=f.opts.request;const c=createExecutionController({...f.opts,request:async(...args)=>{const result=await original(...args);if(args[0].endsWith('bind'))await new Promise(r=>{release=r});return result}});await c.challenge();await c.login();await c.refresh();const pending=c.recoverHash(H);while(!release)await new Promise(r=>setTimeout(r,0));if(kind==='account')f.emit('accountsChanged');else if(kind==='provider')c.invalidate();else f.setAccount(TARGET);release();await assert.rejects(()=>pending);assert.equal(c.snapshot().state.operation.txHash,null);assert.equal(c.snapshot().canSend,false);assert.equal(c.snapshot().authenticated,kind==='unannounced');}
+});

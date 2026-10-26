@@ -12,13 +12,16 @@ const render=s=>{
  $('provider').disabled=false;$('login').disabled=s.busy||!s.challenge;
  $('prepare').disabled=s.busy||!hashData||!s.authenticated||s.recovery||d?.status!=='READY_TO_PREPARE';
  $('send').disabled=s.busy||!s.canSend;$('bind').disabled=s.busy||!s.authenticated||!s.receivedHash;
+ const recoverable=!s.busy&&s.authenticated&&!!d?.operation&&!d.operation.txHash&&!s.canSend;
+ $('original-hash').disabled=!recoverable;$('recover-hash').disabled=!recoverable;
  $('reconcile').disabled=s.busy||!s.authenticated||!d?.operation;
  $('result').textContent=s.error|| (s.busy?'Working…':s.recovery?'Recovery only. Never send again.':'Ready');
 };
 const request=async(path,method,body,csrf)=>{const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),60000);try{const r=await fetch(path,{method,credentials:'same-origin',cache:'no-store',signal:ac.signal,headers:{'Content-Type':'application/json',...(path==='/v1/auth/pre-session'?{'X-C1-Bootstrap':'1'}:{}),...(csrf?{'X-C1-CSRF':csrf}:{})},...(method==='POST'?{body:JSON.stringify(body)}:{})});const s=await r.json();if(!r.ok)throw Error('HTTP_'+r.status);return s;}finally{clearTimeout(timer)}};
-const select=()=>{client?.invalidate();const p=$('provider').value===''?null:providers[Number($('provider').value)];client=createExecutionController({provider:p?.provider,request,hashData:data=>{if(!hashData)throw Error('HASH_UNAVAILABLE');return hashData(data)},origin:location.origin,render});render(client.snapshot());};
+const select=()=>{client?.invalidate();$('original-hash').value='';const p=$('provider').value===''?null:providers[Number($('provider').value)];client=createExecutionController({provider:p?.provider,request,hashData:data=>{if(!hashData)throw Error('HASH_UNAVAILABLE');return hashData(data)},origin:location.origin,render});render(client.snapshot());};
 // Bind every action before loading the optional hashing dependency or contacting the backend.
 for(const action of ['inspect','connect','challenge','login','refresh','prepare','send','bind','reconcile'])$(action).onclick=()=>{if(!client)select();void client[action]().catch(()=>{});};
+$('recover-hash').onclick=()=>{if(client)void client.recoverHash($('original-hash').value.trim()).catch(()=>{});};
 $('provider').onchange=()=>{explicitProvider=$('provider').value!=='';select();};
 addEventListener('pagehide',()=>client?.invalidate());
 addEventListener('eip6963:announceProvider',e=>{add(e.detail.provider,e.detail.info.name);if(!client||providers.length===1)select();});
