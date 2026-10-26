@@ -73,7 +73,9 @@ export async function attestApprovalLive({origin=APPROVAL_PUBLIC_ORIGIN,fixture=
   for(const path of Object.keys(ASSETS)){
    const r=await t.request(path);security(r,{fixture});check(r.status===200&&hash(r.bytes)===expected[path],'ASSET');assetSha256[path]=hash(r.bytes);
   }
-  const page=await t.request('/');security(page,{fixture});check(page.status===200&&hash(page.bytes)===expected['/t1f-approval.html'],'ASSET');
+  const page=await t.request('/');security(page,{fixture});
+  const rootHashes=[expected['/t1f-approval.html'],hash(await readFile(new URL('./public/wallet-v2.html',import.meta.url)))];
+  check(page.status===200&&rootHashes.includes(hash(page.bytes)),'ASSET');
   const cookieName=fixture?'mf_t1f_approval_fixture':'__Host-mf_t1f_approval';
   const session=async()=>{
    const r=await t.request('/v1/approval/session',{method:'POST',body:{}});security(r,{session:true,fixture});

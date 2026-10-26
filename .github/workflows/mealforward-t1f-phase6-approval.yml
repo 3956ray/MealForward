@@ -24,6 +24,17 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
         working-directory: t1-intents
+      - name: Locked Wallet V2 install without package scripts
+        working-directory: t1-intents/wallet-v2
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify provisioned esbuild binary and Wallet V2 source
+        working-directory: t1-intents/wallet-v2
+        run: |
+          node -e "require('esbuild').transformSync('const x = 1')"
+          npm test
+          npm run typecheck
+          npm run build
+          git diff --exit-code -- ../public/wallet-v2.html ../public/wallet-v2.css ../public/wallet-v2-bootstrap.mjs ../public/wallet-v2-controller.mjs ../public/wallet-v2-wallet.mjs ../public/wallet-v2-validation.mjs
       - name: All tests without database fixtures
         working-directory: t1-intents
         run: |

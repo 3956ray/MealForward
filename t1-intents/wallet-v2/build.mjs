@@ -1,9 +1,12 @@
 import {build} from 'esbuild';
-import {access} from 'node:fs/promises';
+import {copyFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
 const publicDir=resolve('../public');
-await Promise.all(['wallet-v2.html','wallet-v2.css'].map(name=>access(resolve(publicDir,name))));
+await Promise.all([
+ copyFile(resolve('public/index.html'),resolve(publicDir,'wallet-v2.html')),
+ copyFile(resolve('public/style.css'),resolve(publicDir,'wallet-v2.css'))
+]);
 await build({
  entryPoints:{
   'wallet-v2-bootstrap':'src/bootstrap.ts',

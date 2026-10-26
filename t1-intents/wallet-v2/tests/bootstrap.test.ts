@@ -12,7 +12,7 @@ import {publicApproval} from '../../t1f-approval-protocol.mjs';
 // @ts-ignore backend fixture is compatibility evidence, not browser code
 import {fixture} from '../../t1f-approval-test-fixture.mjs';
 
-const html=readFileSync(new URL('../../public/wallet-v2.html',import.meta.url),'utf8');
+const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 const flush=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve()};
 test('actual shipped shell binds controls before unresolved loaders',async()=>{
  const dom=new JSDOM(html,{url:'https://example.test/wallet-v2.html'});
