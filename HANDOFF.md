@@ -8,6 +8,16 @@
 
 
 
+## 2026-10-26 23:31:22 Owner 新版真人只读检查：USER-REPORTED PASS，Donor 待测
+
+用户回传Wallet V2页面全文：当前账户 `0xc4f8a468f10d5f98dcff3282516125e97f26433b`、角色Owner、Monad Testnet10143、观察时间2026/10/26 23:31:22，页面“已读取当前钱包”“服务已响应”。诊断为 `phase=ready/ready/NO_ROUND elapsed=15s code=NONE`，build ID `wallet-v2-d1beddb91a74549b3cb3a2ce2e31c34a7c6c8d506be970c5d463da7fb0acbd98` 与已部署版本一致。
+
+据此将Owner新版真实扩展只读检查记录为 **USER-REPORTED PASS**；这是用户提供的页面证据，不是Agent直接操作或观察扩展的证据，也不证明重新申请连接权限的流程。本轮Donor仍待用户测试，不能把Owner结果推广为双钱包通过。NO_ROUND、Owner/Donor批准未记录、NO RELEASE是当前预期状态，连接/读取不等于正式签名批准。
+
+本轮只读复核Render部署 `dep-dbflt5gu01pc73bodam0` 仍live，应用commit `75cdd9ce913b442a67a4674fc5e109d504c08d28`。仅更新交接/验收文档，没有应用改动、部署、数据库或钱包操作；沿用此前CI/公网/实库证据，不冒称本轮重跑。下文“真人MetaMask全部NOT_RUN”为历史状态，现由本节Owner用户回报覆盖；正式签名、创建轮次、发券及域名复核决定均不变。
+
+下一步：用户在MetaMask切换至已授权Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`，回同页点击“检查当前 MetaMask”，回传角色/网络/观察时间和诊断；无需点击正式签名。若未授权或警告，回报提示即可。
+
 ## 2026-10-26 Wallet V2 已上线；独立验收完成，等待真人只读钱包测试
 
 用户已确认方案A具体设计并授权自主推进到真人测试。本轮完成全新客户端，使用固定版本 Wagmi Core/viem；旧前端未被复制为实现模板。钱包、服务、轮次、批准记录分开显示；按钮先绑定再异步加载，后台或校验故障不锁钱包检查；提供方显式选择，当前首账户/实际网络核对、观察时间、阶段等待提示及源码构建指纹可见。正式生产签名仍保持关闭，NO RELEASE。
