@@ -37,10 +37,12 @@ Files: collectorprotocol/service/tests; wallet-v2 contract/validation/controller
 Interfaces: strict optional consumptionreceipt, CONSUMED_NO_RELEASE, canIssuefalse/noReleasetrue. Localfixture actualroute plus syntheticauth/provider, nevercloud.
 - [x] RED/GREEN consumedread invariants and fakewallet one-shot/rejection/reload/account-chainchanges.
 - [x] Browserdesktop/mobilefixture,rebuild/typecheck.
-- [ ] Full exactCI includingPG and independentfinalreview.
+- [x] Full exactCI includingPG and independentfinalreview.
 
 ### Delivery
-- [ ] Concrete activation package: exactmigration/checksum,role/grantdiff,mounting/configurationwork,humansteps,rollback. Label source-only and remainingintegration honestly.
-- [ ] Update HANDOFF,existingPR47/sourcebranch and canonicalhandoffs; no autoactivation.
+- [x] Concrete activation package: exactmigration/checksum,role/grantdiff,mounting/configurationwork,humansteps,rollback. Label source-only and remainingintegration honestly.
+- [x] Update HANDOFF,existingPR47/sourcebranch and canonicalhandoffs; no autoactivation.
 
 Ruling: agents choose trustedcollectorreceipts and separateexecutionrole under autonomousdevelopment authorization. This changes proof trust from raw-signature reverification to protectedserviceattestations. Rejection costs executionproof redesign; no liveprivileges changed.
+
+Final source a527feff5e5ff89a5dd4c83964bd5713e8288829. ExactCI40404621279 sixjobsPASS311tests+42PGgroups; all task and final scoped reviewsPASS. Live activation remains pending explicit security-sensitive permission confirmation; this source plan is complete.

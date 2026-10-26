@@ -21,7 +21,7 @@ The production HTTP source integration must reuse the T1-E SIWE-authenticated is
 Disable execution HTTP/permissions while preserving all immutable receipts and operations. If no operation exists, no transaction capability has been issued. If an operation exists, inspect/recover that same operation; do not delete/reset/re-reserve or issue another packet. Original Claim remains unchanged.
 
 ## Evidence
-Implementation in progress. Migration checksum, sourceSHA, test counts and integration limitations will be filled after verification. This document is not approval or evidence of live execution.
+Accepted source a527feff5e5ff89a5dd4c83964bd5713e8288829; exact CI40404621279 all6 jobs SUCCESS,311 tests+42 isolatedPG groups. Whole-phase and final scoped review PASS with no remaining material findings. Main synthetic browser recovery/reload/wronghash/originalhash/reconcile and mobile checks PASS. This package is concrete and reviewable, but is not approval or evidence of live execution.
 
 ## Exact database delta
 
@@ -67,3 +67,9 @@ Read-only Render check2026-10-27: existing Claim/SIWE service `srv-dbdgstivcj2c7
 Activation must deploy the final reviewed exact commit, not an unrelated saved branch HEAD. First update the collector to consumed-aware source and verify public resource/build parity while it still has only approval capabilities. Deploy the Claim service source with successor disabled and legacy `T1F_ISSUE_WALLET_ENABLED=false`; preserve existing Claim/Auth identity, project, TLS, no funding and no settlement. Then apply the exact017 migration only after current catalog/original-state preflight, provision the dedicated execution LOGIN with only runtime membership, and configure its DSN without exposing credentials. Finally enable the successor flag, verify runtime audit and public unauthenticated/origin/method negatives before asking the human to authenticate.
 
 Expected future UI URL: `https://mealforward-t1e-claim-laodao.onrender.com/t1f-execution.html`. It is not deployed now. Collector formal approvals remain at `https://mealforward-t1f-approval-laodao.onrender.com/`. No fresh round should be created until the Issuer login/read test and a fresh wallet activity report are available; historical2/2 approval is not reusable.
+
+## Explicit activation decision now required
+
+The source phase is complete. Confirm applying the exact017 migration, provisioning the dedicated execution login/runtime membership and configuring only the existing Claim service, deploying the reviewed collector/Claim revision, disabling the old original-Issue route and enabling the successor test entrypoint after negative/auth/capability gates. No fresh round, wallet signature or transaction is included in that activation action; obtain a fresh human activity report and the required explicit wallet actions afterwards. The Superpowers SDD security-sensitive-action stop applies to this new real execution capability. Keep the Draft PR and working branch; do not merge the whole branch into an unrelated curated release.
+
+If reload loses the returned hash after a successful wallet send and failed bind, the Issuer page now accepts the same original transaction hash from wallet history through an explicit recovery action. It validates the loaded operation and calls the existing full server identity check; an unrelated hash cannot update the operation, and no send bytes are recreated.
