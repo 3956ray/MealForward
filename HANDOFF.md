@@ -8,6 +8,21 @@
 
 
 
+## 2026-10-26 14:37（UTC+8）Issuer 空活动回传已核对；Supabase 兼容性修复通过
+
+**覆盖下文“等待 Issuer 活动核对”状态。** 用户针对 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3` / Monad Testnet 的活动与待处理队列检查回传：**“没有任何的内容和活动在这个地址里面。”** 记为 `OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE`（本人回传，非 Agent 直接查看钱包、非全部节点 mempool 为空的证明）。当前回传用于恢复前检查；不得将其时间伪装为后续新观察，创建正式300秒轮次时仍须满足120秒新鲜度。
+
+- **新鲜公网只读核验已实际执行**：2026-10-26 06:22:28 UTC，chain10143，同一 canonical block **74308442** / **`0xed598e8b154df9b2f0102fc7f5165582b06e9c0f24b0ac70db83a8bb86684db2`**。`firstVoucherCandidate({simulateIssuer:false})` 和 `inspectExpiredOriginalIssuer` 同块通过；原合约字节码、固定权限、原Funding receipt、原批次、账目均匹配，7 USDC余额/负债、1 available单位。Issuer latest/pending nonce均0，原op未观察到，unit未issued。状态 `T1F_EXPIRED_NO_ISSUE_OBSERVED_NOT_ABSENCE_PROOF`；零RPC写方法、零签名、零交易。仍不能据此宣称交易从未广播。
+- **实库兼容性审查发现并修复两项缺口**：Supabase postgres实际非superuser、PG170011、CREATEROLE且createrole_self_grant为空，原016无法SET到新owner；另有无schemaUSAGE的统计视图PUBLIC SELECT，被原启动检查误判。通过真实临时PG17先复现42501和启动拒绝，再分别修复，不改任何平台全局ACL或旧业务权限。
+- 016兼容修复 **`de37543`**：仅迁移事务内借用owner SET能力，提交前撤销自身授予关系；保留PG原生ADMIN-only创建者关系，SET/INHERIT=false。运行角色未扩大。运行检查修复 **`cdafe159228435e3f4ecce766733493f19f88f43`**：只忽略无schema访问权的环境PUBLIC表权限，显式表/列授权、ownership、业务表权限和有效schema访问仍拒绝。013–015字节未动。
+- **最新 CI [#40280611850](https://github.com/3956ray/MealForward/actions/runs/40280611850)** 在 **cdafe159228435e3f4ecce766733493f19f88f43** 四作业全部completed/success；日志确认189测试（160+16+13）与 **15组真实隔离PG行为检查全部PASS**。新增组覆盖非superuser迁移、临时权限清理、平台环境授权与直接表/列/schema越权拒绝。只读agent交叉复核新谓词与实库ACL，无该修复范围内的未解决阻断项。旧非阻断测试缺口仍见下节，不扩大此结论到实际部署或正式钱包。
+- **CI后实库复查**：Claim仍ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625/无hash或receipt；013审查表和016schema均不存在，迁移仍001–012。本轮没有实库写入。RoleProof仍 dep-dbfbvi4s728c73erotl0 / c1b99b5；此前旧Claim运行c8723c2也未被本轮改动。当前PR仍 [Draft #47](https://github.com/3956ray/MealForward/pull/47)，未合并/部署。
+- **可审查的下一步方案**：[Phase6实际启用方案](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/t1f-phase6-activation-proposal.md)，包含固定项目/服务范围、SQL SHA256、013审查/014 held slot参数化写入模板、015 HOLD/016顺序、专用账号权限、独立免费Render服务配置、每步断言及回退。不得将测试fixture用于实库。凭据私密注入机制若不可用，停在已完成的HOLD阶段并交由本人直接输入，不能把秘密回传到工具日志或使用旧高权限账号。
+
+**当前门槛：真实环境启用的具体确认。** 钱包空活动这项人工核对已完成；该报告本身不是013–016实库迁移/新凭据/新服务的批准。013源码原有要求 `Never apply to live without a separate migration approval and fresh public-chain/MetaMask revalidation`，runbook同样将实际启用单列。现在源码修复、回归、交叉检查与具体方案已备齐，确认范围应为：按方案分步启用013–016、最小权限专用账号与独立Phase6收集服务，始终NO RELEASE，不发券、不签名/广播、不开放settle。实际公网与真人正式Recovery签名仍NOT_RUN。正式签名轮次只在独立服务公网验证后创建。
+
+本节及方案为 `[skip ci]` 文档更新，最新CI证据属于上列cdafe159，不宣称后续文档HEAD另跑过CI。
+
 ## 2026-10-26 Phase6 源码交付候选 — 正式批准收集，始终 NO RELEASE
 
 **Phase5 真人练习：USER-REPORTED 2/2 PASS · NO RELEASE，无需重做。正式 Recovery 真人签名仍 NOT_RUN。** 本节优先于下文“开始开发”记录；本轮完成源码和隔离验证，尚未启用真实 Phase6 服务。
