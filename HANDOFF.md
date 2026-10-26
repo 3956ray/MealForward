@@ -8,13 +8,19 @@
 
 
 
-## 2026-10-26 Owner 真实连接现场确认；角色旁反馈修复验证中
+## 2026-10-26 18:21（UTC+8）Owner 真实连接确认；角色旁反馈修复已上线
 
 用户将问题页置前台后，Agent只读Chrome确认：页面显示“已连接 OWNER”、固定Owner地址及Monad Testnet 10143；MetaMask网站连接栏为Account1、Monad Testnet并有“断开连接”。本次Owner真实连接成功有直接证据；此前所有尝试不能因此概括成功，Donor真实连接本轮未验收。未点击真实连接/钱包/签名按钮。NO_ROUND时正式签名禁用，“尚未记录”指签名批准，不是连接状态。
 
 按superpowers调试/TDD继续修复可见性：Owner/Donor各自按钮旁显示连接结果；成功按钮明确“已连接 · 重新核对”；签名批准加标签，禁用签名旁显示原因。独立审查发现钱包事件后失败会丢失角色，已加回归并仅保留错误所属角色，不恢复连接。4新增测试分别观察RED再转绿，页面测试20项。浏览器使用独立本机合成provider，检查Owner/Donor切换、错误网络、NO_ROUND禁签及390px无横向溢出；不代表真实扩展验收。钱包权限方法、签名检查与后端协议未改。
 
-当前为候选源码，CI及部署待完成，下文953fea6仍是已知运行基线。域名扫描BLOCK门槛保持；不要求用户重连或越过警告，不创建正式轮次。复核草稿未发送，正式双签NOT_RUN，NO RELEASE。
+- **源码/独审/CI**：应用提交 `8500627b890589e57f46362a805bce3f006892e1`，仍为Phase6源码分支与Draft PR #47；独立agent复查无未解决阻断项。[CI #40306451109](https://github.com/3956ray/MealForward/actions/runs/40306451109) 四作业success，日志确认211项测试（182+16+13）和15组隔离PG17检查PASS。页面20项含4项本次回归；最后事件错误回归先观察断言失败再修复。
+- **实际部署**：同一服务 `srv-dbfflq5g1s2s73fl05fg`，部署 `dep-dbfiinuc6qcc739rqdr0` 于2026-10-26T10:21:01.024459Z live，实际commit为上述8500627；autoDeploy仍off，无环境/权限/数据库迁移改动。入口仍 https://mealforward-t1f-approval-laodao.onrender.com 。旧RoleProof/Claim服务本轮没有操作。
+- **验证边界**：31项真实HTTPS检查 `T1F_PHASE6_PUBLIC_NO_ROUND_NEGATIVE_PASS`，4资产与源码逐字节一致，NO_ROUND/noRelease=true、realSignatures/onchainTransactions/durableWritesRequested均0。HTML SHA256 `98c8d54296117f0f1c07d416bcb56bed9bc404d1c26ce8667e1d04c0e3085bc1`，JS `b45991a36d14dda4b10736aea61817ce8416ba8b42acc06f67725bd9315d6bdc`。本机独立IAB合成钱包UI验证通过；公网IAB只读导航超时，未将其标成浏览器验收，真实新版反馈尚待人工观察。合成fixture已停止，没有操作真人MetaMask。
+- **实库收尾**：部署后只读旧Claim/Fund/Consent/Event指纹仍 `01556b358764d9c262f96c90f75cafcc`，successor release/operation/event仍0/0/0。没有创建正式轮次或持久写入。
+- **当前门槛**：此前实证MetaMask扫描BLOCK尚无解除证据；本轮补查API超时，不能解释为已解除。复核草稿已更新公开源码/CI证据，仍未发送；已向用户提出单独第三方提交授权，尚待回答。不要请求重复连接、忽略警告或创建正式轮次；待域名复核后安排剩余Donor及新版反馈人工观察。正式Recovery双签NOT_RUN、Phase5历史USER-REPORTED 2/2 PASS保留，NO RELEASE。
+
+本轮后续文档提交使用[skip ci]，不把文档HEAD冒称另跑应用CI。
 
 ## 2026-10-26 正确账户仍无可见反应：撤回泛化根因，等待对应页面现场
 
