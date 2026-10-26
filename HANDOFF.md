@@ -6,6 +6,14 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-26 全项目最新 Phase5 401 MetaMask 修复（代码通过，线上仍关闭）
+
+- 实际 Owner 和 Donor 于 Phase5 EIP-712 Practice **均返回 `T1F_PHASE5_SIGNATURE_INVALID · 401`**。Phase4 EIP191 两项此前真人 PASS 仍有效。根因确认：MetaMask V4 要求 `types.EIP712Domain`，旧后端只返回 `PracticeControl`；MetaMask 签名按空 Domain，而 ethers 服务端用四字段 Domain 验证。**未获取真实 Recovery Release，也没有链上交易。**
+- 用户已明确批准修复。修复开发真源 **[Draft PR #46](https://github.com/3956ray/MealForward/pull/46)**，分支 `codex/mealforward-phase5-metamask-v4-domain-fix-20261026`；服务端挑战 JSON-RPC V4 显式四字段 `EIP712Domain`，前端校验域签名类型与固定 StoreEscrow；练习域仍 version0、primaryType PracticeControl，与真实 Recovery version1 隔离。新 EIP712Domain 错配回归 [CI #40259382619](https://github.com/3956ray/MealForward/actions/runs/40259382619) **PASS**；专用 RoleProof 发布分支七组 CI，包括真实关闭状态 21 次 HTTPS 负测，全部 PASS。
+- 真正部署仅在**独立无数据库** Render RoleProof `srv-dbdeuft9fdbs73atbvh0`。`T1F_PHASE5_TYPED_PRACTICE_ENABLED=false` 已在 Render 配置，安全关闭版 `dep-dbfbioqjnfac738pemn0` Live。修复应用 Commit `6d085568d802725f7281439005d0f20c6ffe32ca` 的分阶段部署 `dep-dbfboglg1s2s73f6mh20` 最后检查仍 `update_in_progress`（构建成功、尚无服务新 Live）；**此时用户不得重新签名**。RoleProof 正式放行后必须先验证代码确实上线，再开启 Phase5 true、检查两钱包公网 EIP712Domain challenge / 新 UI 并重新邀请用户本人测试。
+- **这个项目的真实 Claim/资助安全边界完全没有改变**：原单笔 7 Test USDC `FUNDED`、原唯一 Claim `ISSUE_UNKNOWN`、唯一原 Issue 预留及过期 Nonce；Supabase 013–015 未安装，旧 CP30 Journal 不碰，fund/issue/settle 禁止重发。Phase3 015 `HUMAN_REVIEW_HOLD` 的安全修复在独立 PR #45 仅源码/PG17，没有生产授权。
+- 任何新 Agent 必须首先检查上面 Render 正在更新的部署是否真正 Live 并复跑公网 Gate，不能凭本文件猜测部署成功。**每次开发收尾继续更新 HANDOFF.md。**
+
 ## 2026-10-25 Phase 3 安全审查新发现：015 REVIEW_HOLD SQL 权限门禁缺失 — 必须阻止上线
 
 **重要：此节在 Phase4 真人 OWNER/DONOR EIP-191 两项 PASS 后新增，Phase4 仍已通过，但 Phase3 EIP-712 正式恢复仍不允许启用。** 最新代码审阅发现 `t1-intents/supabase/015_t1f_dual_release_successor_issue.sql` 的 `successor_issue_releases.stage` 被约束成 `HUMAN_REVIEW_HOLD`，`may_release_to_wallet=false`，但是创建独立 `successor_issue_operations` 的 `successor_operation_guard()` 只校验 Release 关联关系、参数/有效期、原 Claim 等，没有显式要求已通过**另一独立的正式放行状态**。现有 Phase3 一次性 PG17 集成测试在 HOLD 下插入了一条后续 Operation 并报告 PASS；**这证明测试覆盖的不是完整的安全放行门禁**，不能作为发布批准。
