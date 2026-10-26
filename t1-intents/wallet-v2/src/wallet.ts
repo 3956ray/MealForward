@@ -5,12 +5,17 @@ import {CHAIN_ID} from './contract.ts';
 
 export type ProviderChoice={id:string;name:string};
 export type WalletObservation={account:string|null;chainId:number|null};
+export type WalletSignContext={
+ // Synchronous: called again at the real provider boundary after all preparation.
+ assertCurrent:()=>void;
+ phase:(phase:'preparing'|'prompt'|'settled')=>void;
+};
 export interface WalletPort{
  providers():ProviderChoice[];
  select(id:string):void;
  inspect():Promise<WalletObservation>;
  connect():Promise<WalletObservation>;
- sign(typedData:unknown,account:string):Promise<string>;
+ sign(typedData:unknown,account:string,context:WalletSignContext):Promise<string>;
  dispose():void;
 }
 type Provider={request(args:{method:string;params?:unknown[]}):Promise<unknown>;on?(name:string,listener:(value:unknown)=>void):void;removeListener?(name:string,listener:(value:unknown)=>void):void};
@@ -72,8 +77,9 @@ export function createWalletPort({changed}:{changed:()=>void}):WalletPort{
   try{await wagmiConnect(config,{connector:config.connectors[0]});stillSelected(p,g);return await inspectProvider(p,generation)}
   catch(e){if(e instanceof Error&&e.message==='WALLET_CONTEXT')throw e;return fail('CONNECT')}
  }
- async function sign(typedData:unknown,account:string):Promise<string>{
+ async function sign(typedData:unknown,account:string,context:WalletSignContext):Promise<string>{
   const p=current(),g=generation;if(!address(account))return fail('ACCOUNT');
+  context.phase('preparing');
   const observed=await inspectProvider(p,g);
   if(observed.account!==account.toLowerCase()||observed.chainId!==CHAIN_ID)return fail('CONTEXT');
   if(!typedData||typeof typedData!=='object')return fail('TYPED_DATA');
@@ -81,7 +87,16 @@ export function createWalletPort({changed}:{changed:()=>void}):WalletPort{
   if(!t.domain||!t.types||!t.primaryType||!t.message)return fail('TYPED_DATA');
   try{
    stillCurrent(p,g);
-   const guarded={request:(args:{method:string;params?:unknown[]})=>{stillCurrent(p,g);return p.request(args)}};
+   const guarded={request:(args:{method:string;params?:unknown[]})=>{
+    stillCurrent(p,g);
+    if(args.method!=='eth_signTypedData_v4')return fail('METHOD');
+    context.assertCurrent();
+    context.phase('prompt');
+    // Keep both guards adjacent to request, even if a render invalidates context.
+    stillCurrent(p,g);context.assertCurrent();
+    try{return p.request(args).finally(()=>context.phase('settled'))}
+    catch(error){context.phase('settled');throw error}
+   }};
    const client=createWalletClient({account:account as Address,chain,transport:custom(guarded as never)});
    return await client.signTypedData({domain:t.domain,types:t.types,primaryType:t.primaryType,message:t.message} as never);
   }catch(e){if(e instanceof Error&&e.message==='WALLET_CONTEXT')throw e;return fail('SIGN')}

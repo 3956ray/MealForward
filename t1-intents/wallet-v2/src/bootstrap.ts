@@ -1,4 +1,6 @@
 // This entry has no static imports. DOM handlers exist before any dependency loads.
+declare const __WALLET_V2_BUILD_ID__:string;
+const defaultBuildId=typeof __WALLET_V2_BUILD_ID__==='string'?__WALLET_V2_BUILD_ID__:'wallet-v2-source';
 type ModuleLoaders={
  loadWallet:()=>Promise<any>;
  loadValidation:()=>Promise<any>;
@@ -7,6 +9,7 @@ type ModuleLoaders={
  reportMs?:number;
  promptMs?:number;
  signingEnabled?:boolean;
+ buildId?:string;
 };
 const asset={wallet:'/wallet-v2-wallet.mjs',validation:'/wallet-v2-validation.mjs',controller:'/wallet-v2-controller.mjs'};
 const defaults:ModuleLoaders={
@@ -16,10 +19,12 @@ const defaults:ModuleLoaders={
  loadApi:()=>import(asset.controller),
  reportMs:10000,
  promptMs:30000,
- signingEnabled:false
+ signingEnabled:false,
+ buildId:defaultBuildId
 };
 export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={}){
  const loaders={...defaults,...options};
+ const buildId=loaders.buildId;
  const text=(id:string,value:string)=>{const element=document.getElementById(id);if(element)element.textContent=value};
  const button=(id:string)=>document.getElementById(id) as HTMLButtonElement;
  const select=document.getElementById('provider-select') as HTMLSelectElement;
@@ -30,6 +35,7 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
  let queuedInspect=false,queuedRefresh=false;
  let walletFailure=false,validationFailure=false,apiFailure=false;
  const start=Date.now();
+ text('diagnostic',`build=${buildId} phase=loading elapsed=0s code=NONE`);
  function render(snapshot:any){
   const wallet=snapshot.wallet,backend=snapshot.backend,round=snapshot.round;
   const old=select.value;
@@ -40,6 +46,7 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
   text('wallet-progress',walletFailure?'钱包依赖加载失败，请重新载入页面':!liveWallet?'钱包依赖正在加载；服务读取可继续':wallet.progress+(wallet.code?` · ${wallet.code}`:''));
   text('wallet-account',wallet.account||'未授权或未连接');
   text('wallet-chain',wallet.chainId===null?'尚未读取':wallet.chainId===10143?'Monad Testnet · 10143':`错误网络 · ${wallet.chainId}`);
+  text('wallet-observed-at',wallet.observedAt===null?'尚未检查或已失效':new Date(wallet.observedAt*1000).toLocaleString('zh-CN'));
   text('wallet-role',wallet.role==='owner'?'Owner':wallet.role==='donor'?'Donor':wallet.account?'账户不匹配':'尚未确认');
   text('backend-progress',apiFailure?'服务依赖加载失败，请重新载入页面':backend.progress+(backend.code?` · ${backend.code}`:''));
   const state=round.state;
@@ -75,18 +82,18 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
   if(!liveWallet&&!walletFailure)text('wallet-progress','钱包依赖仍在加载；服务读取可继续');
   if(!validation&&!validationFailure)text('sign-progress','签名校验依赖仍在加载；钱包检查可继续');
   if(!liveApi&&!apiFailure)text('backend-progress','服务依赖仍在加载；钱包检查可继续');
-  if(!controller||!liveWallet||!validation||!liveApi)text('diagnostic',`build=wallet-v2 phase=dependencies elapsed=${Math.floor((Date.now()-start)/1000)}s code=WAITING`);
+  if(!controller||!liveWallet||!validation||!liveApi)text('diagnostic',`build=${buildId} phase=dependencies elapsed=${Math.floor((Date.now()-start)/1000)}s code=WAITING`);
  },loaders.reportMs);
  void Promise.resolve().then(loaders.loadWallet).then(module=>{
   liveWallet=module.createWalletPort({changed:()=>controller?.walletChanged()});
   controller?.walletChanged();
   if(queuedInspect&&controller){queuedInspect=false;void controller.inspect()}
- }).catch(()=>{walletFailure=true;text('wallet-progress','钱包依赖加载失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=wallet-load code=DEPENDENCY_WALLET')});
- const controllerModule=Promise.resolve().then(loaders.loadController).catch(()=>{text('wallet-progress','控制器依赖加载失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=controller-load code=DEPENDENCY_CONTROLLER');return null});
+ }).catch(()=>{walletFailure=true;text('wallet-progress','钱包依赖加载失败，请重新载入页面');text('diagnostic',`build=${buildId} phase=wallet-load code=DEPENDENCY_WALLET`)});
+ const controllerModule=Promise.resolve().then(loaders.loadController).catch(()=>{text('wallet-progress','控制器依赖加载失败，请重新载入页面');text('diagnostic',`build=${buildId} phase=controller-load code=DEPENDENCY_CONTROLLER`);return null});
  void Promise.resolve().then(loaders.loadApi).then(module=>{
   liveApi=module.createApprovalApi({});
   if(controller){queuedRefresh=false;void controller.refresh()}
- }).catch(()=>{apiFailure=true;text('backend-progress','服务依赖加载失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=api-load code=DEPENDENCY_API')});
+ }).catch(()=>{apiFailure=true;text('backend-progress','服务依赖加载失败，请重新载入页面');text('diagnostic',`build=${buildId} phase=api-load code=DEPENDENCY_API`)});
  void Promise.resolve().then(loaders.loadValidation).then(module=>{
   validation=module;
   text('sign-progress','签名校验组件已加载；等待有效轮次');
@@ -94,16 +101,16 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
  }).catch(()=>{validationFailure=true;text('sign-progress','签名校验依赖加载失败；钱包检查仍可使用，请重新载入页面')});
  void controllerModule.then(core=>{
   if(!core)return;
-  const port={providers:()=>liveWallet?.providers()||[],select:(id:string)=>{if(!liveWallet)throw Error('WALLET_UNAVAILABLE');liveWallet.select(id)},inspect:()=>liveWallet?liveWallet.inspect():Promise.reject(Error('WALLET_UNAVAILABLE')),connect:()=>liveWallet?liveWallet.connect():Promise.reject(Error('WALLET_UNAVAILABLE')),sign:(typedData:unknown,account:string)=>liveWallet?liveWallet.sign(typedData,account):Promise.reject(Error('WALLET_UNAVAILABLE')),dispose:()=>liveWallet?.dispose()};
+  const port={providers:()=>liveWallet?.providers()||[],select:(id:string)=>{if(!liveWallet)throw Error('WALLET_UNAVAILABLE');liveWallet.select(id)},inspect:()=>liveWallet?liveWallet.inspect():Promise.reject(Error('WALLET_UNAVAILABLE')),connect:()=>liveWallet?liveWallet.connect():Promise.reject(Error('WALLET_UNAVAILABLE')),sign:(typedData:unknown,account:string,context:any)=>liveWallet?liveWallet.sign(typedData,account,context):Promise.reject(Error('WALLET_UNAVAILABLE')),dispose:()=>liveWallet?.dispose()};
   const api={read:(signal?:AbortSignal)=>liveApi?liveApi.read(signal):Promise.reject(Error('API_UNAVAILABLE')),submit:(input:unknown,signal?:AbortSignal)=>liveApi?liveApi.submit(input,signal):Promise.reject(Error('API_UNAVAILABLE'))};
   controller=core.createController({wallet:port,api,validate:(value:unknown,now:number)=>{
    if(!validation)throw Error('VALIDATION_UNAVAILABLE');
    return validation.validateState(value,now);
-  },render,signingEnabled:loaders.signingEnabled,reportMs:loaders.reportMs,promptMs:loaders.promptMs,buildId:'wallet-v2'});
+  },render,signingEnabled:loaders.signingEnabled,reportMs:loaders.reportMs,promptMs:loaders.promptMs,buildId});
   if(liveWallet)text('wallet-progress','选择钱包提供方，然后检查当前账户');
   if(queuedInspect&&liveWallet){queuedInspect=false;void controller.inspect()}
   if(liveApi){queuedRefresh=false;void controller.refresh()}
- }).catch(()=>{text('wallet-progress','初始化失败，请重新载入页面');text('backend-progress','初始化失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=init code=INIT_FAILED')});
+ }).catch(()=>{text('wallet-progress','初始化失败，请重新载入页面');text('backend-progress','初始化失败，请重新载入页面');text('diagnostic',`build=${buildId} phase=init code=INIT_FAILED`)});
  return {controller:()=>controller};
 }
 if(typeof document!=='undefined'&&document.getElementById('inspect-button'))mountWalletV2(document);

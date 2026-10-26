@@ -1,10 +1,12 @@
 import {build} from 'esbuild';
-import {copyFile} from 'node:fs/promises';
+import {copyFile,readFile,writeFile} from 'node:fs/promises';
+import {sourceFingerprint} from './build-id.mjs';
 import {resolve} from 'node:path';
 
 const publicDir=resolve('../public');
+const buildId=await sourceFingerprint();
 await Promise.all([
- copyFile(resolve('public/index.html'),resolve(publicDir,'wallet-v2.html')),
+ readFile(resolve('public/index.html'),'utf8').then(html=>writeFile(resolve(publicDir,'wallet-v2.html'),html.replaceAll('__WALLET_V2_BUILD_ID__',buildId))),
  copyFile(resolve('public/style.css'),resolve(publicDir,'wallet-v2.css'))
 ]);
 await build({
@@ -17,6 +19,7 @@ await build({
  outdir:publicDir,
  outExtension:{'.js':'.mjs'},
  bundle:true,
+ define:{__WALLET_V2_BUILD_ID__:JSON.stringify(buildId)},
  format:'esm',
  platform:'browser',
  target:'es2022',

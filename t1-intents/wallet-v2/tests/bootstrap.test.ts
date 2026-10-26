@@ -44,6 +44,7 @@ test('delayed validation and pending service leave actual DOM wallet check usabl
  dom.window.document.querySelector<HTMLButtonElement>('#inspect-button')!.click();
  await flush();
  assert.match(dom.window.document.querySelector('#wallet-account')!.textContent||'',new RegExp(OWNER));
+ assert.doesNotMatch(dom.window.document.querySelector('#wallet-observed-at')!.textContent||'',/尚未|失效|Invalid/);
  assert.equal(dom.window.document.querySelector('img'),null);
  await new Promise(resolve=>setTimeout(resolve,8));
  assert.match(dom.window.document.querySelector('#sign-progress')!.textContent||'',/依赖/);
@@ -111,4 +112,21 @@ test('rejected validation import still reports successful service transport with
  assert.equal(dom.window.document.querySelector('#round-payload')!.textContent,'尚无内容');
  assert.equal(dom.window.document.querySelector<HTMLButtonElement>('#sign-button')!.disabled,true);
  assert.doesNotMatch(dom.window.document.body.textContent||'',/private|<img>/);
+});
+test('one build identity survives initial, dependency-wait, load-failure and controller diagnostics',async()=>{
+ const expected='wallet-v2-test-source-sha';
+ for(const mode of ['waiting','failure','controller'] as const){
+  const dom=new JSDOM(html,{url:'https://example.test/wallet-v2.html'});
+  const unavailable=()=>new Promise(()=>{});
+  const options={buildId:expected,loadWallet:unavailable,loadValidation:unavailable,loadApi:unavailable,loadController:mode==='controller'?async()=>({createController}):mode==='failure'?async()=>{throw Error('private')}:unavailable,reportMs:5};
+  mountWalletV2(dom.window.document,options);
+  assert.match(dom.window.document.querySelector('#diagnostic')!.textContent||'',new RegExp(`build=${expected} `));
+  await flush();await flush();
+  const initialized=dom.window.document.querySelector('#diagnostic')!.textContent||'';
+  assert.match(initialized,new RegExp(`build=${expected} `));
+  if(mode==='failure')assert.match(initialized,/phase=controller-load/);
+  if(mode==='controller')assert.match(initialized,/phase=idle\/idle/);
+  await new Promise(resolve=>setTimeout(resolve,8));
+  assert.match(dom.window.document.querySelector('#diagnostic')!.textContent||'',new RegExp(`build=${expected} `));
+ }
 });

@@ -7,6 +7,7 @@ import {fixture,NOW} from '../../t1f-approval-test-fixture.mjs';
 import {OWNER,DONOR} from '../src/contract.ts';
 import {validateState} from '../src/validation.ts';
 import {createController} from '../src/controller.ts';
+import type {WalletSignContext} from '../src/wallet.ts';
 
 function deferred<T>() {
  let resolve!: (value:T)=>void;
@@ -14,7 +15,8 @@ function deferred<T>() {
  const promise=new Promise<T>((yes,no)=>{resolve=yes;reject=no});
  return {promise,resolve,reject};
 }
-const flush=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve()};
+// Drain the adapter lifecycle and post-sign inspection promise chain.
+const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve()};
 const round=()=>publicApproval({row:fixture().row,context:fixture().context,now:NOW});
 const noRound=()=>publicApproval({row:null,context:fixture().context,now:NOW});
 function setup() {
@@ -24,7 +26,7 @@ function setup() {
  const signatures: Array<ReturnType<typeof deferred<string>>>=[];
  const submits: Array<ReturnType<typeof deferred<unknown>>>=[];
  let inspections=0, connects=0;
- const wallet={providers:()=>[{id:'meta',name:'MetaMask'}],select:(_id:string)=>{},inspect:async()=>{inspections++;return {...observation}},connect:async()=>{connects++;return {...observation}},sign:async()=>{const d=deferred<string>();signatures.push(d);return d.promise},dispose:()=>{}};
+ const wallet={providers:()=>[{id:'meta',name:'MetaMask'}],select:(_id:string)=>{},inspect:async()=>{inspections++;return {...observation}},connect:async()=>{connects++;return {...observation}},sign:(_typed:unknown,_account:string,context:WalletSignContext)=>{context.assertCurrent();context.phase('prompt');const d=deferred<string>();signatures.push(d);return d.promise.finally(()=>context.phase('settled'))},dispose:()=>{}};
  const api={read:(_signal?:AbortSignal)=>{const d=deferred<unknown>();reads.push(d);return d.promise},submit:(_input:unknown,_signal?:AbortSignal)=>{const d=deferred<unknown>();submits.push(d);return d.promise}};
  const controller=createController({wallet,api,validate:validateState,render:()=>{},clock:()=>now,signingEnabled:true,reportMs:5,promptMs:5});
  return {controller,reads,signatures,submits,wallet,observation:(x:{account:string;chainId:number})=>{observation=x},clock:(x:number)=>{now=x},counts:()=>({inspections,connects})};

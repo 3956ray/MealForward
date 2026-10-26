@@ -16,12 +16,12 @@
    <label for="provider-select">钱包提供方</label><select id="provider-select"><option value="">正在发现钱包</option></select>
    <div class="actions"><button id="inspect-button" type="button">检查当前 MetaMask</button><button id="connect-button" type="button">连接 MetaMask</button></div>
    <p id="wallet-progress" role="status" aria-live="polite">正在加载钱包检查组件…</p>
-   <dl><dt>当前账户</dt><dd id="wallet-account">尚未检查</dd><dt>网络</dt><dd id="wallet-chain">尚未检查</dd><dt>角色</dt><dd id="wallet-role">尚未检查</dd></dl>
+   <dl><dt>当前账户</dt><dd id="wallet-account">尚未检查</dd><dt>网络</dt><dd id="wallet-chain">尚未检查</dd><dt>角色</dt><dd id="wallet-role">尚未检查</dd><dt>观察时间</dt><dd id="wallet-observed-at">尚未检查或已失效</dd></dl>
   </section>
   <section aria-labelledby="backend-title"><h2 id="backend-title">2. 服务连接</h2><button id="refresh-button" type="button">刷新服务状态</button><p id="backend-progress" role="status" aria-live="polite">正在加载服务组件…</p></section>
   <section aria-labelledby="round-title"><h2 id="round-title">3. 正式批准轮次</h2><p id="round-status" role="status" aria-live="polite">等待读取轮次</p><dl><dt>轮次</dt><dd id="round-id">—</dd><dt>截止时间</dt><dd id="round-expiry">—</dd><dt>摘要</dt><dd id="round-digest">—</dd></dl><h3>完整签名内容</h3><pre id="round-payload">尚无内容</pre><button id="sign-button" type="button" disabled>明确签署当前轮次</button><p id="sign-progress" role="status" aria-live="polite">签名校验尚未就绪</p></section>
   <section aria-labelledby="record-title"><h2 id="record-title">4. 批准记录</h2><p id="owner-record">Owner：尚未读取</p><p id="donor-record">Donor：尚未读取</p><p id="release-status">NO RELEASE</p></section>
-  <footer><h2>安全诊断</h2><p>仅包含构建、阶段、耗时和安全错误码。</p><code id="diagnostic">build=wallet-v2 phase=loading</code><button id="copy-diagnostic" type="button">复制诊断</button></footer>
+  <footer><h2>安全诊断</h2><p>仅包含构建、阶段、耗时和安全错误码。</p><code id="diagnostic">build=wallet-v2-d1beddb91a74549b3cb3a2ce2e31c34a7c6c8d506be970c5d463da7fb0acbd98 phase=loading</code><button id="copy-diagnostic" type="button">复制诊断</button></footer>
  </main>
 </body>
 </html>

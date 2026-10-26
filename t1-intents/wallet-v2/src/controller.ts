@@ -2,9 +2,12 @@ import {CHAIN_ID,OWNER,DONOR,type PublicState,type Role} from './contract.ts';
 import type {WalletPort,WalletObservation} from './wallet.ts';
 import type {ApprovalApi} from './api.ts';
 
+declare const __WALLET_V2_BUILD_ID__:string;
+const defaultBuildId=typeof __WALLET_V2_BUILD_ID__==='string'?__WALLET_V2_BUILD_ID__:'wallet-v2-source';
+
 type Phase='idle'|'loading'|'ready'|'error';
 export type ControllerSnapshot={
- wallet:{phase:Phase;providers:ReturnType<WalletPort['providers']>;account:string|null;chainId:number|null;role:Role|null;code:string|null;progress:string};
+ wallet:{phase:Phase;providers:ReturnType<WalletPort['providers']>;account:string|null;chainId:number|null;observedAt:number|null;role:Role|null;code:string|null;progress:string};
  backend:{phase:Phase;code:string|null;progress:string;validated:boolean};
  round:{state:PublicState|null;canSign:boolean;reason:string;progress:string;uncertain:boolean};
  diagnostic:string;
@@ -19,11 +22,12 @@ const roundKey=(state:PublicState|null)=>state?.round?state.round.id+':'+state.r
 const roleFor=(account:string|null):Role|null=>account?.toLowerCase()===OWNER?'owner':account?.toLowerCase()===DONOR?'donor':null;
 
 /** All signing decisions use a validated server state and a current wallet observation. */
-export function createController({wallet,api,validate,render,clock=()=>Math.floor(Date.now()/1000),timers=globalThis,reportMs=10000,promptMs=30000,signingEnabled=false,buildId='wallet-v2'}:Options){
+export function createController({wallet,api,validate,render,clock=()=>Math.floor(Date.now()/1000),timers=globalThis,reportMs=10000,promptMs=30000,signingEnabled=false,buildId=defaultBuildId}:Options){
  let walletPhase:Phase='idle',backendPhase:Phase='idle';
  let walletCode:string|null=null,backendCode:string|null=null;
  let walletProgress='选择钱包后检查当前账户',backendProgress='等待服务读取',roundProgress='尚未读取正式轮次';
  let observed:WalletObservation={account:null,chainId:null};
+ let observedAt:number|null=null;
  let state:PublicState|null=null;
  let validatedFresh=false,validationCode:string|null=null;
  let selected=false,walletGeneration=0,apiGeneration=0;
@@ -42,7 +46,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   expiryTimer=timers.setTimeout(()=>{expiryTimer=null;roundProgress='轮次已过期';publish()},delay);
   (expiryTimer as unknown as {unref?:()=>void}).unref?.();
  }
- function readiness(){
+ function readiness(ownedSign=false){
   if(backendPhase!=='ready')return 'BACKEND_UNAVAILABLE';
   if(!validatedFresh)return validationCode||'VALIDATION_UNAVAILABLE';
   if(!state?.round)return 'NO_ROUND';
@@ -51,7 +55,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   if(state.status!=='COLLECTING')return 'ROUND_NOT_COLLECTING';
   if(uncertain?.key===roundKey(state))return 'RESULT_UNCERTAIN';
   if(!signingEnabled)return 'SIGNING_HELD';
-  if(signBusy||walletBusy)return 'WALLET_BUSY';
+  if((signBusy&&!ownedSign)||walletBusy)return 'WALLET_BUSY';
   if(walletPhase!=='ready'||!observed.account)return 'WALLET_UNAVAILABLE';
   if(observed.chainId!==CHAIN_ID)return 'WRONG_CHAIN';
   const role=roleFor(observed.account);
@@ -62,7 +66,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  function snapshot():ControllerSnapshot{
   const reason=readiness();
   return {
-   wallet:{phase:walletPhase,providers:wallet.providers(),account:observed.account,chainId:observed.chainId,role:roleFor(observed.account),code:walletCode,progress:walletProgress},
+   wallet:{phase:walletPhase,providers:wallet.providers(),account:observed.account,chainId:observed.chainId,observedAt,role:roleFor(observed.account),code:walletCode,progress:walletProgress},
    backend:{phase:backendPhase,code:backendCode,progress:backendProgress,validated:validatedFresh},
    round:{state,canSign:reason==='READY',reason,progress:roundProgress,uncertain:uncertain?.key===roundKey(state)},
    diagnostic:`build=${buildId} phase=${walletPhase}/${backendPhase}/${reason} elapsed=${Math.max(0,clock()-started)}s code=${walletCode||backendCode||validationCode||'NONE'}`
@@ -70,7 +74,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  }
  function walletChanged(){
   if(walletBusyKind!=='connect')walletGeneration++;
-  observed={account:null,chainId:null};
+  observed={account:null,chainId:null};observedAt=null;
   walletPhase='idle';walletProgress='钱包状态已变化，请重新检查';walletCode=null;
   publish();
  }
@@ -90,10 +94,10 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   try{
    const result=await wallet[kind]();
    if(generation!==walletGeneration)return;
-   observed=result;walletPhase='ready';walletProgress=result.account?'已读取当前钱包':'尚未授权当前账户；可显式连接';
+   observed=result;observedAt=clock();walletPhase='ready';walletProgress=result.account?'已读取当前钱包':'尚未授权当前账户；可显式连接';
   }catch(error){
    if(generation!==walletGeneration)return;
-   observed={account:null,chainId:null};walletPhase='error';walletCode=safeCode(error,'WALLET_ERROR');walletProgress=kind==='inspect'?'检查失败':'连接未完成';
+   observed={account:null,chainId:null};observedAt=null;walletPhase='error';walletCode=safeCode(error,'WALLET_ERROR');walletProgress=kind==='inspect'?'检查失败':'连接未完成';
   }finally{timers.clearTimeout(report);walletBusy=false;walletBusyKind=null;publish()}
  }
  async function refresh(){
@@ -135,12 +139,32 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   const generation=walletGeneration,apiAtStart=apiGeneration;
   const ownsApi=()=>generation===walletGeneration&&apiAtStart===apiGeneration;
   signBusy=true;roundProgress='正在核对钱包与服务轮次';publish();
-  let promptTimer:ReturnType<typeof setTimeout>|null=null;
+  let phaseTimer:ReturnType<typeof setTimeout>|null=null,phaseGeneration=0;
+  const clearPhase=()=>{phaseGeneration++;if(phaseTimer!==null)timers.clearTimeout(phaseTimer);phaseTimer=null};
+  const phase=(progress:string,waiting?:string,delay=reportMs)=>{
+   clearPhase();
+   if(!ownsApi())return;
+   roundProgress=progress;publish();
+   const currentPhase=phaseGeneration;
+   if(waiting)phaseTimer=timers.setTimeout(()=>{
+    if(ownsApi()&&signBusy&&currentPhase===phaseGeneration){roundProgress=waiting;publish()}
+   },delay);
+  };
+  const readWallet=async()=>{
+   phase('正在核对当前钱包账户和网络','钱包检查仍在等待');
+   try{await inspectCurrent();if(ownsApi())observedAt=clock()}
+   finally{clearPhase()}
+  };
+  const assertCurrent=()=>{
+   if(!ownsApi()||roundKey(state)!==key||observed.account!==account||readiness(true)!=='READY')throw Error('VALIDATION_CONTEXT');
+  };
   try{
-   await inspectCurrent();
+   await readWallet();
    let fresh:PublicState;
    try{
+    phase('正在核对服务轮次','服务轮次读取仍在等待');
     const value=await api.read();
+    clearPhase();
     if(!ownsApi())return;
     fresh=validate(value,clock());
    }catch(error){
@@ -151,31 +175,34 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
    if(roundKey(fresh)!==key){backendPhase='error';backendCode='VALIDATION_CONTEXT';validatedFresh=false;throw Error('VALIDATION_CONTEXT')}
    if(fresh.status!=='COLLECTING'||fresh.roles[role]||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
    state=fresh;scheduleExpiry();backendPhase='ready';validatedFresh=true;
-   await inspectCurrent();
+   await readWallet();
    if(!ownsApi()||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
-   roundProgress='等待钱包签名；请查看扩展';publish();
-   promptTimer=timers.setTimeout(()=>{roundProgress='签名请求仍待处理；不会重复弹窗';publish()},promptMs);
-   const signature=await wallet.sign(fresh.round!.typedData,account);
+   const signature=await wallet.sign(fresh.round!.typedData,account,{assertCurrent,phase:stage=>{
+    if(stage==='preparing')phase('正在准备钱包签名，核对账户和网络','钱包检查仍在等待');
+    else if(stage==='prompt')phase('等待钱包签名；请查看扩展','签名请求仍待处理；不会重复弹窗',promptMs);
+    else phase('钱包签名请求已结束，正在核对结果');
+   }});
    if(!ownsApi()||clock()>=fresh.round!.expiresAt)return;
-   await inspectCurrent();
+   await readWallet();
    if(!ownsApi()||clock()>=fresh.round!.expiresAt)return;
-   roundProgress='签名已返回，正在保存批准记录';publish();
+   phase('签名已返回，正在保存批准记录','批准记录保存仍在等待');
    const pending={key,role,pending:true};
    uncertain=pending;
    try{
     const value=await api.submit({role,roundId:fresh.round!.id,digest:fresh.round!.digest,signature});
-    pending.pending=false;
+    pending.pending=false;clearPhase();
     if(!ownsApi())return;
     const result=validate(value,clock());
     if(roundKey(result)!==key)throw Error('VALIDATION_CONTEXT');
     state=result;scheduleExpiry();backendPhase='ready';validatedFresh=true;roundProgress=result.roles[role]?'服务已记录批准':'服务未确认批准';
     if(result.roles[role]&&uncertain===pending)uncertain=null;
    }catch{
-    pending.pending=false;
+    pending.pending=false;clearPhase();
     if(!ownsApi())return;
-    roundProgress='提交结果不确定，正在读取服务确认';publish();
+    phase('提交结果不确定，正在读取服务确认','批准记录确认仍在等待');
     try{
      const value=await api.read();
+     clearPhase();
      if(!ownsApi())return;
      const result=validate(value,clock());
      if(roundKey(result)!==key)throw Error('VALIDATION_CONTEXT');
@@ -190,7 +217,7 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   }catch(error){
    if(ownsApi()){roundProgress='签名未完成';walletCode=safeCode(error,'SIGN_ABORTED')}
   }finally{
-   if(promptTimer)timers.clearTimeout(promptTimer);
+   clearPhase();
    signBusy=false;publish();
   }
  }
