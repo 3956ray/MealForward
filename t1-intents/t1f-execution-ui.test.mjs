@@ -29,3 +29,28 @@ test('service delay, context changes without events and invalid transaction fiel
 });
 test('public snapshots never retain transaction bytes after prepare or invalidation',async()=>{const f=setup();await login(f);await f.client.prepare();assert.doesNotMatch(JSON.stringify(f.client.snapshot()),/0x1234|"transaction"|"data"/);f.client.invalidate();assert.doesNotMatch(JSON.stringify(f.client.snapshot()),/0x1234|"transaction"|"data"/);});
 test('permissions require separate explicit connect; account event during picker may settle but retired provider cannot',async()=>{const f=setup();assert.equal(f.calls.length,0);f.onRequest(q=>{if(q.method==='wallet_requestPermissions')f.emit('accountsChanged')});await f.client.connect();assert.equal(f.client.snapshot().checked,true);assert.equal(f.client.snapshot().recovery,false);assert.equal(f.calls.filter(q=>q.method==='wallet_requestPermissions').length,1);assert.equal(f.requests.length,0);const g=setup();g.onRequest(q=>{if(q.method==='wallet_requestPermissions')g.client.invalidate()});await assert.rejects(()=>g.client.connect());assert.equal(g.calls.some(q=>q.method==='personal_sign'||q.method==='eth_sendTransaction'),false);});
+test('initial unauthenticated refresh, refused SIWE and transient challenge errors allow explicit retry through prepare',async()=>{
+ for(const failure of ['refresh401','siweRefused','challengeTransient']){
+  const f=setup();let fail=true;const original=f.opts.request;
+  const c=createExecutionController({...f.opts,request:async(...args)=>{if(fail&&(failure==='refresh401'&&args[0].endsWith('status')||failure==='challengeTransient'&&args[0].endsWith('challenge')))throw Error('HTTP_FAILURE');return original(...args)}});
+  if(failure==='refresh401')await assert.rejects(()=>c.refresh());
+  else if(failure==='challengeTransient')await assert.rejects(()=>c.challenge());
+  else{await c.challenge();f.onRequest(q=>{if(fail&&q.method==='personal_sign')throw Error('USER_REFUSED_SIWE')});await assert.rejects(()=>c.login());}
+  assert.equal(c.snapshot().recovery,false);assert.equal(c.snapshot().error,'EXECUTION_ACTION_FAILED_RETRY');
+  fail=false;await c.challenge();await c.login();await c.refresh();assert.equal(c.snapshot().authenticated,true);assert.equal(c.snapshot().state.operation,null);assert.equal(c.snapshot().recovery,false);await c.prepare();assert.equal(c.snapshot().canSend,true);
+ }
+});
+test('prepare dispatch loss/timeout and postprepare refusal/bind uncertainty stay sticky across successful login and even READY reads',async()=>{
+ for(const failure of ['prepareLoss','prepareTimeout','sendRefused','bindUncertain','payloadRefresh','reloadOperation']){
+  const f=setup({mode:failure==='sendRefused'?'reject':'ok',timeoutMs:15});const original=f.opts.request;let pretendReady=false;
+  const options={...f.opts,request:async(...args)=>{if(pretendReady&&args[0].endsWith('status'))return ready();const s=await original(...args);if(args[0].endsWith('prepare')){if(failure==='prepareLoss')throw Error('COMMITTED_RESPONSE_LOST');if(failure==='prepareTimeout')await new Promise(r=>setTimeout(r,30));}return s;}};
+  const c=createExecutionController(options);await c.challenge();await c.login();await c.refresh();
+  if(failure.startsWith('prepare'))await assert.rejects(()=>c.prepare());
+  else{await c.prepare();if(failure==='sendRefused')await assert.rejects(()=>c.send());if(failure==='bindUncertain'){f.failBind(true);await assert.rejects(()=>c.send());}if(failure==='payloadRefresh')await c.refresh();}
+  const active=failure==='reloadOperation'?createExecutionController(options):c;
+  if(failure==='reloadOperation')await active.refresh();
+  assert.equal(active.snapshot().recovery,true);assert.equal(active.snapshot().canSend,false);
+  // A later auth success or contradictory empty read never erases earlier reservation uncertainty.
+  pretendReady=true;await active.challenge();await active.login();await active.refresh();assert.equal(active.snapshot().authenticated,true);assert.equal(active.snapshot().state.status,'READY_TO_PREPARE');assert.equal(active.snapshot().recovery,true);await assert.rejects(()=>active.prepare());assert.equal(active.snapshot().canSend,false);
+ }
+});
