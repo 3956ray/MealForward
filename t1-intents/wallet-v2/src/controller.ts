@@ -5,7 +5,7 @@ import type {ApprovalApi} from './api.ts';
 type Phase='idle'|'loading'|'ready'|'error';
 export type ControllerSnapshot={
  wallet:{phase:Phase;providers:ReturnType<WalletPort['providers']>;account:string|null;chainId:number|null;role:Role|null;code:string|null;progress:string};
- backend:{phase:Phase;code:string|null;progress:string};
+ backend:{phase:Phase;code:string|null;progress:string;validated:boolean};
  round:{state:PublicState|null;canSign:boolean;reason:string;progress:string;uncertain:boolean};
  diagnostic:string;
 };
@@ -25,9 +25,10 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  let walletProgress='选择钱包后检查当前账户',backendProgress='等待服务读取',roundProgress='尚未读取正式轮次';
  let observed:WalletObservation={account:null,chainId:null};
  let state:PublicState|null=null;
+ let validatedFresh=false,validationCode:string|null=null;
  let selected=false,walletGeneration=0,apiGeneration=0;
  let walletBusy=false,signBusy=false,walletBusyKind:'inspect'|'connect'|null=null;
- let uncertainKey:string|null=null;
+ let uncertain:{key:string;role:Role;pending:boolean}|null=null;
  let apiAbort:AbortController|null=null;
  let expiryTimer:ReturnType<typeof setTimeout>|null=null;
  let started=clock();
@@ -43,11 +44,12 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  }
  function readiness(){
   if(backendPhase!=='ready')return 'BACKEND_UNAVAILABLE';
+  if(!validatedFresh)return validationCode||'VALIDATION_UNAVAILABLE';
   if(!state?.round)return 'NO_ROUND';
   if(state.status==='EXPIRED'||clock()>=state.round.expiresAt)return 'EXPIRED';
   if(state.status==='COLLECTED_NO_RELEASE')return 'COLLECTED_NO_RELEASE';
   if(state.status!=='COLLECTING')return 'ROUND_NOT_COLLECTING';
-  if(uncertainKey===roundKey(state))return 'RESULT_UNCERTAIN';
+  if(uncertain?.key===roundKey(state))return 'RESULT_UNCERTAIN';
   if(!signingEnabled)return 'SIGNING_HELD';
   if(signBusy||walletBusy)return 'WALLET_BUSY';
   if(walletPhase!=='ready'||!observed.account)return 'WALLET_UNAVAILABLE';
@@ -61,9 +63,9 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   const reason=readiness();
   return {
    wallet:{phase:walletPhase,providers:wallet.providers(),account:observed.account,chainId:observed.chainId,role:roleFor(observed.account),code:walletCode,progress:walletProgress},
-   backend:{phase:backendPhase,code:backendCode,progress:backendProgress},
-   round:{state,canSign:reason==='READY',reason,progress:roundProgress,uncertain:uncertainKey===roundKey(state)&&uncertainKey!==null},
-   diagnostic:`build=${buildId} phase=${walletPhase}/${backendPhase}/${reason} elapsed=${Math.max(0,clock()-started)}s code=${walletCode||backendCode||'NONE'}`
+   backend:{phase:backendPhase,code:backendCode,progress:backendProgress,validated:validatedFresh},
+   round:{state,canSign:reason==='READY',reason,progress:roundProgress,uncertain:uncertain?.key===roundKey(state)},
+   diagnostic:`build=${buildId} phase=${walletPhase}/${backendPhase}/${reason} elapsed=${Math.max(0,clock()-started)}s code=${walletCode||backendCode||validationCode||'NONE'}`
   };
  }
  function walletChanged(){
@@ -97,17 +99,22 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
  async function refresh(){
   const generation=++apiGeneration;
   apiAbort?.abort();apiAbort=new AbortController();
+  validatedFresh=false;validationCode=null;
   backendPhase='loading';backendCode=null;backendProgress='正在读取服务状态';roundProgress='正在核对正式轮次';publish();
   const report=timers.setTimeout(()=>{if(generation===apiGeneration){backendProgress='服务仍在等待响应';publish()}},reportMs);
   try{
    const value=await api.read(apiAbort.signal);
    if(generation!==apiGeneration)return;
-   const fresh=validate(value,clock());
-   state=fresh;scheduleExpiry();backendPhase='ready';backendProgress='服务状态已核对';roundProgress=fresh.round?'已核对正式轮次与摘要':'尚无正式轮次';
-   if(uncertainKey&&roundKey(fresh)===uncertainKey){
-    const role=roleFor(observed.account);
-    if(role&&fresh.roles[role])uncertainKey=null;
-    else if(fresh.status==='COLLECTING')uncertainKey=null;
+   backendPhase='ready';backendProgress='服务已响应';
+   try{
+    const fresh=validate(value,clock());
+    state=fresh;scheduleExpiry();validatedFresh=true;roundProgress=fresh.round?'已核对正式轮次与摘要':'尚无正式轮次';
+    if(uncertain&&roundKey(fresh)===uncertain.key){
+     if(fresh.roles[uncertain.role]||(fresh.status==='COLLECTING'&&!uncertain.pending))uncertain=null;
+    }
+   }catch(error){
+    validationCode=safeCode(error,'VALIDATION_INVALID_STATE');
+    roundProgress='服务已响应，轮次校验不可用；签名已关闭';
    }
   }catch(error){
    if(generation!==apiGeneration)return;
@@ -125,42 +132,62 @@ export function createController({wallet,api,validate,render,clock=()=>Math.floo
   const original=state!;const key=roundKey(original)!;
   const account=observed.account!;const role=roleFor(account)!;
   const generation=walletGeneration,apiAtStart=apiGeneration;
+  const ownsApi=()=>generation===walletGeneration&&apiAtStart===apiGeneration;
   signBusy=true;roundProgress='正在核对钱包与服务轮次';publish();
   let promptTimer:ReturnType<typeof setTimeout>|null=null;
   try{
    await inspectCurrent();
    let fresh:PublicState;
-   try{fresh=validate(await api.read(),clock())}
-   catch(error){backendPhase='error';backendCode=safeCode(error,'BACKEND_PREFLIGHT');throw error}
-   if(roundKey(fresh)!==key){backendPhase='error';backendCode='VALIDATION_CONTEXT';throw Error('VALIDATION_CONTEXT')}
-   if(generation!==walletGeneration||apiAtStart!==apiGeneration||fresh.status!=='COLLECTING'||fresh.roles[role]||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
-   state=fresh;scheduleExpiry();backendPhase='ready';
+   try{
+    const value=await api.read();
+    if(!ownsApi())return;
+    fresh=validate(value,clock());
+   }catch(error){
+    if(ownsApi()){backendPhase='error';backendCode=safeCode(error,'BACKEND_PREFLIGHT');validatedFresh=false}
+    throw error;
+   }
+   if(!ownsApi())return;
+   if(roundKey(fresh)!==key){backendPhase='error';backendCode='VALIDATION_CONTEXT';validatedFresh=false;throw Error('VALIDATION_CONTEXT')}
+   if(fresh.status!=='COLLECTING'||fresh.roles[role]||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
+   state=fresh;scheduleExpiry();backendPhase='ready';validatedFresh=true;
    await inspectCurrent();
-   if(generation!==walletGeneration||apiAtStart!==apiGeneration||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
+   if(!ownsApi()||clock()>=fresh.round!.expiresAt)throw Error('VALIDATION_CONTEXT');
    roundProgress='等待钱包签名；请查看扩展';publish();
    promptTimer=timers.setTimeout(()=>{roundProgress='签名请求仍待处理；不会重复弹窗';publish()},promptMs);
    const signature=await wallet.sign(fresh.round!.typedData,account);
-   if(generation!==walletGeneration||apiAtStart!==apiGeneration||clock()>=fresh.round!.expiresAt)return;
+   if(!ownsApi()||clock()>=fresh.round!.expiresAt)return;
    await inspectCurrent();
-   if(generation!==walletGeneration||apiAtStart!==apiGeneration||clock()>=fresh.round!.expiresAt)return;
+   if(!ownsApi()||clock()>=fresh.round!.expiresAt)return;
    roundProgress='签名已返回，正在保存批准记录';publish();
+   const pending={key,role,pending:true};
+   uncertain=pending;
    try{
-    const result=validate(await api.submit({role,roundId:fresh.round!.id,digest:fresh.round!.digest,signature}),clock());
-    if(generation!==walletGeneration||roundKey(result)!==key)return;
-    state=result;scheduleExpiry();backendPhase='ready';roundProgress=result.roles[role]?'服务已记录批准':'服务未确认批准';
-    if(!result.roles[role])uncertainKey=key;
+    const value=await api.submit({role,roundId:fresh.round!.id,digest:fresh.round!.digest,signature});
+    pending.pending=false;
+    if(!ownsApi())return;
+    const result=validate(value,clock());
+    if(roundKey(result)!==key)throw Error('VALIDATION_CONTEXT');
+    state=result;scheduleExpiry();backendPhase='ready';validatedFresh=true;roundProgress=result.roles[role]?'服务已记录批准':'服务未确认批准';
+    if(result.roles[role]&&uncertain===pending)uncertain=null;
    }catch{
-    uncertainKey=key;roundProgress='提交结果不确定，正在读取服务确认';publish();
+    pending.pending=false;
+    if(!ownsApi())return;
+    roundProgress='提交结果不确定，正在读取服务确认';publish();
     try{
-     const result=validate(await api.read(),clock());
-     if(generation!==walletGeneration||roundKey(result)!==key)return;
-     state=result;scheduleExpiry();backendPhase='ready';
-     if(result.roles[role]){uncertainKey=null;roundProgress='服务已确认批准记录'}
-     else{uncertainKey=null;roundProgress='服务未记录批准；需要新的明确操作'}
-    }catch(error){backendPhase='error';backendCode=safeCode(error,'BACKEND_READBACK');roundProgress='无法确认提交结果，签名保持关闭'}
+     const value=await api.read();
+     if(!ownsApi())return;
+     const result=validate(value,clock());
+     if(roundKey(result)!==key)throw Error('VALIDATION_CONTEXT');
+     state=result;scheduleExpiry();backendPhase='ready';validatedFresh=true;
+     if(uncertain===pending)uncertain=null;
+     roundProgress=result.roles[role]?'服务已确认批准记录':'服务未记录批准；需要新的明确操作';
+    }catch(error){
+     if(!ownsApi())return;
+     backendPhase='error';backendCode=safeCode(error,'BACKEND_READBACK');validatedFresh=false;roundProgress='无法确认提交结果，签名保持关闭';
+    }
    }
   }catch(error){
-   if(generation===walletGeneration){roundProgress='签名未完成';walletCode=safeCode(error,'SIGN_ABORTED')}
+   if(ownsApi()){roundProgress='签名未完成';walletCode=safeCode(error,'SIGN_ABORTED')}
   }finally{
    if(promptTimer)timers.clearTimeout(promptTimer);
    signBusy=false;publish();

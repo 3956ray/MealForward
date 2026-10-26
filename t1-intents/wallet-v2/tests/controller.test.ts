@@ -178,3 +178,60 @@ test('local expiry rerenders completed state as expired and preserves both recor
  assert.equal(rendered.at(-1)?.round.state?.roles.donor,true);
  c.dispose();
 });
+test('late submit success cannot undo a newer failed manual refresh',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();x.reads[1].resolve(round());await flush();
+ x.signatures[0].resolve('0x'+'e'.repeat(130));await flush();
+ assert.equal(x.submits.length,1);
+ const newer=x.controller.refresh();x.reads[2].reject(Error('API_NETWORK'));await newer;
+ assert.equal(x.controller.snapshot().backend.phase,'error');
+ x.submits[0].resolve({...round(),roles:{owner:true,donor:false}});await signing;
+ assert.equal(x.controller.snapshot().backend.phase,'error');
+ assert.equal(x.controller.snapshot().round.canSign,false);
+ assert.equal(x.controller.snapshot().round.uncertain,true);
+});
+test('late negative readback cannot restore readiness after newer failed refresh',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();x.reads[1].resolve(round());await flush();
+ x.signatures[0].resolve('0x'+'e'.repeat(130));await flush();
+ x.submits[0].reject(Error('API_NETWORK'));await flush();
+ assert.equal(x.reads.length,3);
+ const newer=x.controller.refresh();x.reads[3].reject(Error('API_NETWORK'));await newer;
+ x.reads[2].resolve(round());await signing;
+ assert.equal(x.controller.snapshot().backend.phase,'error');
+ assert.equal(x.controller.snapshot().round.canSign,false);
+ assert.equal(x.controller.snapshot().round.uncertain,true);
+});
+test('late readback error cannot overwrite a newer successful different round',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();x.reads[1].resolve(round());await flush();
+ x.signatures[0].resolve('0x'+'e'.repeat(130));await flush();
+ x.submits[0].reject(Error('API_NETWORK'));await flush();
+ const changed=structuredClone(round());changed.round.id='88888888-8888-4888-8888-888888888888';
+ const newer=x.controller.refresh();x.reads[3].resolve(changed);await newer;
+ x.reads[2].reject(Error('API_NETWORK'));await signing;
+ assert.equal(x.controller.snapshot().backend.phase,'ready');
+ assert.equal(x.controller.snapshot().round.state?.round?.id,changed.round.id);
+ assert.equal(x.controller.snapshot().round.canSign,true);
+});
+test('late preflight API error cannot overwrite a newer successful refresh',async()=>{
+ const x=setup();x.controller.selectProvider('meta');await x.controller.inspect();
+ const initial=x.controller.refresh();x.reads[0].resolve(round());await initial;
+ const signing=x.controller.sign();await flush();
+ const newer=x.controller.refresh();x.reads[2].resolve(round());await newer;
+ x.reads[1].reject(Error('API_NETWORK'));await signing;
+ assert.equal(x.controller.snapshot().backend.phase,'ready');
+ assert.equal(x.controller.snapshot().round.canSign,true);
+});
+test('raw service response without signing validator is visible but never signable',async()=>{
+ const wallet={providers:()=>[{id:'meta',name:'MetaMask'}],select:(_id:string)=>{},inspect:async()=>({account:OWNER,chainId:10143}),connect:async()=>({account:OWNER,chainId:10143}),sign:async()=>'',dispose:()=>{}};
+ const c=createController({wallet,api:{read:async()=>round(),submit:async()=>round()},validate:()=>{throw Error('VALIDATION_UNAVAILABLE')},render:()=>{},clock:()=>NOW,signingEnabled:true});
+ c.selectProvider('meta');await c.inspect();await c.refresh();
+ assert.equal(c.snapshot().backend.phase,'ready');
+ assert.equal(c.snapshot().round.reason,'VALIDATION_UNAVAILABLE');
+ assert.equal(c.snapshot().round.state,null);
+ assert.equal(c.snapshot().round.canSign,false);
+});

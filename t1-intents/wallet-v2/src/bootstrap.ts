@@ -43,14 +43,14 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
   text('wallet-role',wallet.role==='owner'?'Owner':wallet.role==='donor'?'Donor':wallet.account?'账户不匹配':'尚未确认');
   text('backend-progress',apiFailure?'服务依赖加载失败，请重新载入页面':backend.progress+(backend.code?` · ${backend.code}`:''));
   const state=round.state;
-  text('round-status',round.reason==='EXPIRED'?'EXPIRED':state?.status||round.reason);
+  text('round-status',round.reason==='EXPIRED'||round.reason.startsWith('VALIDATION_')?round.reason:state?.status||round.reason);
   text('round-id',state?.round?.id||'—');
   text('round-expiry',state?.round?new Date(state.round.expiresAt*1000).toLocaleString('zh-CN'):'—');
   text('round-digest',state?.round?.digest||'—');
   text('round-payload',state?.round?JSON.stringify(state.round.typedData,null,2):'尚无内容');
-  text('sign-progress',validationFailure?'签名校验组件加载失败，请重新载入':round.progress+` · ${round.reason}`);
+  text('sign-progress',validationFailure?'签名校验组件加载失败，请重新载入':!validation?'签名校验依赖正在加载；服务和钱包检查可继续':round.progress+` · ${round.reason}`);
   button('sign-button').disabled=!validation||!round.canSign;
-  const recordPrefix=backend.phase==='ready'?'':'上次读取 · ';
+  const recordPrefix=backend.validated?'':'上次读取 · ';
   text('owner-record',`Owner：${state?recordPrefix+(state.roles.owner?'服务已记录':'未记录'):'尚未读取'}`);
   text('donor-record',`Donor：${state?recordPrefix+(state.roles.donor?'服务已记录':'未记录'):'尚未读取'}`);
   text('release-status','NO RELEASE');
@@ -67,7 +67,7 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
  });
  button('refresh-button').addEventListener('click',()=>{
   text('backend-progress','正在刷新服务状态');
-  if(controller&&validation&&liveApi)void controller.refresh();else queuedRefresh=true;
+  if(controller&&liveApi)void controller.refresh();else queuedRefresh=true;
  });
  button('sign-button').addEventListener('click',()=>{text('sign-progress','正在核对轮次与钱包');if(controller&&validation)void controller.sign()});
  button('copy-diagnostic').addEventListener('click',()=>{const summary=document.getElementById('diagnostic')?.textContent||'';void document.defaultView?.navigator.clipboard?.writeText(summary)});
@@ -85,7 +85,7 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
  const controllerModule=Promise.resolve().then(loaders.loadController).catch(()=>{text('wallet-progress','控制器依赖加载失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=controller-load code=DEPENDENCY_CONTROLLER');return null});
  void Promise.resolve().then(loaders.loadApi).then(module=>{
   liveApi=module.createApprovalApi({});
-  if(controller&&validation){queuedRefresh=false;void controller.refresh()}
+  if(controller){queuedRefresh=false;void controller.refresh()}
  }).catch(()=>{apiFailure=true;text('backend-progress','服务依赖加载失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=api-load code=DEPENDENCY_API')});
  void Promise.resolve().then(loaders.loadValidation).then(module=>{
   validation=module;
@@ -102,7 +102,7 @@ export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={
   },render,signingEnabled:loaders.signingEnabled,reportMs:loaders.reportMs,promptMs:loaders.promptMs,buildId:'wallet-v2'});
   if(liveWallet)text('wallet-progress','选择钱包提供方，然后检查当前账户');
   if(queuedInspect&&liveWallet){queuedInspect=false;void controller.inspect()}
-  if(validation&&liveApi){queuedRefresh=false;void controller.refresh()}
+  if(liveApi){queuedRefresh=false;void controller.refresh()}
  }).catch(()=>{text('wallet-progress','初始化失败，请重新载入页面');text('backend-progress','初始化失败，请重新载入页面');text('diagnostic','build=wallet-v2 phase=init code=INIT_FAILED')});
  return {controller:()=>controller};
 }

@@ -87,3 +87,28 @@ test('unresolved wallet import does not block backend NO_ROUND rendering',async(
  assert.match(dom.window.document.querySelector('#round-status')!.textContent||'',/NO_ROUND/);
  assert.match(dom.window.document.querySelector('#wallet-progress')!.textContent||'',/加载/);
 });
+test('unresolved validation import still reads service and refreshes actual shell',async()=>{
+ const dom=new JSDOM(html,{url:'https://example.test/wallet-v2.html'});
+ const noRound=publicApproval({row:null,context:fixture().context,now:Math.floor(Date.now()/1000)});
+ let reads=0;
+ mountWalletV2(dom.window.document,{loadWallet:()=>new Promise(()=>{}),loadValidation:()=>new Promise(()=>{}),loadController:async()=>({createController}),loadApi:async()=>({createApprovalApi:()=>({read:async()=>{reads++;return noRound},submit:async()=>noRound})}),reportMs:5,signingEnabled:true});
+ await new Promise(resolve=>setTimeout(resolve,0));await flush();
+ assert.equal(reads,1);
+ assert.match(dom.window.document.querySelector('#backend-progress')!.textContent||'',/已响应/);
+ assert.match(dom.window.document.querySelector('#round-status')!.textContent||'',/VALIDATION_UNAVAILABLE/);
+ assert.equal(dom.window.document.querySelector<HTMLButtonElement>('#sign-button')!.disabled,true);
+ dom.window.document.querySelector<HTMLButtonElement>('#refresh-button')!.click();await flush();
+ assert.equal(reads,2);
+});
+test('rejected validation import still reports successful service transport without trusting payload',async()=>{
+ const dom=new JSDOM(html,{url:'https://example.test/wallet-v2.html'});
+ let reads=0;
+ mountWalletV2(dom.window.document,{loadWallet:()=>new Promise(()=>{}),loadValidation:async()=>{throw Error('private')},loadController:async()=>({createController}),loadApi:async()=>({createApprovalApi:()=>({read:async()=>{reads++;return {untrusted:'<img>'}},submit:async()=>({})})}),reportMs:5,signingEnabled:true});
+ await new Promise(resolve=>setTimeout(resolve,0));await flush();
+ assert.equal(reads,1);
+ assert.match(dom.window.document.querySelector('#backend-progress')!.textContent||'',/已响应/);
+ assert.match(dom.window.document.querySelector('#round-status')!.textContent||'',/VALIDATION_UNAVAILABLE/);
+ assert.equal(dom.window.document.querySelector('#round-payload')!.textContent,'尚无内容');
+ assert.equal(dom.window.document.querySelector<HTMLButtonElement>('#sign-button')!.disabled,true);
+ assert.doesNotMatch(dom.window.document.body.textContent||'',/private|<img>/);
+});
