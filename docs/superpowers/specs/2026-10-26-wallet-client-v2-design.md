@@ -1,5 +1,7 @@
 # MealForward Wallet V2 — selected approach A
 
+> 2026-10-27 authorization update: the user explicitly removed domain classification as a project blocker. Historical domain-hold statements below are superseded by `docs/superpowers/plans/2026-10-27-formal-signing-enable.md` and the newest HANDOFF entry. Formal approval capability may be enabled after review and verification; fresh Issuer observation, explicit valid-round signing, NO RELEASE and original UNKNOWN protections remain. External review stays unsent; no claim that the domain classification changed.
+
 Status: user selected approach A and requested development on2026-10-26. This document makes the implementation decisions concrete; independent builder check and human review of this document precede implementation under the requested Superpowers workflow. The current conversation is named “MealForward · 钱包客户端重建 A”.
 
 用户确认摘要：全新客户端使用Wagmi Core＋viem，不复制旧Phase6前端；先检查已经授权的钱包，仅未授权时提供连接动作；钱包/后台/轮次/批准记录独立显示；后台或签名组件卡住不锁钱包检查；所有等待有可见反馈，不自动重复请求；沿用后台验签与保存接口，正式双签/发券操作仍遵守原有门槛。验收覆盖实际页面初始化和点击，不以内部函数测试代替浏览器验收。

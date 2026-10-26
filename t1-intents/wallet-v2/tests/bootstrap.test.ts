@@ -10,6 +10,8 @@ import {OWNER} from '../src/contract.ts';
 // @ts-ignore backend fixture is compatibility evidence, not browser code
 import {publicApproval} from '../../t1f-approval-protocol.mjs';
 // @ts-ignore backend fixture is compatibility evidence, not browser code
+import {buildSuccessorReleaseManifest} from '../../t1f-successor-dual-approval.mjs';
+// @ts-ignore backend fixture is compatibility evidence, not browser code
 import {fixture} from '../../t1f-approval-test-fixture.mjs';
 
 const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
@@ -129,4 +131,34 @@ test('one build identity survives initial, dependency-wait, load-failure and con
   await new Promise(resolve=>setTimeout(resolve,8));
   assert.match(dom.window.document.querySelector('#diagnostic')!.textContent||'',new RegExp(`build=${expected} `));
  }
+});
+test('default bootstrap signs only after an explicit click on a valid collecting round and disables NO_ROUND',async()=>{
+ const now=Math.floor(Date.now()/1000);
+ const sample=fixture();
+ const chain={...sample.chain,observedBlockTime:now-10};
+ const manifest=buildSuccessorReleaseManifest({...sample.context,chain,walletObservation:sample.context.review.wallet_observation,nonceDomain:sample.manifest.value.nonceDomain,candidateOperationId:sample.manifest.value.newOpId,candidateNonce:0,candidateDeadline:now+480,approvalExpiresAt:now+300,now});
+ const row={...sample.row,value:manifest.value,digest:manifest.digest,created_at_epoch:now,observed_block_time:now-10,candidate_calldata_hash:manifest.candidateCalldataHash,approvals:[]};
+ const dom=new JSDOM(html,{url:'https://example.test/wallet-v2.html'});
+ let signs=0,submits=0;
+ let currentRow:typeof row|null=row;
+ const wallet={providers:()=>[{id:'meta',name:'MetaMask'}],select:(_id:string)=>{},inspect:async()=>({account:OWNER,chainId:10143}),connect:async()=>({account:OWNER,chainId:10143}),sign:async()=>{signs++;return '0x'+'1'.repeat(130)},dispose:()=>{}};
+ const read=async()=>publicApproval({row:currentRow,context:sample.context,now:Math.floor(Date.now()/1000)});
+ mountWalletV2(dom.window.document,{loadWallet:async()=>({createWalletPort:()=>wallet}),loadValidation:async()=>({validateState}),loadController:async()=>({createController}),loadApi:async()=>({createApprovalApi:()=>({read,submit:async(input:unknown)=>{submits++;assert.deepEqual(input,{role:'owner',roundId:row.round_id,digest:manifest.digest,signature:'0x'+'1'.repeat(130)});row.approvals=[{role:'owner',wallet:OWNER,fingerprint:'0x'+'2'.repeat(64)}];return read()}})})});
+ await new Promise(resolve=>setTimeout(resolve,0));await flush();
+ const choice=dom.window.document.querySelector<HTMLSelectElement>('#provider-select')!;
+ choice.value='meta';choice.dispatchEvent(new dom.window.Event('change'));
+ dom.window.document.querySelector<HTMLButtonElement>('#inspect-button')!.click();await flush();
+ const signButton=dom.window.document.querySelector<HTMLButtonElement>('#sign-button')!;
+ assert.equal(dom.window.document.querySelector('#round-status')!.textContent,'COLLECTING');
+ assert.equal(signButton.disabled,false);
+ assert.equal(signs,0);assert.equal(submits,0);
+ signButton.click();await new Promise(resolve=>setTimeout(resolve,0));await flush();
+ assert.equal(signs,1);assert.equal(submits,1);
+ assert.equal(signButton.disabled,true);
+ currentRow=null;
+ dom.window.document.querySelector<HTMLButtonElement>('#refresh-button')!.click();await flush();
+ assert.equal(dom.window.document.querySelector('#round-status')!.textContent,'NO_ROUND');
+ assert.equal(signButton.disabled,true);
+ signButton.click();await flush();
+ assert.equal(signs,1);assert.equal(submits,1);
 });

@@ -19,7 +19,7 @@ const defaults:ModuleLoaders={
  loadApi:()=>import(asset.controller),
  reportMs:10000,
  promptMs:30000,
- signingEnabled:false,
+ signingEnabled:true,
  buildId:defaultBuildId
 };
 export function mountWalletV2(document:Document,options:Partial<ModuleLoaders>={}){
