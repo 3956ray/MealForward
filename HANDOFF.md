@@ -8,6 +8,16 @@
 
 
 
+## 2026-10-26 全新客户端调研：复现应用启动缺陷，替换范围待选择
+
+用户报告正确MetaMask/Monad Testnet下Network无反应，明确授权新agent，并提出重写Phase6或采用GitHub成熟实现。本轮启动3个独立agent：wallet_v2_diagnosis、wallet_v2_reuse_research、wallet_v2_clean_design。独立设计agent只读HANDOFF/AGENTS及需求，没有读取旧Phase6实现；诊断与设计输入分开。
+
+诊断agent以Node vm执行实际页面模块，隔离模拟签名依赖导入不返回/失败，复现连接按钮disabled且零事件绑定；模拟启动session请求不返回，复现global busy锁住连接按钮。无真实浏览器、钱包、网络或数据库参与。这证明应用存在可造成无反应的路径，不证明用户那一次的准确根因。旧单元测试跳过DOM bootstrap、公网smoke不执行JS，故此前PASS不能覆盖此缺口；已上线的反馈修复也不等于所有无反应问题已解决。连接RPC经过扩展通道，网页HTTP Network空白本身不说明点击是否执行。不要再用MetaMask风险警告解释这个应用症状。
+
+已核对官方GitHub/docs，推荐A：全新TypeScript客户端，复用Wagmi Core/injected EIP6963/viem，保留既有同源后台契约和数据；不复制旧Phase6前端。B为前后端另起实现、旧数据只读保留。已呈交两方案并询问选择，尚未收到回答；按Superpowers brainstorming后续需选定方案、设计文档/独立builder检查及设计确认，再writing-plans与实现/独立验收。调研记录：[wallet replacement discovery](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/superpowers/2026-10-26-wallet-replacement-discovery.md)。它不是已批准设计，也不是已交付的新客户端。
+
+本轮仅调查和文档，没有安装依赖、修改产品代码、删旧Phase6、部署、实库写入或钱包操作。正式签名暂停、NO RELEASE、用户暂不提交官方复核均保持；这不阻止新客户端隔离设计/开发。运行版本仍8500627，未冒称本轮已跑新版CI或真人验收。
+
 ## 2026-10-26 整体可用性复核：测试网局部可用，业务闭环未完成
 
 用户要求解释全项目进度与卡点，本轮仅作只读复核。Render最新部署确认：Phase6为8500627/dep-dbfiinuc6qcc739rqdr0 live，RoleProof为c1b99b5/dep-dbfbvi4s728c73erotl0 live，Claim为c8723c2/dep-dbdto63rjlhs738br1sg live。再次实际执行Phase6公网31检查PASS，四资产匹配，NO_ROUND/NO RELEASE、零签名/交易/持久写请求。实库FUNDED=1；原Claim仍ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625，hash/receipt为空；恢复release/operation均0。
