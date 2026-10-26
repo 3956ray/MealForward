@@ -63,3 +63,64 @@ test('complete manifest review is visible before either formal signature control
  const review=html.indexOf('id="manifest"');assert.ok(review>=0,'manifest review region must exist');
  assert.ok(review<html.indexOf('id="owner-sign"')&&review<html.indexOf('id="donor-sign"'));
 });
+
+test('connecting before a round exposes the verified active wallet separately from approvals',async()=>{
+ const h=harness();h.state.round=null;h.state.status='NO_ROUND';
+ await h.client.refresh();await h.client.connect('owner');
+ assert.deepEqual(h.client.snapshot().wallet,{status:'connected',role:'owner',account:h.state.wallets.owner,chainId:'10143'});
+ assert.equal(h.client.snapshot().needsRefresh,true);
+ assert.deepEqual(h.client.snapshot().state.roles,{owner:false,donor:false});
+ assert.equal(h.signs,0);assert.equal(h.posts,0);
+ await h.client.refresh();assert.equal(h.client.snapshot().wallet.status,'connected');
+ h.changeAccount();assert.equal(h.client.snapshot().wallet.status,'unverified');
+ await h.client.connect('donor');assert.equal(h.client.snapshot().wallet.role,'donor');
+ assert.equal(h.client.snapshot().wallet.account,h.state.wallets.donor);
+ h.events.disconnect();assert.equal(h.client.snapshot().wallet.status,'unverified');
+});
+test('connection failure explains wrong account or network without marking a wallet connected',async()=>{
+ const wrong=harness();wrong.changeAccount(false);
+ await assert.rejects(()=>wrong.client.connect('owner'),/WALLET_ACCOUNT_MISMATCH/);
+ assert.equal(wrong.client.snapshot().wallet.status,'error');
+ assert.equal(wrong.client.snapshot().wallet.account,wrong.state.wallets.donor);
+ const network=harness();network.changeChain();
+ await assert.rejects(()=>network.client.connect('owner'),/WALLET_NETWORK_MISMATCH/);
+ assert.equal(network.client.snapshot().wallet.chainId,'1');
+ assert.equal(network.client.snapshot().wallet.status,'error');
+ for(const h of [wrong,network]){assert.equal(h.signs,0);assert.equal(h.posts,0)}
+});
+test('connection reports safe rejection/pending codes, never raw wallet errors',async()=>{
+ for(const [code,want] of [[4001,'WALLET_REJECTED'],[-32002,'WALLET_REQUEST_PENDING'],[4900,'WALLET_DISCONNECTED'],[123,'WALLET_CONNECTION_FAILED']]){
+  const h=harness({hook:method=>{if(method==='wallet_requestPermissions')throw Object.assign(Error('PRIVATE_PROVIDER_ERROR'),{code})}});
+  await assert.rejects(()=>h.client.connect('owner'),new RegExp('^Error: '+want+'$'));
+  assert.equal(h.client.snapshot().wallet.status,'error');assert.equal(h.signs,0);assert.equal(h.posts,0);
+ }
+});
+test('wallet event during connection verification cannot report a connected wallet',async()=>{
+ const gate=deferred();const h=harness({hook:async method=>{if(method==='eth_chainId')await gate.promise}});
+ const pending=h.client.connect('owner');await new Promise(r=>setTimeout(r,0));h.changeAccount();gate.resolve();
+ await assert.rejects(()=>pending,/WALLET_CHANGED/);assert.notEqual(h.client.snapshot().wallet.status,'connected');
+ assert.equal(h.signs,0);assert.equal(h.posts,0);
+});
+
+test('page feedback distinguishes a connected wallet from an absent round and wrong network',async()=>{
+ const h=harness();h.state.round=null;h.state.status='NO_ROUND';await h.client.refresh();
+ assert.match(page.approvalWalletText?.(h.client.snapshot())??'',/尚未连接/);
+ await h.client.connect('owner');
+ const text=page.approvalWalletText?.(h.client.snapshot())??'';
+ assert.match(text,/已连接 OWNER/);assert.ok(text.includes(h.state.wallets.owner));assert.match(text,/10143/);assert.match(text,/尚无正式签名轮次/);
+ h.changeChain();await assert.rejects(()=>h.client.connect('owner'));
+ const error=page.approvalWalletText?.(h.client.snapshot())??'';
+ assert.match(error,/切换到 Monad Testnet/);assert.doesNotMatch(error,/已连接 OWNER/);
+});
+
+test('missing provider explains how to connect without sending any HTTP or wallet action',async()=>{
+ const client=createApprovalClient({provider:null,request:()=>{throw Error('Unexpected HTTP')},hashTypedData:hash});
+ await assert.rejects(()=>client.connect('owner'),/WALLET_UNAVAILABLE/);
+ assert.match(page.approvalWalletText(client.snapshot()),/安装并解锁 MetaMask/);
+});
+test('account selection event inside the permission picker is accepted before verification',async()=>{
+ let h;h=harness({hook:method=>{if(method==='wallet_requestPermissions')h.changeAccount()}});
+ await h.client.connect('donor');
+ assert.equal(h.client.snapshot().wallet.status,'connected');assert.equal(h.client.snapshot().wallet.role,'donor');
+ assert.equal(h.signs,0);assert.equal(h.posts,0);
+});

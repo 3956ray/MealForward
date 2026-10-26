@@ -5,6 +5,17 @@ const DOMAIN_FIELDS=[['name','string'],['version','string'],['chainId','uint256'
 const FIELDS=[['claimId','string'],['reviewId','string'],['slotId','string'],['voucherId','bytes32'],['originalOpId','bytes32'],['originalNonce','uint256'],['originalDeadline','uint256'],['originalDataHash','bytes32'],['newOpId','bytes32'],['newNonce','uint256'],['newDeadline','uint256'],['nonceDomain','bytes32'],['observedBlockNumber','uint256'],['observedBlockHash','bytes32'],['approvalExpiresAt','uint256']].map(([name,type])=>({name,type}));
 const PINS={claimId:'fbab3b22-965d-44e2-b144-d7307b7aa8ea',voucherId:'0x170f16ef9ea00697bcfad635e33d521159db5e852b8b5499ddf8db819278b605',originalOpId:'0x2e709dee8113d2dac73cbea53d016d6629fc3730c6f85325a17c98bc4777445b',originalNonce:'0',originalDeadline:'1792765625',originalDataHash:'0x089cb2b0a35e81f31a9f9a658cd298ad7c9d3376ea01fac6fb77013451e1f0ed',newNonce:'0'};
 const check=x=>{if(!x)throw Error('APPROVAL_NOT_CONFIRMED_REFRESH_STATE')};
+class WalletConnectionError extends Error {}
+const WALLET_ERRORS=Object.freeze({
+ WALLET_UNAVAILABLE:'请安装并解锁 MetaMask，然后重新加载页面。',
+ WALLET_REJECTED:'已取消连接。需要连接时，请再次点击连接按钮并在 MetaMask 中确认。',
+ WALLET_REQUEST_PENDING:'MetaMask 中还有待处理请求，请打开扩展完成或取消该请求，再连接。',
+ WALLET_DISCONNECTED:'MetaMask 已断开，请解锁钱包后重新连接。',
+ WALLET_ACCOUNT_MISMATCH:'账户不匹配。请在 MetaMask 中将当前账户切换为本页对应角色的固定地址，再点击连接。',
+ WALLET_NETWORK_MISMATCH:'网络不匹配。请在 MetaMask 中切换到 Monad Testnet（10143），再点击连接。',
+ WALLET_CHANGED:'核对期间账户或网络发生变化，请重新点击连接核对。',
+ WALLET_CONNECTION_FAILED:'钱包连接未确认。请检查 MetaMask 的连接请求后重新点击连接。'
+});
 const keys=(o,k)=>!!o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join(',')===[...k].sort().join(',');
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(x);
 const bytes=x=>typeof x==='string'&&/^0x[0-9a-f]{64}$/.test(x)&&x!=='0x'+'0'.repeat(64);
@@ -23,10 +34,10 @@ export function validateApprovalState(s,{hashTypedData,now}){
  const expected=s.serverTime>=r.expiresAt?'EXPIRED':s.roles.owner&&s.roles.donor?'COLLECTED_NO_RELEASE':'COLLECTING';check(s.status===expected);return s;
 }
 export function createApprovalClient({provider,request,hashTypedData,clock=()=>Math.floor(Date.now()/1000),render=()=>{}}){
- let revision=0,busy=false,state=null,csrf=null,sessionExpiry=0,needsRefresh=true;
+ let revision=0,busy=false,state=null,csrf=null,sessionExpiry=0,needsRefresh=true,wallet={status:'unverified'};
  // Historical role proofs remain visible, but never look valid past the deadline.
- const snapshot=()=>({busy,state:state?.round&&clock()>=state.round.expiresAt?{...state,status:'EXPIRED'}:state,needsRefresh});const notify=()=>render(snapshot());
- const invalid=()=>{revision++;needsRefresh=true;notify()};
+ const snapshot=()=>({busy,state:state?.round&&clock()>=state.round.expiresAt?{...state,status:'EXPIRED'}:state,needsRefresh,wallet:{...wallet}});const notify=()=>render(snapshot());
+ const invalid=()=>{revision++;needsRefresh=true;wallet={status:'unverified'};notify()};
  for(const event of ['accountsChanged','chainChanged','disconnect'])provider?.on?.(event,invalid);
  const unchanged=version=>check(version===revision);
  const current=async(role,version)=>{
@@ -37,10 +48,30 @@ export function createApprovalClient({provider,request,hashTypedData,clock=()=>M
  const session=async()=>{const s=await request('/v1/approval/session','POST',{});check(keys(s,['csrf','expiresAt'])&&/^[0-9a-f]{64}$/.test(s.csrf)&&Number.isSafeInteger(s.expiresAt)&&s.expiresAt>clock());csrf=s.csrf;sessionExpiry=s.expiresAt};
  const read=async()=>validateApprovalState(await request('/v1/approval/state','GET',undefined,csrf),{hashTypedData,now:clock()});
  const eligible=(s,role)=>check(s&&s.status==='COLLECTING'&&!s.roles[role]&&s.round.expiresAt>clock());
- const action=async fn=>{check(!busy);busy=true;notify();try{return await fn()}catch{needsRefresh=true;throw Error('APPROVAL_NOT_CONFIRMED_REFRESH_STATE')}finally{busy=false;notify()}};
+ const action=async(fn,connection=false)=>{check(!busy);busy=true;notify();try{return await fn()}catch(e){
+  needsRefresh=true;
+  if(connection){
+   const code=e instanceof WalletConnectionError?e.message:({4001:'WALLET_REJECTED','-32002':'WALLET_REQUEST_PENDING',4900:'WALLET_DISCONNECTED',4901:'WALLET_DISCONNECTED'}[e?.code]||'WALLET_CONNECTION_FAILED');
+   wallet={...wallet,status:'error',code};throw Error(code);
+  }
+  throw Error('APPROVAL_NOT_CONFIRMED_REFRESH_STATE');
+ }finally{busy=false;notify()}};
  return Object.freeze({snapshot,
   refresh:()=>action(async()=>{const v=revision;await session();unchanged(v);const next=await read();unchanged(v);state=next;needsRefresh=false}),
-  connect:role=>action(async()=>{check(Object.hasOwn(WALLETS,role)&&provider?.request);await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]});const v=revision;await current(role,v);needsRefresh=true}),
+  connect:role=>action(async()=>{
+   check(Object.hasOwn(WALLETS,role));wallet={status:'checking',role};notify();
+   if(!provider?.request)throw new WalletConnectionError('WALLET_UNAVAILABLE');
+   await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]});
+   const v=revision,stable=()=>{if(v!==revision)throw new WalletConnectionError('WALLET_CHANGED')};
+   const accounts=await provider.request({method:'eth_accounts'});stable();
+   const account=typeof accounts?.[0]==='string'?accounts[0].toLowerCase():null;
+   wallet={status:'checking',role,account};
+   if(account!==WALLETS[role])throw new WalletConnectionError('WALLET_ACCOUNT_MISMATCH');
+   const chain=await provider.request({method:'eth_chainId'});stable();
+   const chainId=BigInt(chain).toString();wallet={...wallet,chainId};
+   if(chainId!=='10143')throw new WalletConnectionError('WALLET_NETWORK_MISMATCH');
+   wallet={status:'connected',role,account,chainId};needsRefresh=true;
+  },true),
   sign:role=>action(async()=>{
    check(!needsRefresh);eligible(state,role);const v=revision,shownId=state.round.id,shownDigest=state.round.digest;
    await current(role,v);unchanged(v);
@@ -56,6 +87,13 @@ export function createApprovalClient({provider,request,hashTypedData,clock=()=>M
    unchanged(v);state=validateApprovalState(answer,{hashTypedData,now:clock()});needsRefresh=false;
   })
  });
+}
+export function approvalWalletText({wallet,state,needsRefresh}){
+ if(wallet.status==='checking')return '正在连接 '+wallet.role.toUpperCase()+'，请在 MetaMask 中选择对应账户并确认。';
+ if(wallet.status==='error')return (WALLET_ERRORS[wallet.code]||WALLET_ERRORS.WALLET_CONNECTION_FAILED)+(wallet.account?' 当前读取账户：'+wallet.account:'')+(wallet.chainId?'；网络 Chain ID：'+wallet.chainId:'');
+ if(wallet.status!=='connected')return '尚未连接或账户/网络已变化，请点击对应角色的连接按钮核对。';
+ return '已连接 '+wallet.role.toUpperCase()+'：'+wallet.account+' · Monad Testnet '+wallet.chainId+'。'+
+  (needsRefresh?'请点击「刷新持久状态」。':'')+(state?.status==='NO_ROUND'?'尚无正式签名轮次，签名按钮暂不可用；连接不会创建轮次。':'连接成功不代表已签署批准。');
 }
 export function approvalReviewText(state){
  if(!state?.round)return '尚无批准轮次。创建后会在这里展示双方必须核对的相同内容。';
@@ -78,19 +116,20 @@ if(typeof document!=='undefined'){
   $('digest').textContent=state?.round?.digest||'尚无批准轮次';
   $('expires').textContent=state?.round?new Date(state.round.expiresAt*1000).toLocaleString():'—';
   $('manifest').textContent=approvalReviewText(state);
+  $('wallet-status').textContent=approvalWalletText(client.snapshot());
   $('refresh').disabled=busy;
   for(const role of Object.keys(WALLETS)){
    $(role+'-wallet').textContent=WALLETS[role];$(role+'-progress').textContent=state?.roles[role]?'已记录批准':'尚未记录';
    $(role+'-connect').disabled=busy;$(role+'-sign').disabled=busy||needsRefresh||state?.status!=='COLLECTING'||state.roles[role]||state.round.expiresAt<=Math.floor(Date.now()/1000);
   }
  }
- const act=async fn=>{try{$('message').textContent='处理中，请勿重复点击。';await fn();$('message').textContent='状态已核对。双人批准仍不释放或发送 Issue。'}catch{$('message').textContent='本次未确认。请先点击「刷新持久状态」核对结果；不会自动重试签名或提交。'}finally{draw()}};
+ const act=async(fn,connection=false)=>{try{$('message').textContent='处理中，请勿重复点击。';await fn();$('message').textContent=connection?'连接核对完成，请查看下方「当前钱包连接」。':'状态已核对。双人批准仍不释放或发送 Issue。'}catch{$('message').textContent=connection?'连接未确认，请查看下方「当前钱包连接」中的原因。':'本次未确认。请先点击「刷新持久状态」核对结果；不会自动重试签名或提交。'}finally{draw()}};
  try{
   const {TypedDataEncoder}=await import('/approval-ethers-6.15.0.mjs');
   client=createApprovalClient({provider:window.ethereum?.isMetaMask===true?window.ethereum:null,request:browserRequest,hashTypedData:t=>TypedDataEncoder.hash(t.domain,{SuccessorIssueRelease:t.types.SuccessorIssueRelease},t.message),render:draw});
   $('refresh').addEventListener('click',()=>act(()=>client.refresh()));
   for(const role of Object.keys(WALLETS)){
-   $(role+'-connect').addEventListener('click',()=>act(()=>client.connect(role)));
+   $(role+'-connect').addEventListener('click',()=>act(()=>client.connect(role),true));
    $(role+'-sign').addEventListener('click',()=>act(()=>client.sign(role)));
   }
   setInterval(draw,1000);await act(()=>client.refresh());
