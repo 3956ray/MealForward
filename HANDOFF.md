@@ -6,6 +6,20 @@
 >
 > **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
 
+## 2026-10-26 Phase5 真实 MetaMask EIP-712 签名 401 — 当前 BLOCKED，修复尚未提交
+
+**真人结果（不要重复签名直到修复部署）：** 用户分别使用原 Owner 与 Donor 钱包在已上线 `/t1f-phase5.html` 签署 EIP-712 Practice 后，两者均返回 `T1F_PHASE5_SIGNATURE_INVALID · 401`。Phase4 两角色原先的 EIP-191 控制证明仍为 PASS，不需要重复做。错误发生在 Phase5 服务端校验，而不代表真实恢复批准失败；本次无数据库、无链上交易。
+
+**高度可信的共同根因（需自动回归确认）：** 正在运行的 RoleProof 代码 `t1-intents/t1f-phase5-typed-practice.mjs` 在 JSON-RPC `eth_signTypedData_v4` 挑战中只声明 `types.PracticeControl`，**未声明 `types.EIP712Domain`**，但后端 `ethers.verifyTypedData` 使用包含 `name/version/chainId/verifyingContract` 的完整 Domain。MetaMask 的签名工具对未声明 `EIP712Domain` 的消息可能按空 Domain Struct 编码，与后端验签摘要不一致。MetaMask 官方开发规范要求显式 `EIP712Domain` 类型，域字段顺序建议 `name:string,version:string,chainId:uint256,verifyingContract:address`。此推断与两只独立 EOA 同样失败高度吻合；之前的 CI 使用 ethers.signTypedData 而非 MetaMask JSON-RPC V4 严格格式，未覆盖真实钱包。
+
+**修复方案，不可绕过安全边界：**
+1. 在 server 生成的 V4 JSON-RPC typedData 中**显式加入** `types.EIP712Domain` 四个标准字段（但后端传给 ethers 的 verifier 类型 `types` 继续只包含 `PracticeControl`，避免 ethers 对冗余 primary type 解释错误）。
+2. 前端在调用 `eth_signTypedData_v4` 之前 fail-closed 校验四个 Domain 字段及原 Testnet Escrow 固定地址，绝不更改 Practice Domain / version0 / `PracticeControl` / `PRACTICE ONLY`，不采集原始签名与私钥。
+3. 加入能重现 **MetaMask 缺失 Domain 类型导致签名与 ethers verifier 不一致**的回归测试，以及两只临时 EOA V4 JSON 结构签名正例、错误钱包/跨域/replay/超时负例。只有 exact-head CI PASS 后才能**仅**发布到独立无数据库 RoleProof Render `srv-dbdeuft9fdbs73atbvh0`，先 gate=false，再 gate=true 并跑真实 HTTPS 门禁。
+4. 本轮 GitHub 代码更新工具**连续被安全审查拦截**；故此时**源码未修复，未部署**。不得把文档记录当成已修复结果、不得改用旧真实 Recovery Release 域进行练习。若之后代码工具恢复可写，先修复 CI 再交给用户复测。
+
+**真实运行边界保留：** Render RoleProof `dep-dbf2125g1s2s73e6r1u0` 仍 Live，源 Commit `7a5ee5e1f9d796e743f6b128e856f86473a2e856`，Phase5 练习独立于真实 Fund/Issue/Settle。Supabase 仅 001–012，013–015 没有运行；原 Claim `ISSUE_UNKNOWN`、唯一 Fund 与 Issue Reserve 不得覆盖。Phase3 015 HOLD SQL 已在 Draft PR #45 修复并隔离测试通过，但没有激活真实第二次 Issue。
+
 ## 2026-10-25 当前最新：Phase 5 EIP-712 PRACTICE 已上线，等待 Owner + Donor 本人新测试
 
 **这是全项目当前真人测试 Stop Point。** 用户此前已完成两只钱包的 **Phase 4 EIP-191 控制权 PASS**，不要重新要求那两次签名。本阶段不是恢复授权：在独立无数据库的 RoleProof 服务新增 EIP-712 **练习专用**挑战，原 Claim `ISSUE_UNKNOWN` 依旧冻结，永久禁止拿已过期的原 Issue 参数发交易。
