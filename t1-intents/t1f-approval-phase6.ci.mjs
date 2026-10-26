@@ -124,8 +124,8 @@ try{
    status:'T1F_EXPIRED_NO_ISSUE_OBSERVED_NOT_ABSENCE_PROOF'};
   return {roundId:randomUUID(),createdAt:time,observedBlockTime:time,
    manifest:buildSuccessorReleaseManifest({...context,chain,
-    walletObservation:'OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE',nonceDomain:hex(),
-    candidateOperationId:hex(),candidateNonce:0,candidateDeadline:time+480,
+    walletObservation:'OWNER_REPORTED_NO_TRANSACTIONS_VISIBLE',nonceDomain:extra.nonceDomain??hex(),
+    candidateOperationId:extra.candidateOperationId??hex(),candidateNonce:0,candidateDeadline:time+480,
     approvalExpiresAt:time+300,now:time}),...extra};
  };
  // Historical synthetic round: no clock mocking and no disabled triggers.
@@ -151,6 +151,27 @@ try{
   role:'owner',wallet:T1F_RELEASE_OWNER,fingerprint:oldOwnerFingerprint}),'P0001');
  assert.equal((await store.current()).round_id,historical.roundId,'reads never roll over');
  passed('expired completed round remains visible but identical replay rejects and reads never roll over');
+ const approvalSnapshot=async()=> (await admin.query(`SELECT jsonb_build_object(
+  'rounds',(SELECT jsonb_agg(to_jsonb(t) ORDER BY round_id) FROM mf_t1f_recovery.approval_rounds t),
+  'approvals',(SELECT jsonb_agg(to_jsonb(t) ORDER BY round_id,role) FROM mf_t1f_recovery.role_approvals t),
+  'events',(SELECT jsonb_agg(to_jsonb(t) ORDER BY event_id) FROM mf_t1f_recovery.approval_events t)) AS value`)).rows[0].value;
+ const uniqueWithoutMutation=async(task,constraint)=>{
+  const snapshot=await approvalSnapshot();
+  await assert.rejects(task,e=>e?.code==='23505'&&e.constraint===constraint);
+  assert.deepEqual(await approvalSnapshot(),snapshot);
+ };
+ // Build valid fresh manifests so each failure exercises historical uniqueness,
+ // not stale deadlines, malformed payloads, or recovery of an active round.
+ for(const [option,value,constraint] of [
+  ['nonceDomain',oldValue.nonceDomain,'approval_rounds_nonce_domain_key'],
+  ['candidateOperationId',oldValue.newOpId,'approval_rounds_candidate_op_id_key']
+ ]){
+  const reused=proposal({[option]:value});
+  assert.notEqual(reused.roundId,historical.roundId);
+  assert.notEqual(reused.manifest.digest,historical.manifest.digest);
+  await uniqueWithoutMutation(()=>store.create(reused),constraint);
+  passed('historical '+option+' reuse rejects without changing rounds, approvals or events');
+ }
  const p=proposal();
  for(const value of [{...p.manifest.value,newNonce:0},{...p.manifest.value,newNonce:'00'},
   {...p.manifest.value,approvalExpiresAt:'0'+p.manifest.value.approvalExpiresAt},
@@ -176,6 +197,9 @@ try{
  passed('concurrent create and explicit repeated create recover one active round');
  const owner={roundId:p.roundId,digest:p.manifest.digest,role:'owner',wallet:T1F_RELEASE_OWNER,fingerprint:hex()};
  const donor={...owner,role:'donor',wallet:T1F_RELEASE_DONOR,fingerprint:hex()};
+ await uniqueWithoutMutation(()=>store.record({...owner,fingerprint:oldOwnerFingerprint}),
+  'role_approvals_fingerprint_key');
+ passed('historical fingerprint reuse in a fresh round rejects without changing rounds, approvals or events');
  await admin.query(`CREATE FUNCTION mf_t1f_recovery.ci_reject_event() RETURNS trigger
   LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'SYNTHETIC_AUDIT_FAILURE'; END $$;
   CREATE TRIGGER ci_reject_event BEFORE INSERT ON mf_t1f_recovery.approval_events

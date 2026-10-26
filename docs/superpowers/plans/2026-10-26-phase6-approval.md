@@ -40,3 +40,15 @@ Interfaces: consumes complete Task1+2; produces source-only Draft PR and concret
 - [x] Push isolated branch, inspect CI (PASS only once complete), refresh live read-only truth.
 - [x] Update HANDOFF and report next needed user action; no misleading live approval claims.
 
+
+## Follow-up: historical replay regression coverage (2026-10-26)
+
+Scope: complete Task 1 regression coverage only, following the user's authorization to continue after Wallet V2 read-only acceptance. No new product design, release protocol, migration or production configuration.
+
+- [x] Use fresh valid manifests to attempt reuse of historical nonceDomain and newOpId through the runtime store before a new active round exists.
+- [x] Attempt reuse of the historical Owner fingerprint before fresh role acceptance. Require exact SQLSTATE23505/constraint and unchanged round/approval/event snapshots for all three cases.
+- [x] Fresh isolated PostgreSQL17.11 exact009–016 suite:18/18 PASS; legacy snapshot unchanged and successor rows0/0/0.
+- [x] Three disposable mutation runs: remove each corresponding UNIQUE constraint only in a temporary fixture; each new assertion fails with Missing expected rejection. No tracked migration edits.
+- [ ] Independent review and exact-commit CI.
+
+Ruling: continue the existing approved collector scope with these recorded coverage gaps; do not treat two wallet inspections as authorization to enable signing or mount the successor ledger. No user-facing behavior changes; a broader release protocol remains separate work.
