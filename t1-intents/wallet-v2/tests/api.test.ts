@@ -26,3 +26,20 @@ test('deadline abort is sanitized',async()=>{
  const api=createApprovalApi({fetchImpl:(async(_p:any,i:any)=>new Promise((_r,j)=>i.signal.addEventListener('abort',()=>j(Error('secret'))))) as typeof fetch,timeoutMs:5});
  await assert.rejects(api.read(),/API_/);
 });
+test('caller can cancel a pending read without another fetch',async()=>{
+ const calls:any[]=[];const controller=new AbortController();
+ const fetchImpl=(async(path:any,init:any)=>{calls.push(path);return new Promise((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(Error('private error'))));}) as typeof fetch;
+ const api=createApprovalApi({fetchImpl,timeoutMs:1000});
+ const pending=api.read(controller.signal);controller.abort();
+ await assert.rejects(pending,e=>String(e)==='Error: API_CANCELLED');
+ assert.deepEqual(calls,['/v1/approval/session']);
+});
+test('caller can cancel pending submit without retry or signature leak',async()=>{
+ const calls:any[]=[];const secret='0x'+'2'.repeat(130);const controller=new AbortController();
+ const fetchImpl=(async(path:any,init:any)=>{calls.push(path);if(path==='/v1/approval/session')return {ok:true,status:200,json:async()=>({csrf,expiresAt:1300})} as Response;return new Promise((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(Error(secret))));}) as typeof fetch;
+ const api=createApprovalApi({fetchImpl,clock:()=>1000,timeoutMs:1000});
+ const pending=api.submit({role:'owner',roundId:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',digest:'0x'+'1'.repeat(64),signature:secret},controller.signal);
+ await new Promise(resolve=>setTimeout(resolve,0));controller.abort();
+ await assert.rejects(pending,e=>String(e)==='Error: API_CANCELLED'&&!String(e).includes(secret));
+ assert.deepEqual(calls,['/v1/approval/session','/v1/approval/submit']);
+});

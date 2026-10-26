@@ -25,20 +25,21 @@ const chainNumber=(x:unknown)=>typeof x==='string'&&/^0x[0-9a-fA-F]+$/.test(x)&&
 export function createWalletPort({changed}:{changed:()=>void}):WalletPort{
  const view=globalThis.window as Window&{ethereum?:Provider};
  const choices=new Map<string,{name:string;provider:Provider}>();
- let selected:string|null=null,disposed=false;
+ let selected:string|null=null,disposed=false,generation=0,selectionGeneration=0;
  const emit=()=>{if(!disposed)changed()};
+ const providerChanged=()=>{generation++;emit()};
  const watched=['accountsChanged','chainChanged','disconnect','connect'] as const;
  let listening:Provider|null=null;
  function attach(p:Provider|null){
   if(listening===p)return;
-  if(listening)for(const event of watched)listening.removeListener?.(event,emit);
+  if(listening)for(const event of watched)listening.removeListener?.(event,providerChanged);
   listening=p;
-  if(p)for(const event of watched)p.on?.(event,emit);
+  if(p)for(const event of watched)p.on?.(event,providerChanged);
  }
  function add(id:string,name:string,provider:Provider){
   if(disposed||!provider||typeof provider.request!=='function')return;
   const old=choices.get(id);choices.set(id,{name,provider});
-  if(!selected||selected===id){selected=id;attach(provider)}
+  if(selected===id&&old?.provider!==provider){generation++;selectionGeneration++;attach(provider)}
   if(!old||old.provider!==provider)emit();
  }
  const announcement=(event:Event)=>{
@@ -50,34 +51,40 @@ export function createWalletPort({changed}:{changed:()=>void}):WalletPort{
  if(view.ethereum)add('legacy-injected','Injected wallet',view.ethereum);
  view.dispatchEvent(new Event('eip6963:requestProvider'));
  function current():Provider{if(disposed)return fail('DISPOSED');const p=selected&&choices.get(selected)?.provider;return p||fail('NO_PROVIDER')}
- async function inspect():Promise<WalletObservation>{
-  const p=current();
+ function stillSelected(p:Provider,g:number){if(disposed||selectionGeneration!==g||selected===null||choices.get(selected)?.provider!==p)fail('CONTEXT')}
+ function stillCurrent(p:Provider,g:number){if(disposed||generation!==g||selected===null||choices.get(selected)?.provider!==p)fail('CONTEXT')}
+ async function inspectProvider(p:Provider,g:number):Promise<WalletObservation>{
   try{
    const accounts=await p.request({method:'eth_accounts'});
+   stillCurrent(p,g);
    const chainId=chainNumber(await p.request({method:'eth_chainId'}));
+   stillCurrent(p,g);
    return {account:Array.isArray(accounts)&&address(accounts[0])?accounts[0].toLowerCase():null,chainId};
-  }catch{return fail('INSPECT')}
+  }catch(e){if(e instanceof Error&&e.message==='WALLET_CONTEXT')throw e;return fail('INSPECT')}
  }
+ async function inspect():Promise<WalletObservation>{const p=current(),g=generation;return inspectProvider(p,g)}
  async function connect():Promise<WalletObservation>{
-  const p=current();
+  const p=current(),g=selectionGeneration;
   // Core's injected connector owns the permission request. The adapter never
   // reconnects automatically and uses transient config storage.
   const connector=injected({shimDisconnect:false,target:{id:selected||'injected',name:choices.get(selected||'')?.name||'Injected',provider:p as never}});
   const config=createConfig({chains:[chain],connectors:[connector],transports:{[CHAIN_ID]:custom(p as never)},storage:null,multiInjectedProviderDiscovery:false,ssr:true});
-  try{await wagmiConnect(config,{connector:config.connectors[0]});return await inspect()}
-  catch{return fail('CONNECT')}
+  try{await wagmiConnect(config,{connector:config.connectors[0]});stillSelected(p,g);return await inspectProvider(p,generation)}
+  catch(e){if(e instanceof Error&&e.message==='WALLET_CONTEXT')throw e;return fail('CONNECT')}
  }
  async function sign(typedData:unknown,account:string):Promise<string>{
-  const p=current();if(!address(account))return fail('ACCOUNT');
-  const observed=await inspect();
+  const p=current(),g=generation;if(!address(account))return fail('ACCOUNT');
+  const observed=await inspectProvider(p,g);
   if(observed.account!==account.toLowerCase()||observed.chainId!==CHAIN_ID)return fail('CONTEXT');
   if(!typedData||typeof typedData!=='object')return fail('TYPED_DATA');
   const t=typedData as {domain?:object;types?:TypedData;primaryType?:string;message?:object};
   if(!t.domain||!t.types||!t.primaryType||!t.message)return fail('TYPED_DATA');
   try{
-   const client=createWalletClient({account:account as Address,chain,transport:custom(p as never)});
+   stillCurrent(p,g);
+   const guarded={request:(args:{method:string;params?:unknown[]})=>{stillCurrent(p,g);return p.request(args)}};
+   const client=createWalletClient({account:account as Address,chain,transport:custom(guarded as never)});
    return await client.signTypedData({domain:t.domain,types:t.types,primaryType:t.primaryType,message:t.message} as never);
-  }catch{return fail('SIGN')}
+  }catch(e){if(e instanceof Error&&e.message==='WALLET_CONTEXT')throw e;return fail('SIGN')}
  }
- return Object.freeze({providers:()=>[...choices].map(([id,{name}])=>({id,name})),select:(id:string)=>{if(!choices.has(id))return fail('UNKNOWN_PROVIDER');selected=id;attach(current());emit()},inspect,connect,sign,dispose:()=>{disposed=true;view.removeEventListener('eip6963:announceProvider',announcement);attach(null);choices.clear()}});
+ return Object.freeze({providers:()=>[...choices].map(([id,{name}])=>({id,name})),select:(id:string)=>{if(!choices.has(id))return fail('UNKNOWN_PROVIDER');selected=id;generation++;selectionGeneration++;attach(current());emit()},inspect,connect,sign,dispose:()=>{generation++;selectionGeneration++;disposed=true;view.removeEventListener('eip6963:announceProvider',announcement);attach(null);choices.clear()}});
 }
