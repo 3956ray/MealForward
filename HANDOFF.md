@@ -8,6 +8,14 @@
 
 
 
+## 2026-10-26 方案A已选定；对话改名，详细设计完成独立检查
+
+用户明确选择A路径继续开发，并要求rename；当前对话已通过应用工具改名为“MealForward · 钱包客户端重建 A”（thread01a1780c-b63f-7542-991f-38ca7f6b05a2）。A范围是全新客户端＋成熟钱包库，保留现有后台接口及数据，不复制旧Phase6前端；下文“范围待选择”已成为历史记录。
+
+已完成具体设计 [Wallet V2 design](https://github.com/3956ray/MealForward/blob/codex/mealforward-t1f-phase6-release-review-20261026/docs/superpowers/specs/2026-10-26-wallet-client-v2-design.md)：无异步依赖的启动控制、Wagmi Core/viem与EIP6963发现、已有授权只读检查、四种独立状态、可见等待与防迟到结果、同源session复用、严格manifest及签名前后核对、提交不确定时先读回、固定资产路径与灰度回退。已从后台协议抽出准确15字段及公开pin。独立fresh builder agent wallet_v2_builder_check只读审查返回“nothing important left”。没有将设计检查当作实现或测试PASS。
+
+依用户指定的Superpowers brainstorming，具体设计文档需本人确认后进入writing-plans与实现。本轮已选定A，尚待详细设计确认；下一步是在原先授权的agent方式下完成实现计划、开发和独立验收，直到需要真人测试。仅文档改动，无依赖安装/产品源码/部署/迁移/实库或钱包操作。运行版本仍8500627/dep-dbfiinuc6qcc739rqdr0（沿用上次核验，本轮未重新验活）；NO RELEASE及暂不提交MetaMask复核决定保持。
+
 ## 2026-10-26 全新客户端调研：复现应用启动缺陷，替换范围待选择
 
 用户报告正确MetaMask/Monad Testnet下Network无反应，明确授权新agent，并提出重写Phase6或采用GitHub成熟实现。本轮启动3个独立agent：wallet_v2_diagnosis、wallet_v2_reuse_research、wallet_v2_clean_design。独立设计agent只读HANDOFF/AGENTS及需求，没有读取旧Phase6实现；诊断与设计输入分开。
