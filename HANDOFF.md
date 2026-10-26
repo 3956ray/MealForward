@@ -8,6 +8,14 @@
 
 
 
+## 2026-10-26 整体可用性复核：测试网局部可用，业务闭环未完成
+
+用户要求解释全项目进度与卡点，本轮仅作只读复核。Render最新部署确认：Phase6为8500627/dep-dbfiinuc6qcc739rqdr0 live，RoleProof为c1b99b5/dep-dbfbvi4s728c73erotl0 live，Claim为c8723c2/dep-dbdto63rjlhs738br1sg live。再次实际执行Phase6公网31检查PASS，四资产匹配，NO_ROUND/NO RELEASE、零签名/交易/持久写请求。实库FUNDED=1；原Claim仍ISSUE_UNKNOWN/revision2/nonce0/deadline1792765625，hash/receipt为空；恢复release/operation均0。
+
+新鲜只读链检查在Monad10143区块74358457（0x34bced6fa6e63fa4983f223164fd7fc0f8129e307ffd2a5174385aecfb48bfe5）显示原op未观察到、Unit available未issued、Issuer latest/pending nonce均0；不是全网/钱包不存在未知请求的证明，不授权重发。GitHub #17仍OPEN：原settle缺少链上强制180秒等待，商家结算继续关闭。
+
+总体判断：已完成测试网资助、领取同意、身份/练习签名及正式批准收集基础设施；未完成首张餐券可确认发放、正式Recovery双签、从批准到真实恢复发券的上线验收及商家核销结算全链路。Phase5/6属于T1-F异常恢复子流程，不代表整个产品接近交付的百分比。当前公开页是专项测试/审批入口，不能作为可供公众真实经营的完整产品。钱包UI反馈已修复且有一次真实Owner连接成功；Donor及新版反馈的人类验收未完成。域名BLOCK原因仍未确定，用户“暂不提交官方复核”决定保持；本轮未重复请求、未向第三方发消息，也未重新扫描或宣称解除。后续离线开发/隔离测试可继续，与正式钱包操作暂停分开。
+
 ## 2026-10-26 用户决定：暂不提交 MetaMask 官方复核
 
 用户明确回答“暂不提交”。复核材料继续保留为未发送草稿，不向MetaMask或其他第三方创建issue、发消息或自动提交，也不再次催促同一授权。此前“尚待回答”已被本决定覆盖。正式签名/新轮次继续暂停，NO RELEASE；没有解除域名风险分类的证据。本轮仅更新交接与草稿状态，没有应用、部署、钱包或数据库操作；应用验证仍属于下文8500627及其CI/公网记录，不宣称新验收。
