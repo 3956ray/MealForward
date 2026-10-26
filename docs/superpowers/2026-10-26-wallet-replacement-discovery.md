@@ -1,6 +1,6 @@
 # Wallet client replacement — discovery, not an approved design
 
-Status: research and isolated diagnostic reproduction complete; scope A/B presented to the user, choice pending. No replacement product code, dependencies, database changes or deployments in this phase.
+Status: research and isolated diagnostic reproduction complete; the user selected scope A on2026-10-26 and requested development. The detailed design is in `specs/2026-10-26-wallet-client-v2-design.md`; its review/approval is recorded there and in HANDOFF. No replacement product code, dependencies, database changes or deployments in this phase.
 
 ## User intent and constraints
 
@@ -53,13 +53,13 @@ Official sources checked 2026-10-26:
 
 Injected-only Wagmi does not require a WalletConnect projectId. Core is framework-independent. Its chain configuration still needs an explicit transport, and wallet-reported chain must be verified independently. Do not infer the selected account/chain from desired configuration or saved connection state. A toolkit cannot resolve the separate domain classification or supply MealForward's business approval protocol.
 
-## Approaches presented, not yet selected
+## Approaches presented; A subsequently selected
 
 **A (recommended):** Entirely new client UI and wallet integration using Wagmi Core + viem, consuming the existing same-origin backend contract. Preserve data and service security. No copying the old frontend state machine or bootstrap. Diagnose backend separately if contract tests uncover a defect.
 
 **B:** Entirely new client and backend in parallel, old records retained read-only. Larger implementation, security and migration scope; current reproduction does not show a backend defect requiring this scope.
 
-The user has been asked to select A/B. Under [Superpowers brainstorming](https://github.com/obra/superpowers/blob/main/skills/brainstorming/SKILL.md), next produce the selected design, independent builder review and human design approval, then writing-plans. Existing broad authorization covers the research and agents; do not label an unselected architecture approved.
+The user selected A. Under [Superpowers brainstorming](https://github.com/obra/superpowers/blob/main/skills/brainstorming/SKILL.md), next produce the selected design, independent builder review and human design approval, then writing-plans. Existing broad authorization covers the research and agents; the selected scope is approved; do not represent the subsequent detailed document as human-reviewed until it is.
 
 ## Proposed acceptance criteria for the eventual design
 
