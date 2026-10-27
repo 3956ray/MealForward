@@ -9,6 +9,13 @@
 
 
 
+## 2026-10-27 13:36 已按新鲜本人报告创建重测轮次，等待本人连续双签与prepare
+
+用户再次明确确认 Issuer MetaMask 无待处理/已发送交易、两个页面准备且已登录、现在开始。实际报告接收时间13:36:05 UTC+8。现有 operator 在120秒内通过链上/原记录门禁并返回 COLLECTING；新轮次 `cb9ca0dc-d466-4a6f-83e1-53b0d50f07c0`，摘要 `0xebcf24ea5e1738f09e0093881e7058b55e660c45a815d597c9b16a7dde72ad58`，批准到期 **13:41:27**（1793079687），prepare 必须早于 **13:39:57**。创建结果已立即在 commentary 连同完整操作顺序交给用户，明确不等待文档、不在双签与prepare之间回传截图。
+
+本人执行 Owner→Donor 双签，再切回 Issuer，Read/check wallet→Refresh status→仅 READY_TO_PREPARE 时明确 prepare一次。请用户在准备后回传结果，暂不发送。当前只确认轮次创建，尚无本轮真人双签/prepare/交易结果，不能标PASS或已发券。未自动签名/预留/广播，不复用旧轮次或放宽90秒门槛。未来读取本节须检查时效；超时停止，不自动续轮。应用/部署沿用a527fef，文档更新不触发部署。
+
+
 ## 2026-10-27 13:33 新轮次双签真人测试与实库核验 PASS；准备窗口已关闭
 
 用户回传新轮次 `97bc0a06-274f-4219-823c-ae376cb6ce3f` 的 Owner/Donor 页面，最终 COLLECTED_NO_RELEASE，以及 Issuer 的 PREPARE_WINDOW_CLOSED。只读实库独立确认同一摘要 `0xea5d60d9352dc786fe261ca37ac66d39ec2efcc0e81a6cd4c936620b4ca660db`：Owner 在13:29:15（1793078955）、Donor 在13:30:48（1793079048）验证记录，均早于批准截止13:31:14。**双签收集 PASS；真人 prepare/send/reconcile 尚未运行，不是发券成功。**
