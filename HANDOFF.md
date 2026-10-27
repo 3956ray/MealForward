@@ -10,6 +10,20 @@
 
 
 
+## 2026-10-27 10:22 Phase7 已批准激活并上线；等待 Issuer 本人登录与只读验收
+
+用户明确回复“批准”后，本轮完成已审查的线上激活包。**新入口已上线，但尚未进行真人 Issuer 登录、准备或发送，也未发券。** 历史 Owner/Donor 双签测试仍为已通过且过期，不能复用。
+
+- **源码与服务**：固定审核提交 `a527feff5e5ff89a5dd4c83964bd5713e8288829`，沿用 [CI 40404621279](https://github.com/3956ray/MealForward/actions/runs/40404621279) 六作业 SUCCESS / 311 测试＋42 隔离 PG 组；本轮无应用源码变更，不冒称重跑 CI。Collector `srv-dbfflq5g1s2s73fl05fg` / `dep-dbg0h7ec6qcc73dubi7g` 于 10:13:27 live；Claim `srv-dbdgstivcj2c73fnqcc0` / `dep-dbg0k9uc6qcc73dulhm0` 于 10:20:11 live，两者均为该固定提交。Claim 保存分支已改为 `codex/mealforward-t1f-phase6-release-review-20261026`，autoDeploy 仍 off，避免配置更新重部署旧分支。
+- **配置与顺序**：先更新 collector，再关闭 successor 与旧 Issue 部署 Claim，后应用017/专用权限，最后启用 successor。Render 环境更新实际会触发保存分支部署；中间产生 ba1a76e（旧 Issue 已关闭）与纯文档22f3400版本，最终已用固定 a527fef 覆盖并核对 live。现 `successorEnabled=true`、`issuerIssueEnabled=false`、fund/settle=false；启动日志数据库连接正常。仅现有 Claim 服务持有专用 execution DSN。
+- **数据库**：Supabase `ketfrukrcuosrqynnsay` 已应用逻辑017，文件 SHA256 `9c9f5abf9980e4164d6e526f6824788e150cfb51b668615c4a8ade7875092100`。专用 `mf_t1f_execution_login` 为 LOGIN/NOINHERIT，仅 runtime 成员资格（SET true、INHERIT/ADMIN false）；owner/runtime 为 NOLOGIN。真实 pinned-TLS `verifyExecutionRuntime`、context 读取 PASS；独立 agent 复核 collector 实际连接权限审计与 context/current_round PASS，临时迁移自授已撤销。安全 advisors 无告警。私密连接仅保存在服务配置和本机权限0600的独立运行配置，不写入仓库或日志。
+- **状态不变**：独立实库核对原六表指纹仍 `c0dd34d6df6ad76a43f79bc435cd0b4f`；原 Claim=ISSUE_UNKNOWN。consumption/release/operation/event 均0，历史 rounds1/approvals2。未新建轮次、预留 successor、代签或广播。
+- **公网与界面**：Collector 六个资源与源码相同，真实 session/state 显示 EXPIRED、Owner/Donor true、NO RELEASE。Claim 五个新资源逐字节相同；四个 successor 路由未登录均401；跨源 POST403、跨源未登录 GET401（先认证，未冒称已测到认证后的403）。真实 Chrome 页面可见 MetaMask provider、登录操作及禁用的 prepare/send；未点击钱包按钮。认证后的 origin/method/CSRF 检查沿用隔离 CI 证据，真人会话尚待本人测试。
+
+**现在需要本人测试（只登录与读取）**：打开 [Phase7 Issuer 页面](https://mealforward-t1e-claim-laodao.onrender.com/t1f-execution.html)，使用 Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3`、Monad Testnet10143。选 MetaMask → Read / check wallet；若未授权再 Explicitly connect wallet → Prepare login message → 核对本站登录消息 → Explicitly sign login → Refresh status。预期 `PREPARE_WINDOW_CLOSED`、原 `ISSUE_UNKNOWN`、operation=null；prepare/send 不可用。本次签名仅用于 SIWE 登录，不是发券交易。请用户回报页面状态及钱包当前是否存在待处理/已发送交易，勿提供原始签名或凭据。
+
+下一步：真人 Issuer 读取通过后，取得新鲜钱包活动报告，按既有 operator 门禁创建新的短时双签轮次；再让 Owner/Donor 批准、Issuer 明确准备与发送一次。现在不提前创建。丢响应/拒绝/刷新后不能重发，只恢复原哈希。回退关闭执行入口/权限并保留记录；旧 CP30 与商家结算 #17 不动。域名分类不再阻塞，不提交 MetaMask 外部复核。继续保留 [Draft PR #47](https://github.com/3956ray/MealForward/pull/47)，未合并。
+
 ## 2026-10-27 05:30 Phase7 源码与隔离验收完成，等待线上执行权限激活确认
 
 用户已授权自主开发到本人测试。本轮完成受控恢复执行：017 原子消费批准并只预留一个 successor；独立执行权限及现有 Issuer SIWE 登录接入；一次性 prepare/send、原哈希绑定和链上回执核验；批准消费后的历史展示；刷新后从钱包记录找回原交易哈希。原 Claim 始终 ISSUE_UNKNOWN，不自动广播，不开放商家结算。**这是源码与隔离测试完成，Phase7 尚未上线启用，也未发券。**

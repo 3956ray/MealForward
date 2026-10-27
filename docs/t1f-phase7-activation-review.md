@@ -1,4 +1,6 @@
-# Phase7 activation review package (not activated)
+# Phase7 activation review package (activated 2026-10-27)
+
+User explicitly approved this package. Activation completed with exact app a527feff5e5ff89a5dd4c83964bd5713e8288829: collector dep-dbg0h7ec6qcc73dubi7g, Claim dep-dbg0k9uc6qcc73dulhm0 live. Logical017 and dedicated login/runtime privileges applied; actual TLS capability audits PASS. Successor enabled, legacy Issue disabled, no successor operations or transactions. Current source branch is saved on both services with autoDeploy off. See the newest HANDOFF block for verified live facts and the first human Issuer login/read test. Sections below preserve the reviewed pre-activation package and must not override the latest live record.
 
 ## Current live boundary
 The deployed collector remains6f4710c / dep-dbfnnc59el5s73fumd50. One completed formal round and two role receipts exist; that round expired. No successor release/operation exists. This source phase does not run cloud migrations, add live login credentials, enable production issuer execution, or transact. Disabled source mounting is included for verification.
