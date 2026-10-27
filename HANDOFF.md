@@ -4,11 +4,19 @@
 >
 > **更新日期：2026-10-27（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，正在补诊断。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
+> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，原始原因待定位。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
 
 
 
 
+
+## 2026-10-27 15:37 批准故障诊断增强已上线；503原始根因仍待定位
+
+应用提交 `072d3c6b3e6b680882962a84370346a0bfe49b0a`；独立审查完成，本地270/270 PASS，远程CI https://github.com/3956ray/MealForward/actions/runs/40467867486 全部7项成功。新增4项隔离submit组合测试：双角色记录/回读成功、RPC超时未写、PG权限失败未写、回读失败保留已记录批准；签名恢复使用真实合成签名，授权角色映射仅在隔离测试进程mock，不代表真人E2E通过。
+
+Render部署 `dep-dbg58h6c6qcc73ecrok0` 于15:36:27 UTC+8 live，实际提交与上述一致。新页面返回200且逐字节匹配；状态仍PREPARE_WINDOW_CLOSED、Owner=false、Donor=false、operation=null。用全零合成无效签名探测已过期轮次，返回409/T1F_PHASE8_EXPIRED/stage=request，未提交真人签名、未创建批准。没有数据库迁移/权限/环境变化，也没有新轮次或钱包动作。
+
+新增严格脱敏的阶段和错误分类：read_round / verify_signature / observe_chain / recheck_round / record_approval / readback；仅允许明确RPC/数据库错误码进入响应和日志，不记录原始错误文本、签名、请求体或凭据。页面例如PHASE8_RPC_TIMEOUT_AT_OBSERVE_CHAIN；未知仍UNAVAILABLE。独审指出的对象继承属性分类风险已修正。此发布改善诊断，**尚未证明并修复本次503的根因**。不能让用户在旧过期轮次继续签署。下一步需要新鲜本人钱包无交易与可连续操作报告，先暖机检查服务，再创建限定新轮次用于定位；若Owner签署后出现错误，立即提供新错误码，停止后续签署/prepare/Send。只有Owner/Donor均已记录及READY_TO_PREPARE才继续Issuer。保留失败轮次与旧UNKNOWN，禁止自动重试交易。
 
 ## 2026-10-27 15:24 Phase8 真人批准提交失败，暂停完整 Send 验收
 
