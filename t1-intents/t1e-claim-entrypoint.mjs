@@ -101,7 +101,7 @@ export async function startT1EClaimEntrypoint({env=process.env}={}){
 }
 export function issuerCapabilities(config={},setup=false){
  const issuerIssueEnabled=!setup&&config.issueEnabled===true,successorEnabled=!setup&&config.successorEnabled===true;
- return {issuerTransactionEnabled:issuerIssueEnabled||successorEnabled,issuerIssueEnabled,successorEnabled};
+ return {issuerTransactionEnabled:issuerIssueEnabled||successorEnabled||!setup&&config.phase8Enabled===true,issuerIssueEnabled,successorEnabled,...(!setup&&config.phase8Enabled===true?{phase8Enabled:true}:{})};
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
  try{

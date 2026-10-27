@@ -19,6 +19,8 @@ import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {originalIssueLedger} from './t1f-issue-ledger.mjs';
 import {executionCapabilityPool,verifyExecutionRuntime,makeExecutionStore} from './t1f-execution-store.mjs';
 import {makeExecutionService} from './t1f-execution-service.mjs';
+import {makePhase8Service} from './t1f-phase8-service.mjs';
+import {makePhase8Store,phase8CapabilityPool,verifyPhase8Runtime} from './t1f-phase8-store.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
 export const T1E_CLAIM_ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const PROJECT='ketfrukrcuosrqynnsay';
@@ -38,6 +40,10 @@ export function validateT1EClaimConfig(e=process.env){
  const successorFlag=e.T1F_SUCCESSOR_EXECUTION_ENABLED??'false';
  FAIL(['true','false'].includes(successorFlag),'T1F_EXPLICIT_SUCCESSOR_FLAG_REQUIRED');
  const successorEnabled=successorFlag==='true';
+ const phase8Flag=e.T1F_PHASE8_ENABLED??'false';
+ FAIL(['true','false'].includes(phase8Flag),'T1F_PHASE8_EXPLICIT_FLAG_REQUIRED');
+ const phase8Enabled=phase8Flag==='true';
+ FAIL(!phase8Enabled||(stage==='CLAIM_CONSENT'&&!issueEnabled),'T1F_PHASE8_ISOLATED_CONSENT_REQUIRED');
  FAIL(!successorEnabled||stage==='CLAIM_CONSENT','T1F_EXECUTION_REQUIRES_CONSENT_STAGE');
  FAIL(!issueEnabled||stage==='CLAIM_CONSENT',
   'T1F_ISSUE_REQUIRES_CONSENT_STAGE');
@@ -88,8 +94,18 @@ export function validateT1EClaimConfig(e=process.env){
   FAIL(testing?u.hostname==='127.0.0.1'&&u.port==='5435'&&u.username==='mf_t1f_execution_login':u.hostname===DB_HOST&&u.port==='5432'&&u.username==='mf_t1f_execution_login.'+PROJECT,'T1F_EXECUTION_ROLE_OR_PROJECT_DENIED');
   executionUrl=e.T1F_EXECUTION_DB_URL;
  }
+ const phase8Urls={};
+ if(phase8Enabled)for(const kind of ['collector','execution']){
+  const value=e['T1F_PHASE8_'+kind.toUpperCase()+'_DB_URL'];
+  let u;try{u=new URL(value)}catch{throw Error('T1F_PHASE8_DSN_REQUIRED')}
+  FAIL(['postgres:','postgresql:'].includes(u.protocol)&&u.pathname==='/postgres'&&!u.search&&!u.hash&&u.password.length>=12,'T1F_PHASE8_DSN_INVALID');
+  const login='mf_t1f_phase8_'+kind+'_login';
+  FAIL(testing?u.hostname==='127.0.0.1'&&u.port==='5435'&&u.username===login:u.hostname===DB_HOST&&u.port==='5432'&&u.username===login+'.'+PROJECT,'T1F_PHASE8_ROLE_OR_PROJECT_DENIED');
+  phase8Urls[kind]=value;
+ }
+ FAIL(!e.T1F_PHASE8_OPERATOR_DB_URL,'T1F_PHASE8_OPERATOR_CREDENTIAL_FORBIDDEN_ON_WEB');
  return Object.freeze({
-  stage,origin,port,testing,issueEnabled,successorEnabled,executionUrl,
+  stage,origin,port,testing,issueEnabled,successorEnabled,executionUrl,phase8Enabled,phase8Urls,
   authUrl:chosen[0],claimUrl:chosen[1],
   expectedAuth:AUTH_ROLE,expectedClaim:CLAIM_ROLE
  });
@@ -136,7 +152,7 @@ export async function startT1EClaimServer({env=process.env}={}){
  });
  const authPool=new pg.Pool(options(cfg.authUrl));
  const claimPool=new pg.Pool(options(cfg.claimUrl));
- let server,executionPool;
+ let server,executionPool;const phase8Pools=[];
  try{
   const [a,b]=await Promise.all([
    authPool.query('SELECT current_user AS who'),
@@ -197,7 +213,18 @@ export async function startT1EClaimServer({env=process.env}={}){
    await verifyExecutionRuntime(executionPool);
    executionService=makeExecutionService({store:makeExecutionStore({pool:executionPool})});
   }
+  let phase8Service=null;
+  if(cfg.phase8Enabled){
+   const stores={};
+   for(const kind of ['collector','execution']){
+    const pool=phase8CapabilityPool(new pg.Pool({...options(cfg.phase8Urls[kind]),query_timeout:8000}),kind);phase8Pools.push(pool);
+    await verifyPhase8Runtime(pool,kind);stores[kind]=makePhase8Store({pool});
+   }
+   // Web process has no operator credentials and cannot create a round.
+   phase8Service=makePhase8Service({store:{...stores.execution,record:stores.collector.record,create:()=>{throw Error('T1F_PHASE8_OPERATOR_ONLY')}}});
+  }
   const app=makeT1EClaimGateway({
+   phase8Enabled:cfg.phase8Enabled,phase8Service,
    successorEnabled:cfg.successorEnabled,executionService,
    origin:cfg.origin,stage:cfg.stage,
    authStore:auth,claimStore:claims,loginHandler:handler,
@@ -218,6 +245,12 @@ export async function startT1EClaimServer({env=process.env}={}){
    ['/t1f-execution.html','t1f-execution.html','text/html; charset=utf-8'],
    ['/t1f-execution.css','t1f-execution.css','text/css; charset=utf-8'],
    ...['controller','page','crypto'].map(name=>['/t1f-execution-'+name+'.mjs','t1f-execution-'+name+'.mjs','text/javascript; charset=utf-8'])
+  );
+  if(cfg.phase8Enabled)staticFiles.push(
+   ['/t1f-phase8.html','t1f-phase8.html','text/html; charset=utf-8'],
+   ['/t1f-phase8.css','t1f-phase8.css','text/css; charset=utf-8'],
+   ...['controller','page','crypto'].map(name=>['/t1f-phase8-'+name+'.mjs','t1f-phase8-'+name+'.mjs','text/javascript; charset=utf-8']),
+   ...(!cfg.successorEnabled?[['/t1f-execution-controller.mjs','t1f-execution-controller.mjs','text/javascript; charset=utf-8']]:[])
   );
   const files=new Map(await Promise.all(
    staticFiles.map(async([url,file,type])=>[
@@ -246,11 +279,11 @@ export async function startT1EClaimServer({env=process.env}={}){
    server,config:cfg,
    async close(){
     await new Promise(resolve=>server.close(resolve));
-    await Promise.all([authPool.end(),claimPool.end(),executionPool?.end()]);
+    await Promise.all([authPool.end(),claimPool.end(),executionPool?.end(),...phase8Pools.map(p=>p.end())]);
    }
   });
  }catch(e){
-  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{}),executionPool?.end().catch(()=>{})]);
+  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{}),executionPool?.end().catch(()=>{}),...phase8Pools.map(p=>p.end().catch(()=>{}))]);
   throw e;
  }
 }

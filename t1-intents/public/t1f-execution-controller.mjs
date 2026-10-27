@@ -28,7 +28,14 @@ export function createExecutionController({provider,request,hashData,origin,cloc
  let preparationDispatched=false,disposed=false,revision=0,busy=false,walletBusy=false,state=null,payload=null,challenge=null,csrf=null,preCsrf=null,checked=false,recovery=false,received=null,error=null;
  // Once a prepare leaves this controller, a lost response cannot prove no reservation.
  const hasReservationRisk=()=>preparationDispatched||!!state?.operation||!!payload||!!received;
- const snapshot=()=>({busy,walletBusy,state,checked,authenticated:!!csrf,challenge:challenge?.message||null,canSend:!!payload&&!recovery, recovery,receivedHash:received?.hash||null,error});
+ const snapshot=()=>{
+  const windowRemainingSeconds=state?.round?Math.max(0,state.round.prepareBefore-clock()):null;
+  const windowOpen=windowRemainingSeconds!==null&&windowRemainingSeconds>0;
+  return {busy,walletBusy,state,checked,authenticated:!!csrf,challenge:challenge?.message||null,
+   canPrepare:!disposed&&!!csrf&&!recovery&&!payload&&!state?.operation&&state?.status==='READY_TO_PREPARE'&&windowOpen,
+   canSend:!disposed&&!!payload&&!recovery&&windowOpen,windowRemainingSeconds,
+   windowExpired:windowRemainingSeconds===0,recovery,receivedHash:received?.hash||null,error};
+ };
  const notify=()=>{if(!disposed)render(snapshot())};
  const discard=()=>{recovery=hasReservationRisk();revision++;payload=null;challenge=null;checked=false;csrf=null;preCsrf=null;notify()};
  for(const e of ['accountsChanged','chainChanged','disconnect'])provider?.on?.(e,discard);

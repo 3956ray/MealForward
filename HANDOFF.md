@@ -10,6 +10,16 @@
 
 
 
+## 2026-10-27 Phase8 修复源码完成，正在验证发布
+
+用户确认继续修复并要求完整钱包流程包含 Send；沿用自主推进至本人测试的授权。新增独立 Phase8 version2 批准和一笔限定 child：保留旧原 Claim/017 successor/消费/审计不变，明确绑定已过期 predecessor8872119f-8c4c-4f0d-8c3a-10c841f1018f。新的签名不能使用 V1；合约 replay 在 deadline 检查之前，故必须同时核对 finalized/head 两个锚点旧操作不存在、Unit0 generation0可用、固定代码/角色/账务及 latest/pending nonce0。新轮次须有新鲜本人报告，不提前创建。此时尚未应用迁移、创建新轮次或发送交易。
+
+实现文件 `t1-intents/t1f-phase8-{protocol,observe,service,store,http,operator}.mjs`，客户端 `/t1f-phase8.html` 及相关controller/page/crypto；现有 SIWE网关独立 `T1F_PHASE8_ENABLED` 默认false，独立collector/execution登录凭据，Web禁止operator凭据/建轮接口。新迁移由Supabase CLI生成 `20261027061724_t1f_phase8_recovery.sql`，内容SHA256 `9f67d713bc384c4d84251d2c420701ed547898296de4906edaf9aef5b8ba00ab`。迁移不创建LOGIN，角色激活另做受控发布步骤。旧界面已修复截止时间、计时刷新与误导Ready提示。
+
+独立协议/后端/客户端审查完成，发现的状态归属/回执/SQL NULL检查/同块锚点/迟到响应问题已修正。根agent独立PG17运行10组PASS（精确009–018、能力分离、并发唯一、审计失败回滚、原记录不变）；客户端合成DOM完整双批准→登录→prepare→单独Send→哈希→回执通过，非真人钱包。全量分组CI正在发布验证，不提前写远程PASS。裸npm test需要专用PG与合成Quote环境，先前32项环境门禁失败已记录；工作流分开运行这些专用环境。
+
+公网只读观察：finalized74589436 / hash0xd61bffa13c997e19319ee33f374e45da5bb50426ec69393c105c41974bca659b，head74589438 / hash0x36f104c249e77346f87b21452f8d74e3b64b4206550e94997207b9032d904595，timestamp1793081260；两旧操作未观察到、Unit可用gen0、nonce latest/pending0。不是全网无交易证明或新的本人活动报告。实库复查旧successor仍UNKNOWN/hashNULL/revision0，Phase8 schema不存在；security advisors无告警。设计/计划见docs/superpowers。后续固定已审查提交跑CI，再应用迁移与最小权限、部署并核对公网；只有部署门禁通过后才交给本人测试。
+
 ## 2026-10-27 13:46 本人确认未点击发送；独立审查确认预留后未发送的恢复缺口
 
 用户明确回复：**“没有点击发送，也没有交易确认窗口”**。这是本人操作报告；结合上一节实库 tx_hash NULL，当前没有交易发送或上链成功证据，不把 NULL 哈希当作全网未广播证明。双签和 prepare 已通过；send / bind / reconcile 尚未完成。轮次与唯一 successor 沿用13:40节，不新建、不重置。13:46:36 UTC+8 的时钟核对已晚于客户端截止13:39:57与候选交易deadline13:44:27；该时间核对不是新的链上状态查询。

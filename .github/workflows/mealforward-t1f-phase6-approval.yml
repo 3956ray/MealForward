@@ -1,4 +1,4 @@
-name: MealForward Phase6 durable approval collection (SOURCE ONLY)
+name: MealForward recovery approvals and execution (SOURCE ONLY)
 on:
   push:
     branches:
@@ -35,6 +35,8 @@ jobs:
           npm run typecheck
           npm run build
           node ../t1f-execution-build.mjs
+          node ../t1f-phase8-client-build.mjs
+          git diff --exit-code -- ../public/t1f-phase8-crypto.mjs
           git diff --exit-code -- ../public/t1f-execution-crypto.mjs
           git diff --exit-code -- ../public/wallet-v2.html ../public/wallet-v2.css ../public/wallet-v2-bootstrap.mjs ../public/wallet-v2-controller.mjs ../public/wallet-v2-wallet.mjs ../public/wallet-v2-validation.mjs
       - name: All tests without database fixtures
@@ -50,7 +52,7 @@ jobs:
       - name: New service syntax and unchanged original release hold
         working-directory: t1-intents
         run: |
-          for file in t1f-approval-*.mjs public/t1f-approval.mjs t1f-execution-*.mjs public/t1f-execution-*.mjs; do node --check "$file"; done
+          for file in t1f-approval-*.mjs public/t1f-approval.mjs t1f-execution-*.mjs public/t1f-execution-*.mjs t1f-phase8-*.mjs public/t1f-phase8-*.mjs; do node --check "$file"; done
           if grep -En 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|privateKeyToAccount|Wallet.fromPrivateKey' t1f-approval-{protocol,service,server,operator,store}.mjs public/t1f-approval.mjs; then exit 1; fi
           test -s ../HANDOFF.md
   legacy-postgres:
@@ -124,7 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        file: [t1f-execution-phase7.ci.mjs, t1f-execution-http-phase7.ci.mjs]
+        file: [t1f-execution-phase7.ci.mjs, t1f-execution-http-phase7.ci.mjs, t1f-phase8-pg.ci.mjs]
     env:
       MF_T1F_PHASE6_DISPOSABLE_ONLY: ack-fresh-phase6-pg17
       MF_T1F_EXECUTION_HTTP_DISPOSABLE_ONLY: ack-fresh-execution-http-pg17
@@ -149,6 +151,6 @@ jobs:
           exit 1
       - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
         working-directory: t1-intents
-      - name: Exact 009–017; separate fresh database, never reuse between scripts
+      - name: Exact reviewed migrations; separate fresh database, never reuse between scripts
         working-directory: t1-intents
         run: node ${{ matrix.file }}
