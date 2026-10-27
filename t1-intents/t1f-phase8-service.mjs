@@ -1,4 +1,5 @@
 /** Phase8 source-only service. No wallet provider or transaction broadcaster. */
+import {phase8Step} from './t1f-phase8-diagnostics.mjs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {keccak256} from 'ethers';
 import {CHAIN,ESCROW,MEAL,TERMS} from './core.mjs';
@@ -49,10 +50,10 @@ export function makePhase8Service({store,rpc=makeExecutionPublicRpc(),clock=()=>
    await store.create({roundId:randomUUID(),manifest,createdAt,observedBlockTime:observation.observedBlockTime,evidence:observation,walletObservation,beforeExecute:b.check});return dto(await store.context());
   }),
   submit:async(body,{signal}={})=>run(signal,async b=>{
-   check(exact(body,['roundId','digest','role','signature'])&&hash(body.digest),'BODY');const e=await selected(body);check(!e.operation&&e.round.digest===body.digest,'CONSUMED_OR_DIGEST');
-   const m=reconstructRecoveryManifest({row:e.round,predecessor:e.predecessor,now:clock()}),approval=verifyRecoveryApproval({manifest:m,role:body.role,signature:body.signature});
-   const evidence=await fresh(b,e);unchanged(e,await store.get(body.roundId));b.check();
-   await store.record({roundId:body.roundId,digest:body.digest,...approval,evidence,beforeExecute:()=>{b.check();check(clock()<Number(m.value.approvalExpiresAt),'EXPIRED')}});return dto(await store.get(body.roundId));
+   check(exact(body,['roundId','digest','role','signature'])&&hash(body.digest),'BODY');const e=await phase8Step('read_round',()=>selected(body));check(!e.operation&&e.round.digest===body.digest,'CONSUMED_OR_DIGEST');
+   const m=reconstructRecoveryManifest({row:e.round,predecessor:e.predecessor,now:clock()}),approval=await phase8Step('verify_signature',()=>verifyRecoveryApproval({manifest:m,role:body.role,signature:body.signature}));
+   const evidence=await phase8Step('observe_chain',()=>fresh(b,e));await phase8Step('recheck_round',async()=>unchanged(e,await store.get(body.roundId)));b.check();
+   await phase8Step('record_approval',()=>store.record({roundId:body.roundId,digest:body.digest,...approval,evidence,beforeExecute:()=>{b.check();check(clock()<Number(m.value.approvalExpiresAt),'EXPIRED')}}));return phase8Step('readback',async()=>dto(await store.get(body.roundId)));
   }),
   prepare:async(body,{signal}={})=>{
    check(exact(body,['roundId','digest'])&&hash(body.digest),'BODY');check(!signal?.aborted,'ABORTED');const e=await selected(body);check(e.round.digest===body.digest,'DIGEST');

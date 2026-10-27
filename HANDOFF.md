@@ -4,11 +4,21 @@
 >
 > **更新日期：2026-10-27（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 已上线，NO_ROUND，等待本人完整 Send 测试。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
+> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，正在补诊断。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
 
 
 
 
+
+## 2026-10-27 15:24 Phase8 真人批准提交失败，暂停完整 Send 验收
+
+收到本人15:19:40 UTC+8新鲜报告：Issuer已登录、MetaMask活动无交易、可开始。operator核验后创建轮次 `b55789fd-76ac-47c4-bf80-5a1ea5e74b40`，digest `0xef115f9bc083a5a3ee691db96e211dae8fe134a51ca64645e53350de5dc300fd`；准备发送截止15:23:37，批准截止15:25:07。已立即交付连续Owner→Donor→Issuer→prepare→Send步骤，无Agent签名/交易。
+
+用户回报两钱包已签署但均未记录，附件显示 `PHASE8_HTTP_503`。15:24公网状态及随后真实collector/execution只读get确认双角色批准0、operation=null，旧predecessor保持UNKNOWN/hashNULL，窗口关闭。故不是单纯页面刷新问题，尚无新预留或发送证据。本轮不重开、不代签、不重复提交用户签名。
+
+独立审查确认：生产执行读取/collector写入接线与权限正确；根agent与独审在本机对同一轮次完整只读链观察均42次RPC PASS。这不能证明Render当时RPC正常。Render应用日志显示15:20:22启动、15:20:35服务ready，无失败细节，请求日志未返回记录。实际503根因仍未确定，不能归因钱包、RPC或数据库。此前服务测试只覆盖无效签名，PG直接record与DOM模拟响应未覆盖有效submit组合路径，记录此验收缺口。
+
+正在增加严格脱敏错误类别/submit阶段诊断和隔离成功路径回归；未降低签名、角色、时限或链核验门禁。原始错误消息、SQL、DSN、会话及签名不进入日志/公开响应。诊断修复不等于批准503根因已解决；发布与测试结果另补，真人完整Send仍未通过。
 
 ## 2026-10-27 14:33 Phase8 已上线，等待本人完整 Send 测试
 

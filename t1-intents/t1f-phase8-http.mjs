@@ -1,4 +1,5 @@
 /** Public signature collector; Issuer writes require trusted SIWE+CSRF gateway. No create-round route. */
+import {phase8Failure} from './t1f-phase8-diagnostics.mjs';
 import {FIXED} from './t1e-first-issue-readiness.mjs';
 const write=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});res.end(JSON.stringify(body))};
 export function makePhase8Http({enabled=false,service,origin,clock=()=>Date.now(),requestTimeoutMs=60000}={}){
@@ -36,8 +37,9 @@ export function makePhase8Http({enabled=false,service,origin,clock=()=>Date.now(
    }
   }catch(e){
    const bodyError=[400,413,415,422].includes(e?.status);
-   const known=typeof e?.message==='string'&&/^T1F_PHASE8_[A-Z_]{3,80}$/.test(e.message);
-   if(!res.destroyed&&!res.writableEnded)write(res,bodyError?e.status:known?409:503,{error:bodyError?'T1F_PHASE8_BODY':known?e.message:'T1F_PHASE8_UNAVAILABLE'});
+   const failure=phase8Failure(e);
+   if(!bodyError)console.warn(JSON.stringify({event:'PHASE8_REQUEST_FAILED',...failure}));
+   if(!res.destroyed&&!res.writableEnded)write(res,bodyError?e.status:failure.status,bodyError?{error:'T1F_PHASE8_BODY'}:{error:failure.error,stage:failure.stage});
   }
  };
 }
