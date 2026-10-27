@@ -4,11 +4,25 @@
 >
 > **更新日期：2026-10-27（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前最高优先级门槛：真实用户已预留唯一 T1-F Issue，Claim=ISSUE_UNKNOWN。必须核对链上原交易/过期/恢复，不得重新预留或自动重发。** 详见本文件 22:24 的 CRITICAL LIVE STATE。
+> **当前状态：Phase8 已上线，NO_ROUND，等待本人完整 Send 测试。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
 
 
 
 
+
+## 2026-10-27 14:33 Phase8 已上线，等待本人完整 Send 测试
+
+本节覆盖下方历史发布状态。用户已批准自主推进至本人测试；Phase8 限定过期未发送恢复路径已实现、独立审查并上线。真实钱包 Send、绑定哈希与链上回执尚未验收，不能称为发券成功。
+
+- 应用提交：`8314157fb8ca19e553a3679680c4258add263927`。CI run https://github.com/3956ray/MealForward/actions/runs/40460811122 全部7项成功；本地源码264/264 PASS、独立PG17迁移及能力/并发/回滚10组PASS、合成DOM完整流程通过。
+- Render `srv-dbdgstivcj2c73fnqcc0` / deploy `dep-dbg48d59fdbs73cnrerg` 于14:27:52 UTC+8 live，固定上述应用提交。文档后续提交不部署。入口：https://mealforward-t1e-claim-laodao.onrender.com/t1f-phase8.html 。Owner、Donor、Issuer 均使用这一新页面。
+- Supabase 已应用 `20261027061724_t1f_phase8_recovery.sql`（SHA256 `9f67d713bc384c4d84251d2c420701ed547898296de4906edaf9aef5b8ba00ab`）及独立运行角色激活。operator/collector/execution 三种实际登录能力核验通过，security advisors无告警、临时owner成员关系0。旧successor表前后指纹均 `3c687c4f7ab9cdc3b701fe188df09604`，旧记录未改变。
+- Phase8 开启，旧 successor/issue wallet 路径关闭，fund/settle关闭。14:33 公网六个静态资源200且逐字节与源码一致；Phase8状态200/NO_ROUND，round=null、operation=null，predecessor仍ISSUE_UNKNOWN/hash=null；匿名prepare401、跨站approval403。尚未创建新轮次、批准或child，未执行Agent钱包操作。
+- Chrome创建测试页超时，系统曾报告Mac锁定；未声称真实Chrome视觉或MetaMask验证通过。公共HTTP和合成DOM验证不能替代本人验收。
+
+下一步：本人打开新入口，确认Issuer 0x9747…aA2B3 / Monad Testnet10143，完成页面登录检查，确认MetaMask活动无待处理或已发送交易，并可连续操作约5分钟。必须收到新鲜报告再建轮，不复用13:36或更早报告。operator私有配置 `/Users/mili/.mealforward-phase8-20261027/operator.json`（0600，不提交凭据）；命令 `node t1f-phase8-operator.mjs create-round <配置路径> <实际报告epoch秒> ISSUER_REPORTED_NO_PENDING_OR_SENT_TRANSACTIONS`，在t1-intents执行，报告时效120秒。
+
+建轮前先交付完整步骤，建轮后立即公布轮次与截止：Owner显式批准→Donor显式批准→切回Issuer检查并重新登录→刷新READY_TO_PREPARE→prepare一次→立即单独点击Send once并本人确认MetaMask→保留原交易哈希→绑定/核验回执。prepare/send窗口210秒、批准300秒；不要在prepare后要求暂停聊天，不刷新以免丢失一次性字节。账户切换可能清除登录，不能假定预登录持续有效。超时/拒绝/不确定时不自动续轮或重发；已有哈希只恢复同一交易。若需关闭入口，设置T1F_PHASE8_ENABLED=false并保留全部审计数据。
 
 ## 2026-10-27 Phase8 修复源码完成，正在验证发布
 
