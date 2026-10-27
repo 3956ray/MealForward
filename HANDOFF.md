@@ -9,6 +9,13 @@
 
 
 
+## 2026-10-27 13:26 新鲜报告后创建 Phase7 测试轮次；等待本人双签
+
+用户明确确认“MetaMask 活动也没有交易，现在开始”。实际报告接收观察时间2026-10-27 13:25:51 UTC+8，现有 operator 在120秒时效内完成独立链/原记录预检并返回 COLLECTING。不是 Agent 全网无交易证明。新轮次 `97bc0a06-274f-4219-823c-ae376cb6ce3f`，摘要 `0xea5d60d9352dc786fe261ca37ac66d39ec2efcc0e81a6cd4c936620b4ca660db`，批准截止 **2026-10-27 13:31:14 UTC+8**（1793079074），Issuer prepare 必须早于 **13:29:44**（保留90秒门槛）。超时不自动续轮，不复用旧报告。
+
+已通知本人在 collector 刷新，Owner/Donor 对同一新轮次显式双签，再回 Issuer 刷新状态。本轮只创建批准轮次，未代签、prepare、发送或发券；上线代码不变。上节历史“未收到报告”已由本节新报告覆盖；若读到本节时窗口已过，按过期处理，不能照抄当作当前有效授权。
+
+
 ## 2026-10-27 Phase7 Issuer 真人登录与状态读取通过（用户回报）
 
 用户回传本站 SIWE 登录消息和登录后的受保护状态：Issuer 为固定 0x9747…aA2B3，chain10143、本站 URI 正确；页面 Original Claim=ISSUE_UNKNOWN、Successor=PREPARE_WINDOW_CLOSED，历史 round79e1b5e5-ba34-4387-805b-e2eb7d00300d / digest0x83c97ca5e3cb5ffebc934406773ef4246159a7e1117f059ad470515f8473ba9c，Transaction hash=—。据此记录本人登录与读取验收 PASS（用户提供页面证据，非 Agent 直接操作或观察钱包）。原始登录 nonce、Request ID、签名及会话凭据不录入交接。
