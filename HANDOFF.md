@@ -10,6 +10,26 @@
 
 
 
+
+## 2026-10-27 15:37 批准故障诊断增强已上线；503原始根因仍待定位
+
+应用提交 `072d3c6b3e6b680882962a84370346a0bfe49b0a`；独立审查完成，本地270/270 PASS，远程CI https://github.com/3956ray/MealForward/actions/runs/40467867486 全部7项成功。新增4项隔离submit组合测试：双角色记录/回读成功、RPC超时未写、PG权限失败未写、回读失败保留已记录批准；签名恢复使用真实合成签名，授权角色映射仅在隔离测试进程mock，不代表真人E2E通过。
+
+Render部署 `dep-dbg58h6c6qcc73ecrok0` 于15:36:27 UTC+8 live，实际提交与上述一致。新页面返回200且逐字节匹配；状态仍PREPARE_WINDOW_CLOSED、Owner=false、Donor=false、operation=null。用全零合成无效签名探测已过期轮次，返回409/T1F_PHASE8_EXPIRED/stage=request，未提交真人签名、未创建批准。没有数据库迁移/权限/环境变化，也没有新轮次或钱包动作。
+
+新增严格脱敏的阶段和错误分类：read_round / verify_signature / observe_chain / recheck_round / record_approval / readback；仅允许明确RPC/数据库错误码进入响应和日志，不记录原始错误文本、签名、请求体或凭据。页面例如PHASE8_RPC_TIMEOUT_AT_OBSERVE_CHAIN；未知仍UNAVAILABLE。独审指出的对象继承属性分类风险已修正。此发布改善诊断，**尚未证明并修复本次503的根因**。不能让用户在旧过期轮次继续签署。下一步需要新鲜本人钱包无交易与可连续操作报告，先暖机检查服务，再创建限定新轮次用于定位；若Owner签署后出现错误，立即提供新错误码，停止后续签署/prepare/Send。只有Owner/Donor均已记录及READY_TO_PREPARE才继续Issuer。保留失败轮次与旧UNKNOWN，禁止自动重试交易。
+
+## 2026-10-27 15:24 Phase8 真人批准提交失败，暂停完整 Send 验收
+
+收到本人15:19:40 UTC+8新鲜报告：Issuer已登录、MetaMask活动无交易、可开始。operator核验后创建轮次 `b55789fd-76ac-47c4-bf80-5a1ea5e74b40`，digest `0xef115f9bc083a5a3ee691db96e211dae8fe134a51ca64645e53350de5dc300fd`；准备发送截止15:23:37，批准截止15:25:07。已立即交付连续Owner→Donor→Issuer→prepare→Send步骤，无Agent签名/交易。
+
+用户回报两钱包已签署但均未记录，附件显示 `PHASE8_HTTP_503`。15:24公网状态及随后真实collector/execution只读get确认双角色批准0、operation=null，旧predecessor保持UNKNOWN/hashNULL，窗口关闭。故不是单纯页面刷新问题，尚无新预留或发送证据。本轮不重开、不代签、不重复提交用户签名。
+
+独立审查确认：生产执行读取/collector写入接线与权限正确；根agent与独审在本机对同一轮次完整只读链观察均42次RPC PASS。这不能证明Render当时RPC正常。Render应用日志显示15:20:22启动、15:20:35服务ready，无失败细节，请求日志未返回记录。实际503根因仍未确定，不能归因钱包、RPC或数据库。此前服务测试只覆盖无效签名，PG直接record与DOM模拟响应未覆盖有效submit组合路径，记录此验收缺口。
+
+正在增加严格脱敏错误类别/submit阶段诊断和隔离成功路径回归；未降低签名、角色、时限或链核验门禁。原始错误消息、SQL、DSN、会话及签名不进入日志/公开响应。诊断修复不等于批准503根因已解决；发布与测试结果另补，真人完整Send仍未通过。
+
+
 ## 2026-10-27 14:33 Phase8 已上线，等待本人完整 Send 测试
 
 本节覆盖下方历史发布状态。用户已批准自主推进至本人测试；Phase8 限定过期未发送恢复路径已实现、独立审查并上线。真实钱包 Send、绑定哈希与链上回执尚未验收，不能称为发券成功。
