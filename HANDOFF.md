@@ -4,12 +4,34 @@
 >
 > **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：单商家 Monad Testnet MVP 完整真人业务流程已跑通：已有测试USDC捐赠、发券、私密链接领取、验码、交餐、180秒后结算。后台SETTLED，链上付款7 USDC及商家余额40→47已独立核验。旧部署和旧Phase8记录保留；不代表主网或多商家上线验收。** 以下最新记录优先于后面的历史阶段。
+> **当前状态：原始前端复用版与第二笔业务支持已发布，入口 /mvp/product.html，等待用户一次第二张券验收。第一笔SETTLED及原六笔操作完整保留，沿用现有合约和已有测试USDC。新程序支持按业务隔离、单笔串行处理与10份上限；不代表第二张券真人验收已完成。** 以下最新记录优先于后面的历史阶段。
 
 
 
 
 
+
+## 2026-10-29 02:50 原始产品入口已上线，等待第二张券本人测试
+
+### 入口与版本
+- 产品入口：https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html 。复用原始品牌、首页餐盘、导航及src/styles.css；原src旧模拟入口未替换，真实流程在同源产品入口。
+- 私密领取页：/mvp/product-recipient.html（由Issuer生成带业务编号的私密链接）；旧/mvp/setup.html、merchant.html、recipient.html及无scope API固定第1笔，不能用于新业务。
+- 应用commit **5c7b21451d75d103a3445de1641c96d73ee9e7c4**（功能c3d1d6e+测试清理修复），client build **6d05e07775e6a859901e**。
+- Render **dep-dbh47dflk1mc73evolhg**，2026-10-29 02:50:17 UTC+8 live；service srv-dbdgstivcj2c73fnqcc0、workspace tea-db7q3ou7bikc73bp2bt0，原分支，autoDeploy off。MVP_WALLET_ACTIONS_ENABLED=true，公网核验已生效。
+- Draft PR47：https://github.com/3956ray/MealForward/pull/47 ，未合并。本文档后续commit不改变上述实际应用部署。
+
+### 已完成验证
+- MVP CI https://github.com/3956ray/MealForward/actions/runs/40748486255 PASS（含合约既有门禁、21客户端、后台/运行时/旧入口20检查及PG+Anvil连续双券和清理）；兼容CI https://github.com/3956ray/MealForward/actions/runs/40748486591 PASS。
+- 独立审查和修复闭环完成；原重复/me CSRF竞争已移除。运行时+客户端+链上接口对齐。详细证据docs/superpowers/2026-10-29-second-voucher-verification.md。
+- 公网 mvp-live-smoke PASS：13静态资源精确一致、10143/固定USDC、writesEnabled=true、未登录及跨域拒绝、新业务接口未登录401、旧Phase8 ISSUED保留，0钱包动作。
+- 本机IAB原始首页和商家入口视觉检查已完成；IAB打开公网及重新绑定均工具超时，因此不声称公网浏览器钱包验收通过。直接公网HTTP完整检查通过，最终真人操作待用户。
+- 云迁移20261028184428_mvp_sequential_businesses、schema2，runtime TLS/最少权限及安全advisors PASS。发布后只有第1笔，SETTLED/revision10/data指纹408e76f0c970880598786deeb7bfb39c；原6操作指纹48457edd692dc32b55527297715b430c（排除新增business_id列）保持。没有创建第2笔，没有代签或代发。
+
+### 用户下一步（只需一次）
+新入口进入商家工作台，以Owner登录；进入业务记录→创建下一笔业务→第2笔签报价；再切Donor登录第2笔授权及捐赠7USDC，Issuer登录发券并生成私密领取链接，领取人打开后生成码，Owner商家验码、本人发送确认交餐，链上180秒后本人结算。无需新部署，初始支持者余额77.5USDC。每次切角色后核对第2笔及钱包身份。正常5笔交易，另有消息签名。详细步骤docs/superpowers/2026-10-29-second-voucher-acceptance.md。最终以第二券SETTLED、商家余额增加7和第一笔不变为准；尚未验证真实第二笔。
+
+### 回退与范围
+单商家、单份7USDC、同一时刻一笔未完成业务，合约生命周期10份上限；到顶拒绝新建。数据写入异常关闭MVP_WALLET_ACTIONS_ENABLED，保留查询与原hash恢复；不得回退旧无business scope写程序、删除记录或另发替代交易。旧合约/Phase8结算限制不变。现有工作树保留继续处理验收反馈。
 
 ## 2026-10-29 发布门禁：迁移已完成，等待CI清理修复
 
