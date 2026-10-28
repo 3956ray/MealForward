@@ -187,3 +187,70 @@ test("currency rejects wrong address, runtime, decimals and insufficient funds b
   decimals=6n;balance=6999999n;
   await assert.rejects(chain.build("approve",{token:policy.token},"0x",0),/INSUFFICIENT_USDC/);
 });
+
+test("business routes preserve auth, write kill, recovery and strict path boundaries", async () => {
+  const a = app({ enabled: true });
+  assert.equal((await request(a, "/businesses")).status, 401);
+  assert.equal((await request(a, "/businesses/2/setup")).status, 401);
+  assert.equal((await request(a, "/businesses/2/recipient/voucher")).status, 401);
+  assert.equal((await request(a, "/businesses", { method: "POST", headers: { origin } })).content.error, "WRITES_DISABLED");
+  assert.equal((await request(a, "/businesses/2/quote", { method: "POST", headers: { origin } })).content.error, "WRITES_DISABLED");
+  assert.equal((await request(a, "/businesses/2/operations/00000000-0000-0000-0000-000000000000/reconcile", { method: "POST", headers: { origin } })).status, 401);
+  for (const path of ["/businesses/01/setup", "/businesses/0/setup", "/businesses/2/auth/pre-session", "/businesses/2/status", "/businesses/2/me"]) {
+    assert.equal((await request(a, path)).status, 404);
+  }
+});
+
+test("legacy operation URLs cannot access second business even for same wallet", async () => {
+  const { POLICY } = await import("./chain.mjs");
+  const operation = { id: "00000000-0000-0000-0000-000000000002", business_id: 2, wallet: POLICY.owner, state: "CONFIRMED", action: "settle" };
+  const p = { async query(sql, params) {
+    if (sql.includes("FROM mf_mvp_usdc.sessions")) return { rows: [{ wallet: POLICY.owner }] };
+    if (sql.includes("FROM mf_mvp_usdc.operations")) {
+      assert.match(sql, /business_id=\$2/);
+      return { rows: params[1] === "2" ? [operation] : [] };
+    }
+    throw Error("unexpected query");
+  } };
+  const a = app({ pool: p, enabled: true });
+  const headers = { cookie: "__Host-mf_mvp_usdc_session=" + "x".repeat(43) };
+  assert.equal((await request(a, `/operations/${operation.id}`, { headers })).status, 404);
+  assert.equal((await request(a, `/businesses/1/operations/${operation.id}`, { headers })).status, 404);
+  const own = await request(a, `/businesses/2/operations/${operation.id}`, { headers });
+  assert.equal(own.status, 200);
+  assert.equal(own.content.businessId, "2");
+});
+
+test("recipient credentials are bound to business while legacy credentials remain first-only", async () => {
+  const { makeService } = await import("./service.mjs");
+  let recipient = { expiresAt: 200, invite: "same-hash", csrfHash: "csrf" };
+  const p = { async query(sql) {
+    if (sql.includes("credentials")) return { rows: [{data: recipient}] };
+    if (sql.includes("state")) return { rows: [{revision: "0", data: {invite: "same-hash"}}] };
+    throw Error("unexpected query");
+  } };
+  const service = makeService({ pool: p, rpc: {async send(){throw Error("unexpected RPC");}}, pepper: "test-private-pepper-at-least-32bytes", clock: () => 100 });
+  await service.recipient("hash", "csrf");
+  await assert.rejects(service.forBusiness("2").recipient("hash", "csrf"), /RECIPIENT_UNAUTHENTICATED/);
+  recipient = {...recipient, businessId: "2"};
+  await assert.rejects(service.recipient("hash", "csrf"), /RECIPIENT_UNAUTHENTICATED/);
+  await service.forBusiness("2").recipient("hash", "csrf");
+});
+
+test("business list stops at the contract limit and creation fails before inserting", async () => {
+  const { makeService } = await import("./service.mjs");
+  const { POLICY } = await import("./chain.mjs");
+  const rows = Array.from({length:10}, (_, i) => ({id:i+1, data:{phase:"SETTLED",token:POLICY.token,escrow:POLICY.owner,termsHash:"0x"+"1".repeat(64)}}));
+  const c = { async query(sql) {
+    if (sql.includes("revision,data")) return {rows:[{revision:"0",data:rows[0].data}]};
+    if (sql.includes("SELECT id,data")) return {rows};
+    if (sql.includes("SELECT 1 FROM")) return {rows:[],rowCount:0};
+    if (sql.includes("INSERT")) throw Error("unexpected insert");
+    return {rows:[]};
+  },release(){} };
+  const s = makeService({pool:{query:c.query,async connect(){return c;}},rpc:{async send(){throw Error("unexpected RPC");}},pepper:"test-private-pepper-at-least-32bytes"});
+  const list = await s.businesses(POLICY.owner);
+  assert.equal(list.canCreate,false);
+  assert.equal(list.disabledReason,"BUSINESS_LIMIT");
+  await assert.rejects(s.createBusiness(POLICY.owner),/BUSINESS_LIMIT/);
+});

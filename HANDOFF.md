@@ -11,6 +11,14 @@
 
 
 
+## 2026-10-29 原始前端与第二笔业务开发完成，发布验证进行中
+
+已实现独立businessId、Owner显式创建下一笔、全局单一未完成业务和合约10份上限；旧无编号路由永久对应第1笔。新API /v1/mvp/businesses及/businesses/:id/*，操作/领取凭证隔离。动态读取候选券与捐赠批次绑定，核验累计账目和每一历史已结算券，不移除资金检查。新入口 /mvp/product.html，私密领取入口 /mvp/product-recipient.html；原始src/styles.css逐字复用及原首页/导航/餐盘组件视觉复用，旧接口/模拟登录未迁入。既有钱包单次发送逻辑复用，准备摘要自动滚入视图。
+
+本地当前验证：20项后台/运行时/旧入口检查、21项客户端测试、一次双业务PG+Anvil完整流程PASS；第一笔记录不变，第二笔seq1，跨业务凭证拒绝，并发创建200/409，旧路由不能读取第2笔操作，180秒前拒绝结算。receipt最多20 RPC（第10笔上界44，预算80）。原始首页真实浏览器视觉检查完成，但MetaMask真人测试未开始。独立backend/chain/frontend接口审查通过；审查发现重复/me导致CSRF竞争，已修复并加单一/me测试。client build 6d05e07775e6a859901e。
+
+预发布实库第一笔SETTLED/revision10，data指纹408e76f0c970880598786deeb7bfb39c；原6条operation完整行指纹48457edd692dc32b55527297715b430c；Phase8原operation指纹0fa8942bd38048d9274cfdabefadea85（按row文本排序）。迁移只新增business_id=1及新约束，验证原operation需排除新增列再比较。计划migration mvp_sequential_businesses将schema_version升为2，必须先确认MVP写入关闭。已请求Render关闭MVP_WALLET_ACTIONS_ENABLED并触发dep-dbh43rnlk1mc73evg000，当前仍需确认live。尚未应用云迁移、推送本轮应用或部署产品入口，GitHub CI与公网验证PENDING。不要据本节提前要求用户操作。无新业务创建/签名/广播。后续写入只使用v2程序；出现问题关闭写入，不能把支持新业务的数据交回旧无scope写程序。
+
 ## 2026-10-29 完整MVP真人验收通过
 
 用户商家页面显示“测试餐款已结算”。只读实库 mf_mvp_usdc.state=SETTLED，redeem和settle均CONFIRMED，Owner nonce15、16。公开RPC独立检查两笔receipt status=0x1，from固定Owner、to新USDC escrow 0x2ab15b22860323c02c90664fb8c39406a93eab54，区块hash匹配canonical，观察finalized 0x4785e84超过两笔回执区块。

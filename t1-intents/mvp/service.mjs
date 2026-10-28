@@ -7,9 +7,9 @@ import {
   token,
   codeHash,
   check,
-  event,
-  putCredential,
-  credential,
+  event as baseEvent,
+  putCredential as basePutCredential,
+  credential as baseCredential,
   json,
 } from "./store.mjs";
 import {
@@ -38,6 +38,7 @@ export const actionRole = {
 };
 export const dto = (o) => ({
   id: o.id,
+  businessId: String(o.business_id ?? 1),
   action: o.action,
   state: o.state,
   txHash: o.tx_hash,
@@ -47,6 +48,8 @@ export const dto = (o) => ({
 });
 export function makeService({
   pool,
+  businessId = "1",
+  currencyState = {},
   rpc,
   pepper,
   policy = POLICY,
@@ -58,11 +61,44 @@ export function makeService({
     503,
   );
   const context = new AsyncLocalStorage();
-  const store = makeStore(pool),
+  const store = makeStore(pool, businessId),
     chain = makeChain(
       { send: (...args) => (context.getStore() || rpc).send(...args) },
       policy,
     );
+  const event = (c, kind, id = null) => baseEvent(c, kind, id, businessId);
+  const putCredential = (c, kind, key, data) => basePutCredential(c, kind, key, { ...data, businessId });
+  const credential = async (c, kind, key) => {
+    const data = await baseCredential(c, kind, key);
+    return data && String(data.businessId ?? "1") === businessId ? data : undefined;
+  };
+  const summary = row => ({ id: String(row.id), phase: row.data.phase, token: row.data.token, escrow: row.data.escrow, completedCount: row.data.completedCount ?? 0 });
+  async function businesses(wallet) {
+    check(role(wallet), "ROLE_DENIED", 403);
+    const rows = (await pool.query("SELECT id,data FROM mf_mvp_usdc.state ORDER BY id")).rows;
+    const complete = rows.length > 0 && rows.every(r => r.data.phase === "SETTLED");
+    return { businesses: rows.map(summary), canCreate: role(wallet) === "owner" && complete && rows.length < 10,
+      disabledReason: role(wallet) !== "owner" ? "OWNER_REQUIRED" : !complete ? "ACTIVE_BUSINESS_EXISTS" : rows.length >= 10 ? "BUSINESS_LIMIT" : null };
+  }
+  async function createBusiness(wallet) {
+    requireRole(wallet, "owner");
+    // Lock the permanent first row to serialize creation across processes.
+    const firstStore = makeStore(pool);
+    return firstStore.transaction(async (c) => {
+      const rows = (await c.query("SELECT id,data FROM mf_mvp_usdc.state ORDER BY id FOR UPDATE")).rows;
+      check(rows.length && rows.every(r => r.data.phase === "SETTLED"), "ACTIVE_BUSINESS_EXISTS");
+      check(!(await c.query("SELECT 1 FROM mf_mvp_usdc.operations WHERE state IN ('PREPARED','SEND_UNKNOWN','HASH_BOUND') LIMIT 1")).rowCount, "PENDING_OPERATION_EXISTS");
+      check(rows.length < 10, "BUSINESS_LIMIT");
+      const first = rows[0].data, previous = rows.at(-1);
+      check(first.token === policy.token && first.escrow && first.termsHash, "ESCROW_REQUIRED");
+      const id = String(Number(previous.id) + 1);
+      check(/^[1-9][0-9]{0,8}$/.test(id), "BUSINESS_LIMIT");
+      const data = { phase: "READY", token: first.token, escrow: first.escrow, termsHash: first.termsHash, completedCount: rows.length };
+      await c.query("INSERT INTO mf_mvp_usdc.state(id,data) VALUES($1,$2::jsonb)", [id, json(data)]);
+      await baseEvent(c, "BUSINESS_CREATED", null, id);
+      return { business: summary({id,data}) };
+    });
+  }
   const role = (wallet) =>
     Object.entries({
       owner: policy.owner,
@@ -76,21 +112,20 @@ export function makeService({
     check(o && o.wallet === wallet, "OPERATION_NOT_FOUND", 404);
     return o;
   };
-  let currencyCache, currencyPending;
   async function currencyStatus(state) {
-    if (currencyCache && Date.now() - currencyCache.at < 30000) return currencyCache.value;
-    if (!currencyPending) currencyPending = chain.currency(state).then(value => {
-      currencyCache = { at: Date.now(), value }; return value;
-    }).finally(() => { currencyPending = null; });
-    return currencyPending;
+    if (currencyState.cache && Date.now() - currencyState.cache.at < 30000) return currencyState.cache.value;
+    if (!currencyState.pending) currencyState.pending = chain.currency(state).then(value => {
+      currencyState.cache = { at: Date.now(), value }; return value;
+    }).finally(() => { currencyState.pending = null; });
+    return currencyState.pending;
   }
   async function setup(wallet) {
     check(role(wallet), "ROLE_DENIED", 403);
     const s = (await store.read()).data;
     const ops = (
       await pool.query(
-        "SELECT * FROM mf_mvp_usdc.operations WHERE wallet=$1 ORDER BY nonce",
-        [wallet],
+        "SELECT * FROM mf_mvp_usdc.operations WHERE wallet=$1 AND business_id=$2 ORDER BY nonce",
+        [wallet, businessId],
       )
     ).rows;
     let settleEnabled = false,
@@ -104,6 +139,7 @@ export function makeService({
       Object.keys(prerequisites).find((k) => prerequisites[k] === s.phase) ||
       null;
     return {
+      businessId,
       currency: await currencyStatus(s),
       role: role(wallet),
       settleEnabled,
@@ -155,8 +191,8 @@ export function makeService({
     const immutable = await chain.build(action, state, opId, clock());
     return store.transaction(async (c, row) => {
       const prior = (
-        await c.query("SELECT * FROM mf_mvp_usdc.operations WHERE action=$1", [
-          action,
+        await c.query("SELECT * FROM mf_mvp_usdc.operations WHERE action=$1 AND business_id=$2", [
+          action, businessId,
         ])
       ).rows[0];
       if (prior) return dto(prior);
@@ -187,13 +223,14 @@ export function makeService({
       }
       const inserted = (
         await c.query(
-          `INSERT INTO mf_mvp_usdc.operations(id,action,wallet,nonce,immutable,state) VALUES($1,$2,$3,$4,$5::jsonb,'PREPARED') RETURNING *`,
+          `INSERT INTO mf_mvp_usdc.operations(id,action,wallet,nonce,immutable,state,business_id) VALUES($1,$2,$3,$4,$5::jsonb,'PREPARED',$6) RETURNING *`,
           [
             id,
             action,
             wallet,
             BigInt(immutable.transaction.nonce).toString(),
             json(immutable),
+            businessId,
           ],
         )
       ).rows[0];
@@ -309,6 +346,7 @@ export function makeService({
     }
     requireRole(wallet, "owner");
     return store.transaction(async (c, row) => {
+      check(["READY", "APPROVED"].includes(row.data.phase), "QUOTE_UNAVAILABLE");
       check(row.data.escrow, "ESCROW_REQUIRED");
       if (
         row.data.quote &&
@@ -316,7 +354,7 @@ export function makeService({
       ) {
         check(
           !(
-            await c.query("SELECT 1 FROM mf_mvp_usdc.operations WHERE action='fund'")
+            await c.query("SELECT 1 FROM mf_mvp_usdc.operations WHERE action='fund' AND business_id=$1", [businessId])
           ).rowCount,
           "FUND_ALREADY_PREPARED",
         );
@@ -348,6 +386,7 @@ export function makeService({
     check(/^0x[0-9a-fA-F]{130}$/.test(signature), "INVALID_SIGNATURE", 422);
     const snapshot = await store.read(),
       s = snapshot.data;
+    check(["READY", "APPROVED"].includes(s.phase), "QUOTE_UNAVAILABLE");
     check(
       s.quote && Number(s.quote.message.deadline) > clock(),
       "QUOTE_EXPIRED",
@@ -463,7 +502,7 @@ export function makeService({
         row.data.phase === "ISSUED" &&
           !(
             await c.query(
-              "SELECT 1 FROM mf_mvp_usdc.operations WHERE action='redeem'",
+              "SELECT 1 FROM mf_mvp_usdc.operations WHERE action='redeem' AND business_id=$1", [businessId],
             )
           ).rowCount,
         "REDEEM_ALREADY_PREPARED",
@@ -518,6 +557,8 @@ export function makeService({
     });
   }
   const methods = {
+    businesses,
+    createBusiness,
     setup,
     prepare,
     attempt,
@@ -538,6 +579,7 @@ export function makeService({
     chain,
     policy,
     role,
+    forBusiness: id => makeService({ pool, rpc, pepper, policy, clock, currencyState, businessId: id }),
     ...Object.fromEntries(
       Object.entries(methods).map(([name, fn]) => [
         name,

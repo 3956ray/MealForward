@@ -7,6 +7,12 @@ const ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const HOST='aws-0-ap-southeast-2.pooler.supabase.com';
 const PROJECT='ketfrukrcuosrqynnsay';
 const assets=new Map([
+ ['/mvp/product.html','text/html; charset=utf-8'],
+ ['/mvp/product-recipient.html','text/html; charset=utf-8'],
+ ['/mvp/product.mjs','text/javascript; charset=utf-8'],
+ ['/mvp/product-recipient.mjs','text/javascript; charset=utf-8'],
+ ['/mvp/product-original.css','text/css; charset=utf-8'],
+ ['/mvp/product.css','text/css; charset=utf-8'],
  ['/mvp/setup.html','text/html; charset=utf-8'],
  ['/mvp/merchant.html','text/html; charset=utf-8'],
  ['/mvp/recipient.html','text/html; charset=utf-8'],
@@ -64,7 +70,7 @@ export async function startMvpRuntime({env=process.env,load=()=>import('./mvp/ht
    }
    const file=files.get(url.pathname);
    if(!file||!['GET','HEAD'].includes(req.method)){json(res,404,'MVP_NOT_FOUND');return true}
-   res.writeHead(200,{...headers,'Content-Type':file.type,'Content-Length':file.bytes.length,...(url.pathname==='/mvp/merchant.html'?{'Permissions-Policy':'camera=(self),microphone=(),geolocation=()'}:{})});
+   res.writeHead(200,{...headers,'Content-Type':file.type,'Content-Length':file.bytes.length,...(['/mvp/merchant.html','/mvp/product.html'].includes(url.pathname)?{'Permissions-Policy':'camera=(self),microphone=(),geolocation=()'}:{})});
    res.end(req.method==='HEAD'?undefined:file.bytes);return true;
   },
   async close(){await app?.close?.();await pool?.end()}

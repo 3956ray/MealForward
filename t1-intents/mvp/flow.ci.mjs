@@ -9,7 +9,7 @@ import { createServer as createHttpServer } from "node:http";
 import { makeLocalMvpHttp } from "./http.mjs";
 import { makeService } from "./service.mjs";
 import { Interface, keccak256 } from "ethers";
-import { POLICY } from "./chain.mjs";
+import { POLICY, makeChain, escrowInterface } from "./chain.mjs";
 import { verifyRuntime, hash } from "./store.mjs";
 const connectionString = process.env.MVP_TEST_DATABASE_URL;
 assert(
@@ -45,6 +45,7 @@ try {
       "",
     );
   await admin.query(migration);
+  await admin.query(readFileSync(new URL("../supabase/migrations/20261029090000_mvp_sequential_businesses.sql", import.meta.url), "utf8"));
   pool = new pg.Pool({
     connectionString: target.href,
     options: "-c role=mf_mvp_usdc_runtime",
@@ -107,7 +108,7 @@ try {
   await admin.query("UPDATE mf_mvp_usdc.state SET data=$1::jsonb WHERE id=1", [JSON.stringify({ phase: "TOKEN_READY", token: policy.token })]);
   const rpc = { send: local };
   let time = Math.floor(Date.now() / 1000);
-  const service = makeService({
+  let service = makeService({
     pool,
     rpc,
     policy,
@@ -128,7 +129,7 @@ try {
     writesEnabled: true,
     clock: () => time,
   });
-  function client() {
+  function client(prefix = "") {
     const jar = {};
     let csrf;
     return {
@@ -137,7 +138,7 @@ try {
         return csrf;
       },
       async request(path, body, extra = {}) {
-        const response = await fetch(origin + "/v1/mvp" + path, {
+        const response = await fetch(origin + "/v1/mvp" + prefix + path, {
           method: body === undefined ? "GET" : "POST",
           headers: {
             origin,
@@ -187,6 +188,7 @@ try {
     401,
   );
   const merchantSession = hash(ownerClient.jar["__Host-mf_mvp_usdc_session"]);
+  let maxReceiptCalls = 0;
   async function execute(action, wallet, body = {}) {
     const op = await service.prepare(action, wallet, merchantSession, body);
     const again = await service.prepare(action, wallet, merchantSession, body);
@@ -218,7 +220,9 @@ try {
       service.bind(op.id, wallet, "0x" + "e".repeat(64)),
       /HASH_IMMUTABLE/,
     );
+    const beforeReceipt = rpcId;
     const confirmed = await service.reconcile(op.id, wallet);
+    maxReceiptCalls = Math.max(maxReceiptCalls, rpcId - beforeReceipt);
     assert.equal(confirmed.state, "CONFIRMED", action);
     return confirmed;
   }
@@ -298,6 +302,69 @@ try {
   time += 180;
   await execute("settle", policy.owner);
   assert.equal((await service.setup(policy.owner)).state.phase, "SETTLED");
+  const firstService = service;
+  const firstState = await firstService.store.read();
+  const firstOperations = (await admin.query("SELECT * FROM mf_mvp_usdc.operations WHERE business_id='1' ORDER BY id")).rows;
+  await assert.rejects(service.createBusiness(policy.donor), /OWNER_REQUIRED|ROLE_REQUIRED|ROLE_DENIED/);
+  const creations = await Promise.all([ownerClient.request("/businesses", {}), ownerClient.request("/businesses", {})]);
+  assert.deepEqual(creations.map(r => r.status).sort(), [200, 409], "one concurrent business creation wins");
+  const created = creations.find(r => r.status === 200).body;
+  assert.equal(created.business.id, "2");
+  service = firstService.forBusiness("2");
+  await assert.rejects(firstService.createBusiness(policy.owner), /ACTIVE_BUSINESS_EXISTS/);
+  assert.equal((await service.store.read()).data.escrow, firstState.data.escrow);
+  const draft2 = await service.quote(policy.owner, true);
+  assert.notEqual(draft2.typedData.message.quoteId, draft.typedData.message.quoteId);
+  const signature2 = await local("eth_signTypedData_v4", [policy.owner, JSON.stringify({ ...draft2.typedData,
+    types: { ...draft2.typedData.types, EIP712Domain: signed.types.EIP712Domain } })]);
+  await service.signQuote(policy.owner, signature2);
+  // Synthetic token fixture has a fixed 7-token supply: recycle the first
+  // payout to provision the next donation without deploying another asset.
+  await local("eth_sendTransaction", [{ from: policy.owner, to: policy.token,
+    data: new Interface(tokenArtifact.abi).encodeFunctionData("transfer", [policy.donor, 7000000n]) }]);
+  await local("anvil_mine", ["0x40"]);
+  await execute("approve", policy.donor);
+  const secondFund = await execute("fund", policy.donor);
+  assert.equal((await ownerClient.request("/operations/" + secondFund.id)).status, 404);
+  assert.equal((await ownerClient.request("/businesses/1/operations/" + secondFund.id)).status, 404);
+  const funded2 = (await service.store.read()).data;
+  const chain = makeChain(rpc, policy);
+  await assert.rejects(chain.build("issue", { ...funded2, unitSeq: 0 }, "0x" + "a".repeat(64), time), /CANDIDATE_CHANGED/);
+  await assert.rejects(chain.build("issue", { ...funded2, quote: firstState.data.quote }, "0x" + "a".repeat(64), time), /BUSINESS_UNIT_MISMATCH/);
+  const fundRow = (await admin.query("SELECT * FROM mf_mvp_usdc.operations WHERE id=$1", [secondFund.id])).rows[0];
+  const corruptAccounting = makeChain({ send: async (method, params) => {
+    if (method === "eth_call" && params[0].data === escrowInterface.encodeFunctionData("getAccounting"))
+      return escrowInterface.encodeFunctionResult("getAccounting", [[2n, 14000000n, [2n,0n,0n,0n,0n], [14000000n,0n,0n,0n,0n], 14000000n]]);
+    return local(method, params);
+  } }, policy);
+  await assert.rejects(corruptAccounting.receipt(fundRow, funded2), /ACCOUNTING_MISMATCH/);
+  await assert.rejects(service.prepare("issue", policy.donor, merchantSession), /ROLE_REQUIRED|ROLE_DENIED|WRONG_ROLE/);
+  await execute("issue", policy.issuer);
+  const secondState = await service.store.read();
+  assert.equal(secondState.data.unitSeq, 1);
+  assert.notEqual(secondState.data.voucherId, firstState.data.voucherId);
+  await assert.rejects(service.exchange(invite.token), /INVITE_EXPIRED/);
+  const invite2 = await service.invite(policy.issuer);
+  const recipient2 = client("/businesses/2");
+  await recipient2.ok("/recipient/exchange", { token: invite2.token });
+  const legacyRecipient = client();
+  Object.assign(legacyRecipient.jar, recipient2.jar);
+  assert.equal((await legacyRecipient.request("/recipient/voucher")).status, 401);
+  const display2 = await recipient2.ok("/recipient/display", {});
+  assert.notEqual((await ownerClient.request("/merchant/check", { code: display2.code })).status, 200);
+  assert.notEqual((await ownerClient.request("/businesses/2/merchant/check", { code: "invalid" })).status, 200);
+  const checked2 = await ownerClient.ok("/businesses/2/merchant/check", { qrToken: display2.qrToken });
+  await execute("redeem", policy.owner, { checkToken: checked2.checkToken });
+  await assert.rejects(service.prepare("settle", policy.owner, merchantSession), /SETTLEMENT_WAIT/);
+  await local("evm_increaseTime", [180]);
+  await local("anvil_mine", ["0x1"]);
+  time += 180;
+  await execute("settle", policy.owner);
+  assert.equal((await service.setup(policy.owner)).state.phase, "SETTLED");
+  assert.deepEqual(await firstService.store.read(), firstState, "original state remains immutable across next business");
+  assert.deepEqual((await admin.query("SELECT * FROM mf_mvp_usdc.operations WHERE business_id='1' ORDER BY id")).rows,
+    firstOperations, "original operation evidence preserved");
+
   await assert.rejects(
     pool.query("UPDATE mf_mvp_usdc.events SET kind=kind"),
     /permission denied/,
@@ -306,8 +373,10 @@ try {
     pool.query("DELETE FROM mf_mvp_usdc.operations"),
     /permission denied/,
   );
+  assert(maxReceiptCalls + 8 * 3 < 80, "receipt RPC budget holds through tenth sequential business");
+  console.log(`Receipt RPC maximum observed: ${maxReceiptCalls}; tenth-business upper bound: ${maxReceiptCalls + 8 * 3}`);
   console.log(
-    "PASS: disposable PG + Anvil deployment, quote, approve, fund, issue, private invite/display refresh, merchant redeem, 180s settle, concurrent attempt and immutable audit",
+    "PASS: two sequential businesses sharing one escrow, preserved first record, isolation + disposable PG + Anvil deployment, quote, approve, fund, issue, private invite/display refresh, merchant redeem, 180s settle, concurrent attempt and immutable audit",
   );
 } finally {
   if (httpServer) await new Promise((r) => httpServer.close(r));

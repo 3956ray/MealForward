@@ -50,6 +50,12 @@ function readSaved() {
 }
 export function App({
   merchant = false,
+  product = false,
+  expectedRole = null,
+  businessId = "1",
+  onSession = () => {},
+  onProgress = () => {},
+  shell: PageShell = Shell,
   walletFactory = createMvpWallet,
   api = request,
   decodeQr = jsQR,
@@ -79,7 +85,12 @@ export function App({
     video = useRef(null),
     stream = useRef(null),
     frame = useRef(null),
-    pendingScan = useRef(null);
+    pendingScan = useRef(null),
+    transactionPanel = useRef(null);
+  useEffect(() => { onSession(session); }, [session]);
+  useEffect(() => {
+    if (op?.state === "PREPARED") transactionPanel.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [op?.id, op?.state]);
   function stopCamera() {
     cancelAnimationFrame(frame.current);
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -99,6 +110,8 @@ export function App({
     setOp(null);
     setObserved(null);
     setInvite("");
+    setCode("");
+    setHash("");
   }
   useEffect(() => {
     let alive = true;
@@ -175,6 +188,7 @@ export function App({
     setStatus(publicStatus);
     setupRef.current = data;
     setSetup(data);
+    onProgress(data);
     const active = data.operations.find(pending);
     setOp(active || null);
     if (active && !background) {
@@ -316,7 +330,7 @@ export function App({
     const s = sessionRef.current, r = revision.current;
     const value = await post("/issuer/invite", rotate ? { rotate: true } : {});
     assertContext(r, s);
-    setInvite(location.origin + "/mvp/recipient.html#" + value.token);
+    setInvite(location.origin + (product ? "/mvp/product-recipient.html#businessId=" + businessId + "&token=" + encodeURIComponent(value.token) : "/mvp/recipient.html#" + value.token));
     await refresh();
   }
   async function checkCode(body) {
@@ -385,9 +399,9 @@ export function App({
     action = setup?.allowedAction,
     active = pending(op),
     writes = status?.enabled && status?.writesEnabled,
-    rightPage = merchant
-      ? ["redeem", "settle"].includes(action)
-      : !["redeem", "settle"].includes(action),
+    rightPage = (!expectedRole || session?.role === expectedRole) && (merchant
+      ? (product ? ["escrow", "redeem", "settle"] : ["redeem", "settle"]).includes(action)
+      : !["redeem", "settle"].includes(action)),
     checkValid = check && Number(check.expiresAt) * 1000 > now,
     walletReady = !!selected,
     wait =
@@ -408,8 +422,8 @@ export function App({
     (action !== "fund" || setup.quote?.verified)
   );
   return (
-    <Shell page={merchant ? "merchant" : "setup"}>
-      <section className="hero">
+    <PageShell page={merchant ? "merchant" : "setup"}>
+      <section className={product ? "page-intro product-intro" : "hero"}>
         <div>
           <p className="eyebrow">一份餐 · 一份关怀</p>
           <h1>{merchant ? "让善意，在这里交接。" : "让下一餐，有着落。"}</h1>
@@ -419,12 +433,11 @@ export function App({
               : "从一份支持出发，连接机构、领取者与暖心餐馆。"}
           </p>
         </div>
-        <div className="meal-art" aria-hidden="true">
-          ♨<span>一份热餐</span>
-        </div>
+        {!product && <div className="meal-art" aria-hidden="true">♨<span>一份热餐</span></div>}
       </section>
       <Steps phase={phase} />
       <Notice busy={busy} error={error} />
+      {expectedRole && session && session.role !== expectedRole ? <p className="notice">当前为{roles[session.role]}，此工作台需要{roles[expectedRole]}。请切换对应钱包并重新登录。</p> : null}
       <div className="grid">
         <section className="card">
           <p className="eyebrow">01 · 身份与连接</p>
@@ -525,11 +538,11 @@ export function App({
                 </p>
               ) : null}
               {!merchant && ["ISSUED", "HANDED_OVER"].includes(phase) ? (
-                <a className="button secondary" href="/mvp/merchant.html">
+                <a className="button secondary" href={product ? "#businessId=" + businessId + "&role=owner" : "/mvp/merchant.html"}>
                   前往商家工作台 →
                 </a>
               ) : null}
-              {session.role === "owner" &&
+              {session.role === "owner" && (!expectedRole || expectedRole === "owner") &&
               ["READY", "APPROVED"].includes(phase) ? (
                 <div className="subcard">
                   <strong>店主确认本餐报价</strong>
@@ -640,7 +653,7 @@ export function App({
                   )}
                 </>
               ) : null}
-              {session.role === "issuer" && phase === "ISSUED" ? (
+              {session.role === "issuer" && (!expectedRole || expectedRole === "issuer") && phase === "ISSUED" ? (
                 <div className="subcard">
                   <h3>交给领取者的私密链接</h3>
                   <button
@@ -698,7 +711,7 @@ export function App({
         </section>
       </div>
       {active ? (
-        <section className="card recovery">
+        <section className="card recovery" ref={transactionPanel} tabIndex={-1}>
           <p className="eyebrow">03 · 原交易与恢复</p>
           <h2>
             {labels[op.action]} ·{" "}
@@ -728,7 +741,7 @@ export function App({
                 <dd>{Number(op.transaction.nonce)}</dd>
               </dl>
               <button
-                disabled={busy || !walletReady || !writes}
+                disabled={busy || !walletReady || !writes || (expectedRole && session?.role !== expectedRole)}
                 onClick={() => run(send)}
               >
                 本人打开钱包，发送这笔{labels[op.action]}交易
@@ -784,10 +797,10 @@ export function App({
           ) : null}
         </section>
       ) : null}
-    </Shell>
+    </PageShell>
   );
 }
-if (document.getElementById("root"))
+if (document.getElementById("root") && !location.pathname.includes("product"))
   createRoot(document.getElementById("root")).render(
     <App merchant={location.pathname.endsWith("merchant.html")} />,
   );

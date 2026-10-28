@@ -119,8 +119,13 @@ function makeHttp({
   }
   async function handle(req, res) {
     try {
-      const u = new URL(req.url, origin),
-        path = u.pathname.slice("/v1/mvp".length);
+      const u = new URL(req.url, origin);
+      let path = u.pathname.slice("/v1/mvp".length);
+      const scoped = path.match(/^\/businesses\/([1-9][0-9]{0,8})(\/.*)$/);
+      const selected = scoped ? service.forBusiness(scoped[1]) : service;
+      if (scoped) path = scoped[2];
+      else if (path.startsWith("/businesses/")) check(false, "NOT_FOUND", 404);
+      if (scoped && (path.startsWith("/auth/") || path.startsWith("/identity/") || ["/me", "/status", "/businesses"].includes(path))) check(false, "NOT_FOUND", 404);
       check(
         req.headers.host === new URL(origin).host &&
           !u.search &&
@@ -181,7 +186,7 @@ function makeHttp({
           "INVALID_REQUEST",
           422,
         );
-        const { session, ...result } = await service.exchange(body.token);
+        const { session, ...result } = await selected.exchange(body.token);
         return send(res, 200, result, {
           "Set-Cookie": cookie(
             "__Host-mf_mvp_usdc_recipient",
@@ -198,7 +203,7 @@ function makeHttp({
         );
         const sh = hash(recipientRaw);
         if (path === "/recipient/voucher" && req.method === "GET")
-          return send(res, 200, await service.recipientView(sh));
+          return send(res, 200, await selected.recipientView(sh));
         if (path === "/recipient/display" && req.method === "POST") {
           check(
             exact(body, []) && typeof req.headers["x-mvp-usdc-csrf"] === "string",
@@ -208,7 +213,7 @@ function makeHttp({
           return send(
             res,
             200,
-            await service.display(sh, hash(req.headers["x-mvp-usdc-csrf"])),
+            await selected.display(sh, hash(req.headers["x-mvp-usdc-csrf"])),
           );
         }
         check(false, "NOT_FOUND", 404);
@@ -243,17 +248,23 @@ function makeHttp({
         );
         return send(res, 200, { wallet, role: service.role(wallet), csrf });
       }
+      if (path === "/businesses" && req.method === "GET")
+        return send(res, 200, await service.businesses(wallet));
+      if (path === "/businesses" && req.method === "POST") {
+        check(exact(body, []), "INVALID_REQUEST", 422);
+        return send(res, 200, await service.createBusiness(wallet));
+      }
       if (path === "/setup" && req.method === "GET")
-        return send(res, 200, await service.setup(wallet));
+        return send(res, 200, await selected.setup(wallet));
       if (path === "/quote" && req.method === "GET")
-        return send(res, 200, await service.quote(wallet));
+        return send(res, 200, await selected.quote(wallet));
       if (path === "/quote" && req.method === "POST") {
         check(exact(body, []), "INVALID_REQUEST", 422);
-        return send(res, 200, await service.quote(wallet, true));
+        return send(res, 200, await selected.quote(wallet, true));
       }
       if (path === "/quote/verify" && req.method === "POST") {
         check(exact(body, ["signature"]), "INVALID_REQUEST", 422);
-        return send(res, 200, await service.signQuote(wallet, body.signature));
+        return send(res, 200, await selected.signQuote(wallet, body.signature));
       }
       if (routes[path] && req.method === "POST") {
         check(
@@ -267,7 +278,7 @@ function makeHttp({
         return send(
           res,
           200,
-          await service.prepare(routes[path], wallet, sh, body),
+          await selected.prepare(routes[path], wallet, sh, body),
         );
       }
       const match = path.match(
@@ -276,7 +287,7 @@ function makeHttp({
       if (match) {
         const [, id, action] = match;
         if (!action && req.method === "GET")
-          return send(res, 200, await service.operation(id, wallet));
+          return send(res, 200, await selected.operation(id, wallet));
         if (req.method === "POST") {
           check(
             exact(body, action === "hash" ? ["txHash"] : []),
@@ -291,7 +302,7 @@ function makeHttp({
           return send(
             res,
             200,
-            await service[action === "hash" ? "bind" : action](
+            await selected[action === "hash" ? "bind" : action](
               id,
               wallet,
               body.txHash,
@@ -308,7 +319,7 @@ function makeHttp({
         return send(
           res,
           200,
-          await service.invite(wallet, body.rotate === true),
+          await selected.invite(wallet, body.rotate === true),
         );
       }
       if (path === "/merchant/check" && req.method === "POST") {
@@ -322,7 +333,7 @@ function makeHttp({
           "INVALID_REQUEST",
           422,
         );
-        return send(res, 200, await service.merchantCheck(wallet, sh, body));
+        return send(res, 200, await selected.merchantCheck(wallet, sh, body));
       }
       check(false, "NOT_FOUND", 404);
     } catch (e) {

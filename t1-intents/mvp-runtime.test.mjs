@@ -14,9 +14,11 @@ test('configuration rejects other roles, projects, weak pepper and ambiguous fla
 test('MVP startup failure is contained, never exposes raw error or falls through',async()=>{
  let ended=0;const app=await startMvpRuntime({env,poolFactory:()=>({end:async()=>{ended++}}),verify:async()=>{throw Error('secret-dsn')}});assert.equal(app.ready,false);const r=res();assert.equal(await app.handle(req('/v1/mvp/status'),r),true);assert.equal(r.status,503);assert.ok(!r.body.includes('secret'));assert.equal(await app.handle(req('/t1f-phase8.html'),res()),false);assert.equal(ended,1);await app.close();
 });
-test('only merchant page allows camera; no arbitrary file path or foreign host',async()=>{
+test('only merchant-capable pages allow camera; no arbitrary file path or foreign host',async()=>{
  let closed=0;const app=await startMvpRuntime({env,poolFactory:()=>({end:async()=>{closed++}}),verify:async()=>{},load:async()=>({makeMvpHttp:()=>({handle:async(_q,r)=>{r.writeHead(200,{});r.end('{}')}})}),read:async()=>Buffer.from('test')});
  const m=res();await app.handle(req('/mvp/merchant.html'),m);assert.match(m.headers['Permissions-Policy'],/camera=\(self\)/);
+ const product=res();await app.handle(req('/mvp/product.html'),product);assert.equal(product.status,200);assert.match(product.headers['Permissions-Policy'],/camera=\(self\)/);
+ const privatePage=res();await app.handle(req('/mvp/product-recipient.html'),privatePage);assert.equal(privatePage.status,200);assert.match(privatePage.headers['Permissions-Policy'],/camera=\(\)/);
  const p=res();await app.handle(req('/mvp/recipient.html'),p);assert.match(p.headers['Permissions-Policy'],/camera=\(\)/);
  const bad=res();await app.handle({...req('/v1/mvp/status'),headers:{host:'evil.example'}},bad);assert.equal(bad.status,403);
  const unknown=res();await app.handle(req('/mvp/unknown'),unknown);assert.equal(unknown.status,404);await app.close();assert.equal(closed,1);

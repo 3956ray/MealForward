@@ -8,15 +8,17 @@ const request=(path,init={})=>fetch(origin+path,{redirect:'error',signal:AbortSi
 const result=await request('/v1/mvp/status');assert.equal(result.status,200);
 const status=await result.json();assert.equal(status.chainId,10143);assert.equal(status.testOnly,true);assert.equal(status.enabled,true);
 assert.deepEqual(status.currency,{address:'0x534b2f3a21130d7a60830c2df862319e593943a3',symbol:'USDC',decimals:6,existing:true});
-const names=['setup.html','merchant.html','recipient.html','app.mjs','recipient.mjs','style.css','THIRD_PARTY_NOTICES.txt'];
+const names=['product.html','product-recipient.html','product.mjs','product-recipient.mjs','product-original.css','product.css','setup.html','merchant.html','recipient.html','app.mjs','recipient.mjs','style.css','THIRD_PARTY_NOTICES.txt'];
 for(const name of names){
  const response=await request('/mvp/'+name);assert.equal(response.status,200);
  const actual=Buffer.from(await response.arrayBuffer()),expected=await readFile(new URL('./public/mvp/'+name,import.meta.url));
  assert.equal(digest(actual),digest(expected));
  assert.equal(response.headers.get('referrer-policy'),'no-referrer');
- if(name==='merchant.html')assert.match(response.headers.get('permissions-policy'),/camera=\(self\)/);
+ if(['merchant.html','product.html'].includes(name))assert.match(response.headers.get('permissions-policy'),/camera=\(self\)/);
 }
 assert.equal((await request('/v1/mvp/setup')).status,401);
+assert.equal((await request('/v1/mvp/businesses')).status,401);
+assert.equal((await request('/v1/mvp/businesses/1/setup')).status,401);
 assert.equal((await request('/v1/mvp/recipient/voucher')).status,401);
 const anon=await request('/v1/mvp/setup/escrow/prepare',{method:'POST',headers:{Origin:origin,'content-type':'application/json'},body:'{}'});
 assert.equal(anon.status,status.writesEnabled?401:503);

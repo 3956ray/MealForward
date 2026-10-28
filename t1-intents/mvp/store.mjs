@@ -43,15 +43,20 @@ export async function verifyRuntime(pool) {
     "MUTABLE_AUDIT",
     503,
   );
+  check((await pool.query("SELECT max(version) AS version FROM mf_mvp_usdc.schema_version")).rows[0]?.version === 2, "SCHEMA_VERSION_REQUIRED", 503);
   await pool.query("SELECT revision FROM mf_mvp_usdc.state WHERE id=1");
   return true;
 }
-export function makeStore(pool) {
-  const read = async () =>
-    (await pool.query("SELECT revision,data FROM mf_mvp_usdc.state WHERE id=1"))
-      .rows[0];
+export function makeStore(pool, businessId = "1") {
+  check(/^[1-9][0-9]{0,8}$/.test(businessId), "INVALID_BUSINESS", 422);
+  const read = async () => {
+    const row = (await pool.query("SELECT revision,data FROM mf_mvp_usdc.state WHERE id=$1", [businessId])).rows[0];
+    check(row, "BUSINESS_NOT_FOUND", 404);
+    return row;
+  };
   return {
     pool,
+    businessId,
     read,
     async transaction(fn) {
       const c = await pool.connect();
@@ -59,14 +64,14 @@ export function makeStore(pool) {
         await c.query("BEGIN");
         const row = (
           await c.query(
-            "SELECT revision,data FROM mf_mvp_usdc.state WHERE id=1 FOR UPDATE",
+            "SELECT revision,data FROM mf_mvp_usdc.state WHERE id=$1 FOR UPDATE", [businessId],
           )
         ).rows[0];
-        check(row, "STORE_UNAVAILABLE", 503);
+        check(row, "BUSINESS_NOT_FOUND", 404);
         const out = await fn(c, row);
         await c.query(
-          "UPDATE mf_mvp_usdc.state SET data=$1::jsonb,revision=revision+CASE WHEN data IS DISTINCT FROM $1::jsonb THEN 1 ELSE 0 END WHERE id=1",
-          [json(row.data)],
+          "UPDATE mf_mvp_usdc.state SET data=$1::jsonb,revision=revision+1 WHERE id=$2 AND data IS DISTINCT FROM $1::jsonb",
+          [json(row.data), businessId],
         );
         await c.query("COMMIT");
         return out;
@@ -79,13 +84,13 @@ export function makeStore(pool) {
     },
     async operation(id) {
       return (
-        await pool.query("SELECT * FROM mf_mvp_usdc.operations WHERE id=$1", [id])
+        await pool.query("SELECT * FROM mf_mvp_usdc.operations WHERE id=$1 AND business_id=$2", [id, businessId])
       ).rows[0];
     },
     async action(action) {
       return (
-        await pool.query("SELECT * FROM mf_mvp_usdc.operations WHERE action=$1", [
-          action,
+        await pool.query("SELECT * FROM mf_mvp_usdc.operations WHERE action=$1 AND business_id=$2", [
+          action, businessId,
         ])
       ).rows[0];
     },
@@ -98,10 +103,11 @@ export function makeStore(pool) {
     },
   };
 }
-export async function event(c, kind, id = null) {
-  await c.query("INSERT INTO mf_mvp_usdc.events(kind,operation_id) VALUES($1,$2)", [
+export async function event(c, kind, id = null, businessId = "1") {
+  await c.query("INSERT INTO mf_mvp_usdc.events(kind,operation_id,business_id) VALUES($1,$2,$3)", [
     kind,
     id,
+    businessId,
   ]);
 }
 export async function putCredential(c, kind, key, data) {

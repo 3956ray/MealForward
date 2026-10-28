@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import { QRCodeSVG } from "qrcode.react";
 import { Shell, Steps, Notice, request, phases } from "./shared.jsx";
 import { captureFragment, displayRemaining } from "./recipient-state.mjs";
-const privateToken = captureFragment(window);
-export function Recipient({ token = privateToken, api = request }) {
+const privateToken = location.pathname.includes("product") ? "" : captureFragment(window);
+export function Recipient({ token = privateToken, api = request, shell: PageShell = Shell }) {
   const secret = useRef(token),
     working = useRef(false),
     ready = useRef(false),
@@ -16,8 +16,7 @@ export function Recipient({ token = privateToken, api = request }) {
   async function run(fn, quiet = false) {
     if (working.current) return;
     working.current = true;
-    setBusy(true);
-    setError("");
+    if (!quiet) { setBusy(true); setError(""); }
     try {
       await fn();
     } catch {
@@ -27,7 +26,7 @@ export function Recipient({ token = privateToken, api = request }) {
         );
     } finally {
       working.current = false;
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   }
   async function refresh() {
@@ -41,7 +40,7 @@ export function Recipient({ token = privateToken, api = request }) {
     const tick = setInterval(() => setNow(Date.now()), 1000),
       poll = setInterval(() => {
         if (!working.current && ready.current && !secret.current)
-          void run(refresh);
+          void run(refresh, true);
       }, 8000);
     return () => {
       clearInterval(tick);
@@ -51,7 +50,7 @@ export function Recipient({ token = privateToken, api = request }) {
   const remaining = displayRemaining(display, now),
     show = display && remaining > 0 && voucher?.state === "ISSUED";
   return (
-    <Shell page="recipient">
+    <PageShell page="recipient">
       <section className="hero">
         <div>
           <p className="eyebrow">为你留好的一餐</p>
@@ -171,8 +170,8 @@ export function Recipient({ token = privateToken, api = request }) {
           私密链接只用于领取。无需连接钱包或支付费用。
         </p>
       </div>
-    </Shell>
+    </PageShell>
   );
 }
-if (document.getElementById("root"))
+if (document.getElementById("root") && !location.pathname.includes("product"))
   createRoot(document.getElementById("root")).render(<Recipient />);

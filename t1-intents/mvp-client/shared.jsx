@@ -52,6 +52,10 @@ export async function request(path, { body, csrf, bootstrap = false } = {}) {
   }
 }
 const errors = {
+  BUSINESS_LIMIT: "已达到当前测试服务的业务数量上限。已有记录仍可查看。",
+  ACTIVE_BUSINESS_EXISTS: "上一笔业务尚未结算，请先完成原业务，再创建下一笔。",
+  BUSINESS_NOT_FOUND: "未找到这笔业务，请从业务记录中重新选择。",
+  LOGIN_REQUIRED: "请先连接对应角色的钱包并签名登录。",
   SWITCH_TO_MONAD_TESTNET:
     "请在钱包中切换到 Monad Testnet（10143），然后重新登录。",
   ROLE_DENIED: "当前账户不是本轮固定角色，请切换至对应钱包。",

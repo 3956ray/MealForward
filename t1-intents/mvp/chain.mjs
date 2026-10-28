@@ -149,12 +149,37 @@ export function makeChain(rpc, policy = POLICY) {
       donorBalance: balance.toString(), sufficientFunds: balance >= AMOUNT,
       observedAt: Math.floor(Date.now() / 1000) };
   }
+  const completed = (state) => {
+    const count = state.completedCount ?? 0;
+    check(Number.isInteger(count) && count >= 0 && count < 10, "INVALID_COMPLETED_COUNT");
+    return BigInt(count);
+  };
+  const batchIdFor = (state) => keccak256(AbiCoder.defaultAbiCoder().encode(
+    ["uint256", "address", "bytes32"],
+    [policy.chainId, state.escrow, state.quote.message.quoteId],
+  ));
+  async function ownedUnit(state, seq, block = "latest") {
+    const unit = await call(state.escrow, "getUnit", [seq], block);
+    const batchId = batchIdFor(state);
+    const batch = await call(state.escrow, "getBatch", [batchId], block);
+    const used = await call(state.escrow, "quoteUses", [state.quote.message.quoteId], block);
+    check(eq(unit.batchId, batchId) && eq(used.batchId, batchId) &&
+      (!state.batchId || eq(state.batchId, batchId)) &&
+      eq(unit.payer, policy.donor) && eq(batch.payer, policy.donor) &&
+      eq(unit.mealId, policy.mealId) && eq(batch.mealId, policy.mealId) &&
+      eq(unit.termsHash, state.termsHash) && eq(batch.termsHash, state.termsHash) &&
+      unit.version === 1n && batch.version === 1n && unit.localIndex === 0n &&
+      unit.unitPrice === AMOUNT && batch.unitPrice === AMOUNT &&
+      batch.quantity === 1n && batch.firstUnit === BigInt(seq) && batch.refundedMask === 0n,
+      "BUSINESS_UNIT_MISMATCH");
+    return unit;
+  }
   async function build(action, state, id, now) {
     await network();
     let from = policy.owner,
       to,
       data,
-      deadline;
+      deadline, unitSeq, generation, batchId;
     await currency(state, ["approve", "fund"].includes(action));
     if (action === "escrow") {
       check(state.token, "TOKEN_REQUIRED");
@@ -199,18 +224,23 @@ export function makeChain(rpc, policy = POLICY) {
       const c = await call(to, "nextCandidate", [policy.mealId]);
       check(
         c.available &&
-          c.unitSeq === 0n &&
-          c.nextGeneration === 1n &&
+          c.unitSeq === completed(state) &&
+          (state.unitSeq === undefined || c.unitSeq === BigInt(state.unitSeq)) &&
           !c.needsExpiry &&
           eq(c.termsHash, state.termsHash),
         "CANDIDATE_CHANGED",
       );
+      const unit = await ownedUnit(state, c.unitSeq);
+      check(unit.bucket === 0n && unit.generation + 1n === c.nextGeneration, "CANDIDATE_CHANGED");
+      unitSeq = Number(c.unitSeq);
+      generation = Number(c.nextGeneration);
+      batchId = unit.batchId;
       deadline = now + 1800;
       data = escrowInterface.encodeFunctionData("issue", [
         id,
         policy.mealId,
-        0,
-        1,
+        unitSeq,
+        generation,
         state.termsHash,
         deadline,
       ]);
@@ -221,7 +251,7 @@ export function makeChain(rpc, policy = POLICY) {
       data = escrowInterface.encodeFunctionData("redeem", [
         id,
         state.voucherId,
-        1,
+        state.generation ?? 1,
         deadline,
       ]);
     } else if (action === "settle") {
@@ -234,7 +264,7 @@ export function makeChain(rpc, policy = POLICY) {
       data = escrowInterface.encodeFunctionData("settle", [
         id,
         state.voucherId,
-        1,
+        state.generation ?? 1,
       ]);
     } else check(false, "INVALID_ACTION", 422);
     const nonce = await send("eth_getTransactionCount", [from, "pending"]);
@@ -247,7 +277,7 @@ export function makeChain(rpc, policy = POLICY) {
       chainId: hex(policy.chainId),
     };
     await simulate(transaction);
-    return { transaction, deadline, opId: id };
+    return { transaction, deadline, opId: id, ...(unitSeq !== undefined ? { unitSeq, generation, batchId } : {}) };
   }
   async function identity(op, txHash) {
     await network();
@@ -379,13 +409,17 @@ export function makeChain(rpc, policy = POLICY) {
       const expectedBucket = { fund: 0, issue: 1, redeem: 2, settle: 3 }[
         action
       ];
+      const prior = completed(state);
+      const seq = BigInt(state.unitSeq ?? op.immutable.unitSeq ?? prior);
+      const generation = BigInt(state.generation ?? op.immutable.generation ?? 1);
+      check(seq === prior, "BUSINESS_UNIT_MISMATCH");
       const acc = await call(state.escrow, "getAccounting", [], block);
       check(
-        acc.fundedUnits === 1n &&
-          acc.fundedAmount === AMOUNT &&
-          acc.counts.every((x, i) => x === (i === expectedBucket ? 1n : 0n)) &&
+        acc.fundedUnits === prior + 1n &&
+          acc.fundedAmount === AMOUNT * (prior + 1n) &&
+          acc.counts.every((x, i) => x === (i === 3 ? prior : 0n) + (i === expectedBucket ? 1n : 0n)) &&
           acc.amounts.every(
-            (x, i) => x === (i === expectedBucket ? AMOUNT : 0n),
+            (x, i) => x === AMOUNT * ((i === 3 ? prior : 0n) + (i === expectedBucket ? 1n : 0n)),
           ) &&
           acc.liability === (action === "settle" ? 0n : AMOUNT),
         "ACCOUNTING_MISMATCH",
@@ -395,6 +429,21 @@ export function makeChain(rpc, policy = POLICY) {
           (action === "settle" ? 0n : AMOUNT),
         "ESCROW_BALANCE_MISMATCH",
       );
+      // Sequential businesses retain every settled unit; aggregate totals alone
+      // must not hide an unrelated, expired, or replaced historical voucher.
+      for (let i = 0n; i < prior; i++) {
+        const previousUnit = await call(state.escrow, "getUnit", [i], block);
+        const previous = await call(state.escrow, "getVoucher", [previousUnit.voucherId], block);
+        const settlement = await call(state.escrow, "getOperation", [previous.settleId], block);
+        check(previousUnit.bucket === 3n && previousUnit.unitPrice === AMOUNT &&
+          eq(previousUnit.payer, policy.donor) && eq(previousUnit.mealId, policy.mealId) &&
+          eq(previousUnit.termsHash, state.termsHash) && previous.unitSeq === i &&
+          previous.generation === previousUnit.generation && !previous.expired &&
+          eq(previous.issuer, policy.issuer) && settlement.kind === 9n &&
+          eq(settlement.caller, policy.owner) && BigInt(settlement.result) === AMOUNT &&
+          settlement.executedAt >= previous.settlementAvailableAt,
+          "PREVIOUS_BUSINESS_MISMATCH");
+      }
       if (action === "fund") {
         const e = one(state.escrow, escrowInterface, "Funded");
         check(
@@ -405,7 +454,7 @@ export function makeChain(rpc, policy = POLICY) {
             e.quantity === 1n &&
             e.amount === AMOUNT &&
             e.unitPrice === AMOUNT &&
-            e.firstUnit === 0n,
+            e.firstUnit === seq && eq(e.batchId, batchIdFor(state)),
           "FUND_EVENT_MISMATCH",
         );
         const t = one(state.token, tokenInterface, "Transfer");
@@ -415,7 +464,8 @@ export function makeChain(rpc, policy = POLICY) {
             t.value === AMOUNT,
           "FUND_TRANSFER_MISMATCH",
         );
-        patch = { phase: "FUNDED" };
+        await ownedUnit(state, seq, block);
+        patch = { phase: "FUNDED", unitSeq: Number(seq), batchId: e.batchId };
       } else {
         const voucherId =
           state.voucherId ||
@@ -426,17 +476,18 @@ export function makeChain(rpc, policy = POLICY) {
                 digest("MealForwardVoucherV1"),
                 policy.chainId,
                 state.escrow,
-                0,
-                1,
+                seq,
+                generation,
               ],
             ),
           );
         const v = await call(state.escrow, "getVoucher", [voucherId], block);
-        const unit = await call(state.escrow, "getUnit", [0], block);
+        const unit = await ownedUnit(state, seq, block);
         check(
           eq(unit.voucherId, voucherId) &&
             unit.bucket === BigInt(expectedBucket) &&
-            v.generation === 1n &&
+            v.unitSeq === seq && unit.generation === generation &&
+            v.generation === generation &&
             eq(v.termsHash, state.termsHash) &&
             !v.expired,
           "VOUCHER_MISMATCH",
@@ -466,8 +517,8 @@ export function makeChain(rpc, policy = POLICY) {
           const e = one(state.escrow, escrowInterface, "Issued");
           check(
             eq(e.voucherId, voucherId) &&
-              e.generation === 1n &&
-              e.unitSeq === 0n &&
+              e.generation === generation &&
+              e.unitSeq === seq &&
               eq(e.termsHash, state.termsHash) &&
               e.issuedAt === v.issuedAt &&
               e.expiresAt === v.expiresAt &&
@@ -478,6 +529,7 @@ export function makeChain(rpc, policy = POLICY) {
           patch = {
             phase: "ISSUED",
             voucherId,
+            unitSeq: Number(seq), generation: Number(generation),
             expiresAt: Number(v.expiresAt),
           };
         }

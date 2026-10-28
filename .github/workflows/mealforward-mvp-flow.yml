@@ -3,6 +3,7 @@ on:
   push:
     branches: [codex/mealforward-t1f-phase6-release-review-20261026]
     paths:
+      - 'src/styles.css'
       - 'mvp-contracts/**'
       - 't1-intents/mvp/**'
       - 't1-intents/mvp-client/**'
