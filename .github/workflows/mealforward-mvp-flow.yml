@@ -57,7 +57,7 @@ jobs:
           git diff --exit-code -- mvp-contracts/artifacts
       - name: Install service and client dependencies
         run: |
-          npm ci --prefix t1-intents --ignore-scripts --no-audit --no-fund
+          npm install --prefix t1-intents --ignore-scripts --no-audit --no-fund --package-lock=false
           npm ci --prefix t1-intents/mvp-client --ignore-scripts --no-audit --no-fund
       - name: Focused backend, integration and browser tests
         run: |
