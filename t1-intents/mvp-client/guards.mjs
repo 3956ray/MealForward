@@ -37,8 +37,10 @@ export function validateQuote(t, state) {
 }
 export function validateTransaction(tx, action, account, state) {
   const target = action === "approve" ? state.token : state.escrow;
-  const creation = ["token", "escrow"].includes(action);
+  const creation = action === "escrow";
   if (
+    !["escrow", "approve", "fund", "issue", "redeem", "settle"].includes(action) ||
+    !same(state.token, "0x534b2f3a21130d7a60830c2df862319e593943a3") ||
     !same(tx?.from, account) ||
     Number(tx.chainId) !== 10143 ||
     !/^0x[0-9a-f]{2,}$/i.test(tx.data || "") ||

@@ -19,7 +19,11 @@ const cookie = (name,value,age) => `${name}=${value}; Path=/; Secure; HttpOnly; 
 
 export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=newToken,newId=randomUUID,namespace=null}) {
   const ns=namespace;
-  if(ns && (ns.prefix!=='/v1/mvp' || ns.sessionCookie!=='__Host-mf_mvp_session' || ns.preCookie!=='__Host-mf_mvp_pre' || ns.csrfHeader!=='x-mvp-csrf' || ns.bootstrapHeader!=='x-mvp-bootstrap'))throw Error('INVALID_AUTH_NAMESPACE');
+  // Only complete, explicitly supported namespace tuples are accepted.
+  if(ns && !['mvp','mvp_usdc'].some(id=>{
+    const header=id.replaceAll('_','-');
+    return ns.prefix==='/v1/mvp' && ns.sessionCookie==='__Host-mf_'+id+'_session' && ns.preCookie==='__Host-mf_'+id+'_pre' && ns.csrfHeader==='x-'+header+'-csrf' && ns.bootstrapHeader==='x-'+header+'-bootstrap';
+  }))throw Error('INVALID_AUTH_NAMESPACE');
   const sessionCookie=ns?.sessionCookie||SESSION_COOKIE,preCookie=ns?.preCookie||PRE_COOKIE,csrfHeader=ns?.csrfHeader||'x-c1-csrf',bootstrapHeader=ns?.bootstrapHeader||'x-c1-bootstrap';
   if (typeof origin !== 'string' || !/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) && !/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)) throw Error('PINNED_PUBLIC_ORIGIN_REQUIRED');
   const expectedHost = new URL(origin).host;

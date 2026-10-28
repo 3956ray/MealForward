@@ -10,7 +10,7 @@ import {
 } from "ethers";
 import { check } from "./store.mjs";
 export const artifacts = Object.fromEntries(
-  ["MvpTestToken", "MvpStoreEscrow"].map((n) => [
+  ["MvpStoreEscrow"].map((n) => [
     n,
     JSON.parse(
       readFileSync(
@@ -19,12 +19,14 @@ export const artifacts = Object.fromEntries(
     ),
   ]),
 );
-export const tokenInterface = new Interface(artifacts.MvpTestToken.abi),
+export const tokenInterface = new Interface(["function decimals() view returns (uint8)", "function balanceOf(address) view returns (uint256)", "function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)", "event Transfer(address indexed from,address indexed to,uint256 value)", "event Approval(address indexed owner,address indexed spender,uint256 value)"]),
   escrowInterface = new Interface(artifacts.MvpStoreEscrow.abi);
 export const AMOUNT = 7000000n;
 const digest = (x) => keccak256(toUtf8Bytes(x));
 export const POLICY = Object.freeze({
   chainId: 10143,
+  token: "0x534b2f3a21130d7a60830c2df862319e593943a3",
+  tokenCodeHash: "0x96215e6049ed615cdc22fea7701e85458a8e51a2df3e7d45e8f9fa1d521b5a78",
   owner: "0xc4f8a468f10d5f98dcff3282516125e97f26433b",
   donor: "0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952",
   issuer: "0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3",
@@ -133,17 +135,28 @@ export function makeChain(rpc, policy = POLICY) {
       "latest",
     ]);
   }
+  async function currency(state, requireFunds = false) {
+    check(eq(state.token, policy.token), "WRONG_TOKEN");
+    await network();
+    const block = await send("eth_getBlockByNumber", ["finalized", false]);
+    check(block?.number, "FINALIZED_BLOCK_REQUIRED");
+    const code = await send("eth_getCode", [policy.token, block.number]);
+    check(code !== "0x" && eq(keccak256(code), policy.tokenCodeHash), "TOKEN_CODE_MISMATCH");
+    check(await call(policy.token, "decimals", [], block.number, true) === 6n, "TOKEN_DECIMALS_MISMATCH");
+    const balance = await call(policy.token, "balanceOf", [policy.donor], block.number, true);
+    if (requireFunds) check(balance >= AMOUNT, "INSUFFICIENT_USDC");
+    return { address: policy.token, symbol: "USDC", decimals: 6, existing: true,
+      donorBalance: balance.toString(), sufficientFunds: balance >= AMOUNT,
+      observedAt: Math.floor(Date.now() / 1000) };
+  }
   async function build(action, state, id, now) {
     await network();
     let from = policy.owner,
       to,
       data,
       deadline;
-    if (action === "token") {
-      data =
-        artifacts.MvpTestToken.bytecode +
-        tokenInterface.encodeDeploy([policy.donor]).slice(2);
-    } else if (action === "escrow") {
+    await currency(state, ["approve", "fund"].includes(action));
+    if (action === "escrow") {
       check(state.token, "TOKEN_REQUIRED");
       data =
         artifacts.MvpStoreEscrow.bytecode +
@@ -297,14 +310,14 @@ export function makeChain(rpc, policy = POLICY) {
       check(list.length === 1, "EXPECTED_EVENT_MISSING");
       return list[0];
     };
-    if (action === "token" || action === "escrow") {
+    if (action === "escrow") {
       const address = getCreateAddress({
         from: op.wallet,
         nonce: op.nonce,
       }).toLowerCase();
       check(eq(r.contractAddress, address), "CREATION_ADDRESS_MISMATCH");
       const a =
-        artifacts[action === "token" ? "MvpTestToken" : "MvpStoreEscrow"];
+        artifacts.MvpStoreEscrow;
       const code = await send("eth_getCode", [address, block]);
       check(
         code.length === a.deployedBytecode.length &&
@@ -312,23 +325,7 @@ export function makeChain(rpc, policy = POLICY) {
             normalizedRuntime(a.deployedBytecode, a),
         "RUNTIME_MISMATCH",
       );
-      if (action === "token") {
-        check(
-          (await call(address, "decimals", [], block, true)) === 6n &&
-            (await call(address, "totalSupply", [], block, true)) === AMOUNT &&
-            (await call(address, "balanceOf", [policy.donor], block, true)) ===
-              AMOUNT,
-          "TOKEN_STATE_MISMATCH",
-        );
-        const e = one(address, tokenInterface, "Transfer");
-        check(
-          eq(e.from, "0x" + "0".repeat(40)) &&
-            eq(e.to, policy.donor) &&
-            e.value === AMOUNT,
-          "TOKEN_MINT_MISMATCH",
-        );
-        patch = { token: address, phase: "TOKEN_READY" };
-      } else {
+      {
         for (const [getter, value] of Object.entries({
           asset: state.token,
           storeId: policy.storeId,
@@ -546,5 +543,5 @@ export function makeChain(rpc, policy = POLICY) {
     check(eq(again?.hash, r.blockHash), "RECEIPT_NOT_CANONICAL");
     return { state: "CONFIRMED", receipt: evidence, patch };
   }
-  return { build, identity, receipt, call, network, send };
+  return { build, identity, receipt, call, network, send, currency };
 }

@@ -8,6 +8,7 @@ import pg from "pg";
 import { createServer as createHttpServer } from "node:http";
 import { makeLocalMvpHttp } from "./http.mjs";
 import { makeService } from "./service.mjs";
+import { Interface, keccak256 } from "ethers";
 import { POLICY } from "./chain.mjs";
 import { verifyRuntime, hash } from "./store.mjs";
 const connectionString = process.env.MVP_TEST_DATABASE_URL;
@@ -30,23 +31,23 @@ try {
   admin = new pg.Pool({ connectionString: target.href });
   let migration = readFileSync(
     new URL(
-      "../supabase/migrations/20261028114053_mvp_business_flow.sql",
+      "../supabase/migrations/20261028140155_mvp_existing_usdc.sql",
       import.meta.url,
     ),
     "utf8",
   );
   if (
-    (await root.query("SELECT 1 FROM pg_roles WHERE rolname='mf_mvp_runtime'"))
+    (await root.query("SELECT 1 FROM pg_roles WHERE rolname='mf_mvp_usdc_runtime'"))
       .rowCount
   )
     migration = migration.replace(
-      "CREATE ROLE mf_mvp_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;",
+      "CREATE ROLE mf_mvp_usdc_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;",
       "",
     );
   await admin.query(migration);
   pool = new pg.Pool({
     connectionString: target.href,
-    options: "-c role=mf_mvp_runtime",
+    options: "-c role=mf_mvp_usdc_runtime",
   });
   await verifyRuntime(pool);
   const port = await new Promise((resolve) => {
@@ -96,6 +97,14 @@ try {
     donor: accounts[1],
     issuer: accounts[2],
   };
+  // Fixture provisioning is outside the six-transaction business flow.
+  const tokenArtifact = JSON.parse(readFileSync(new URL("../../mvp-contracts/artifacts/MvpTestToken.json", import.meta.url)));
+  const deployment = await local("eth_sendTransaction", [{from: policy.owner, data: tokenArtifact.bytecode + new Interface(tokenArtifact.abi).encodeDeploy([policy.donor]).slice(2)}]);
+  await local("anvil_mine", ["0x40"]);
+  const tokenReceipt = await local("eth_getTransactionReceipt", [deployment]);
+  policy.token = tokenReceipt.contractAddress;
+  policy.tokenCodeHash = keccak256(await local("eth_getCode", [policy.token, "latest"]));
+  await admin.query("UPDATE mf_mvp_usdc.state SET data=$1::jsonb WHERE id=1", [JSON.stringify({ phase: "TOKEN_READY", token: policy.token })]);
   const rpc = { send: local };
   let time = Math.floor(Date.now() / 1000);
   const service = makeService({
@@ -134,8 +143,8 @@ try {
             origin,
             "content-type": "application/json",
             "sec-fetch-site": "same-origin",
-            "x-mvp-bootstrap": "1",
-            ...(csrf ? { "x-mvp-csrf": csrf } : {}),
+            "x-mvp-usdc-bootstrap": "1",
+            ...(csrf ? { "x-mvp-usdc-csrf": csrf } : {}),
             cookie: Object.entries(jar)
               .map(([k, v]) => k + "=" + v)
               .join("; "),
@@ -173,11 +182,11 @@ try {
   });
   assert.equal((await ownerClient.ok("/setup")).role, "owner");
   assert.equal(
-    (await ownerClient.request("/quote", {}, { "x-mvp-csrf": "x".repeat(43) }))
+    (await ownerClient.request("/quote", {}, { "x-mvp-usdc-csrf": "x".repeat(43) }))
       .status,
     401,
   );
-  const merchantSession = hash(ownerClient.jar["__Host-mf_mvp_session"]);
+  const merchantSession = hash(ownerClient.jar["__Host-mf_mvp_usdc_session"]);
   async function execute(action, wallet, body = {}) {
     const op = await service.prepare(action, wallet, merchantSession, body);
     const again = await service.prepare(action, wallet, merchantSession, body);
@@ -213,7 +222,8 @@ try {
     assert.equal(confirmed.state, "CONFIRMED", action);
     return confirmed;
   }
-  await execute("token", policy.owner);
+  assert.equal((await ownerClient.request("/setup/token/prepare", {})).status, 404);
+  await assert.rejects(service.prepare("token", policy.owner), /INVALID_ACTION/);
   await execute("escrow", policy.owner);
   const draft = await service.quote(policy.owner, true);
   const signed = {
@@ -289,11 +299,11 @@ try {
   await execute("settle", policy.owner);
   assert.equal((await service.setup(policy.owner)).state.phase, "SETTLED");
   await assert.rejects(
-    pool.query("UPDATE mf_mvp.events SET kind=kind"),
+    pool.query("UPDATE mf_mvp_usdc.events SET kind=kind"),
     /permission denied/,
   );
   await assert.rejects(
-    pool.query("DELETE FROM mf_mvp.operations"),
+    pool.query("DELETE FROM mf_mvp_usdc.operations"),
     /permission denied/,
   );
   console.log(

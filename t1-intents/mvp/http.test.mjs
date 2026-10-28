@@ -93,7 +93,7 @@ test("write kill and missing session fail closed, recovery still authenticated",
 });
 test("raw database exceptions not disclosed", async () => {
   const r = await request(app({ enabled: true }), "/setup", {
-    headers: { cookie: "__Host-mf_mvp_session=" + "x".repeat(43) },
+    headers: { cookie: "__Host-mf_mvp_usdc_session=" + "x".repeat(43) },
   });
   assert.equal(r.status, 503);
   assert.deepEqual(r.content, { error: "SERVICE_UNAVAILABLE" });
@@ -116,10 +116,10 @@ test("legacy auth defaults and MVP namespace use isolated cookies and headers", 
   const store = { async createPre() {} };
   const ns = {
     prefix: "/v1/mvp",
-    sessionCookie: "__Host-mf_mvp_session",
-    preCookie: "__Host-mf_mvp_pre",
-    csrfHeader: "x-mvp-csrf",
-    bootstrapHeader: "x-mvp-bootstrap",
+    sessionCookie: "__Host-mf_mvp_usdc_session",
+    preCookie: "__Host-mf_mvp_usdc_pre",
+    csrfHeader: "x-mvp-usdc-csrf",
+    bootstrapHeader: "x-mvp-usdc-bootstrap",
   };
   async function pre(namespace, path, header) {
     let result;
@@ -151,11 +151,39 @@ test("legacy auth defaults and MVP namespace use isolated cookies and headers", 
   const old = await pre(null, "/v1/auth/pre-session", "x-c1-bootstrap");
   assert.equal(old.status, 200);
   assert.match(old.headers["Set-Cookie"], /^__Host-mcpay_c1_pre=/);
-  const isolated = await pre(ns, "/v1/mvp/auth/pre-session", "x-mvp-bootstrap");
+  const isolated = await pre(ns, "/v1/mvp/auth/pre-session", "x-mvp-usdc-bootstrap");
   assert.equal(isolated.status, 200);
-  assert.match(isolated.headers["Set-Cookie"], /^__Host-mf_mvp_pre=/);
+  assert.match(isolated.headers["Set-Cookie"], /^__Host-mf_mvp_usdc_pre=/);
   assert.equal(
     (await pre(ns, "/v1/mvp/auth/pre-session", "x-c1-bootstrap")).status,
     422,
   );
+});
+
+test("removed token route and currency status identify existing USDC", async () => {
+  const a = app({enabled:true,writesEnabled:true});
+  const s = await request(a, "/status");
+  assert.deepEqual(s.content.currency, {address:"0x534b2f3a21130d7a60830c2df862319e593943a3",symbol:"USDC",decimals:6,existing:true});
+  assert.equal((await request(a, "/setup/token/prepare", {method:"POST",headers:{origin}})).status,404);
+});
+test("currency rejects wrong address, runtime, decimals and insufficient funds before building writes", async () => {
+  const {makeChain,POLICY,tokenInterface} = await import("./chain.mjs");
+  const {keccak256} = await import("ethers");
+  let decimals=6n, balance=84500000n;
+  const policy={...POLICY,tokenCodeHash:keccak256("0x1234")};
+  const chain=makeChain({async send(method,params){
+    if(method==="eth_chainId") return "0x279f";
+    if(method==="eth_getBlockByNumber") return {number:"0x10"};
+    if(method==="eth_getCode") return "0x1234";
+    if(method==="eth_call") { const fn=tokenInterface.parseTransaction({data:params[0].data});return tokenInterface.encodeFunctionResult(fn.name,[fn.name==="decimals"?decimals:balance]); }
+    throw Error("UNEXPECTED_RPC");
+  }},policy);
+  await assert.rejects(chain.currency({token:POLICY.owner}),/WRONG_TOKEN/);
+  assert.equal((await chain.currency({token:policy.token})).donorBalance,"84500000");
+  policy.tokenCodeHash=keccak256("0x12");
+  await assert.rejects(chain.currency({token:policy.token}),/TOKEN_CODE_MISMATCH/);
+  policy.tokenCodeHash=keccak256("0x1234");decimals=18n;
+  await assert.rejects(chain.currency({token:policy.token}),/TOKEN_DECIMALS_MISMATCH/);
+  decimals=6n;balance=6999999n;
+  await assert.rejects(chain.build("approve",{token:policy.token},"0x",0),/INSUFFICIENT_USDC/);
 });

@@ -28,7 +28,7 @@ export function mvpConfig(env=process.env){
  if(enabled==='false')return {enabled:false,writesEnabled:false};
  if(env.PUBLIC_ORIGIN!==ORIGIN)fail();
  let db;try{db=new URL(env.MVP_DB_URL)}catch{fail()}
- if(!['postgres:','postgresql:'].includes(db.protocol)||db.hostname!==HOST||db.port!=='5432'||db.pathname!=='/postgres'||db.search||db.hash||db.username!=='mf_mvp_runtime.'+PROJECT||db.password.length<32)fail();
+ if(!['postgres:','postgresql:'].includes(db.protocol)||db.hostname!==HOST||db.port!=='5432'||db.pathname!=='/postgres'||db.search||db.hash||db.username!=='mf_mvp_usdc_runtime.'+PROJECT||db.password.length<32)fail();
  if(!/^[A-Za-z0-9_-]{43,128}$/.test(env.MVP_CODE_PEPPER??''))fail();
  return {enabled:true,writesEnabled:writes==='true',origin:ORIGIN,databaseUrl:env.MVP_DB_URL,pepper:env.MVP_CODE_PEPPER};
 }

@@ -7,10 +7,10 @@ import { POLICY, MEAL, AMOUNT } from "./chain.mjs";
 import { hash, token, check } from "./store.mjs";
 const namespace = {
   prefix: "/v1/mvp",
-  sessionCookie: "__Host-mf_mvp_session",
-  preCookie: "__Host-mf_mvp_pre",
-  csrfHeader: "x-mvp-csrf",
-  bootstrapHeader: "x-mvp-bootstrap",
+  sessionCookie: "__Host-mf_mvp_usdc_session",
+  preCookie: "__Host-mf_mvp_usdc_pre",
+  csrfHeader: "x-mvp-usdc-csrf",
+  bootstrapHeader: "x-mvp-usdc-bootstrap",
 };
 const cookie = (name, value, age) =>
   `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${age}`;
@@ -27,7 +27,6 @@ const exact = (body, keys) =>
   !Array.isArray(body) &&
   Object.keys(body).sort().join(",") === [...keys].sort().join(",");
 const routes = {
-  "/setup/token/prepare": "token",
   "/setup/escrow/prepare": "escrow",
   "/donor/approve/prepare": "approve",
   "/donor/fund/prepare": "fund",
@@ -141,6 +140,7 @@ function makeHttp({
           writesEnabled: enabled && writesEnabled,
           chainId: policy.chainId,
           testOnly: true,
+          currency: { address: policy.token, symbol: "USDC", decimals: 6, existing: true },
           roles: {
             owner: policy.owner,
             donor: policy.donor,
@@ -150,6 +150,7 @@ function makeHttp({
           amount: AMOUNT.toString(),
         });
       check(enabled, "MVP_DISABLED", 503);
+      if (path.startsWith("/setup/token")) check(false, "NOT_FOUND", 404);
       if (
         [
           "/auth/pre-session",
@@ -173,17 +174,17 @@ function makeHttp({
         check(writesEnabled, "WRITES_DISABLED", 503);
       const ck = cookies(req),
         sessionRaw = ck[namespace.sessionCookie],
-        recipientRaw = ck["__Host-mf_mvp_recipient"];
+        recipientRaw = ck["__Host-mf_mvp_usdc_recipient"];
       if (path === "/recipient/exchange" && req.method === "POST") {
         check(
-          exact(body, ["token"]) && req.headers["x-mvp-bootstrap"] === "1",
+          exact(body, ["token"]) && req.headers["x-mvp-usdc-bootstrap"] === "1",
           "INVALID_REQUEST",
           422,
         );
         const { session, ...result } = await service.exchange(body.token);
         return send(res, 200, result, {
           "Set-Cookie": cookie(
-            "__Host-mf_mvp_recipient",
+            "__Host-mf_mvp_usdc_recipient",
             session,
             result.expiresAt - clock(),
           ),
@@ -200,14 +201,14 @@ function makeHttp({
           return send(res, 200, await service.recipientView(sh));
         if (path === "/recipient/display" && req.method === "POST") {
           check(
-            exact(body, []) && typeof req.headers["x-mvp-csrf"] === "string",
+            exact(body, []) && typeof req.headers["x-mvp-usdc-csrf"] === "string",
             "CSRF",
             403,
           );
           return send(
             res,
             200,
-            await service.display(sh, hash(req.headers["x-mvp-csrf"])),
+            await service.display(sh, hash(req.headers["x-mvp-usdc-csrf"])),
           );
         }
         check(false, "NOT_FOUND", 404);
@@ -221,14 +222,14 @@ function makeHttp({
       let session;
       if (req.method === "POST") {
         check(
-          typeof req.headers["x-mvp-csrf"] === "string" &&
-            req.headers["x-mvp-csrf"].length === 43,
+          typeof req.headers["x-mvp-usdc-csrf"] === "string" &&
+            req.headers["x-mvp-usdc-csrf"].length === 43,
           "CSRF",
           403,
         );
         session = await authStore.getSessionWithCsrf(
           sh,
-          hash(req.headers["x-mvp-csrf"]),
+          hash(req.headers["x-mvp-usdc-csrf"]),
           clock(),
         );
       } else session = await authStore.getSession(sh, clock());
@@ -237,7 +238,7 @@ function makeHttp({
       if (path === "/me" && req.method === "GET") {
         const csrf = token();
         await pool.query(
-          "UPDATE mf_mvp.sessions SET csrf_hash=$2 WHERE token_hash=$1",
+          "UPDATE mf_mvp_usdc.sessions SET csrf_hash=$2 WHERE token_hash=$1",
           [sh, hash(csrf)],
         );
         return send(res, 200, { wallet, role: service.role(wallet), csrf });

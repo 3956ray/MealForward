@@ -1,15 +1,14 @@
 import React from "react";
 export const labels = {
-  token: "部署测试代币",
   escrow: "部署餐券合约",
-  approve: "授权 7 测试代币",
-  fund: "捐赠 7 测试代币",
+  approve: "授权 7 测试 USDC",
+  fund: "捐赠 7 测试 USDC",
   issue: "签发一张餐券",
   redeem: "确认交餐",
   settle: "结算测试餐款",
 };
 export const phases = {
-  EMPTY: "等待创建测试代币",
+  EMPTY: "等待读取已有测试 USDC",
   TOKEN_READY: "等待创建餐券合约",
   READY: "合约已就绪",
   APPROVED: "捐赠额度已授权",
@@ -34,8 +33,8 @@ export async function request(path, { body, csrf, bootstrap = false } = {}) {
       signal: controller.signal,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...(csrf ? { "x-mvp-csrf": csrf } : {}),
-        ...(bootstrap ? { "x-mvp-bootstrap": "1" } : {}),
+        ...(csrf ? { "x-mvp-usdc-csrf": csrf } : {}),
+        ...(bootstrap ? { "x-mvp-usdc-bootstrap": "1" } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -59,6 +58,7 @@ const errors = {
   REQUEST_TIMEOUT: "请求超时，结果尚未确认。请刷新进度；交易请仅恢复原哈希。",
   WALLET_CONTEXT_CHANGED: "钱包或网络发生变化，请重新登录后继续。",
   QUOTE_EXPIRED: "报价已过期，请由店主检查并明确重新生成。",
+  INSUFFICIENT_USDC: "支持者的测试 USDC 余额不足 7 USDC，请先补足已有币种余额。",
   RPC_BUSY: "链上查询繁忙，请稍后刷新原交易状态。",
 };
 export function errorText(e) {

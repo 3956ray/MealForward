@@ -75,7 +75,7 @@ export function Recipient({ token = privateToken, api = request }) {
               <p>全天供应 · 一人一份</p>
             </div>
             <b>
-              7 <small>测试代币</small>
+              7 <small>测试 USDC</small>
             </b>
           </div>
           {secret.current ? (

@@ -19,7 +19,6 @@ import {
   roles,
 } from "./shared.jsx";
 const paths = {
-  token: "/setup/token",
   escrow: "/setup/escrow",
   approve: "/donor/approve",
   fund: "/donor/fund",
@@ -31,7 +30,7 @@ const pending = (o) => o && o.state !== "CONFIRMED";
 function save(o, hash) {
   try {
     localStorage.setItem(
-      "mf-mvp-recovery-v1",
+      "mf-mvp-usdc-recovery-v2",
       JSON.stringify({
         id: o.id,
         action: o.action,
@@ -44,7 +43,7 @@ function save(o, hash) {
 }
 function readSaved() {
   try {
-    return JSON.parse(localStorage.getItem("mf-mvp-recovery-v1"));
+    return JSON.parse(localStorage.getItem("mf-mvp-usdc-recovery-v2"));
   } catch {
     return null;
   }
@@ -54,6 +53,7 @@ export function App({
   walletFactory = createMvpWallet,
   api = request,
   decodeQr = jsQR,
+  pollMs = 8000,
 }) {
   const [status, setStatus] = useState(null),
     [session, setSession] = useState(null),
@@ -72,6 +72,7 @@ export function App({
     [camera, setCamera] = useState(false);
   const wallet = useRef(null),
     revision = useRef(0),
+    actionEpoch = useRef(0),
     working = useRef(false),
     sessionRef = useRef(null),
     setupRef = useRef(null),
@@ -88,6 +89,7 @@ export function App({
   function invalidate() {
     stopCamera();
     revision.current++;
+    actionEpoch.current++;
     pendingScan.current = null;
     sessionRef.current = null;
     setSession(null);
@@ -138,6 +140,7 @@ export function App({
   async function run(fn) {
     if (working.current) return;
     working.current = true;
+    actionEpoch.current++;
     setBusy(true);
     setError("");
     try {
@@ -161,20 +164,20 @@ export function App({
       return;
     void run(() => checkCode({ qrToken: queued.token }));
   }
-  async function refresh(s = sessionRef.current) {
+  async function refresh(s = sessionRef.current, background = false, epoch = actionEpoch.current) {
     if (!s) return;
     const r = revision.current;
     const [data, publicStatus] = await Promise.all([
       api("/setup"),
       api("/status"),
     ]);
-    if (r !== revision.current || s !== sessionRef.current) return;
+    if (r !== revision.current || s !== sessionRef.current || epoch !== actionEpoch.current || (background && working.current)) return;
     setStatus(publicStatus);
     setupRef.current = data;
     setSetup(data);
     const active = data.operations.find(pending);
     setOp(active || null);
-    if (active) {
+    if (active && !background) {
       const saved = readSaved();
       setHash(
         active.txHash ||
@@ -185,19 +188,29 @@ export function App({
     }
   }
   useEffect(() => {
-    const id = setInterval(() => {
-      if (!working.current && sessionRef.current)
-        void run(async () => {
+    let stopped = false, timer, failures = 0;
+    async function poll() {
+      if (stopped) return;
+      if (!document.hidden && !working.current && sessionRef.current) {
+        const s = sessionRef.current, epoch = actionEpoch.current, r = revision.current;
+        try {
           const active = setupRef.current?.operations.find((o) =>
-            ["SEND_UNKNOWN", "HASH_BOUND"].includes(o.state),
-          );
+            ["SEND_UNKNOWN", "HASH_BOUND"].includes(o.state));
           if (active && (active.txHash || active.candidateHash))
-            await post("/operations/" + active.id + "/reconcile", {});
-          await refresh();
-        });
-    }, 8000);
-    return () => clearInterval(id);
-  }, []);
+            await post("/operations/" + active.id + "/reconcile", {}, s);
+          if (!stopped && epoch === actionEpoch.current && r === revision.current && s === sessionRef.current && !working.current)
+            await refresh(s, true, epoch);
+          failures = 0;
+        } catch {
+          // Preserve last confirmed progress, entered hashes and explicit-action errors.
+          failures = Math.min(failures + 1, 3);
+        }
+      }
+      if (!stopped) timer = setTimeout(poll, Math.min(pollMs * 2 ** failures, 60000));
+    }
+    timer = setTimeout(poll, pollMs);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [pollMs]);
   function assertContext(r, s) {
     if (r !== revision.current || s !== sessionRef.current)
       throw Error("WALLET_CONTEXT_CHANGED");
@@ -267,6 +280,7 @@ export function App({
     // Fail closed even when the attempt response is lost.
     setOp({ ...o, state: "SEND_UNKNOWN", transaction: undefined });
     const result = await post("/operations/" + o.id + "/attempt", {});
+    assertContext(r, s);
     setOp(result.operation);
     if (result.allowed !== true) throw Error("SEND_NOT_ALLOWED");
     const txHash = await wallet.current.sendTransaction(
@@ -299,7 +313,9 @@ export function App({
     await refresh(s);
   }
   async function inviteCreate(rotate = false) {
+    const s = sessionRef.current, r = revision.current;
     const value = await post("/issuer/invite", rotate ? { rotate: true } : {});
+    assertContext(r, s);
     setInvite(location.origin + "/mvp/recipient.html#" + value.token);
     await refresh();
   }
@@ -388,6 +404,7 @@ export function App({
     !active &&
     (action !== "redeem" || checkValid) &&
     (action !== "settle" || setup.settleEnabled) &&
+    (!["approve", "fund"].includes(action) || setup.currency?.sufficientFunds !== false) &&
     (action !== "fund" || setup.quote?.verified)
   );
   return (
@@ -483,9 +500,10 @@ export function App({
               <p>全天供应 · 一张餐券</p>
             </div>
             <b>
-              7 <small>测试代币</small>
+              7 <small>测试 USDC</small>
             </b>
           </div>
+          {setup?.currency ? <p className="muted">使用已有测试 USDC · 支持者余额 {Number(setup.currency.donorBalance) / 1000000} USDC{!setup.currency.sufficientFunds ? " · 余额不足 7 USDC，请先补足" : ""}</p> : null}
           {!writes ? (
             <p className="notice">
               服务暂未开放新的操作。已发送交易仍可恢复核对。
@@ -515,7 +533,7 @@ export function App({
               ["READY", "APPROVED"].includes(phase) ? (
                 <div className="subcard">
                   <strong>店主确认本餐报价</strong>
-                  <p>1 份 × 7 测试代币 · 30 分钟有效</p>
+                  <p>1 份 × 7 测试 USDC · 30 分钟有效</p>
                   <button
                     disabled={
                       busy ||
@@ -574,7 +592,7 @@ export function App({
                   {checkValid ? (
                     <p className="success">
                       餐券有效 · {check.meal} · 7
-                      测试代币。核对不代表已交餐，请在实际交餐后点击下方确认。
+                      测试 USDC。核对不代表已交餐，请在实际交餐后点击下方确认。
                     </p>
                   ) : check ? (
                     <p>核对凭证已过期，请重新核对。</p>
@@ -592,7 +610,7 @@ export function App({
               ) : null}
               {phase === "SETTLED" ? (
                 <p className="success">
-                  餐券流程完成，测试代币付款已核验。交餐状态来自商家声明，不代表独立核实了实际用餐。
+                  餐券流程完成，测试 USDC付款已核验。交餐状态来自商家声明，不代表独立核实了实际用餐。
                 </p>
               ) : null}
               {action && rightPage && !active ? (

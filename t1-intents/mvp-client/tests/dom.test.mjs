@@ -84,10 +84,10 @@ function factory({ onChange }) {
 const status = { enabled: true, writesEnabled: true };
 const session = { wallet: account, role: "owner", csrf: "test" };
 const setup = (phase = "EMPTY", operations = []) => ({
-  state: { phase },
+  state: { phase, token: "0x534b2f3a21130d7a60830c2df862319e593943a3" },
   operations,
-  nextAction: "token",
-  allowedAction: "token",
+  nextAction: "escrow",
+  allowedAction: "escrow",
   quote: null,
 });
 test("synthetic DOM login immediately refreshes setup; confirmed phase enables next step", async () => {
@@ -144,7 +144,7 @@ test("synthetic DOM reload PREPARED recovers transaction summary; UNKNOWN never 
   for (const state of ["PREPARED", "SEND_UNKNOWN"]) {
     const o = {
       id: "original",
-      action: "token",
+      action: "escrow",
       state,
       transaction:
         state === "PREPARED"
@@ -249,7 +249,7 @@ test("lost attempt response blocks resend and never invokes provider", async () 
     attempts = 0;
   const operation = {
     id: "original",
-    action: "token",
+    action: "escrow",
     state: "PREPARED",
     transaction: {
       from: account,
@@ -435,6 +435,75 @@ test("camera preserves first-frame and busy-refresh scans; context changes disca
     for (const k of ["readyState", "videoWidth", "videoHeight"])
       delete videoProto[k];
   }
+});
+test("silent background polling preserves buttons, entered recovery hash and explicit errors on failure", async () => {
+  Object.defineProperty(document, "hidden", {configurable:true,value:false});
+  let reads=0, fail=false;
+  const operation={id:"original",action:"escrow",state:"SEND_UNKNOWN"};
+  const api=async p=>{
+    if(p==="/status") return status;
+    if(p==="/me") return session;
+    if(p==="/setup") {reads++;if(fail) throw Error("RPC_BUSY");return setup("TOKEN_READY",[operation]);}
+    throw Error("RPC_BUSY");
+  };
+  await mount(App,{api,walletFactory:factory,pollMs:20});
+  try {
+    const input=document.querySelector('input[placeholder="0x…"]');
+    await act(async()=>{
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,"value").set.call(input,"0x12345");
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    await click("查询原交易确认结果");
+    const error=document.querySelector('[role="alert"]').textContent;
+    const button=document.querySelector("button.text-button");
+    fail=true;
+    await act(async()=>{await new Promise(r=>setTimeout(r,100));});
+    assert.ok(reads>=2);
+    assert.equal(input.value,"0x12345");
+    assert.equal(button.disabled,false);
+    assert.equal(document.querySelector('[role="alert"]').textContent,error);
+    assert.equal(document.body.textContent.includes("正在处理"),false);
+  } finally {await unmount();}
+});
+test("stale background response cannot overwrite an explicit refresh or changed wallet context; hidden polls suspend", async()=>{
+  Object.defineProperty(document,"hidden",{configurable:true,value:false});
+  let reads=0, resolveOld, change;
+  const api=async p=>{
+    if(p==="/status")return status;
+    if(p==="/me")return session;
+    if(p==="/setup") {reads++;if(reads===2)return new Promise(r=>resolveOld=r);return {...setup(reads>2?"READY":"TOKEN_READY"),nextAction:null,allowedAction:null};}
+  };
+  await mount(App,{api,pollMs:20,walletFactory:({onChange})=>{change=onChange;return factory({onChange});}});
+  try {
+    await act(async()=>{await new Promise(r=>setTimeout(r,30));});
+    assert.ok(resolveOld);
+    await click("刷新已确认进度");
+    await act(async()=>{resolveOld(setup("TOKEN_READY"));await Promise.resolve();});
+    assert.match(document.body.textContent,/合约已就绪/);
+    await act(async()=>{change();});
+    assert.match(document.body.textContent,/登录后继续/);
+    Object.defineProperty(document,"hidden",{configurable:true,value:true});
+    const count=reads;
+    await act(async()=>{await new Promise(r=>setTimeout(r,50));});
+    assert.equal(reads,count);
+  } finally {await unmount();Object.defineProperty(document,"hidden",{configurable:true,value:true});}
+});
+test("wallet change during pending background read discards prior session response", async()=>{
+  Object.defineProperty(document,"hidden",{configurable:true,value:false});
+  let reads=0, resolveOld, change;
+  const api=async p=>{
+    if(p==="/status")return status;
+    if(p==="/me")return session;
+    if(p==="/setup") {if(++reads===2)return new Promise(r=>resolveOld=r);return setup("TOKEN_READY");}
+  };
+  await mount(App,{api,pollMs:20,walletFactory:({onChange})=>{change=onChange;return factory({onChange});}});
+  try {
+    await act(async()=>{await new Promise(r=>setTimeout(r,30));});
+    assert.ok(resolveOld);
+    await act(async()=>{change();resolveOld(setup("SETTLED"));await Promise.resolve();});
+    assert.match(document.body.textContent,/登录后继续/);
+    assert.equal(document.body.textContent.includes("测试餐款已结算"),false);
+  } finally {await unmount();Object.defineProperty(document,"hidden",{configurable:true,value:true});}
 });
 test.after(async () => {
   dom.window.close();

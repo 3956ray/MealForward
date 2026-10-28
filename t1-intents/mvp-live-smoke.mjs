@@ -7,6 +7,7 @@ const digest=b=>createHash('sha256').update(b).digest('hex');
 const request=(path,init={})=>fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(45000),...init});
 const result=await request('/v1/mvp/status');assert.equal(result.status,200);
 const status=await result.json();assert.equal(status.chainId,10143);assert.equal(status.testOnly,true);assert.equal(status.enabled,true);
+assert.deepEqual(status.currency,{address:'0x534b2f3a21130d7a60830c2df862319e593943a3',symbol:'USDC',decimals:6,existing:true});
 const names=['setup.html','merchant.html','recipient.html','app.mjs','recipient.mjs','style.css','THIRD_PARTY_NOTICES.txt'];
 for(const name of names){
  const response=await request('/mvp/'+name);assert.equal(response.status,200);
@@ -23,4 +24,4 @@ const foreign=await request('/v1/mvp/setup/token/prepare',{method:'POST',headers
 assert.equal(foreign.status,403);
 const legacy=await request('/v1/t1f/phase8/status');assert.equal(legacy.status,200);
 const prior=await legacy.json();assert.equal(prior.operation?.stage,'ISSUED');
-console.log(JSON.stringify({status:'MVP_PUBLIC_READONLY_SMOKE_PASS',assets:names.length,chainId:status.chainId,writesEnabled:status.writesEnabled,legacyIssuedPreserved:true,walletActions:0}));
+console.log(JSON.stringify({status:'MVP_PUBLIC_READONLY_SMOKE_PASS',assets:names.length,chainId:status.chainId,writesEnabled:status.writesEnabled,legacyIssuedPreserved:true,walletActions:0,existingTestUsdc:status.currency.address}));

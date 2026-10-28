@@ -21,7 +21,6 @@ import {
   verifyQuote,
 } from "./chain.mjs";
 const prerequisites = {
-  token: "EMPTY",
   escrow: "TOKEN_READY",
   approve: "READY",
   fund: "APPROVED",
@@ -30,7 +29,6 @@ const prerequisites = {
   settle: "HANDED_OVER",
 };
 export const actionRole = {
-  token: "owner",
   escrow: "owner",
   approve: "donor",
   fund: "donor",
@@ -78,12 +76,20 @@ export function makeService({
     check(o && o.wallet === wallet, "OPERATION_NOT_FOUND", 404);
     return o;
   };
+  let currencyCache, currencyPending;
+  async function currencyStatus(state) {
+    if (currencyCache && Date.now() - currencyCache.at < 30000) return currencyCache.value;
+    if (!currencyPending) currencyPending = chain.currency(state).then(value => {
+      currencyCache = { at: Date.now(), value }; return value;
+    }).finally(() => { currencyPending = null; });
+    return currencyPending;
+  }
   async function setup(wallet) {
     check(role(wallet), "ROLE_DENIED", 403);
     const s = (await store.read()).data;
     const ops = (
       await pool.query(
-        "SELECT * FROM mf_mvp.operations WHERE wallet=$1 ORDER BY nonce",
+        "SELECT * FROM mf_mvp_usdc.operations WHERE wallet=$1 ORDER BY nonce",
         [wallet],
       )
     ).rows;
@@ -98,6 +104,7 @@ export function makeService({
       Object.keys(prerequisites).find((k) => prerequisites[k] === s.phase) ||
       null;
     return {
+      currency: await currencyStatus(s),
       role: role(wallet),
       settleEnabled,
       chainTime,
@@ -136,6 +143,7 @@ export function makeService({
     };
   }
   async function prepare(action, wallet, sessionHash, body = {}) {
+    check(Object.hasOwn(actionRole, action), "INVALID_ACTION", 422);
     requireRole(wallet, actionRole[action]);
     let existing = await store.action(action);
     if (existing) return dto(existing);
@@ -147,7 +155,7 @@ export function makeService({
     const immutable = await chain.build(action, state, opId, clock());
     return store.transaction(async (c, row) => {
       const prior = (
-        await c.query("SELECT * FROM mf_mvp.operations WHERE action=$1", [
+        await c.query("SELECT * FROM mf_mvp_usdc.operations WHERE action=$1", [
           action,
         ])
       ).rows[0];
@@ -179,7 +187,7 @@ export function makeService({
       }
       const inserted = (
         await c.query(
-          `INSERT INTO mf_mvp.operations(id,action,wallet,nonce,immutable,state) VALUES($1,$2,$3,$4,$5::jsonb,'PREPARED') RETURNING *`,
+          `INSERT INTO mf_mvp_usdc.operations(id,action,wallet,nonce,immutable,state) VALUES($1,$2,$3,$4,$5::jsonb,'PREPARED') RETURNING *`,
           [
             id,
             action,
@@ -196,7 +204,7 @@ export function makeService({
   async function attempt(id, wallet) {
     const original = await owned(id, wallet);
     check(original.state === "PREPARED", "ALREADY_ATTEMPTED");
-    await chain.network();
+    await chain.currency((await store.read()).data, ["approve", "fund"].includes(original.action));
     const pending = await chain.send("eth_getTransactionCount", [
       wallet,
       "pending",
@@ -205,7 +213,7 @@ export function makeService({
     return store.transaction(async (c) => {
       const o = (
         await c.query(
-          "SELECT * FROM mf_mvp.operations WHERE id=$1 FOR UPDATE",
+          "SELECT * FROM mf_mvp_usdc.operations WHERE id=$1 FOR UPDATE",
           [id],
         )
       ).rows[0];
@@ -216,7 +224,7 @@ export function makeService({
       );
       const r = (
         await c.query(
-          "UPDATE mf_mvp.operations SET state='SEND_UNKNOWN' WHERE id=$1 RETURNING *",
+          "UPDATE mf_mvp_usdc.operations SET state='SEND_UNKNOWN' WHERE id=$1 RETURNING *",
           [id],
         )
       ).rows[0];
@@ -232,13 +240,13 @@ export function makeService({
     await store.transaction(async (c) => {
       const r = (
         await c.query(
-          "SELECT * FROM mf_mvp.operations WHERE id=$1 FOR UPDATE",
+          "SELECT * FROM mf_mvp_usdc.operations WHERE id=$1 FOR UPDATE",
           [id],
         )
       ).rows[0];
       check(!r.tx_hash || r.tx_hash === txHash, "HASH_IMMUTABLE");
       await c.query(
-        "UPDATE mf_mvp.operations SET candidate_hash=$2 WHERE id=$1",
+        "UPDATE mf_mvp_usdc.operations SET candidate_hash=$2 WHERE id=$1",
         [id, txHash],
       );
     });
@@ -248,7 +256,7 @@ export function makeService({
     return store.transaction(async (c) => {
       const r = (
         await c.query(
-          "UPDATE mf_mvp.operations SET tx_hash=$2,candidate_hash=$2,state='HASH_BOUND' WHERE id=$1 AND state='SEND_UNKNOWN' RETURNING *",
+          "UPDATE mf_mvp_usdc.operations SET tx_hash=$2,candidate_hash=$2,state='HASH_BOUND' WHERE id=$1 AND state='SEND_UNKNOWN' RETURNING *",
           [id, txHash],
         )
       ).rows[0];
@@ -270,7 +278,7 @@ export function makeService({
     return store.transaction(async (c, row) => {
       const current = (
         await c.query(
-          "SELECT * FROM mf_mvp.operations WHERE id=$1 FOR UPDATE",
+          "SELECT * FROM mf_mvp_usdc.operations WHERE id=$1 FOR UPDATE",
           [id],
         )
       ).rows[0];
@@ -280,7 +288,7 @@ export function makeService({
       Object.assign(row.data, result.patch);
       const updated = (
         await c.query(
-          "UPDATE mf_mvp.operations SET state=$2,receipt=$3::jsonb WHERE id=$1 RETURNING *",
+          "UPDATE mf_mvp_usdc.operations SET state=$2,receipt=$3::jsonb WHERE id=$1 RETURNING *",
           [id, result.state, json(result.receipt)],
         )
       ).rows[0];
@@ -308,7 +316,7 @@ export function makeService({
       ) {
         check(
           !(
-            await c.query("SELECT 1 FROM mf_mvp.operations WHERE action='fund'")
+            await c.query("SELECT 1 FROM mf_mvp_usdc.operations WHERE action='fund'")
           ).rowCount,
           "FUND_ALREADY_PREPARED",
         );
@@ -455,7 +463,7 @@ export function makeService({
         row.data.phase === "ISSUED" &&
           !(
             await c.query(
-              "SELECT 1 FROM mf_mvp.operations WHERE action='redeem'",
+              "SELECT 1 FROM mf_mvp_usdc.operations WHERE action='redeem'",
             )
           ).rowCount,
         "REDEEM_ALREADY_PREPARED",

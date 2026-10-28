@@ -11,6 +11,24 @@
 
 
 
+## 2026-10-28 USDC与静默刷新源码完成，独立复核/发布待完成
+
+新固定USDC流程源代码完成，TOKEN_READY从已有token开始、无token创建路由；新mf_mvp_usdc schema/专用角色和独立cookie隔离旧两笔部署。背景轮询不进入全局busy，不清除错误/输入，失败退避、隐藏页暂停，动作epoch与账户上下文阻止旧响应覆盖。
+
+本地HTTP8项、客户端15项（含三项静默轮询/旧响应回归）、全新PG+Anvil完整已有币业务流程PASS；Root13项HTTP/runtime/命名空间检查PASS。构建c4faf613472bc740512c。真实USDC公开链只读证据已核对；新namespace迁移尚未应用，独立审查/CI/新发布PENDING，暂不可让用户按新入口测试。
+
+## 2026-10-28 22:03 用户反馈刷新跳动，改为已有测试USDC（实施中）
+
+用户录屏14.75秒显示8秒后台轮询调用全局busy，插入提示造成布局位移并禁用按钮；将改为静默、保留输入和错误、避免旧查询覆盖前台动作。用户明确取消新测试代币部署，改用原测试USDC。修正计划docs/superpowers/2026-10-28-mvp-usdc-stability-plan.md。
+
+**真实状态更新：用户已完成上一版token及escrow部署，并签报价**。mf_mvp phaseREADY revision4，token0xda4c890b12856dc4c6415c6aac5a7807f5e1f4b5（tx0xceb69f00763c668ba4c703e38523c49c66d874810bcf17b61e4e5a39ccf6b0fd）、escrow0x59d95b10a31abaca3de93c4c70c9218622ed7d6b（tx0x31447fb169e36980249d0330546e1d6a989668291a3ab258ccdc0811d0451848）；两操作CONFIRMED，nonce12/13，无approve/fund。此前“未部署”已成为历史。
+
+写入已暂停MVP_WALLET_ACTIONS_ENABLED=false，Render dep-dbgvvr0ae00c73dh0gn0已live，应用30a7874，公网writesEnabled=false确认。旧记录不删除/重置；旧新合约币种immutable，切USDC需要一份新escrow，不再部署token。使用新mf_mvp_usdc schema及专用角色，旧两笔交易保留。
+
+原测试USDC0x534b2f3a21130d7a60830c2df862319e593943a3，链10143；finalized block0x477e1b7只读验证symbolUSDC、decimals6、runtime codeHash0x96215e6049ed615cdc22fea7701e85458a8e51a2df3e7d45e8f9fa1d521b5a78；Donor余额84.5。未mint/approve/fund/发送任何交易。新迁移CLI生成20261028140155_mvp_existing_usdc.sql，尚未应用；实现/测试/独审/新发布待完成。
+
+旧mf_mvp.state摘要e37fc8a183f0bea3ab2c9af245d2ef27、operations摘要9445b9c26c49001c61282c0471d603d5，Phase8摘要945836426c0db60aff0ddadbd929a32b；后续对照不修改历史事实。
+
 ## 2026-10-28 20:59 MVP已发布，停在本人初始化与一次完整验收
 
 ### 当前真源与实际发布
