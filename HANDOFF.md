@@ -4,12 +4,20 @@
 >
 > **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：沿用已有测试USDC的MVP修复版已发布，自动刷新已改为静默更新，不再部署代币。等待本人部署一次绑定USDC的新餐券合约及完整验收；上一版两笔部署与旧Phase8发券记录保留。** 以下最新记录优先于后面的历史阶段。
+> **当前状态：沿用已有测试USDC的MVP修复版已发布，自动刷新已改为静默更新，不再部署代币。USDC餐券合约已本人部署并核验，Owner报价已记录，下一步Donor授权及捐赠；上一版两笔部署与旧Phase8发券记录保留。** 以下最新记录优先于后面的历史阶段。
 
 
 
 
 
+
+## 2026-10-28 23:44 USDC餐券合约真人部署成功，进入Donor测试
+
+用户回报tx `0x5f92ce86e23abf40b9f34e1be3186b1f9463e1f20ce5d269f873bbda7138e92f`。公开RPC独立核对chain10143、from固定Owner、to=null、nonce14、receipt status0x1；创建合约 **0x2ab15b22860323c02c90664fb8c39406a93eab54**，回执block0x4782f4c，观察finalized0x478311d已超过。浏览器网页抓取不可用，结论来自RPC及后台，不是用户报告单独推断。
+
+实库mf_mvp_usdc只有escrow操作CONFIRMED，tx匹配，state=READY、token固定旧测试USDC0x534b2f3a21130d7a60830c2df862319e593943a3、escrow匹配上述地址。Owner报价signature存在（不读取/记录原始签名），deadline1793203913，即北京时间2026-10-29 00:11:53；当前仍有效。没有approve/fund/issue/redeem/settle操作，尚不能称为全MVP验收成功。
+
+下一步用户在原准备页切换Donor0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952并重新登录，准备并本人发送授权7 USDC，等CONFIRMED，再准备并本人发送捐赠7 USDC。达到FUNDED后Issuer发券；无需重部署或重签已有效报价。Agent本轮仅只读核验与文档更新，无预留/签名/广播。应用仍6a05bf7、部署dep-dbh0afon74is73dhpdt0，不因本文档重新部署。
 
 ## 2026-10-28 22:25 USDC修复版已上线，下一步仅需本人测试
 
