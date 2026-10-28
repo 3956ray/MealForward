@@ -4,12 +4,47 @@
 >
 > **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 真人完整钱包流程已验收，唯一child=ISSUED，交易成功并核对链上回执。禁止重新开轮或重复发送；商家结算仍关闭。** 最新成功证据见顶部记录。
+> **当前状态：新隔离 MVP 已发布，等待用户一次初始化及完整业务验收。新合约链上强制180秒；旧Phase8唯一child=ISSUED保留，旧商家结算仍关闭。禁止重新开旧轮或重复发送。** 以下最新记录优先于后面的历史阶段。
 
 
 
 
 
+
+## 2026-10-28 20:59 MVP已发布，停在本人初始化与一次完整验收
+
+### 当前真源与实际发布
+
+- 仓库3956ray/MealForward，分支`codex/mealforward-t1f-phase6-release-review-20261026`；应用源码固定`b054aef65b247b2e60ae52cbd483d6afd7a01c7d`，之后交接提交仅文档。PR47仍draft，未合并：https://github.com/3956ray/MealForward/pull/47 。
+- Render服务`srv-dbdgstivcj2c73fnqcc0`，工作区`tea-db7q3ou7bikc73bp2bt0`；部署`dep-dbgv22ec6qcc73cmf74g`，20:57:32（UTC+8）live，commit精确匹配b054aef。自动代码部署off；本次合并新增4个MVP环境键后自动触发了部署，未重复trigger。
+- 新配置MVP_ENABLED=true、MVP_WALLET_ACTIONS_ENABLED=true；独立MVP_DB_URL/MVP_CODE_PEPPER通过服务秘密环境配置，旧环境不替换。服务只构造、验证交易，所有签名/发送由本人钱包明确确认。
+- 客户端构建`ccc79f153121bd9a9cce`；使用已审自包含bundle，无第三方运行时CDN。源码`mvp-contracts/`、`t1-intents/mvp/`、`t1-intents/mvp-client/`，入口集成`mvp-runtime.mjs`与`t1e-claim-server.mjs`。
+
+### 本次验证结果（不等于真人验收）
+
+- [MVP完整云端CI40691783883](https://github.com/3956ray/MealForward/actions/runs/40691783883) **PASS**：8项合约、2项导出不变性、可重复artifact及客户端构建、后端与runtime检查、12项客户端测试、全新PG17+Anvil31337+HTTP完整业务闭环。
+- [兼容CI40691783978](https://github.com/3956ray/MealForward/actions/runs/40691783978) **PASS**，全部7组旧会话、批准、执行及Postgres用例。两次此前发布检查失败及修正保留在后面记录，未冒称PASS。
+- 合约、后台、前端、整体独立审查及扫码/构建修正复核PASS，详见`docs/superpowers/2026-10-28-mvp-verification.md`。
+- 实际公网`node t1-intents/mvp-live-smoke.mjs` **PASS**：7个资源与本地逐字节一致；状态10143/testOnly/写入口启用；匿名业务访问拒绝；外站Origin拒绝；商家相机权限正确；旧Phase8 operation.stage=ISSUED。Agent钱包动作0。
+- 本地桌面及375px视觉检查通过；最后线上内嵌浏览器工具超时，未声称线上真实浏览器/相机/MetaMask验收。HTTP发布核对已独立完成。
+- Supabase项目`ketfrukrcuosrqynnsay`，新mf_mvp schema及专用非owner角色mf_mvp_runtime；迁移20261028121458/20261028121519。启动权限验证通过，RLS已启用、security advisors无lints。发布后新operations=0、events=0；旧Phase8 operations=1，摘要仍`945836426c0db60aff0ddadbd929a32b`，历史事实未改变。
+
+### 真实链上边界和下一步
+
+**新代币/新escrow尚未由用户部署，因此没有新真实合约地址。** 旧已发券交易0x231eb45af33fa58e6b8ad2b1932983a1b0e23d5019ba4504db4cf539b2398327保留，不迁移、不重复发券；原合约180秒缺陷没有被原地修补，旧结算继续关闭。新链10143，Owner `0xc4f8a468f10d5f98dcff3282516125e97f26433b`兼商家，Donor `0xcc5c1ce846c0302ab27a4811cf2e0e6fc7282952`，Issuer `0x9747d93d9f8c2e1202b4d922a4916fcf634aa2b3`。公网状态已核对以上角色和7e6金额。
+
+入口与一次验收：
+1. [准备与发券](https://mealforward-t1e-claim-laodao.onrender.com/mvp/setup.html)：Owner登录，依次部署测试代币、餐券合约，签单份报价；Donor登录，授权并捐赠7个测试代币；Issuer登录，发券并生成私密领取链接。每次先准备，再本人发送，等待服务核验成功后继续。三钱包需测试MON支付gas。
+2. 领取人用完整私密链接打开并领取，无钱包；到店生成二维码或六位码。不要把私密链接提交GitHub或聊天。刷新展示码会让旧码失效。
+3. [商家工作台](https://mealforward-t1e-claim-laodao.onrender.com/mvp/merchant.html)：Owner登录，扫码或数字码检查，准备并发送确认交餐；链上等待180秒后，准备并发送结算。商家正常两笔交易；初次从部署到结算总计七笔交易，另有登录/报价消息签名。
+4. 最终以券状态、交餐回执、结算回执及商家测试代币余额增加7核验；用户还未执行本阶段任何真实动作，整体MVP真人验收 **NOT_RUN**。无需再批准开发，也不重开旧短时双签轮次。详细按钮顺序、异常恢复见`docs/superpowers/2026-10-28-mvp-acceptance.md`。
+
+### 已知限制、实施裁定与回退
+
+- 独立一券7单位代币避免复用旧资金；构造时一次铸给Donor替代faucet，代价是新初始化且不能任意加量。错误金额/角色须明确重新设计新隔离部署，不能后台偷偷改账。
+- PREPARED在首次attempt之前允许恢复相同准备内容；atomic attempt后仅恢复原哈希，不自动重发。钱包拒绝/超时而没有哈希可能停留UNKNOWN，需要排查，不默认重跑整个流程。报价/部分准备有效期30分钟，请准备后连续发送；过期PREPARED或外部nonce变化不能自动改写替代交易。
+- 物理交餐是商家声明；本次仅单商家Testnet、代币无货币价值。原pause/close/refund语义保留，pause不等于冻结已发生的结算义务。
+- 若新入口有缺陷，合并设置`MVP_WALLET_ACTIONS_ENABLED=false`并核对部署及公网writesEnabled=false。这样阻止新准备/attempt/凭证写入，仍可登录、读状态、绑定/核验原交易；不删除mf_mvp记录、不重发、不改历史已上链事实。必要时MVP_ENABLED=false隐藏全部新入口；旧服务仍独立运行。保留新数据库角色/凭据、已产生链上事实供恢复，禁止通过删库“重测”。
 
 ## 2026-10-28 MVP云端安装步骤对齐
 
