@@ -11,6 +11,12 @@
 
 
 
+## 2026-10-28 MVP三页面源码完成，独审与发布核对中
+
+新增准备、领取、商家三个中文入口，前端构建f3928b75050020e64bc9。Root复跑11/11合成浏览器/钱包守卫测试PASS、构建PASS；本地桌面及375px页面视觉检查无横向溢出。领取入口不含钱包发现依赖，长期链接fragment立即清除，展示码过期隐藏。商家扫码/数字码检查后才可明确交餐，后台链时间决定结算按钮。准备内容可在首次attempt之前恢复，attempt之后仅恢复原交易哈希。
+
+静态资源已接入隔离mvp-runtime，路由/权限及旧claim相关19项针对性测试PASS。独立前端/整体审查、GitHub CI和Render发布仍PENDING；真实相机及真实钱包初始化、完整业务验收NOT_RUN。新链合约地址尚不存在，旧发券成功事实不变。
+
 ## 2026-10-28 MVP后台独审通过；隔离实库已建，入口仍未发布
 
 后台提交7fe377a独立审查spec/quality PASS。Supabase项目ketfrukrcuosrqynnsay已应用新独立迁移`20261028121458_mvp_business_flow`（源码文件20261028114053_mvp_business_flow.sql）和`20261028121519_mvp_runtime_login`。仅新mf_mvp schema及专用mf_mvp_runtime角色；直接TLS登录通过运行时最小权限核对：当前phase=EMPTY、operations=0，无旧schema访问、无owner/superuser/DELETE/TRUNCATE/audit UPDATE。security advisors无告警。旧Phase8唯一operation摘要前后相同945836426c0db60aff0ddadbd929a32b。
