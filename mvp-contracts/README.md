@@ -4,7 +4,7 @@ New deployments only. Nothing upgrades or moves funds from frozen CP30/T0 contra
 
 ## Reproduce
 
-From this directory: `npm ci --ignore-scripts --no-audit --no-fund`, `forge test -vv`, `forge build`, `python3 scripts/export-artifacts.py`. Foundry needs Solidity 0.8.28 installed (offline configuration). OpenZeppelin is pinned to 5.6.1. Exported JSON has `abi` and `bytecode` ready for viem encodeDeployData, plus compiler metadata, source SHA-256, placeholder runtime and immutable references. Do not compare placeholder runtime directly to deployed runtime (see PROVENANCE.md).
+From this directory: `npm ci --ignore-scripts --no-audit --no-fund`, `forge test -vv`, `forge build`, `python3 scripts/export-artifacts.py`. Check exporter invariants with `python3 scripts/test-export-artifacts.py`. Immutable-reference keys are stable range-ordered labels (`immutable_0`, etc.), not compiler AST IDs; consumers iterate their values. Export also refreshes artifact checksums. Foundry needs Solidity 0.8.28 installed (offline configuration). OpenZeppelin is pinned to 5.6.1. Exported JSON has `abi` and `bytecode` ready for viem encodeDeployData, plus compiler metadata, source SHA-256, placeholder runtime and immutable references. Do not compare placeholder runtime directly to deployed runtime (see PROVENANCE.md).
 
 ## Deployment and fixed roles
 

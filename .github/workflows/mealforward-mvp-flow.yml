@@ -52,6 +52,7 @@ jobs:
       - name: On-chain wait, replay, accounting and compatibility
         run: |
           forge test --root mvp-contracts -vv
+          python3 mvp-contracts/scripts/test-export-artifacts.py
           python3 mvp-contracts/scripts/export-artifacts.py
           git diff --exit-code -- mvp-contracts/artifacts
       - name: Install service and client dependencies
