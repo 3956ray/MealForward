@@ -19,6 +19,7 @@ import {verifiedSupabasePoolerTls} from './supabase-tls.mjs';
 import {originalIssueLedger} from './t1f-issue-ledger.mjs';
 import {executionCapabilityPool,verifyExecutionRuntime,makeExecutionStore} from './t1f-execution-store.mjs';
 import {makeExecutionService} from './t1f-execution-service.mjs';
+import {probePhase8Rpc} from './t1f-phase8-rpc-probe.mjs';
 import {makePhase8Service} from './t1f-phase8-service.mjs';
 import {makePhase8Store,phase8CapabilityPool,verifyPhase8Runtime} from './t1f-phase8-store.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
@@ -213,13 +214,14 @@ export async function startT1EClaimServer({env=process.env}={}){
    await verifyExecutionRuntime(executionPool);
    executionService=makeExecutionService({store:makeExecutionStore({pool:executionPool})});
   }
-  let phase8Service=null;
+  let phase8Service=null,phase8ProbeStore=null;const phase8ProbeAbort=new AbortController();
   if(cfg.phase8Enabled){
    const stores={};
    for(const kind of ['collector','execution']){
     const pool=phase8CapabilityPool(new pg.Pool({...options(cfg.phase8Urls[kind]),query_timeout:8000}),kind);phase8Pools.push(pool);
     await verifyPhase8Runtime(pool,kind);stores[kind]=makePhase8Store({pool});
    }
+   phase8ProbeStore=stores.execution;
    // Web process has no operator credentials and cannot create a round.
    phase8Service=makePhase8Service({store:{...stores.execution,record:stores.collector.record,create:()=>{throw Error('T1F_PHASE8_OPERATOR_ONLY')}}});
   }
@@ -275,9 +277,11 @@ export async function startT1EClaimServer({env=process.env}={}){
    server.once('error',reject);
    server.listen(cfg.port,cfg.testing?'127.0.0.1':'0.0.0.0',resolve);
   });
+  if(phase8ProbeStore)void probePhase8Rpc({store:phase8ProbeStore,signal:phase8ProbeAbort.signal}).then(result=>console.log(JSON.stringify(result)));
   return Object.freeze({
    server,config:cfg,
    async close(){
+    phase8ProbeAbort.abort();
     await new Promise(resolve=>server.close(resolve));
     await Promise.all([authPool.end(),claimPool.end(),executionPool?.end(),...phase8Pools.map(p=>p.end())]);
    }

@@ -2,12 +2,30 @@
 
 > **本文件是当前项目唯一的高优先级跨 Agent 接手入口。** 从仓库根目录打开 `HANDOFF.md`，先核对实时 GitHub / Render / Supabase，再继续任何开发。此文件随每次开发、迁移、部署和用户验收更新。历史 `docs/agent-handoff-2026-10-16/` 与原 CP30 合同不得当作 2026-10-23 的实时云状态。
 >
-> **更新日期：2026-10-27（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
+> **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，原始原因待定位。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
+> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，已定位observe_chain的RPC HTTP失败，具体HTTP状态待查。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
 
 
 
+
+
+
+## 2026-10-28 17:07 重测定位：签名通过后链上观察HTTP失败
+
+用户回报本轮3b2a0834双签仍未记录。公网serverTime1793178418显示AWAIT_APPROVALS、双方false、operation=null。Render真实日志在09:05:24.153Z、09:05:52.336Z、09:06:27.370Z均为PHASE8_REQUEST_FAILED /503 /T1F_PHASE8_RPC_HTTP /observe_chain。服务submit先验证签名再进入此阶段，故这三次请求已越过签名门禁，但RPC HTTP错误使其未到record_approval。不能据此认定每条日志对应哪个角色；HTTP具体码此前未保留，不能断言限流或封禁。
+
+为避免再次让本人签署定位，新增Phase8开启时启动一次的只读RPC探测，读取已有context/round并执行同一42调用观察；最多45秒，不能建轮/记录批准/prepare/send，无公开探测接口。失败不阻断监听或引起重启。只记录固定事件、允许错误码、整数HTTP状态、方法和耗时；不输出上游响应体。源码272项PASS，后续独审/CI/部署证据另补。本轮没有新预留或交易，暂停真人重测。
+
+
+## 2026-10-28 17:04 已创建诊断重测轮次，等待本人操作
+
+本人于17:03:43（1793178223）确认Issuer MetaMask无待处理/已发送交易且可连续测试。operator新鲜报告及链/库预检通过，创建3b2a0834-eca0-457c-ae84-82730c9bed69，digest0xe4d5a9ebdb1fbf2c2239555b5ecb6198c56a6048c8ea02467bfe1e66ccf4fca1，AWAIT_APPROVALS；prepare/send截止17:07:28（1793178448），批准截止17:08:58（1793178538）。结果已立即通知本人，先Owner签署，有错误停止回传诊断；成功再Donor，双记录后Issuer重新登录/prepare/立即独立Send。未代签、prepare或发送，transactionSent=false，不声称真人已通过。沿用072d3c6诊断部署；前次503根因仍未确认。
+
+
+## 2026-10-28 重测准备：服务读取成功，等待新鲜钱包活动报告
+
+用户要求再次重启测试。公网status返回HTTP200，serverTime1793177896，仍为旧轮b55789fd-76ac-47c4-bf80-5a1ea5e74b40 / PREPARE_WINDOW_CLOSED，Owner=false、Donor=false、operation=null。未创建计时轮次，未执行钱包操作。已询问Issuer当前MetaMask活动；昨日无交易报告不用于今天新建轮次。收到新鲜确认后执行预检和建轮，保留503根因尚未确认的限制。
 
 
 ## 2026-10-27 16:07 旧轮次按钮禁用核验
