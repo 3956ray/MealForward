@@ -11,6 +11,12 @@
 
 
 
+## 2026-10-28 MVP合约独审通过、后台本地闭环完成，公开发布未执行
+
+合约提交4ef6ab4独立审查PASS，根agent复跑8/8 Foundry通过。新后台`t1-intents/mvp/`与CLI生成迁移`20261028114053_mvp_business_flow.sql`源码完成，独立后台审查待执行。根agent在全新本地PG17+Anvil31337复跑部署→报价签名→approve/fund/issue→私密链接→过期展示码拒绝→商家redeem→180秒settle通过，包含真实HTTP SIWE/CSRF与凭证流程；13项离线/路由/旧setup针对性测试PASS。均为合成验证，不是用户真实钱包验收。
+
+PREPARED允许恢复同一准备内容；原子attempt之后只允许原哈希恢复，不重复发送。凭证轮询不再改变业务revision；未核验候选哈希可更正，核验绑定后不可替换。报价过期且没有fund操作时，Owner可以显式重新生成；已PREPARED的交易若过期仍禁止重写/重发，须明确恢复设计而非让用户盲试。旧Phase8 operations基线1条、摘要945836426c0db60aff0ddadbd929a32b。新mf_mvp还未在实库创建，安全advisors无告警；新Runtime、UI、部署和最终用户步骤仍在实施。没有新公链交易。
+
 ## 2026-10-28 MVP完整业务流程已批准，实施中（尚未部署）
 
 用户确认以跑通单商家Monad Testnet MVP为优先，减少人工重复测试。已选新隔离合约链上180秒结算等待、Owner兼商家/operator/catalog/quote，Donor与Issuer沿用；旧合约和已ISSUED child保持不变，不迁券、不挪旧资金。计划：`docs/superpowers/2026-10-28-mvp-business-flow-plan.md`。新测试代币在用户部署时向Donor铸造7e6（6位小数），无额外faucet；之后捐赠→发券→私密领取链接→扫码→一次确认交餐→180秒后独立结算。

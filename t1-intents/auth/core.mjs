@@ -17,7 +17,10 @@ const newToken = () => randomBytes(32).toString('base64url');
 const cookies = header => Object.fromEntries((header || '').split(';').map(v => v.trim().split(/=(.*)/s).slice(0,2)).filter(x=>x.length===2 && x[0]));
 const cookie = (name,value,age) => `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${age}`;
 
-export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=newToken,newId=randomUUID}) {
+export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=newToken,newId=randomUUID,namespace=null}) {
+  const ns=namespace;
+  if(ns && (ns.prefix!=='/v1/mvp' || ns.sessionCookie!=='__Host-mf_mvp_session' || ns.preCookie!=='__Host-mf_mvp_pre' || ns.csrfHeader!=='x-mvp-csrf' || ns.bootstrapHeader!=='x-mvp-bootstrap'))throw Error('INVALID_AUTH_NAMESPACE');
+  const sessionCookie=ns?.sessionCookie||SESSION_COOKIE,preCookie=ns?.preCookie||PRE_COOKIE,csrfHeader=ns?.csrfHeader||'x-c1-csrf',bootstrapHeader=ns?.bootstrapHeader||'x-c1-bootstrap';
   if (typeof origin !== 'string' || !/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) && !/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)) throw Error('PINNED_PUBLIC_ORIGIN_REQUIRED');
   const expectedHost = new URL(origin).host;
   const json = (res,status,value,additional={}) => {
@@ -33,11 +36,11 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
   };
   const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',');
   const active = async(req) => {
-    const token=cookies(req.headers.cookie)[SESSION_COOKIE];
+    const token=cookies(req.headers.cookie)[sessionCookie];
     return typeof token==='string' && token.length===43 ? await store.getSession(HASH(token),clock()) : null;
   };
   return async function handler(req,res){
-    const u=new URL(req.url || '/',origin),path=u.pathname, method=req.method,now=clock();
+    const u=new URL(req.url || '/',origin),path=ns ? (u.pathname.startsWith(ns.prefix+'/')?'/v1'+u.pathname.slice(ns.prefix.length):'/invalid') : u.pathname, method=req.method,now=clock();
     try {
       // The origin and Host must remain pinned to one Render-managed origin.
       if(req.headers.host!==expectedHost || u.search || u.username || u.password)throw issueError(403,'ORIGIN_DENIED');
@@ -68,15 +71,15 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
       }
       if(path==='/v1/auth/pre-session' && method==='POST'){
         const body=await readJson(req);
-        if(!exact(body,[]) || req.headers['x-c1-bootstrap']!=='1')throw issueError(422,'INVALID_REQUEST');
+        if(!exact(body,[]) || req.headers[bootstrapHeader]!=='1')throw issueError(422,'INVALID_REQUEST');
         const pre=issueToken(),csrf=issueToken();
         await store.createPre({preHash:HASH(pre),csrfHash:HASH(csrf),expiresAt:now+300,now});
-        return json(res,200,{csrf}, {'Set-Cookie':cookie(PRE_COOKIE,pre,300)});
+        return json(res,200,{csrf}, {'Set-Cookie':cookie(preCookie,pre,300)});
       }
       if(path==='/v1/identity/wallet/challenge' && method==='POST'){
         const body=await readJson(req);
         if(!exact(body,['address']) || typeof body.address!=='string' || !ADDRESS.test(body.address) || BigInt(body.address)===0n)throw issueError(422,'INVALID_ADDRESS');
-        const pre=cookies(req.headers.cookie)[PRE_COOKIE],csrf=req.headers['x-c1-csrf'];
+        const pre=cookies(req.headers.cookie)[preCookie],csrf=req.headers[csrfHeader];
         if(typeof pre!=='string'||pre.length!==43||typeof csrf!=='string'||csrf.length!==43)throw issueError(403,'CSRF');
         const challenge=siwe.makeChallenge({wallet:body.address.toLowerCase(),origin,chainId:10143,nonce:randomBytes(32).toString('hex'),challengeId:newId(),issuedAt:now,expiresAt:now+180});
         if(!await store.createChallenge({preHash:HASH(pre),csrfHash:HASH(csrf),challenge,now}))throw issueError(409,'CHALLENGE_REJECTED');
@@ -85,7 +88,7 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
       if(path==='/v1/identity/wallet/login' && method==='POST'){
         const body=await readJson(req);
         if(!exact(body,['challengeId','signature'])||typeof body.challengeId!=='string'||!UUID.test(body.challengeId)||typeof body.signature!=='string'||!SIG.test(body.signature))throw issueError(422,'INVALID_LOGIN');
-        const pre=cookies(req.headers.cookie)[PRE_COOKIE],csrf=req.headers['x-c1-csrf'];
+        const pre=cookies(req.headers.cookie)[preCookie],csrf=req.headers[csrfHeader];
         if(typeof pre!=='string'||pre.length!==43||typeof csrf!=='string'||csrf.length!==43)throw issueError(403,'CSRF');
         const p=HASH(pre),c=HASH(csrf);
         const challenge=await store.getChallenge({preHash:p,csrfHash:c,challengeId:body.challengeId,now});
@@ -96,17 +99,17 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
         const session=issueToken(),newCsrf=issueToken();
         const stored=await store.consumeAndCreateSession({preHash:p,csrfHash:c,challenge,sessionHash:HASH(session),sessionCsrfHash:HASH(newCsrf),wallet:signer,expiresAt:now+3600,now});
         if(!stored)throw issueError(409,'CHALLENGE_EXPIRED_OR_CONSUMED');
-        return json(res,200,{csrf:newCsrf,authPilot:true}, {'Set-Cookie':cookie(SESSION_COOKIE,session,3600)});
+        return json(res,200,{csrf:newCsrf,authPilot:true}, {'Set-Cookie':cookie(sessionCookie,session,3600)});
       }
       if(path==='/v1/auth/logout' && method==='POST'){
         const body=await readJson(req);
         if(!exact(body,[]))throw issueError(422,'INVALID_REQUEST');
-        const session=cookies(req.headers.cookie)[SESSION_COOKIE],csrf=req.headers['x-c1-csrf'];
+        const session=cookies(req.headers.cookie)[sessionCookie],csrf=req.headers[csrfHeader];
         if(!session||session.length!==43||!csrf||csrf.length!==43)throw issueError(403,'CSRF');
         const ok=await store.revokeSession(HASH(session),HASH(csrf),now);
         if(!ok)throw issueError(401,'UNAUTHENTICATED');
         const preserve=req.headers['x-c1-preserve-session-cookie']==='1';
-        return json(res,200,{ok:true},{...(preserve?{}:{'Set-Cookie':cookie(SESSION_COOKIE,'',0)})});
+        return json(res,200,{ok:true},{...(preserve?{}:{'Set-Cookie':cookie(sessionCookie,'',0)})});
       }
       if(path.startsWith('/v1/'))return json(res,503,{
         error:method==='GET'?'ORIGINAL_BUSINESS_NOT_CONNECTED':'AUTH_PILOT_NO_BUSINESS_WRITES',
