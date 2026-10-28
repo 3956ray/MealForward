@@ -1,5 +1,11 @@
 # MVP 实施验证与独立审查记录
 
+## 已有USDC及静默刷新修正（最新）
+
+用户要求取消额外代币部署，并报告自动轮询导致页面跳动。2ae0ed0改为固定原测试USDC、新mf_mvp_usdc隔离命名空间、静默背景更新；6a05bf7修正公开smoke。15客户端、8HTTP、5runtime、本地PG+Anvil已有币全流程与云端CI40705015291/40705015510通过；独立源码/迁移复核及P2限定复核通过。公网7资源/权限/USDC/token404/旧ISSUED检查通过，build c4faf613472bc740512c，部署dep-dbh0afon74is73dhpdt0 live。
+
+33次本地合成页面查询前后布局位置和按钮状态稳定；不能代替用户MetaMask验收。新USDC合约尚未本人部署。上一版已真实部署token/escrow保持原记录不修改；币种immutable因此仍需一次USDC escrow部署，但不再部署token。以下原始新token设计记录仅为历史，被用户最新USDC选择覆盖。
+
 基线64714db；新工作仅mvp-contracts、t1-intents的MVP模块/客户端及最小入口接线。85个冻结cp30-contracts文件未改。代码审查是工程审查，不是外部安全审计。
 
 ## 独立审查

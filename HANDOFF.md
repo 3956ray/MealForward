@@ -4,12 +4,43 @@
 >
 > **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：新隔离 MVP 已发布，等待用户一次初始化及完整业务验收。新合约链上强制180秒；旧Phase8唯一child=ISSUED保留，旧商家结算仍关闭。禁止重新开旧轮或重复发送。** 以下最新记录优先于后面的历史阶段。
+> **当前状态：沿用已有测试USDC的MVP修复版已发布，自动刷新已改为静默更新，不再部署代币。等待本人部署一次绑定USDC的新餐券合约及完整验收；上一版两笔部署与旧Phase8发券记录保留。** 以下最新记录优先于后面的历史阶段。
 
 
 
 
 
+
+## 2026-10-28 22:25 USDC修复版已上线，下一步仅需本人测试
+
+### 具体修复与使用入口
+
+- 自动状态更新从全局busy中分离：不插入“正在处理”横条、不禁用所有按钮、不清除错误或已输入哈希；串行后台请求、失败退避、隐藏页面暂停。钱包/会话变化及明确操作会使旧查询响应失效，保留单次attempt与原哈希恢复。
+- 固定沿用已有测试USDC `0x534b2f3a21130d7a60830c2df862319e593943a3`（Monad10143、6小数）。界面显示“测试USDC”、Donor余额及不足提示；不再有部署代币操作/路由。每次准备/发送前核对固定代码hash、精度及所需余额，后台余额查询缓存30秒。
+- [准备与发券](https://mealforward-t1e-claim-laodao.onrender.com/mvp/setup.html) 和 [商家工作台](https://mealforward-t1e-claim-laodao.onrender.com/mvp/merchant.html) 地址不变。用户关闭旧页或刷新一次、选MetaMask并重新登录Owner；新会话与旧MVP隔离，不能复用旧登录Cookie。无需重开旧双签轮次。
+
+### 版本、独审和验收边界
+
+- 应用commit **6a05bf79506cfab6a59469f3c24164a84a80a3fb**，客户端build **c4faf613472bc740512c**。分支codex/mealforward-t1f-phase6-release-review-20261026、PR47仍draft未合并，之后仅交接文档提交。
+- Render服务srv-dbdgstivcj2c73fnqcc0，部署 **dep-dbh0afon74is73dhpdt0**，22:23:47（UTC+8）live，commit精确匹配。仅更新MVP专用DB/pepper和写入开关，旧服务变量未替换。MVP_ENABLED=true、MVP_WALLET_ACTIONS_ENABLED=true，角色地址不变。
+- [MVP CI40705015291](https://github.com/3956ray/MealForward/actions/runs/40705015291) **PASS**；[旧流程兼容CI40705015510](https://github.com/3956ray/MealForward/actions/runs/40705015510) **PASS**，全部7组。客户端15项、HTTP8项、runtime5项及已有币PG+Anvil全流程通过；原合约180秒测试保留、Solidity源码未变。
+- 独立源码/迁移/权限/轮询复核通过。唯一P2为公开smoke仍检查已删除token路由，已改为escrow鉴权+单独token404并复核通过。
+- 真实公网smoke **PASS**：7个资源逐字节一致、USDC地址/精度/币种标识正确、匿名与跨域拒绝、token prepare404、旧Phase8仍ISSUED。Agent钱包动作0。
+- 浏览器本地合成Owner场景跨33次setup查询，前后抽样的两个面板位置均为521.09375/524.09375，按钮状态相同、无busy条；这验证录屏所报跳动修复，不是真实钱包签名。线上基本页面已渲染“测试USDC”，后续内嵌浏览器工具读取超时，未据此声称真人登录/完整浏览器验收通过。
+
+### 新旧数据和权限
+
+- Supabase项目ketfrukrcuosrqynnsay；新迁移 **20261028142019_mvp_existing_usdc**（源20261028140155_mvp_existing_usdc.sql）、**20261028142025_mvp_usdc_runtime_login**。新schema **mf_mvp_usdc**、新专用角色 **mf_mvp_usdc_runtime**，非owner、无旧schema权限、RLS、无DELETE/TRUNCATE、审计仅追加。真实TLS运行时加载验证PASS，security advisors无lints。
+- 新state TOKEN_READY、token固定已有USDC，发布后operations=0。**新的USDC餐券合约尚未由用户部署**，因此没有新USDC escrow地址；不能拿旧0x59d95…当作USDC escrow。
+- 旧mf_mvp的READY/两笔CONFIRMED部署与报价原样保留：state摘要e37fc8a183f0bea3ab2c9af245d2ef27、operations摘要9445b9c26c49001c61282c0471d603d5；Phase8摘要945836426c0db60aff0ddadbd929a32b，发布前后相同。
+- 新私密运行时配置仅在`/Users/mili/.mealforward-mvp-usdc-20261028/`（0700/0600）和Render秘密变量；不输出/提交秘密。旧私有配置保留供历史恢复，不串用。新Cookie __Host-mf_mvp_usdc_*、请求头x-mvp-usdc-*、本地恢复key mf-mvp-usdc-recovery-v2与旧值隔离。
+
+### 本人下一步与回退
+
+1. Owner只部署**一份使用已有USDC的新餐券合约**并签该合约报价；无需再部署/领取新代币。先前escrow币种不可改，所以不能复用它来结算USDC，这是保留历史事实的代价。
+2. Donor授权/捐赠7 USDC（观察余额84.5，以现场为准）→ Issuer发券并创建私密领取链接 → 领取人出示短期码 → Owner商家检查、确认交餐 → 链上等待180秒 → 结算。新流程共六笔交易，另有登录与报价消息签名。详见docs/superpowers/2026-10-28-mvp-acceptance.md。
+3. 本阶段真实新USDC部署/发券/结算 **NOT_RUN**，等待用户测试；Agent未代签/发送。保留原30分钟准备期限、UNKNOWN只恢复原哈希限制；失败只补测受影响步骤，不从头重跑或重置库。
+4. 回退优先仅设MVP_WALLET_ACTIONS_ENABLED=false并等待部署/public确认，保留新旧数据及已上链交易；必要时MVP_ENABLED=false隐藏新入口。不得把新数据写入旧mf_mvp或将旧代币escrow改称USDC。旧结算及Phase8恢复规则保持不变。
 
 ## 2026-10-28 USDC修正独审完成，公开检查脚本同步
 
