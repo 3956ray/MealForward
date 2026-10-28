@@ -11,6 +11,41 @@
 
 
 
+
+## 2026-10-28 17:23 RPC429限流修复已上线，Render完整只读核验PASS
+
+已确认根因：Render对公共Monad RPC的42次链观察查询未限速，实际启动探测在34次/2738ms时遭HTTP429；签名已通过、record_approval尚未执行，所以双角色未记录。源码2f7cc36b69a4a1fb34dd51fc7ac8cfed8f3912c4加入进程共享250ms间隔、8项有界FIFO、取消移除和BUSY明确错误；不重试签名/交易，不切换RPC、不放宽安全核验。本地279/279、独立复核通过；CI40663410258全部7项成功。本机真实公共链观察42次/12976ms PASS，不能代替Render结果。
+
+Render部署dep-dbgrt8on74is73d961kg于17:22:30 live，commit与上述一致；真实运行日志17:22:34.620Z+8（UTC09:22:34.620）为PHASE8_RPC_BOOT_PROBE ok=true calls42 elapsedMs10720。与此前同环境429失败对照，限速后完整观察已通过；这不是真人批准记录或交易验收PASS。未创建新轮次，未代签/预留/发送，未修改数据库权限或历史记录。
+
+下一步本人准备好后，重新取得新鲜Issuer MetaMask无待处理/已发送交易报告，先确认服务已响应，再建轮并立即给出截止。Owner批准记录成功才继续Donor；双记录后Issuer重新登录、prepare并立即独立Send。若出现错误立即停下回传错误码，不盲目重签或重发。旧3b2a0834轮次已过期，不能刷新续期；真人双签入库与Send仍待验收。回退可禁用Phase8，保留全部记录。
+
+
+## 2026-10-28 17:15 Render运行时复现RPC HTTP429
+
+只读探测提交12ef519271f7ee06bc4449fd4d80397b52404516，CI40662434415成功，部署dep-dbgrpn49v7es73b8favg于17:15:06 live。真实Render日志17:14:59返回PHASE8_RPC_BOOT_PROBE ok=false、calls34、method eth_call、elapsed2738ms、rpcHttpStatus429。此证据确认Render出口对公共Monad RPC的当前观察查询被限流，不是钱包连接故障或批准表已写而UI未刷新。未运行签名/轮次/批准/交易写入。
+
+开始修复进程共享的RPC请求频率：固定250ms最小发起间隔（最多4次/秒）、FIFO有界8项等待、排队取消和BUSY明确拒绝；保持单次/总预算、全部链核验、固定端点，不自动重试签名或广播，不放宽截止时间。修复完成仍需Render同样42次完整只读探测PASS才安排真人测试。上线及最终测试证据另补。
+
+
+## 2026-10-28 17:07 重测定位：签名通过后链上观察HTTP失败
+
+用户回报本轮3b2a0834双签仍未记录。公网serverTime1793178418显示AWAIT_APPROVALS、双方false、operation=null。Render真实日志在09:05:24.153Z、09:05:52.336Z、09:06:27.370Z均为PHASE8_REQUEST_FAILED /503 /T1F_PHASE8_RPC_HTTP /observe_chain。服务submit先验证签名再进入此阶段，故这三次请求已越过签名门禁，但RPC HTTP错误使其未到record_approval。不能据此认定每条日志对应哪个角色；HTTP具体码此前未保留，不能断言限流或封禁。
+
+为避免再次让本人签署定位，新增Phase8开启时启动一次的只读RPC探测，读取已有context/round并执行同一42调用观察；最多45秒，不能建轮/记录批准/prepare/send，无公开探测接口。失败不阻断监听或引起重启。只记录固定事件、允许错误码、整数HTTP状态、方法和耗时；不输出上游响应体。源码272项PASS，后续独审/CI/部署证据另补。本轮没有新预留或交易，暂停真人重测。
+
+
+## 2026-10-28 17:04 已创建诊断重测轮次，等待本人操作
+
+本人于17:03:43（1793178223）确认Issuer MetaMask无待处理/已发送交易且可连续测试。operator新鲜报告及链/库预检通过，创建3b2a0834-eca0-457c-ae84-82730c9bed69，digest0xe4d5a9ebdb1fbf2c2239555b5ecb6198c56a6048c8ea02467bfe1e66ccf4fca1，AWAIT_APPROVALS；prepare/send截止17:07:28（1793178448），批准截止17:08:58（1793178538）。结果已立即通知本人，先Owner签署，有错误停止回传诊断；成功再Donor，双记录后Issuer重新登录/prepare/立即独立Send。未代签、prepare或发送，transactionSent=false，不声称真人已通过。沿用072d3c6诊断部署；前次503根因仍未确认。
+
+
+## 2026-10-28 重测准备：服务读取成功，等待新鲜钱包活动报告
+
+用户要求再次重启测试。公网status返回HTTP200，serverTime1793177896，仍为旧轮b55789fd-76ac-47c4-bf80-5a1ea5e74b40 / PREPARE_WINDOW_CLOSED，Owner=false、Donor=false、operation=null。未创建计时轮次，未执行钱包操作。已询问Issuer当前MetaMask活动；昨日无交易报告不用于今天新建轮次。收到新鲜确认后执行预检和建轮，保留503根因尚未确认的限制。
+
+
+
 ## 2026-10-27 15:37 批准故障诊断增强已上线；503原始根因仍待定位
 
 应用提交 `072d3c6b3e6b680882962a84370346a0bfe49b0a`；独立审查完成，本地270/270 PASS，远程CI https://github.com/3956ray/MealForward/actions/runs/40467867486 全部7项成功。新增4项隔离submit组合测试：双角色记录/回读成功、RPC超时未写、PG权限失败未写、回读失败保留已记录批准；签名恢复使用真实合成签名，授权角色映射仅在隔离测试进程mock，不代表真人E2E通过。
