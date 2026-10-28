@@ -1,3 +1,5 @@
+import {createRpcPacer} from './t1f-rpc-pacer.mjs';
+const publicRpcPacer=createRpcPacer();
 /** Bounded public read-only execution transport; no signing or broadcast methods. */
 const check=(ok,code)=>{if(!ok)throw Error('T1F_EXECUTION_'+code)};
 const METHODS=new Set(['eth_chainId','eth_blockNumber','eth_getBlockByNumber','eth_getCode','eth_call','eth_getTransactionReceipt','eth_getTransactionCount','eth_getTransactionByHash']);
@@ -6,6 +8,8 @@ export function makeExecutionPublicRpc({fetchImpl=fetch}={}){
  let nextId=0;
  return {async send(method,params,signal){
   check(METHODS.has(method)&&Array.isArray(params),'RPC_METHOD');
+  await publicRpcPacer(signal);
+  check(!signal?.aborted,'RPC_TIMEOUT');
   const id=++nextId;
   const response=await fetchImpl('https://testnet-rpc.monad.xyz',{method:'POST',headers:{'content-type':'application/json'},redirect:'error',signal,body:JSON.stringify({jsonrpc:'2.0',id,method,params})});
   if(!response.ok){const e=Error('T1F_EXECUTION_RPC_HTTP');e.rpcHttpStatus=Number.isInteger(response.status)?response.status:null;e.rpcMethod=method;await response.body?.cancel().catch(()=>{});throw e;}

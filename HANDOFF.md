@@ -4,11 +4,18 @@
 >
 > **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，已定位observe_chain的RPC HTTP失败，具体HTTP状态待查。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
+> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，已定位observe_chain的RPC HTTP失败，已确认HTTP429限流，正在修复请求频率。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
 
 
 
 
+
+
+## 2026-10-28 17:15 Render运行时复现RPC HTTP429
+
+只读探测提交12ef519271f7ee06bc4449fd4d80397b52404516，CI40662434415成功，部署dep-dbgrpn49v7es73b8favg于17:15:06 live。真实Render日志17:14:59返回PHASE8_RPC_BOOT_PROBE ok=false、calls34、method eth_call、elapsed2738ms、rpcHttpStatus429。此证据确认Render出口对公共Monad RPC的当前观察查询被限流，不是钱包连接故障或批准表已写而UI未刷新。未运行签名/轮次/批准/交易写入。
+
+开始修复进程共享的RPC请求频率：固定250ms最小发起间隔（最多4次/秒）、FIFO有界8项等待、排队取消和BUSY明确拒绝；保持单次/总预算、全部链核验、固定端点，不自动重试签名或广播，不放宽截止时间。修复完成仍需Render同样42次完整只读探测PASS才安排真人测试。上线及最终测试证据另补。
 
 
 ## 2026-10-28 17:07 重测定位：签名通过后链上观察HTTP失败
