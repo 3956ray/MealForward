@@ -18,10 +18,12 @@ for(const name of names){
 }
 assert.equal((await request('/v1/mvp/setup')).status,401);
 assert.equal((await request('/v1/mvp/recipient/voucher')).status,401);
-const anon=await request('/v1/mvp/setup/token/prepare',{method:'POST',headers:{Origin:origin,'content-type':'application/json'},body:'{}'});
+const anon=await request('/v1/mvp/setup/escrow/prepare',{method:'POST',headers:{Origin:origin,'content-type':'application/json'},body:'{}'});
 assert.equal(anon.status,status.writesEnabled?401:503);
-const foreign=await request('/v1/mvp/setup/token/prepare',{method:'POST',headers:{Origin:'https://example.com','content-type':'application/json'},body:'{}'});
+const foreign=await request('/v1/mvp/setup/escrow/prepare',{method:'POST',headers:{Origin:'https://example.com','content-type':'application/json'},body:'{}'});
 assert.equal(foreign.status,403);
+const removedToken=await request('/v1/mvp/setup/token/prepare',{method:'POST',headers:{Origin:origin,'content-type':'application/json'},body:'{}'});
+assert.equal(removedToken.status,404);
 const legacy=await request('/v1/t1f/phase8/status');assert.equal(legacy.status,200);
 const prior=await legacy.json();assert.equal(prior.operation?.stage,'ISSUED');
 console.log(JSON.stringify({status:'MVP_PUBLIC_READONLY_SMOKE_PASS',assets:names.length,chainId:status.chainId,writesEnabled:status.writesEnabled,legacyIssuedPreserved:true,walletActions:0,existingTestUsdc:status.currency.address}));
