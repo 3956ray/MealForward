@@ -4,11 +4,29 @@
 >
 > **更新日期：2026-10-28（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Phase8 真人批准提交遇到503，双角色未记录；暂停新轮次，诊断增强已上线，RPC429限流修复已上线，Render42次完整只读核验PASS，等待真人重测。旧 Claim 与 predecessor 保持 ISSUE_UNKNOWN；不得自动重发。** 最新状态以顶部 Phase8 上线记录为准。
+> **当前状态：Phase8 真人完整钱包流程已验收，唯一child=ISSUED，交易成功并核对链上回执。禁止重新开轮或重复发送；商家结算仍关闭。** 最新成功证据见顶部记录。
 
 
 
 
+
+
+## 2026-10-28 Phase8 真人完整钱包流程PASS，child已ISSUED
+
+本人回报交易哈希及“链上发券已核验通过”。独立公网/链只读核对确认：轮次617f877a-0709-4b8f-9323-8a7ff94d0369，Owner=true、Donor=true；child f165d689-6d2b-4e5b-909b-81c3cf4d487c，stage=ISSUED、revision2、nonce0，operationId=0x46cc1cf6f86f1b8b881c40bfac6819e26309d00e869da688fc6b4ed3befd222e。
+
+交易：`0x231eb45af33fa58e6b8ad2b1932983a1b0e23d5019ba4504db4cf539b2398327`，https://testnet.monadvision.com/tx/0x231eb45af33fa58e6b8ad2b1932983a1b0e23d5019ba4504db4cf539b2398327 。chain10143、from固定Issuer0x9747…aA2B3、to固定合约0xcf0c…fe58、nonce0、value0；解码方法issue且operationId匹配，calldataHash0x8eed3d0755b9ce15f7597d02a50b214fcb97c524f502aea24c8498f7886d11fa与后台一致。回执status0x1，block74923731，hash0x5d7ab9cce31a4d04f8ed0217f11bec5c1efbaff09ca3d8fe2ed539e9ae396718，独立区块查询hash一致、2条日志；finalized观察高度74924111已超过回执高度。
+
+因此真人Owner/Donor批准、Issuer登录、prepare、本人Send、哈希绑定和服务回执核验完整流程PASS。public顶层RECOVERY_ONLY表示已消费、禁止再次准备，不是失败；operation.stage=ISSUED为结果。不得重新开轮/预留/重发，不删除旧轮次或将原Claim/旧predecessor的UNKNOWN改写为这笔成功。结算settlementEnabled=false，#17仍未解决；本验收不覆盖商家核销/结算或整个产品上线。
+
+实际应用edcbc4b3a2fd7badf1ce4536557a890eba6ca151、部署dep-dbgsq2ks728c73ca7kp0；CI40671509207成功。此前RPC429已由共享限速修复，登录后状态自动刷新已上线，本人此次完成验收。Agent只进行了只读核验和文档更新，没有代签或广播。原始登录nonce、RequestID及签名不记录。后续开发应从已发券事实继续设计领取/核销闭环，并先处理结算缺陷；不可继续把测试入口当作需要再次Send的待办。
+
+
+## 2026-10-28 18:28 登录刷新修复已上线，创建真人重测轮次
+
+登录后自动只读刷新提交edcbc4b3a2fd7badf1ce4536557a890eba6ca151，CI40671509207成功，部署dep-dbgsq2ks728c73ca7kp0于18:24:05 live。公网页面200且源码逐字节一致；Render启动探测42次/10795ms PASS。此前8baf8b59轮次双角色true、operation=null，已过期；只证明双签入库和本人报告登录，不证明prepare/send。
+
+本人于18:28:09（1793183289）明确确认Issuer活动无交易、立即开始。operator预检通过创建617f877a-0709-4b8f-9323-8a7ff94d0369，digest0xf30bc11433a4810eac9e71071a9b11982f949e3cf05b95d9c9d3a9c38f413ab9，AWAIT_APPROVALS；prepare/send截止18:31:53（1793183513），批准截止18:33:23（1793183603）。已立即交付轮次及连续操作步骤，要求加载新页面，Issuer登录自动刷新后prepare/单独Send。无Agent签名/预留/发送，真人结果待回报。
 
 
 ## 2026-10-28 18:20 双签真实记录PASS；Issuer登录后按钮关闭反馈
