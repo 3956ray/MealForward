@@ -11,6 +11,17 @@
 
 
 
+## 2026-10-28 MVP完整业务流程已批准，实施中（尚未部署）
+
+用户确认以跑通单商家Monad Testnet MVP为优先，减少人工重复测试。已选新隔离合约链上180秒结算等待、Owner兼商家/operator/catalog/quote，Donor与Issuer沿用；旧合约和已ISSUED child保持不变，不迁券、不挪旧资金。计划：`docs/superpowers/2026-10-28-mvp-business-flow-plan.md`。新测试代币在用户部署时向Donor铸造7e6（6位小数），无额外faucet；之后捐赠→发券→私密领取链接→扫码→一次确认交餐→180秒后独立结算。
+
+源码`mvp-contracts/`已完成首轮8项本地Foundry测试，包括两条H入账路径179/180秒、重复操作、防重复支付、权限、pause/close/refund/expiry；85个冻结cp30-contracts文件与HEAD逐字节一致。仅本地合成证据，独立审查/后端/前端/CI/公开部署/真人钱包仍未完成。现网仍edcbc4b3a2fd7badf1ce4536557a890eba6ca151，服务srv-dbdgstivcj2c73fnqcc0，旧settlement保持false。没有新公链部署、签名、广播或业务数据变更。继续实现至需要本人初始化新合约及一次完整验收，不重新开启Phase8。
+
+## 2026-10-28 下一阶段建议：Phase9已发券展示与领取/核销设计
+
+用户询问下一阶段流程和目的。本轮核对现有交接及GitHub Issue17仍OPEN：原StoreEscrow settle不强制180秒链上等待。建议先把已ISSUED child的权威回执映射到用户可理解的券状态和领取凭证（保留旧UNKNOWN），完成领取页面/权限/恢复测试；商家扫码、锁券、交餐及结算先设计并用隔离测试验证，不直接打开旧合约settle。链上强制等待若采用须新审合约及明确现有券处置方案，不能前端倒计时冒充链约束。此为阶段规划建议，未声称Phase9设计已批准、已实现或部署；未新增交易/轮次。
+
+
 ## 2026-10-28 Phase8 真人完整钱包流程PASS，child已ISSUED
 
 本人回报交易哈希及“链上发券已核验通过”。独立公网/链只读核对确认：轮次617f877a-0709-4b8f-9323-8a7ff94d0369，Owner=true、Donor=true；child f165d689-6d2b-4e5b-909b-81c3cf4d487c，stage=ISSUED、revision2、nonce0，operationId=0x46cc1cf6f86f1b8b881c40bfac6819e26309d00e869da688fc6b4ed3befd222e。

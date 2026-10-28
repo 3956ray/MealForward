@@ -12,6 +12,7 @@ evidence/
 !.env.example
 out/
 cache/
+**/supabase/.temp/
 .localchain/
 wallet-harness/dist/
 .venv/
