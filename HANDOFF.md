@@ -11,6 +11,10 @@
 
 
 
+## 2026-10-29 商家交餐已准备，待本人发送
+
+用户已核对取餐码，页面显示确认交餐摘要，Owner nonce15。只读实库确认 redeem=PREPARED、tx_hash=null，无settle。源码 app.jsx 的发送按钮紧接摘要 Nonce 下方，与摘要共用 PREPARED && transaction 条件；应向下滚动寻找“本人打开钱包，发送这笔确认交餐交易”。尚未检查用户实际浏览器，不能认定按钮确实已显示；若滚到底仍无按钮，需要截图定位。不要重新准备或发券。用户本人发送并核验后才开始180秒等待，再结算。本轮无应用变更、无代发、无部署。
+
 ## 2026-10-28 真人捐赠与发券完成，进入领取及商家验收
 
 用户准备页显示餐券已签发、Donor余额77.5 USDC。只读查询实库 mf_mvp_usdc.state 为 ISSUED，escrow 为 0x2ab15b22860323c02c90664fb8c39406a93eab54；operations 中 escrow、approve、fund、issue 均 CONFIRMED，无 redeem/settle 记录。本轮依据后台已核验记录及用户页面回报，没有另行独立查询链上回执。
