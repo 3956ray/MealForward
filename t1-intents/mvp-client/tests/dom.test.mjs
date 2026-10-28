@@ -301,6 +301,141 @@ test("recipient unauthenticated landing is neutral and has no administrative nav
   assert.match(document.body.textContent, /请从机构给你的私密链接进入/);
   await unmount();
 });
+test("camera preserves first-frame and busy-refresh scans; context changes discard queued checks", async () => {
+  const oldNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const oldRaf = globalThis.requestAnimationFrame,
+    oldCancel = globalThis.cancelAnimationFrame;
+  const videoProto = dom.window.HTMLVideoElement.prototype,
+    canvasProto = dom.window.HTMLCanvasElement.prototype;
+  const oldPlay = videoProto.play,
+    oldContext = canvasProto.getContext;
+  let frames = [],
+    stops = 0;
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => ({
+          getTracks: () => [
+            {
+              stop() {
+                stops++;
+              },
+            },
+          ],
+        }),
+      },
+    },
+  });
+  globalThis.requestAnimationFrame = (fn) => {
+    frames.push(fn);
+    return frames.length;
+  };
+  globalThis.cancelAnimationFrame = () => {};
+  Object.defineProperty(videoProto, "readyState", {
+    configurable: true,
+    get: () => 2,
+  });
+  Object.defineProperty(videoProto, "videoWidth", {
+    configurable: true,
+    get: () => 2,
+  });
+  Object.defineProperty(videoProto, "videoHeight", {
+    configurable: true,
+    get: () => 2,
+  });
+  videoProto.play = async () => {};
+  canvasProto.getContext = () => ({
+    drawImage() {},
+    getImageData: () => ({ data: new Uint8ClampedArray(16) }),
+  });
+  try {
+    for (const scenario of ["first", "busy", "changed"]) {
+      frames = [];
+      stops = 0;
+      let checks = 0,
+        ready = scenario === "first",
+        held = false,
+        release,
+        changed;
+      const state = {
+        ...setup("ISSUED"),
+        nextAction: "redeem",
+        allowedAction: "redeem",
+      };
+      const api = async (p) => {
+        if (p === "/status") return status;
+        if (p === "/me") return session;
+        if (p === "/merchant/check") {
+          checks++;
+          return {
+            checkToken: "check",
+            expiresAt: Math.floor(Date.now() / 1000) + 120,
+            meal: "测试餐",
+          };
+        }
+        if (held)
+          return new Promise((r) => {
+            release = () => r(state);
+          });
+        return state;
+      };
+      const walletFactory = ({ onChange }) => {
+        changed = onChange;
+        return factory({ onChange });
+      };
+      await mount(App, {
+        merchant: true,
+        api,
+        walletFactory,
+        decodeQr: () => (ready ? { data: "short-qr" } : null),
+      });
+      await act(async () => {
+        [...document.querySelectorAll("button")]
+          .find((b) => b.textContent === "开启相机扫码")
+          .click();
+      });
+      assert.equal(frames.length, 1);
+      await act(async () => {
+        frames.shift()();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      if (scenario !== "first") {
+        assert.equal(checks, 0);
+        held = true;
+        await act(async () => {
+          [...document.querySelectorAll("button")]
+            .find((b) => b.textContent.includes("刷新已确认进度"))
+            .click();
+        });
+        ready = true;
+        await act(async () => {
+          frames.shift()();
+        });
+        assert.equal(checks, 0, "check waits for busy refresh");
+        if (scenario === "changed") await act(async () => changed());
+        held = false;
+        await act(async () => {
+          release();
+          await new Promise((r) => setTimeout(r, 0));
+        });
+      }
+      assert.equal(checks, scenario === "changed" ? 0 : 1, scenario);
+      assert.equal(stops, 1, "camera tracks stopped exactly once");
+      await unmount();
+    }
+  } finally {
+    if (oldNavigator)
+      Object.defineProperty(globalThis, "navigator", oldNavigator);
+    else delete globalThis.navigator;
+    globalThis.requestAnimationFrame = oldRaf;
+    globalThis.cancelAnimationFrame = oldCancel;
+    videoProto.play = oldPlay;
+    canvasProto.getContext = oldContext;
+    for (const k of ["readyState", "videoWidth", "videoHeight"])
+      delete videoProto[k];
+  }
+});
 test.after(async () => {
   dom.window.close();
   await rm(tmp, { recursive: true, force: true });

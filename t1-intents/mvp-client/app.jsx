@@ -53,6 +53,7 @@ export function App({
   merchant = false,
   walletFactory = createMvpWallet,
   api = request,
+  decodeQr = jsQR,
 }) {
   const [status, setStatus] = useState(null),
     [session, setSession] = useState(null),
@@ -76,7 +77,8 @@ export function App({
     setupRef = useRef(null),
     video = useRef(null),
     stream = useRef(null),
-    frame = useRef(null);
+    frame = useRef(null),
+    pendingScan = useRef(null);
   function stopCamera() {
     cancelAnimationFrame(frame.current);
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -86,6 +88,7 @@ export function App({
   function invalidate() {
     stopCamera();
     revision.current++;
+    pendingScan.current = null;
     sessionRef.current = null;
     setSession(null);
     setSetup(null);
@@ -126,6 +129,7 @@ export function App({
     return () => {
       alive = false;
       revision.current++;
+      pendingScan.current = null;
       clearInterval(tick);
       wallet.current.dispose();
       stopCamera();
@@ -143,7 +147,19 @@ export function App({
     } finally {
       working.current = false;
       setBusy(false);
+      drainScan();
     }
+  }
+  function drainScan() {
+    if (working.current || !pendingScan.current) return;
+    const queued = pendingScan.current;
+    pendingScan.current = null;
+    if (
+      queued.revision !== revision.current ||
+      queued.session !== sessionRef.current
+    )
+      return;
+    void run(() => checkCode({ qrToken: queued.token }));
   }
   async function refresh(s = sessionRef.current) {
     if (!s) return;
@@ -329,14 +345,19 @@ export function App({
         canvas.width = v.videoWidth;
         canvas.height = v.videoHeight;
         ctx.drawImage(v, 0, 0);
-        const result = jsQR(
+        const result = decodeQr(
           ctx.getImageData(0, 0, canvas.width, canvas.height).data,
           canvas.width,
           canvas.height,
         );
         if (result) {
           stopCamera();
-          void run(() => checkCode({ qrToken: result.data }));
+          pendingScan.current = {
+            token: result.data,
+            revision: r,
+            session: sessionRef.current,
+          };
+          drainScan();
           return;
         }
       }
