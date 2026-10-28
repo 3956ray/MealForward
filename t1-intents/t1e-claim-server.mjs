@@ -23,6 +23,7 @@ import {probePhase8Rpc} from './t1f-phase8-rpc-probe.mjs';
 import {makePhase8Service} from './t1f-phase8-service.mjs';
 import {makePhase8Store,phase8CapabilityPool,verifyPhase8Runtime} from './t1f-phase8-store.mjs';
 import {makeReadOnlyPublicRpc} from './testnet-readonly-rpc.mjs';
+import {startMvpRuntime} from './mvp-runtime.mjs';
 export const T1E_CLAIM_ORIGIN='https://mealforward-t1e-claim-laodao.onrender.com';
 const PROJECT='ketfrukrcuosrqynnsay';
 const DB_HOST='aws-0-ap-southeast-2.pooler.supabase.com';
@@ -153,7 +154,7 @@ export async function startT1EClaimServer({env=process.env}={}){
  });
  const authPool=new pg.Pool(options(cfg.authUrl));
  const claimPool=new pg.Pool(options(cfg.claimUrl));
- let server,executionPool;const phase8Pools=[];
+ let server,executionPool,mvpRuntime;const phase8Pools=[];
  try{
   const [a,b]=await Promise.all([
    authPool.query('SELECT current_user AS who'),
@@ -258,8 +259,12 @@ export async function startT1EClaimServer({env=process.env}={}){
    staticFiles.map(async([url,file,type])=>[
    url,{bytes:await readFile(new URL('./public/'+file,import.meta.url)),type}
   ])));
+  mvpRuntime=await startMvpRuntime({env});
   server=http.createServer((req,res)=>{
    const u=new URL(req.url||'/',cfg.origin);
+   if(u.pathname==='/mvp'||u.pathname.startsWith('/mvp/')||u.pathname==='/v1/mvp'||u.pathname.startsWith('/v1/mvp/')){
+    void mvpRuntime.handle(req,res);return;
+   }
    const item=files.get(u.pathname);
    if(item&&(req.method==='GET'||req.method==='HEAD')){
     if(req.headers.host!==new URL(cfg.origin).host||
@@ -279,15 +284,15 @@ export async function startT1EClaimServer({env=process.env}={}){
   });
   if(phase8ProbeStore)void probePhase8Rpc({store:phase8ProbeStore,signal:phase8ProbeAbort.signal}).then(result=>console.log(JSON.stringify(result)));
   return Object.freeze({
-   server,config:cfg,
+   server,config:{...cfg,mvpReady:mvpRuntime.ready},
    async close(){
     phase8ProbeAbort.abort();
     await new Promise(resolve=>server.close(resolve));
-    await Promise.all([authPool.end(),claimPool.end(),executionPool?.end(),...phase8Pools.map(p=>p.end())]);
+    await Promise.all([authPool.end(),claimPool.end(),executionPool?.end(),...phase8Pools.map(p=>p.end()),mvpRuntime?.close()]);
    }
   });
  }catch(e){
-  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{}),executionPool?.end().catch(()=>{}),...phase8Pools.map(p=>p.end().catch(()=>{}))]);
+  await Promise.all([authPool.end().catch(()=>{}),claimPool.end().catch(()=>{}),executionPool?.end().catch(()=>{}),...phase8Pools.map(p=>p.end().catch(()=>{})),mvpRuntime?.close().catch(()=>{})]);
   throw e;
  }
 }

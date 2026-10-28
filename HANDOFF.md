@@ -11,6 +11,12 @@
 
 
 
+## 2026-10-28 MVP后台独审通过；隔离实库已建，入口仍未发布
+
+后台提交7fe377a独立审查spec/quality PASS。Supabase项目ketfrukrcuosrqynnsay已应用新独立迁移`20261028121458_mvp_business_flow`（源码文件20261028114053_mvp_business_flow.sql）和`20261028121519_mvp_runtime_login`。仅新mf_mvp schema及专用mf_mvp_runtime角色；直接TLS登录通过运行时最小权限核对：当前phase=EMPTY、operations=0，无旧schema访问、无owner/superuser/DELETE/TRUNCATE/audit UPDATE。security advisors无告警。旧Phase8唯一operation摘要前后相同945836426c0db60aff0ddadbd929a32b。
+
+新凭据只在本机私有目录`/Users/mili/.mealforward-mvp-20261028/`，权限0700/0600，不进Git/日志/聊天。Render尚未配置新凭据/开启新入口；实际线上版本保持edcbc4。Root新集成模块mvp-runtime.mjs默认关闭，失效时仅MVP返回503、保留旧服务。前端实施中，CI/公开发布/用户初始化仍未完成。公共链10143只读token部署eth_call模拟通过，无Agent广播、无新真实合约。
+
 ## 2026-10-28 MVP合约独审通过、后台本地闭环完成，公开发布未执行
 
 合约提交4ef6ab4独立审查PASS，根agent复跑8/8 Foundry通过。新后台`t1-intents/mvp/`与CLI生成迁移`20261028114053_mvp_business_flow.sql`源码完成，独立后台审查待执行。根agent在全新本地PG17+Anvil31337复跑部署→报价签名→approve/fund/issue→私密链接→过期展示码拒绝→商家redeem→180秒settle通过，包含真实HTTP SIWE/CSRF与凭证流程；13项离线/路由/旧setup针对性测试PASS。均为合成验证，不是用户真实钱包验收。
