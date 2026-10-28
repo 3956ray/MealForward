@@ -12,6 +12,18 @@
 
 
 
+
+## 2026-10-28 Phase8 真人完整钱包流程PASS，child已ISSUED
+
+本人回报交易哈希及“链上发券已核验通过”。独立公网/链只读核对确认：轮次617f877a-0709-4b8f-9323-8a7ff94d0369，Owner=true、Donor=true；child f165d689-6d2b-4e5b-909b-81c3cf4d487c，stage=ISSUED、revision2、nonce0，operationId=0x46cc1cf6f86f1b8b881c40bfac6819e26309d00e869da688fc6b4ed3befd222e。
+
+交易：`0x231eb45af33fa58e6b8ad2b1932983a1b0e23d5019ba4504db4cf539b2398327`，https://testnet.monadvision.com/tx/0x231eb45af33fa58e6b8ad2b1932983a1b0e23d5019ba4504db4cf539b2398327 。chain10143、from固定Issuer0x9747…aA2B3、to固定合约0xcf0c…fe58、nonce0、value0；解码方法issue且operationId匹配，calldataHash0x8eed3d0755b9ce15f7597d02a50b214fcb97c524f502aea24c8498f7886d11fa与后台一致。回执status0x1，block74923731，hash0x5d7ab9cce31a4d04f8ed0217f11bec5c1efbaff09ca3d8fe2ed539e9ae396718，独立区块查询hash一致、2条日志；finalized观察高度74924111已超过回执高度。
+
+因此真人Owner/Donor批准、Issuer登录、prepare、本人Send、哈希绑定和服务回执核验完整流程PASS。public顶层RECOVERY_ONLY表示已消费、禁止再次准备，不是失败；operation.stage=ISSUED为结果。不得重新开轮/预留/重发，不删除旧轮次或将原Claim/旧predecessor的UNKNOWN改写为这笔成功。结算settlementEnabled=false，#17仍未解决；本验收不覆盖商家核销/结算或整个产品上线。
+
+实际应用edcbc4b3a2fd7badf1ce4536557a890eba6ca151、部署dep-dbgsq2ks728c73ca7kp0；CI40671509207成功。此前RPC429已由共享限速修复，登录后状态自动刷新已上线，本人此次完成验收。Agent只进行了只读核验和文档更新，没有代签或广播。原始登录nonce、RequestID及签名不记录。后续开发应从已发券事实继续设计领取/核销闭环，并先处理结算缺陷；不可继续把测试入口当作需要再次Send的待办。
+
+
 ## 2026-10-28 17:23 RPC429限流修复已上线，Render完整只读核验PASS
 
 已确认根因：Render对公共Monad RPC的42次链观察查询未限速，实际启动探测在34次/2738ms时遭HTTP429；签名已通过、record_approval尚未执行，所以双角色未记录。源码2f7cc36b69a4a1fb34dd51fc7ac8cfed8f3912c4加入进程共享250ms间隔、8项有界FIFO、取消移除和BUSY明确错误；不重试签名/交易，不切换RPC、不放宽安全核验。本地279/279、独立复核通过；CI40663410258全部7项成功。本机真实公共链观察42次/12976ms PASS，不能代替Render结果。
