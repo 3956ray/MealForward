@@ -23,7 +23,20 @@ assert(
 );
 const root = new pg.Pool({ connectionString });
 const database = "mvp_test_" + randomUUID().replaceAll("-", "");
-let admin, pool, anvil, httpServer;
+let admin, pool, anvil, httpServer, businessFailure;
+async function dropDisposableDatabase(connection, name) {
+  // Pool shutdown may finish just before PostgreSQL observes socket closure.
+  // Never terminate a still-connected client: retry only database-in-use.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await connection.query(`DROP DATABASE IF EXISTS ${name}`);
+      return;
+    } catch (error) {
+      if (error.code !== "55006" || attempt >= 19) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+}
 try {
   await root.query(`CREATE DATABASE ${database}`);
   const target = new URL(dbUrl);
@@ -378,13 +391,26 @@ try {
   console.log(
     "PASS: two sequential businesses sharing one escrow, preserved first record, isolation + disposable PG + Anvil deployment, quote, approve, fund, issue, private invite/display refresh, merchant redeem, 180s settle, concurrent attempt and immutable audit",
   );
+} catch (error) {
+  businessFailure = error;
+  throw error;
 } finally {
-  if (httpServer) await new Promise((r) => httpServer.close(r));
+  const cleanupErrors = [];
+  const clean = async fn => {
+    try { await fn(); } catch (error) { cleanupErrors.push(error); }
+  };
+  if (httpServer) await clean(() => new Promise((resolve, reject) => {
+    httpServer.close(error => error ? reject(error) : resolve());
+    httpServer.closeIdleConnections();
+  }));
   anvil?.kill("SIGTERM");
-  await pool?.end();
-  await admin?.end();
-  await root
-    .query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`)
-    .catch(() => {});
-  await root.end();
+  await clean(() => pool?.end());
+  await clean(() => admin?.end());
+  await clean(() => dropDisposableDatabase(root, database));
+  await clean(() => root.end());
+  if (cleanupErrors.length) {
+    if (!businessFailure) throw new AggregateError(cleanupErrors, "Disposable MVP cleanup failed");
+    // Preserve the business failure as primary, but never silently swallow cleanup failures.
+    console.error("Disposable MVP cleanup also failed:", cleanupErrors.map(error => error.code || error.name).join(", "));
+  }
 }

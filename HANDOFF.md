@@ -11,6 +11,12 @@
 
 
 
+## 2026-10-29 发布门禁：迁移已完成，等待CI清理修复
+
+应用提交c3d1d6e已推送。云迁移mvp_sequential_businesses实际版本20261028184428已应用，schema2；专用最少权限runtime通过TLS连接和verifyRuntime核验，Supabase安全advisors无lints。第一笔data指纹408e76f0c970880598786deeb7bfb39c/revision10、原6条operation排除新增business_id列后的指纹48457edd692dc32b55527297715b430c完全一致，没有第2笔业务或待发送操作。
+
+Render关写部署dep-dbh43rnlk1mc73evg000已live，公网writesEnabled=false确认。GitHub旧兼容40747874011 PASS；MVP40747874892的合约/前端/后台/双券业务断言均PASS，但测试清理DROP DATABASE WITH FORCE触发Linux Node22闲置连接error，因此整个CI必须记FAIL，不能发布。修复仅测试脚本：先关闭HTTP与连接池、非强制删除临时库，对database-in-use做有限重试，保留业务及清理错误。公网仍旧程序且关写，等待新CI全绿后发布产品入口。
+
 ## 2026-10-29 原始前端与第二笔业务开发完成，发布验证进行中
 
 已实现独立businessId、Owner显式创建下一笔、全局单一未完成业务和合约10份上限；旧无编号路由永久对应第1笔。新API /v1/mvp/businesses及/businesses/:id/*，操作/领取凭证隔离。动态读取候选券与捐赠批次绑定，核验累计账目和每一历史已结算券，不移除资金检查。新入口 /mvp/product.html，私密领取入口 /mvp/product-recipient.html；原始src/styles.css逐字复用及原首页/导航/餐盘组件视觉复用，旧接口/模拟登录未迁入。既有钱包单次发送逻辑复用，准备摘要自动滚入视图。
