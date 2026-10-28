@@ -34,7 +34,7 @@ const proxy=Object.fromEntries(['validatePhase8','executionDTO','hashData','reco
 const select=()=>{client?.invalidate();$('original-hash').value='';const p=$('provider').value===''?null:providers[Number($('provider').value)];client=createPhase8Controller({provider:p?.provider,request,crypto:proxy,cryptoReady:()=>!!crypto,origin:location.origin,render});render(client.snapshot());};
 const add=(provider,name)=>{if(!provider?.request||providers.some(p=>p.provider===provider))return;providers.push({provider,name});const option=document.createElement('option');option.value=String(providers.length-1);option.textContent=name;$('provider').append(option);if(!explicitProvider){$('provider').value=providers.length===1?'0':'';if(client)select();}};
 for(const action of ['inspect','connect','refresh','approve'])$(action).onclick=()=>{if(!client)select();void client[action]().catch(()=>{})};
-for(const action of ['challenge','login','prepare','send','bind','reconcile'])$(action).onclick=()=>{if(client&&!client.snapshot().busy)void client.issuer[action]().catch(()=>{})};
+for(const action of ['challenge','login','prepare','send','bind','reconcile'])$(action).onclick=()=>{if(client&&!client.snapshot().busy)void (async()=>{await client.issuer[action]();if(action==='login')await client.refresh()})().catch(()=>{})};
 $('recover-hash').onclick=()=>{if(client&&!client.snapshot().busy)void client.issuer.recoverHash($('original-hash').value.trim()).catch(()=>{})};
 $('provider').onchange=()=>{explicitProvider=$('provider').value!=='';select()};
 const countdown=setInterval(()=>{if(client)render(client.snapshot())},1000);

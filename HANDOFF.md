@@ -11,6 +11,23 @@
 
 
 
+## 2026-10-28 18:20 双签真实记录PASS；Issuer登录后按钮关闭反馈
+
+本人回报Issuer已登录但后续按钮无法点击。公网serverTime1793182797（18:19:57）确认轮次8baf8b59-0e64-4c37-9b63-67d5848d7d69，Owner=true、Donor=true、operation=null，PREPARE_WINDOW_CLOSED；prepareBefore1793182786（18:19:46）。因此限流修复后的真人双签入库已通过，未有新prepare/send。用户提供登录消息签发18:18:40，不等于登录完成时刻；不能仅凭现在过期推定最初按钮关闭原因。
+
+源码确认页面登录成功不会自动读轮次，批准响应更新wrapper状态而Issuer控制器可能仍持有旧AWAIT_APPROVALS，需手动刷新才能更新canPrepare。补充Phase8登录完成后的自动只读刷新，不自动prepare或send，不修改登录、签名、时限或后台规则。实际DOM完整流程改为不手动刷新也能在有效窗口内启用prepare，11项相关测试PASS。发布证据另补，真人Issuer prepare/send仍未验收。原始SIWE nonce/RequestID/签名不进入交接。
+
+
+## 2026-10-28 18:16 上轮无操作，按本人报告重新开轮
+
+本人明确“上一轮没有任何动作，重新启动测试”，接收18:15:45（1793182545）；沿用此前Issuer无交易报告及本次无操作更新。公网确认a49e7722已过期、双方false、operation=null。operator链/库预检通过后创建8baf8b59-0e64-4c37-9b63-67d5848d7d69，digest0x046eaf10d0c83e3a784b291f016fd6aa947dc30f8966ed210c8a886e662ca460，AWAIT_APPROVALS，prepare/send截止18:19:46（1793182786）、批准截止18:21:16（1793182876）。结果立即告知本人，无Agent签名/prepare/send，transactionSent=false，真人结果待回报。
+
+
+## 2026-10-28 18:06 限流修复后真人重测轮次已创建
+
+本人于18:05:57（1793181957）确认可以开始且Issuer活动无交易。先暖机公网200，旧轮过期且operation=null；随后使用新鲜报告执行operator与限速后的链/库预检，创建a49e7722-34cc-45d0-a704-1f7a2c185ecd，digest0xbfe5d248b5fe0ec6c2e95726f552fa3451a50493d116a11d8f71203e2c32fcd8，AWAIT_APPROVALS。prepare/send截止18:10:25（1793182225），批准截止18:11:55（1793182315），transactionSent=false。已立即告知完整顺序及每次签署等待后台十几秒记录成功再换角色；无Agent签名/prepare/send。本轮真人结果仍待回报，不把创建成功标作双签或发送PASS。
+
+
 ## 2026-10-28 17:23 RPC429限流修复已上线，Render完整只读核验PASS
 
 已确认根因：Render对公共Monad RPC的42次链观察查询未限速，实际启动探测在34次/2738ms时遭HTTP429；签名已通过、record_approval尚未执行，所以双角色未记录。源码2f7cc36b69a4a1fb34dd51fc7ac8cfed8f3912c4加入进程共享250ms间隔、8项有界FIFO、取消移除和BUSY明确错误；不重试签名/交易，不切换RPC、不放宽安全核验。本地279/279、独立复核通过；CI40663410258全部7项成功。本机真实公共链观察42次/12976ms PASS，不能代替Render结果。
