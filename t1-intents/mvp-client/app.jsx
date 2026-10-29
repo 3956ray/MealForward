@@ -60,6 +60,7 @@ export function App({
   api = request,
   decodeQr = jsQR,
   pollMs = 8000,
+  externalAuth = null,
 }) {
   const [status, setStatus] = useState(null),
     [session, setSession] = useState(null),
@@ -87,7 +88,16 @@ export function App({
     frame = useRef(null),
     pendingScan = useRef(null),
     transactionPanel = useRef(null);
-  useEffect(() => { onSession(session); }, [session]);
+  useEffect(() => { if (!product) onSession(session); }, [session, product]);
+  useEffect(() => {
+    if (!externalAuth) return;
+    invalidate();
+    wallet.current = externalAuth.wallet;
+    sessionRef.current = externalAuth.session;
+    setSession(externalAuth.session);
+    setSelected("product-wallet");
+    if (externalAuth.session) void run(() => refresh(externalAuth.session));
+  }, [externalAuth?.session, externalAuth?.wallet]);
   useEffect(() => {
     if (op?.state === "PREPARED") transactionPanel.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, [op?.id, op?.state]);
@@ -115,6 +125,11 @@ export function App({
   }
   useEffect(() => {
     let alive = true;
+    if (externalAuth) {
+      wallet.current = externalAuth.wallet;
+      void api("/status").then(value => { if (alive) setStatus(value); }).catch(() => {});
+      return () => { alive = false; revision.current++; stopCamera(); };
+    }
     wallet.current = walletFactory({
       onChange: () => {
         if (alive) {
@@ -226,11 +241,11 @@ export function App({
     return () => { stopped = true; clearTimeout(timer); };
   }, [pollMs]);
   function assertContext(r, s) {
-    if (r !== revision.current || s !== sessionRef.current)
+    if (r !== revision.current || s !== sessionRef.current || (externalAuth && externalAuth.sessionRef.current !== s))
       throw Error("WALLET_CONTEXT_CHANGED");
   }
   async function post(path, body, auth = sessionRef.current) {
-    if (!auth?.csrf) throw Error("LOGIN_REQUIRED");
+    if (!auth?.csrf || (externalAuth && externalAuth.sessionRef.current !== auth)) throw Error("LOGIN_REQUIRED");
     return api(path, { body, csrf: auth.csrf });
   }
   async function login() {
@@ -304,7 +319,7 @@ export function App({
     );
     setHash(txHash);
     save(o, txHash);
-    if (r !== revision.current || s !== sessionRef.current)
+    if (r !== revision.current || s !== sessionRef.current || (externalAuth && externalAuth.sessionRef.current !== s))
       throw Error("HASH_SAVED_LOGIN_TO_RECOVER");
     await post("/operations/" + o.id + "/hash", { txHash });
     await refresh(s);
@@ -439,6 +454,7 @@ export function App({
       <Notice busy={busy} error={error} />
       {expectedRole && session && session.role !== expectedRole ? <p className="notice">当前为{roles[session.role]}，此工作台需要{roles[expectedRole]}。请切换对应钱包并重新登录。</p> : null}
       <div className="grid">
+        {!product && <>
         <section className="card">
           <p className="eyebrow">01 · 身份与连接</p>
           <h2>{session ? roles[session.role] : "选择你的测试钱包"}</h2>
@@ -503,6 +519,7 @@ export function App({
             ))}
           </details>
         </section>
+        </>}
         <section className="card primary-card">
           <p className="eyebrow">02 · {merchant ? "餐券交接" : "当前进度"}</p>
           <h2>{session ? phases[phase] : "登录后继续这一份善意"}</h2>

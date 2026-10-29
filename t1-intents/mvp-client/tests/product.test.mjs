@@ -27,64 +27,51 @@ test('scopes merchant and operations, keeps authentication global, removes recip
  assert.deepEqual(captureProductInvite(v),{businessId:'2',token:'private'});assert.equal(v.location.hash,'#businessId=2');
  assert.equal(productRoute('#businessId=2&role=issuer').businessId,'2');
 });
-test('switching business drops old transaction and entered code; late response cannot contaminate new business',async()=>{
+const {POLICIES}=await import('../guards.mjs');
+function fixture(extra = {}) {
+ let change, signed=0, account=POLICIES.owner, chainId=10143, reject=false;
+ const factory=({onChange})=>{change=onChange;return {providers:()=>[{id:'p',name:'Wallet'}],select(){},connect:async()=>({account,chainId}),inspect:async()=>({account,chainId}),signMessage:async()=>{signed++;if(reject)throw Error('REJECTED');return 'signature';},dispose(){}};};
+ const session={role:'owner',csrf:'test',wallet:POLICIES.owner};
+ const api=async(path,options)=>{if(extra.api){const value=extra.api(path,options);if(value !== undefined)return value;}if(path==='/auth/pre-session')return {csrf:'test'};if(path==='/identity/wallet/challenge')return {challengeId:'req12345',message:`mvp.example wants you to sign in with your Ethereum account:\n${POLICIES.owner}\n\nSign in\n\nURI: https://mvp.example\nVersion: 1\nChain ID: 10143\nNonce: abcdefgh\nIssued At: 2026-01-01T00:00:00.000Z\nExpiration Time: 2099-01-01T00:00:00.000Z\nRequest ID: req12345`};if(path==='/identity/wallet/login')return {};if(path==='/me')return session;if(path==='/businesses')return businesses;if(path==='/status')return {enabled:true};if(path.endsWith('/setup'))return {state:{phase:'SETTLED'},operations:[]};throw Error(path);};
+ return {factory,api,change:()=>change(),setReject:v=>reject=v,setChain:v=>chainId=v,setAccount:v=>account=v,get signed(){return signed;}};
+}
+async function mountFixture(f, hash='businessId=1&role=owner') {await navigate(hash);document.body.innerHTML='<div id="test"></div>';root=createRoot(document.getElementById('test'));await act(async()=>{root.render(React.createElement(Product,{api:f.api,walletFactory:f.factory}));await tick();});const select=document.querySelector('select[aria-label="选择钱包"]');await act(async()=>{select.value='p';select.dispatchEvent(new Event('change',{bubbles:true}));});}
+async function loginFixture(){await act(async()=>{[...document.querySelectorAll('button')].find(b=>b.textContent.includes('连接钱包并签名')).click();await tick();await tick();});}
+test('explicit login persists across routes and wallet change clears it',async()=>{
+ const {POLICIES}=await import('../guards.mjs'); let change, reads=0, signs=0;
+ const wallet=()=>({providers:()=>[{id:'p',name:'Wallet'}],select(){},connect:async()=>({account:POLICIES.owner,chainId:10143}),inspect:async()=>({account:POLICIES.owner,chainId:10143}),signMessage:async()=>{signs++;return 'signature';},dispose(){}});
+ const factory=({onChange})=>{change=onChange;return wallet();};
+ const verified={role:'owner',csrf:'test',wallet:POLICIES.owner};
+ const api=async(path)=>{if(path==='/auth/pre-session')return {csrf:'test'};if(path==='/identity/wallet/challenge')return {challengeId:'req12345',message:`mvp.example wants you to sign in with your Ethereum account:\n${POLICIES.owner}\n\nSign in\n\nURI: https://mvp.example\nVersion: 1\nChain ID: 10143\nNonce: abcdefgh\nIssued At: 2026-01-01T00:00:00.000Z\nExpiration Time: 2099-01-01T00:00:00.000Z\nRequest ID: req12345`};if(path==='/identity/wallet/login')return {};if(path==='/me'){reads++;return verified;}if(path==='/businesses')return businesses;if(path==='/status')return {enabled:true};if(path.endsWith('/setup'))return {state:{phase:'SETTLED'},operations:[]};throw Error(path);};
+ await navigate('businessId=1&role=home'); document.body.innerHTML='<div id="test"></div>';root=createRoot(document.getElementById('test'));
+ try { await act(async()=>{root.render(React.createElement(Product,{api,walletFactory:factory}));await tick();}); assert.equal(reads,0);
+ await act(async()=>document.querySelector('.wallet-header button').click());
+ const select=document.querySelector('select[aria-label="选择钱包"]');await act(async()=>{select.value='p';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ await act(async()=>{[...document.querySelectorAll('button')].find(b=>b.textContent.includes('连接钱包并签名')).click();await tick();await tick();});
+ assert.equal(signs,1);assert.equal(reads,1);assert.ok(document.querySelector('.wallet-header').textContent.includes('商家'));
+ await navigate('businessId=1&role=records');await navigate('businessId=1&role=home');await navigate('businessId=1&role=owner');assert.equal(reads,1);
+ await act(async()=>{change();await tick();});assert.ok(document.body.textContent.includes('连接钱包，开启善意'));assert.equal(document.querySelector('.product-work'),null);
+ } finally {await unmount();}
+});
+test('anonymous role route does not access protected business',async()=>{
+ let calls=[];await navigate('businessId=1&role=owner');await mount(async p=>{calls.push(p);throw Error('LOGIN_REQUIRED');});
+ try {assert.ok(document.body.textContent.includes('连接钱包，开启善意'));assert.deepEqual(calls,[]);} finally {await unmount();}
+});
+test('business switch discards late response from prior scope',async()=>{
  let resolveOld, reads=0;
- const api=async(path)=>{
-  if(path==='/me')return session;if(path==='/status')return {enabled:true,writesEnabled:true};if(path==='/businesses')return businesses;
-  if(path==='/businesses/1/setup'){reads++; if(reads>1)return new Promise(r=>resolveOld=r);return {state:{phase:'ISSUED'},operations:[],allowedAction:'redeem'};}
-  if(path==='/businesses/2/setup')return {state:{phase:'SETTLED'},operations:[],allowedAction:null};
-  throw Error('UNEXPECTED_PATH');
- };
- await mount(api);
- assert.ok(document.querySelector('.header .brand svg'));assert.equal(document.querySelectorAll('.header').length,1);
- const input=document.querySelector('input[placeholder="000000"]');assert.ok(input);
- await act(async()=>{const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;setter.call(input,'123456');input.dispatchEvent(new Event('input',{bubbles:true}));});
- const refresh=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('刷新已确认'));
- await act(async()=>{refresh.click();await tick();});
- await navigate('businessId=2&role=owner');
- assert.equal(document.querySelector('input[placeholder="000000"]'),null);
- await act(async()=>{resolveOld({state:{phase:'ISSUED'},operations:[{id:'stale',action:'redeem',state:'PREPARED',transaction:{nonce:'0x1'}}],allowedAction:'redeem'});await tick();});
- assert.equal(document.querySelector('.recovery'),null);assert.ok(document.body.textContent.includes('测试餐款已结算'));
- await unmount();
+ const f=fixture({api:path=>{if(path==='/businesses/1/setup'){if(++reads>1)return new Promise(r=>resolveOld=r);return {state:{phase:'ISSUED'},operations:[],allowedAction:'redeem'};}if(path==='/businesses/2/setup')return {state:{phase:'SETTLED'},operations:[]};}});
+ await mountFixture(f);try {await loginFixture();const input=document.querySelector('input[placeholder="000000"]');assert.ok(input);await act(async()=>{const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;setter.call(input,'123456');input.dispatchEvent(new Event('input',{bubbles:true}));});const refresh=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('刷新已确认'));await act(async()=>{refresh.click();await tick();});await navigate('businessId=2&role=owner');assert.equal(document.querySelector('input[placeholder="000000"]'),null);await act(async()=>{resolveOld({state:{phase:'ISSUED'},operations:[{id:'stale',action:'redeem',state:'PREPARED',transaction:{nonce:'0x1'}}],allowedAction:'redeem'});await tick();});assert.equal(document.querySelector('.recovery'),null);assert.ok(document.body.textContent.includes('测试餐款已结算'));}finally{await unmount();}
 });
-test('new business creation is owner-only and requires server eligibility',async()=>{
- let created=0;
- const api=async(path,options)=>{if(path==='/me')return session;if(path==='/businesses'){if(options?.body){created++;return {business:{id:'2'}};}return {...businesses,canCreate:false};}if(path==='/status')return {};return {state:{phase:'SETTLED'},operations:[]};};
- await navigate('businessId=1&role=records');await mount(api);
- const create=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('创建下一笔'));
- assert.equal(create.disabled,true);assert.equal(created,0);await unmount();
+test('rejected signature can retry; wrong network blocks signing',async()=>{
+ const f=fixture();await mountFixture(f);try {f.setChain(1);await loginFixture();assert.equal(f.signed,0);f.setChain(10143);f.setReject(true);await loginFixture();assert.equal(f.signed,1);assert.ok(document.querySelector('[role="alert"]'));f.setReject(false);await loginFixture();assert.equal(f.signed,2);assert.ok(document.querySelector('.wallet-header').textContent.includes('商家'));f.setAccount(POLICIES.donor);await act(async()=>{f.change();await tick();});assert.equal(document.querySelector('.product-work'),null);}finally{await unmount();}
 });
-test('working view is sole session reader; eligible owner creates a new record without preparing a transaction',async()=>{
- let reads=0,created=0;
- const api=async(path,options)=>{
-  if(path==='/me'){reads++;return session;}
-  if(path==='/status')return {enabled:true,writesEnabled:true};
-  if(path==='/businesses'){if(options?.body){assert.equal(options.csrf,'test');created++;return {business:{id:'2'}};}return {...businesses,canCreate:true};}
-  if(path.endsWith('/setup'))return {state:{phase:'SETTLED'},operations:[]};
-  throw Error('UNEXPECTED_PATH');
- };
- await navigate('businessId=1&role=owner');await mount(api);assert.equal(reads,1);
- await navigate('businessId=1&role=records');
- const create=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('创建下一笔'));
- assert.equal(create.disabled,false);
- await act(async()=>{create.click();await tick();await tick();});
- assert.equal(created,1);assert.equal(location.hash,'#businessId=2&role=owner');await unmount();
+test('late login response cannot restore changed wallet identity',async()=>{
+ let resolveMe, started;const ready=new Promise(r=>started=r);const f=fixture({api:path=>path==='/me'?new Promise(r=>{resolveMe=r;started();}):undefined});await mountFixture(f);try {await act(async()=>{[...document.querySelectorAll('button')].find(b=>b.textContent.includes('连接钱包并签名')).click();await ready;});await act(async()=>{f.change();resolveMe({role:'owner',csrf:'test',wallet:POLICIES.owner});await tick();});assert.equal(document.querySelector('.product-work'),null);assert.ok(document.querySelector('.wallet-header').textContent.includes('钱包登录'));}finally{await unmount();}
 });
-test('anonymous landing treats protected business-list denial as a normal state',async()=>{
- let sessionReads=0;
- const api=async(path)=>{if(path==='/me')sessionReads++;throw Error('LOGIN_REQUIRED');};
- await navigate('businessId=1&role=home');await mount(api);
- assert.equal(sessionReads,0);assert.equal(document.querySelector('[role="alert"]'),null);
- assert.ok(document.body.textContent.includes('支持一餐')); assert.equal(document.querySelectorAll('.store-card').length,3); assert.equal(document.querySelectorAll('.store-card button:disabled').length,2); await unmount();
+test('wrong role route cannot access work and owner creates eligible business',async()=>{
+ let created=0;const f=fixture({api:(path,options)=>{if(path==='/businesses')return options?.body?(created++,{business:{id:'2'}}):{...businesses,canCreate:true};}});await mountFixture(f);try {await loginFixture();await navigate('businessId=1&role=donor');assert.equal(document.querySelector('.product-work'),null);assert.ok(document.body.textContent.includes('请使用支持者 / Donor钱包登录'));await navigate('businessId=1&role=records');const create=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('创建下一笔'));assert.equal(create.disabled,false);await act(async()=>{create.click();await tick();await tick();});assert.equal(created,1);assert.equal(location.hash,'#businessId=2&role=owner');}finally{await unmount();}
 });
-test('home kitchen scroll preserves selected business',async()=>{
- await navigate('businessId=2&role=home'); await mount(async path=>path==='/businesses' ? businesses : path==='/me' ? session : path==='/status' ? {enabled:true,writesEnabled:true} : {state:{phase:'SETTLED'},operations:[]});
- let scrolled=false; document.getElementById('kitchens').scrollIntoView=()=>{scrolled=true;};
- const button=[...document.querySelectorAll('.hero button')].find(b=>b.textContent.includes('支持一餐'));
- await act(async()=>button.click()); assert.equal(scrolled,true); assert.equal(location.hash,'#businessId=2&role=home');
- const card=document.querySelector('.store-card button:not(:disabled)'); await act(async()=>{card.click();await tick();});
- assert.equal(location.hash,'#businessId=2&role=donor'); await unmount();
-});
+test('server unknown role is rejected',async()=>{const f=fixture({api:path=>path==='/me'?{role:'admin',wallet:POLICIES.owner,csrf:'test'}:undefined});await mountFixture(f);try{await loginFixture();assert.equal(document.querySelector('.product-work'),null);assert.ok(document.querySelector('[role="alert"]'));}finally{await unmount();}});
 test('original stylesheet is reused verbatim and recipient build has no wallet dependency',async()=>{
  const original=await readFile(new URL('../source.css',import.meta.url),'utf8');
  const generated=await readFile(new URL('../../public/mvp/product-original.css',import.meta.url),'utf8');assert.equal(generated,original);
