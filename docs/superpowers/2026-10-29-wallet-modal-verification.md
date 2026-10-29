@@ -14,3 +14,7 @@ Candidate07dc5bc, buildf223eb7a67f5a243c84b:35client+5runtimePASS. Local desktop
 ## Reviewed candidate
 
 Final source 1a339cd30950781d6ee688832a36db9e5abf4bcf; build b749401674bede156e3d, 36client+5runtime PASS. Independent review approved after fixing standalone setup/merchant late-discovery callback; dedicated test preserves existing identity and single /me. Same-UUID replacement and unknown selection independently checked. Public release and human testing pending.
+
+## Live release
+
+Deployment a7f4c84dfa02aacd458dcd19cca0abddb8671aaa / Render dep-dbhlh4mc6qcc73fo4nog live2026-10-29 22:31:38 Asia/Shanghai, buildb749401674bede156e3d. ExactCI [MVP](https://github.com/3956ray/MealForward/actions/runs/40891996525) and [compatibility](https://github.com/3956ray/MealForward/actions/runs/40891996601) PASS. Public smoke16assets exact/chain10143/existingUSDC/denialchecks/legacyissuedPASS. Bothsettledbusiness fingerprints unchanged frompreflight. No wallet or businesswrites. Humanextensionacceptance pending; local browserhadnoextension. This supersedes pending statuses above.

@@ -4,7 +4,7 @@
 >
 > **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Three Stores 产品页面已发布钱包优先登录；首页/顶部直接连接并签名验证，再按服务端角色进入业务。用户已完成第二张券全流程；两笔 SETTLED，第二笔7测试USDC付款已核验，本阶段最小MVP验收通过。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
+> **当前状态：Three Stores 已发布钱包选择弹窗、扩展去重、分步登录提示与被动会话恢复；本轮待最小真人登录补测。用户已完成第二张券全流程；两笔 SETTLED，第二笔7测试USDC付款已核验，本阶段最小MVP验收通过。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
 
 
 
@@ -12,7 +12,18 @@
 
 
 
-## 2026-10-29 钱包选择与被动恢复（仅源码，待父 Agent 独审/发布）
+## 2026-10-29 22:31 钱包弹窗优化已上线，等待最小补测
+
+- 入口 https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html 。点击钱包登录弹出已发现扩展卡片；同一 provider 去重；连接、签名、后台验证分别提示；报价显示当前业务与期限；已经在对应工作台时显示「当前工作台」。复用锁定 Wagmi/Viem，参考 thirdweb/RainbowKit 交互，无新SDK或依赖升级。
+- 通过一次显式登录记住 provider 元数据后，可在刷新时被动恢复：启动2.5秒内唯一匹配扩展 + 当前授权账户/10143网络 + 有效后台会话/角色均匹配才恢复。没有自动连接、签名、交易或切链。升级前无记忆需先主动登录一次；不匹配、会话过期或扩展未及时发现均回到手动登录。退出清除记忆，发现新扩展不再错误清除现有身份。
+- 源码最终 `1a339cd30950781d6ee688832a36db9e5abf4bcf`；部署 `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa`；build `b749401674bede156e3d`。Render `dep-dbhlh4mc6qcc73fo4nog` 于2026-10-29 22:31:38 UTC+8 live，service srv-dbdgstivcj2c73fnqcc0 / workspace tea-db7q3ou7bikc73bp2bt0，autoDeploy off，writesEnabled=true。GitHub仍3956ray/MealForward同分支、PR47 draft未合并；后续文档commit不改变部署。
+- 独立审查通过；修复旧setup/merchant入口未接收延迟发现事件的兼容问题。36客户端+5runtime本地PASS。精确部署SHA CI：[MVP](https://github.com/3956ray/MealForward/actions/runs/40891996525) PASS，[兼容性](https://github.com/3956ray/MealForward/actions/runs/40891996601) PASS。
+- 公网只读检查PASS：16资源与生成物完全匹配、10143/既有USDC、权限拒绝、旧Phase8 ISSUED保留。Supabase发布后两笔仍SETTLED，revision10/9和fingerprint408e76f0c970880598786deeb7bfb39c / 517254d2bdad4ef3dffc14ab23806c39均不变。没有第三笔，没有业务或钱包动作。
+- 桌面与390px本地弹窗检查通过；Esc关闭焦点回到原按钮。预览环境无扩展，只证明布局/无扩展提示，真实MetaMask发现、登录及恢复仍待本人。完整证据见 [验证记录](docs/superpowers/2026-10-29-wallet-modal-verification.md)。
+- 用户只按 [最小补测](docs/superpowers/2026-10-29-wallet-modal-acceptance.md) 测试弹窗选择、拒签重试、同账户刷新恢复、切换账户失效。无需捐赠/发券/交餐/结算或第三张券。没有新开发阻碍，停在真人测试门槛。
+- 回退应用至上一部署d5a8a1bd37f8627c3fb008b76e119c41798c0646；不回滚链/数据库，不重发不确定交易。
+
+## 历史源码阶段：钱包选择与被动恢复
 
 - 独审修复：独立 setup/merchant 页面补充 `onDiscovery` 刷新钱包列表，保留 `onChange` 身份失效语义。晚到扩展可见且不会清除已验证 session；新增针对性 DOM 回归。修复后客户端 36/36、运行时 5/5、build `b749401674bede156e3d` PASS，仍仅源码未发布。
 
