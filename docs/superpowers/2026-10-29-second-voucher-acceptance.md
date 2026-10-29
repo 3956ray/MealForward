@@ -1,5 +1,7 @@
 # 第二张券：一次最小真人验收
 
+**2026-10-29 验收完成。** 用户报告全流程成功；RPC核验结算交易 `0xff0a2d482e8fc8e177a79a9e2f9d3228b28a06faf2eb3edfd5c6b54bb25698ff` 成功并向商家转入7测试USDC。数据库两笔均SETTLED，第一笔指纹不变。以下步骤留作记录，不要求重复执行。
+
 仅在HANDOFF标记新入口已发布且写入已开放后进行。Monad Testnet10143、7已有测试USDC、固定Owner/Donor/Issuer，沿用现有escrow 0x2ab15b22860323c02c90664fb8c39406a93eab54。不重复初始化或部署。
 
 入口：https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html

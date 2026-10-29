@@ -4,13 +4,22 @@
 >
 > **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Three Stores 产品页面已发布钱包优先登录；首页/顶部直接连接并签名验证，再按服务端角色进入业务。用户已反馈 Owner 登录及第一笔已结算；等待第二张券验收。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
+> **当前状态：Three Stores 产品页面已发布钱包优先登录；首页/顶部直接连接并签名验证，再按服务端角色进入业务。用户已完成第二张券全流程；两笔 SETTLED，第二笔7测试USDC付款已核验，本阶段最小MVP验收通过。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
 
 
 
 
 
 
+
+## 2026-10-29 第二张券完整真人验收通过
+
+- 用户报告整个流程成功，提供结算交易 `0xff0a2d482e8fc8e177a79a9e2f9d3228b28a06faf2eb3edfd5c6b54bb25698ff`。范围为现有产品前端、Monad Testnet、单商家、第二张券；不是主网或多商家验收。
+- 独立只读 RPC `eth_getTransactionReceipt`：status=0x1，block=75160315，from=固定Owner，to=现有escrow `0x2ab15b22860323c02c90664fb8c39406a93eab54`。既有USDC `0x534b2f3a21130d7a60830c2df862319e593943a3` 的 Transfer 从escrow至Owner，amount=7000000（6位小数，即7测试USDC）；券事件ID `0x4beace94a037c3551e6b925525d3f273be1ef8e01b08c73bab51e30ed3281de0` 与业务2一致。结算blockTimestamp=1793255184，晚于后台可结算时刻1793254816。
+- Supabase `ketfrukrcuosrqynnsay` / `mf_mvp_usdc.state`：业务1 SETTLED/revision10/fingerprint408e76f0c970880598786deeb7bfb39c（与上轮完全一致）；业务2 SETTLED/revision9/fingerprint517254d2bdad4ef3dffc14ab23806c39。两笔独立完成，旧记录保留。
+- 浏览器抓取交易页面失败，以上链上证据来自公开Monad RPC，不依赖浏览器页面展示。用户反馈完整产品操作通过；Agent核验最终链上付款及持久状态，没有代签或发起交易。
+- 部署仍为 `d5a8a1bd37f8627c3fb008b76e119c41798c0646` / build352203334c9e32785dc0 / Render dep-dbhc9m2fngtc73b8vglg；本次仅文档交接，无代码/配置/数据库/合约修改。原精确版本CI仍适用，不为文档重复运行业务测试。
+- 本阶段完成：捐赠→发券→免钱包领取→商家验码交餐→等待→结算付款。无需重复完整验收或自动创建第三笔。剩余轻量UX待办：「进入工作台」在当前页缺少反馈；后续仅针对实际改动补测。PR47保持draft未合并，下一开发范围待用户决定。
 
 ## 2026-10-29 Owner 真人登录反馈与第二笔测试起点
 
