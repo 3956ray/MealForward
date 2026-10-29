@@ -4,7 +4,7 @@
 >
 > **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：已按用户指定的 Three Stores Sites v8 前端修正并发布到 /mvp/product.html，等待一次第二张券真人验收。原站作为视觉来源保持不变；当前仅清禾测试厨房接通，另外两家明确未开放。第一笔SETTLED及6操作记录保留；同一既有USDC/合约，不新部署。** 以下最新记录优先于历史阶段。
+> **当前状态：Three Stores 产品页面已发布钱包优先登录；首页/顶部直接连接并签名验证，再按服务端角色进入业务。等待用户本人完成登录及第二张券验收。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
 
 
 
@@ -12,11 +12,18 @@
 
 
 
-## 2026-10-29 钱包优先登录（源码候选，未发布）
+## 2026-10-29 12:01 钱包优先登录已发布
 
-最终源码 `78345f223cc594b6e236a5043cec2c45733f785d` 已独立复审通过；27 客户端、5 runtime 本地检查通过，构建 `352203334c9e32785dc0`。修复共用身份路径下倒计时冻结、延迟退出清除新会话，以及等待登录时退出按钮的误导状态。CI / 部署 / 真人钱包验收仍 pending。完整证据见 [钱包登录验证记录](docs/superpowers/2026-10-29-wallet-first-verification.md)，操作见 [第二张券验收](docs/superpowers/2026-10-29-second-voucher-acceptance.md)。下段为实施过程记录，最终候选以本段为准。
-
-产品入口新增显式钱包选择、连接和 SIWE 登录，Product 持有唯一会话；按服务端角色进入对应工作台，切业务时隔离工作状态。账户、网络或断开变化清除身份及操作状态；领取页仍无需钱包。原 Three Stores CSS 与图片未变。修复产品工作台计时与退出登录并发，退出响应完成前禁止新登录。钱包操作中退出按钮显示等待并禁用，防止误以为退出已执行。构建 352203334c9e32785dc0；客户端 27 项、runtime 5 项本地通过，含显式登录、拒签重试、角色门禁、旧响应及跨业务隔离测试。独立审查、当前 SHA CI、发布及真实钱包验收均 PENDING；线上仍为下述 d5d4b23 部署，不代表此候选已上线。未操作云、数据库、钱包或链。下一步独立复核、通过 CI 和发布门禁后再安排用户本人测试。
+- 正式入口：https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html 。首页及顶部提供钱包登录，选择 MetaMask → 本人确认连接/登录签名 → 服务端验证角色 → 对应业务操作。连接不等于登录，登录不等于交易批准。领取页面仍无需钱包。
+- 源码最终审查 SHA `78345f223cc594b6e236a5043cec2c45733f785d`；部署 commit `d5a8a1bd37f8627c3fb008b76e119c41798c0646`；build `352203334c9e32785dc0`。GitHub 仓库/分支仍 `3956ray/MealForward` / `codex/mealforward-t1f-phase6-release-review-20261026`，PR47 draft 未合并。后续仅文档提交不改变运行代码。
+- Render `dep-dbhc9m2fngtc73b8vglg` 于 2026-10-29 12:01:30 UTC+8 live，service `srv-dbdgstivcj2c73fnqcc0` / workspace `tea-db7q3ou7bikc73bp2bt0`；autoDeploy off，writesEnabled=true，网络 Monad Testnet 10143。
+- 复用锁定的 Wagmi/Viem 与既有 SIWE 校验；无依赖升级、后台改动、迁移或新合约。Product 共用钱包和会话，各业务保留独立操作状态。账户/网络变化清除旧身份，旧响应不能恢复身份或覆盖新业务。
+- 独立审查修复了共用钱包路径跳过倒计时、延迟退出清除新会话、等待登录时退出按钮仍可点击的问题。退出等待期间不能开始新登录；登录等待期间退出按钮明确禁用。最终独立复审 PASS，27 客户端 + 5 runtime 本地检查 PASS。
+- 精确部署 SHA CI：[MVP](https://github.com/3956ray/MealForward/actions/runs/40815158516) PASS（含 fresh PostgreSQL/Anvil 两笔完整业务）；[兼容性](https://github.com/3956ray/MealForward/actions/runs/40815158562) PASS。
+- 公网只读/拒绝检查 PASS：16 个资源与本地生成物逐字节一致；正确网络和既有 USDC；未登录/跨域访问拒绝；旧 Phase8 ISSUED 保留。没有钱包动作或业务写入。数据项目 `ketfrukrcuosrqynnsay`，`mf_mvp_usdc.state` 仅业务 1、SETTLED、revision 10、fingerprint `408e76f0c970880598786deeb7bfb39c`，与发布前一致；业务 2 尚未创建。
+- 桌面及 390px 本地匿名预览检查通过，钱包入口明确、未登录业务被拦截、无扩展有提示。内置浏览器访问公网超时；不能把本地预览或公网 HTTP 检查当作真人钱包已登录。真实 MetaMask 测试仍待用户本人。
+- 下一步：用户打开正式入口，点击顶部「钱包登录」，选择 MetaMask，用 Owner 登录，确认顶部账户/角色及业务 1 已结算；然后按 [第二张券验收](docs/superpowers/2026-10-29-second-voucher-acceptance.md) 进行一次完整流程。不重复初始化、不新部署代币/合约。当前无开发阻碍，停在本人钱包测试门槛。
+- 回退：若登录或会话验证异常，暂停测试；恢复上一个已验证 Render 应用 commit `d5d4b233f9c5e5dedf0a977f7bcb73089197528f`。数据库及链上记录不回滚、不重发不确定交易。详细实现/验证见 [钱包登录验证记录](docs/superpowers/2026-10-29-wallet-first-verification.md)。
 
 ## 2026-10-29 10:41 正确 Three Stores 前端已发布
 

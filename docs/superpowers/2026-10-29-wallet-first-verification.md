@@ -30,6 +30,13 @@ Persistent product authentication owns one wallet adapter and one login lifecycl
 - Independent review found two P2 issues: the externally owned wallet path skipped the business clock, and a delayed logout could erase a newer login cookie. Fixes move the clock to an independent effect and serialize authentication actions through logout completion, including wallet changes. Focused regression tests cover both.
 - Desktop and 390px browser inspection: header/home login is visible; direct anonymous business navigation presents login and no transaction controls; unavailable extension is explained. This is a synthetic anonymous preview, not evidence of real-wallet login. Screenshots: `/tmp/mealforward-wallet-first-evidence/home.jpg` and `login-mobile.jpg`.
 
-## Pending
+## Release results
 
-Independent re-review approved `78345f223cc594b6e236a5043cec2c45733f785d`, independently running 27 client and 5 runtime tests. Header Exit is visibly disabled during authentication, instead of silently ignoring a click. Exact-commit CI, deployment and public smoke verification are pending. Human wallet acceptance has not been performed.
+Independent re-review approved `78345f223cc594b6e236a5043cec2c45733f785d`, independently running 27 client and 5 runtime tests. Header Exit is visibly disabled during authentication, instead of silently ignoring a click. Exact deployment commit `d5a8a1bd37f8627c3fb008b76e119c41798c0646` passed both CI suites:
+
+- [Isolated MVP business flow](https://github.com/3956ray/MealForward/actions/runs/40815158516): PASS, including fresh PostgreSQL/Anvil two-business flow.
+- [Recovery compatibility](https://github.com/3956ray/MealForward/actions/runs/40815158562): PASS.
+
+Deployment `dep-dbhc9m2fngtc73b8vglg` is live at 2026-10-29 12:01:30 Asia/Shanghai against that exact commit. Public read/denial smoke PASS: all 16 assets match, Monad Testnet 10143, existing USDC, writes enabled, legacy issued operation preserved. No wallet actions. Database business 1 remains SETTLED/revision 10 with unchanged fingerprint `408e76f0c970880598786deeb7bfb39c`; no business 2.
+
+Public browser navigation timed out in the in-app browser. Local desktop/mobile preview and public HTTP verification are recorded separately; real MetaMask login is still for the user to verify. Human wallet acceptance has not been performed.
