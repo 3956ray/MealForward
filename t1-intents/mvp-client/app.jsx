@@ -565,7 +565,8 @@ export function App({
               ["READY", "APPROVED"].includes(phase) ? (
                 <div className="subcard">
                   <strong>店主确认本餐报价</strong>
-                  <p>1 份 × 7 测试 USDC · 30 分钟有效</p>
+                  <p>第 {businessId} 笔业务 · 清禾厨房 · 1 份 × 7 测试 USDC · 30 分钟有效</p>
+                  <p>报价签名确认本餐金额和期限，不转账、不支付 Gas；有效报价无需重复签名。{setup.quote?.deadline ? `有效至 ${new Date(Number(setup.quote.deadline) * 1000).toLocaleString()}` : "请核对钱包中显示的报价期限。"}</p>
                   <button
                     disabled={
                       busy ||

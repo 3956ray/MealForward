@@ -9,7 +9,7 @@ const chain = defineChain({id: CHAIN_ID, name: 'Monad Testnet', nativeCurrency: 
 const address = x => typeof x === 'string' && /^0x[0-9a-fA-F]{40}$/.test(x);
 const fail = code => {throw Error('MVP_WALLET_' + code)};
 
-export function createMvpWallet({view = globalThis.window, onChange = () => {}} = {}) {
+export function createMvpWallet({view = globalThis.window, onChange = () => {}, onDiscovery = () => {}} = {}) {
   const choices = new Map();
   let selected = null, listening = null, generation = 0, selection = 0, disposed = false;
   const changed = () => {generation++; if (!disposed) onChange()};
@@ -20,18 +20,21 @@ export function createMvpWallet({view = globalThis.window, onChange = () => {}} 
     listening = provider;
     for (const name of events) listening?.on?.(name,changed);
   }
-  function add(id,name,provider) {
+  function add(id,name,provider,rdns = null) {
     if (disposed || typeof provider?.request !== 'function') return;
-    const previous = choices.get(id); choices.set(id,{name,provider});
+    const duplicate = [...choices].find(([, entry]) => entry.provider === provider);
+    if (duplicate) { const entry = duplicate[1]; if (rdns) { entry.name=name; entry.rdns=rdns; } onDiscovery(); return; }
+    const previous = choices.get(id); choices.set(id,{name,provider,rdns});
     if (selected === id && previous?.provider !== provider) {selection++;generation++;attach(provider)}
-    if (!previous || previous.provider !== provider) onChange();
+    if (selected === id && previous?.provider !== provider) onChange();
+    onDiscovery();
   }
   const announce = event => {
     const {info,provider} = event.detail || {};
-    if (typeof info?.uuid === 'string' && /^[-\w]{1,80}$/.test(info.uuid) && typeof info.name === 'string') add(info.uuid,info.name.slice(0,80),provider);
+    if (typeof info?.uuid === 'string' && /^[-\w]{1,80}$/.test(info.uuid) && typeof info.name === 'string') add(info.uuid,info.name.slice(0,80),provider, typeof info.rdns === "string" && /^[a-zA-Z0-9.-]{1,160}$/.test(info.rdns) ? info.rdns : null);
   };
   view.addEventListener('eip6963:announceProvider',announce);
-  if (view.ethereum) add('injected','Injected wallet',view.ethereum);
+  if (view.ethereum) add('injected','浏览器钱包',view.ethereum);
   view.dispatchEvent(new view.Event('eip6963:requestProvider'));
   function current() {if(disposed)fail('DISPOSED');return choices.get(selected)?.provider || fail('SELECT_PROVIDER')}
   function stable(provider,revision) {if(disposed || generation !== revision || current() !== provider)fail('CONTEXT_CHANGED')}
@@ -63,7 +66,7 @@ export function createMvpWallet({view = globalThis.window, onChange = () => {}} 
     return invoke(client);
   }
   return Object.freeze({
-    providers:()=>[...choices].map(([id,{name}])=>({id,name})),
+    providers:()=>[...choices].map(([id,{name,rdns}])=>({id,name,rdns})),
     select(id){if(!choices.has(id))fail('SELECT_PROVIDER');selected=id;selection++;generation++;attach(current());onChange()},
     inspect(){return observe(current(),generation)},
     async connect(){

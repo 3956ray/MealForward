@@ -25,3 +25,11 @@ test('returned original hash survives account change while wallet prompt is open
 test('nonzero value and mismatched sender never reach provider',async()=>{
  const f=fixture();assert.throws(()=>f.wallet.sendTransaction(owner,{...tx,value:'0x1'}));assert.throws(()=>f.wallet.sendTransaction(other,tx));assert.deepEqual(f.calls,[]);f.wallet.dispose();
 });
+test('late announcements deduplicate fallback provider without identity invalidation',async()=>{
+ const view=new EventTarget();view.Event=Event;let identity=0, discovery=0;const calls=[];
+ const provider={request:async({method})=>{calls.push(method);return method==='eth_accounts'?[owner]:'0x279f';}};
+ view.ethereum=provider;const wallet=createMvpWallet({view,onChange:()=>identity++,onDiscovery:()=>discovery++});wallet.select('injected');const initial=identity;
+ const announce=(uuid,name,p,rdns)=>{const e=new Event('eip6963:announceProvider');e.detail={info:{uuid,name,rdns},provider:p};view.dispatchEvent(e);};
+ announce('a','MetaMask',provider,'io.metamask');announce('b','Other wallet',{request:provider.request},'other.wallet');announce('c','MetaMask',provider,'io.metamask');
+ assert.equal(wallet.providers().length,2);assert.equal(wallet.providers()[0].name,'MetaMask');assert.equal(wallet.providers()[0].rdns,'io.metamask');assert.equal(identity,initial);assert.ok(discovery>=3);assert.deepEqual(calls,[]);assert.equal((await wallet.inspect()).account,owner);wallet.dispose();
+});
