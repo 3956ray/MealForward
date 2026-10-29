@@ -30,7 +30,7 @@ test('scopes merchant and operations, keeps authentication global, removes recip
 const {POLICIES}=await import('../guards.mjs');
 function fixture(extra = {}) {
  let change, signed=0, account=POLICIES.owner, chainId=10143, reject=false;
- const factory=({onChange})=>{change=onChange;return {providers:()=>[{id:'p',name:'Wallet'}],select(){},connect:async()=>({account,chainId}),inspect:async()=>({account,chainId}),signMessage:async()=>{signed++;if(reject)throw Error('REJECTED');return 'signature';},dispose(){}};};
+ const factory=({onChange})=>{change=onChange;return {providers:()=>[{id:'p',name:'Wallet'}],select(){},connect:async()=>({account,chainId}),inspect:async()=>({account,chainId}),signMessage:async()=>{signed++;if(extra.sign)return extra.sign(signed);if(reject)throw Error('REJECTED');return 'signature';},dispose(){}};};
  const session={role:'owner',csrf:'test',wallet:POLICIES.owner};
  const api=async(path,options)=>{if(extra.api){const value=extra.api(path,options);if(value !== undefined)return value;}if(path==='/auth/pre-session')return {csrf:'test'};if(path==='/identity/wallet/challenge')return {challengeId:'req12345',message:`mvp.example wants you to sign in with your Ethereum account:\n${POLICIES.owner}\n\nSign in\n\nURI: https://mvp.example\nVersion: 1\nChain ID: 10143\nNonce: abcdefgh\nIssued At: 2026-01-01T00:00:00.000Z\nExpiration Time: 2099-01-01T00:00:00.000Z\nRequest ID: req12345`};if(path==='/identity/wallet/login')return {};if(path==='/me')return session;if(path==='/businesses')return businesses;if(path==='/status')return {enabled:true};if(path.endsWith('/setup'))return {state:{phase:'SETTLED'},operations:[]};throw Error(path);};
  return {factory,api,change:()=>change(),setReject:v=>reject=v,setChain:v=>chainId=v,setAccount:v=>account=v,get signed(){return signed;}};
@@ -77,6 +77,9 @@ test('logout holds login lock until response settles even after wallet change',a
 });
 test('product countdown updates with time',async()=>{
  const deadline=Math.floor(Date.now()/1000)+5;const f=fixture({api:path=>path==='/businesses/1/setup'?{state:{phase:'HANDED_OVER',settlementAvailableAt:deadline},operations:[]}:undefined});await mountFixture(f);try{await loginFixture();const text=()=>document.body.textContent.match(/预计还需 (\d+) 秒/)?.[1];const before=Number(text());assert.ok(before>0);await act(async()=>{await new Promise(r=>setTimeout(r,1150));});assert.ok(Number(text())<before);}finally{await unmount();}
+});
+test('exit is visibly disabled during re-login and wallet change cancels it',async()=>{
+ let resolveSign,started;const ready=new Promise(r=>started=r);const f=fixture({sign:n=>n===2?new Promise(r=>{resolveSign=r;started();}):'signature'});await mountFixture(f);try{await loginFixture();await navigate('businessId=1&role=donor');await act(async()=>{[...document.querySelectorAll('button')].find(b=>b.textContent.includes('连接钱包并签名')).click();await ready;});const exit=document.querySelector('.wallet-header button');assert.equal(exit.disabled,true);assert.ok(exit.textContent.includes('等待钱包登录完成'));await act(async()=>{f.change();resolveSign('signature');await tick();});assert.equal(document.querySelector('.product-work'),null);assert.ok(document.querySelector('.wallet-header').textContent.includes('钱包登录'));await loginFixture();assert.equal(document.querySelector('.wallet-header button').disabled,false);assert.equal(document.querySelector('.wallet-header button').textContent,'退出');}finally{await unmount();}
 });
 test('original stylesheet is reused verbatim and recipient build has no wallet dependency',async()=>{
  const original=await readFile(new URL('../source.css',import.meta.url),'utf8');
