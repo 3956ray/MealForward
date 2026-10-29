@@ -13,6 +13,7 @@ const assets=new Map([
  ['/mvp/product-recipient.mjs','text/javascript; charset=utf-8'],
  ['/mvp/product-original.css','text/css; charset=utf-8'],
  ['/mvp/product.css','text/css; charset=utf-8'],
+ ...['hero-meal.jpg','bowl.jpg','vegetables.jpg'].map(name => ['/mvp/' + name, 'image/jpeg']),
  ['/mvp/setup.html','text/html; charset=utf-8'],
  ['/mvp/merchant.html','text/html; charset=utf-8'],
  ['/mvp/recipient.html','text/html; charset=utf-8'],

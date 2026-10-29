@@ -36,7 +36,7 @@ test('switching business drops old transaction and entered code; late response c
   throw Error('UNEXPECTED_PATH');
  };
  await mount(api);
- assert.ok(document.querySelector('.site-header .brand-mark'));assert.equal(document.querySelectorAll('.site-header').length,1);
+ assert.ok(document.querySelector('.header .brand svg'));assert.equal(document.querySelectorAll('.header').length,1);
  const input=document.querySelector('input[placeholder="000000"]');assert.ok(input);
  await act(async()=>{const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;setter.call(input,'123456');input.dispatchEvent(new Event('input',{bubbles:true}));});
  const refresh=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('刷新已确认'));
@@ -75,10 +75,10 @@ test('anonymous landing treats protected business-list denial as a normal state'
  const api=async(path)=>{if(path==='/me')sessionReads++;throw Error('LOGIN_REQUIRED');};
  await navigate('businessId=1&role=home');await mount(api);
  assert.equal(sessionReads,0);assert.equal(document.querySelector('[role="alert"]'),null);
- assert.ok(document.body.textContent.includes('为一份热餐留位'));await unmount();
+ assert.ok(document.body.textContent.includes('支持一餐')); assert.equal(document.querySelectorAll('.store-card').length,3); assert.equal(document.querySelectorAll('.store-card button:disabled').length,2); await unmount();
 });
 test('original stylesheet is reused verbatim and recipient build has no wallet dependency',async()=>{
- const original=await readFile(new URL('../../../src/styles.css',import.meta.url),'utf8');
+ const original=await readFile(new URL('../source.css',import.meta.url),'utf8');
  const generated=await readFile(new URL('../../public/mvp/product-original.css',import.meta.url),'utf8');assert.equal(generated,original);
  const recipient=await readFile(new URL('../../public/mvp/product-recipient.mjs',import.meta.url),'utf8');assert.doesNotMatch(recipient,/eth_sendTransaction|eth_requestAccounts|personal_sign/);
 });
