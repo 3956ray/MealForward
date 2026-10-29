@@ -1,0 +1,156 @@
+name: MealForward recovery approvals and execution (SOURCE ONLY)
+on:
+  push:
+    branches:
+      - codex/mealforward-t1f-phase6-release-review-20261026
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit-and-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+        working-directory: t1-intents
+      - name: Locked Wallet V2 install without package scripts
+        working-directory: t1-intents/wallet-v2
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify provisioned esbuild binary and Wallet V2 source
+        working-directory: t1-intents/wallet-v2
+        run: |
+          node -e "require('esbuild').transformSync('const x = 1')"
+          npm test
+          npm run typecheck
+          npm run build
+          node ../t1f-execution-build.mjs
+          node ../t1f-phase8-client-build.mjs
+          git diff --exit-code -- ../public/t1f-phase8-crypto.mjs
+          git diff --exit-code -- ../public/t1f-execution-crypto.mjs
+          git diff --exit-code -- ../public/wallet-v2.html ../public/wallet-v2.css ../public/wallet-v2-bootstrap.mjs ../public/wallet-v2-controller.mjs ../public/wallet-v2-wallet.mjs ../public/wallet-v2-validation.mjs
+      - name: All tests without database fixtures
+        working-directory: t1-intents
+        run: |
+          npm run check
+          files=()
+          for file in *.test.mjs; do
+            case "$file" in core.test.mjs|http-auth.test.mjs) continue;; esac
+            files+=("$file")
+          done
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: New service syntax and unchanged original release hold
+        working-directory: t1-intents
+        run: |
+          for file in t1f-approval-*.mjs public/t1f-approval.mjs t1f-execution-*.mjs public/t1f-execution-*.mjs t1f-phase8-*.mjs public/t1f-phase8-*.mjs; do node --check "$file"; done
+          if grep -En 'eth_sendTransaction|eth_sendRawTransaction|wallet_sendCalls|privateKeyToAccount|Wallet.fromPrivateKey' t1f-approval-{protocol,service,server,operator,store}.mjs public/t1f-approval.mjs; then exit 1; fi
+          test -s ../HANDOFF.md
+  legacy-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        include:
+          - file: core.test.mjs
+            database: mf_t1c_disposable_ci
+            port: 5432
+          - file: http-auth.test.mjs
+            database: mf_t1c_http_ci
+            port: 5433
+    env:
+      MF_T1C_DISPOSABLE_ONLY: ack-fresh-t1c-postgres17
+      MF_T1C_HTTP_DISPOSABLE_ONLY: ack-original-siwe-pg17
+      MF_T1D_DISPOSABLE_ONLY: ack-ephemeral-quote-key
+      DATABASE_URL: postgres://postgres:t1c-disposable-only@127.0.0.1:${{ matrix.port }}/${{ matrix.database }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Isolated legacy fixture
+        run: |
+          docker run -d --rm --name legacy-fixture -e POSTGRES_PASSWORD=t1c-disposable-only -e POSTGRES_DB=${{ matrix.database }} -p 127.0.0.1:${{ matrix.port }}:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec legacy-fixture pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+        working-directory: t1-intents
+      - run: node --test ${{ matrix.file }}
+        working-directory: t1-intents
+  approval-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MF_T1F_PHASE6_DISPOSABLE_ONLY: ack-fresh-phase6-pg17
+      PGHOST: 127.0.0.1
+      PGPORT: '15439'
+      PGDATABASE: postgres
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Entirely new PG17 fixture; loopback only
+        run: |
+          docker run -d --rm --name phase6-fixture -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:15439:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec phase6-fixture pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+        working-directory: t1-intents
+      - name: Exact 009–016, concurrency, immutable evidence, least privileges and NO RELEASE
+        working-directory: t1-intents
+        run: node t1f-approval-phase6.ci.mjs
+  successor-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        file: [t1f-execution-phase7.ci.mjs, t1f-execution-http-phase7.ci.mjs, t1f-phase8-pg.ci.mjs]
+    env:
+      MF_T1F_PHASE6_DISPOSABLE_ONLY: ack-fresh-phase6-pg17
+      MF_T1F_EXECUTION_HTTP_DISPOSABLE_ONLY: ack-fresh-execution-http-pg17
+      PGHOST: 127.0.0.1
+      PGPORT: '15439'
+      PGDATABASE: postgres
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Independent fresh PG17.11 instance for each execution fixture
+        run: |
+          docker run -d --rm --name phase7-fixture -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:15439:5432 postgres:17.11
+          for i in $(seq 1 40); do
+            if docker exec phase7-fixture pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+        working-directory: t1-intents
+      - name: Exact reviewed migrations; separate fresh database, never reuse between scripts
+        working-directory: t1-intents
+        run: node ${{ matrix.file }}

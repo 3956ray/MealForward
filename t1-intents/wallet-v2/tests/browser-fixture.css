@@ -1,0 +1,10 @@
+/* Synthetic fixture controls only; production CSP and layout are unchanged. */
+#fixture-controls {
+ border: 2px solid #b43;
+ padding: 1rem;
+ background: #fffbe8;
+ color: #111;
+ min-width: 0;
+ overflow-wrap: anywhere;
+}
+#fixture-controls p { max-width: 100%; overflow-wrap: anywhere; }

@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MealForward · 完整钱包测试</title><link rel="stylesheet" href="/t1f-phase8.css"></head>
+<body><main><p class="eyebrow">mealforward · Monad Testnet 10143</p><h1>完整钱包流程</h1><p>Owner 和 Donor 批准本轮后，由 Issuer 本人准备、发送并核验交易。每一步都需要明确点击。商家结算关闭。</p>
+<section><h2>1. 检查当前钱包</h2><label for="provider">钱包提供方</label><select id="provider"></select><button id="inspect">检查钱包</button><button id="connect">连接钱包</button><p id="wallet" role="status">尚未检查</p></section>
+<section><h2>2. 核对当前轮次</h2><button id="refresh">刷新状态</button><pre id="state">尚未读取</pre><details><summary>已保留的上一笔操作</summary><pre id="previous">尚未读取</pre></details><details><summary>完整批准签名内容</summary><pre id="typed">尚无内容</pre></details><button id="approve" disabled>明确签署当前 Owner / Donor 批准</button><p id="approvals">Owner：未读取 · Donor：未读取</p></section>
+<section><h2>3. Issuer 登录</h2><p>完成双签后切换到 Issuer 账户，重新检查钱包并登录本站。</p><button id="challenge" disabled>准备登录消息</button><pre id="message">尚无登录消息</pre><button id="login" disabled>明确签署登录</button><p id="auth">尚未登录</p></section>
+<section><h2>4. 准备并立即发送</h2><p>准备成功后，立即点击“Send once in wallet”，在 MetaMask 核对并确认。准备与发送之间不要刷新、切换账户或暂停回传结果。截止后按钮会关闭。</p><button id="prepare" disabled>明确准备新操作</button><button id="send" disabled>Send once in wallet</button><p>确认交易后保留同一交易哈希；拒绝、超时或结果不确定时不要再次发送。</p></section>
+<section><h2>5. 核验同一笔交易</h2><button id="bind" disabled>重试绑定同一哈希</button><label for="original-hash">当前新操作的原交易哈希</label><input id="original-hash" autocomplete="off" spellcheck="false" disabled><button id="recover-hash" disabled>恢复同一交易哈希</button><button id="reconcile" disabled>核验链上结果</button><p>刷新或绑定失败后，仅从钱包活动复制本次新操作已发送的原交易哈希。</p></section>
+<pre id="result" role="status">请选择钱包并检查账户。</pre></main><script type="module" src="/t1f-phase8-page.mjs"></script></body></html>

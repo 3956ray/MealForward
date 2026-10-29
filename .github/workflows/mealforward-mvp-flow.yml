@@ -1,0 +1,70 @@
+name: MealForward isolated MVP business flow
+on:
+  push:
+    branches: [codex/mealforward-t1f-phase6-release-review-20261026]
+    paths:
+      - 'src/styles.css'
+      - 'mvp-contracts/**'
+      - 't1-intents/mvp/**'
+      - 't1-intents/mvp-client/**'
+      - 't1-intents/mvp-*.mjs'
+      - 't1-intents/public/mvp/**'
+      - 't1-intents/auth/core.mjs'
+      - 't1-intents/t1e-claim-server.mjs'
+      - 't1-intents/supabase/migrations/*mvp*'
+      - '.github/workflows/mealforward-mvp-flow.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mvp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-synthetic-only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      FOUNDRY_OFFLINE: 'false'
+      MVP_TEST_DATABASE_URL: postgres://postgres:local-synthetic-only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.1
+      - name: Install locked isolated contract dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: mvp-contracts
+      - name: On-chain wait, replay, accounting and compatibility
+        run: |
+          forge test --root mvp-contracts -vv
+          python3 mvp-contracts/scripts/test-export-artifacts.py
+          python3 mvp-contracts/scripts/export-artifacts.py
+          git diff --exit-code -- mvp-contracts/artifacts
+      - name: Install service and client dependencies
+        run: |
+          npm install --prefix t1-intents --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm ci --prefix t1-intents/mvp-client --ignore-scripts --no-audit --no-fund
+      - name: Focused backend, integration and browser tests
+        run: |
+          node --test t1-intents/mvp/*.test.mjs t1-intents/mvp-runtime.test.mjs t1-intents/t1e-claim-setup.test.mjs
+          npm test --prefix t1-intents/mvp-client
+          npm run build --prefix t1-intents/mvp-client
+          git diff --exit-code -- t1-intents/public/mvp
+      - name: Fresh PostgreSQL and Anvil full business flow
+        run: node t1-intents/mvp/flow.ci.mjs

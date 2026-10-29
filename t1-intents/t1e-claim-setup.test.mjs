@@ -42,7 +42,7 @@ test('plain public page + tracked ChatGPT source works without any wallet script
  const status=await http('/v1/t1e/status');
  assert.equal(status.status,200);
  assert.equal(status.body.status,'T1E_SAFE_SETUP_ONLY_NO_SESSIONS');
- for(const k of ['claimWriteEnabled','issuerIssueEnabled','fundingEnabled','settleEnabled',
+ for(const k of ['claimWriteEnabled','issuerIssueEnabled','issuerTransactionEnabled','successorEnabled','fundingEnabled','settleEnabled',
   'independentRecipientLoginEnabled'])assert.equal(status.body[k],false,k);
  const home=await http('/');
  const track=await http('/?utm_source=chatgpt.com');

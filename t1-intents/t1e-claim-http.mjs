@@ -9,6 +9,8 @@ import {consentFromClaim} from './t1e-consent-payload.mjs';
 import {publicClaim,PILOT_RECIPIENT} from './t1e-claim-store.mjs';
 import {FIXED} from './t1e-first-issue-readiness.mjs';
 import {t1fIssuerRoute} from './t1f-issuer-http.mjs';
+import {makeExecutionHttp} from './t1f-execution-http.mjs';
+import {makePhase8Http} from './t1f-phase8-http.mjs';
 
 const HASH=x=>createHash('sha256').update(x,'utf8').digest('hex');
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
@@ -53,6 +55,8 @@ async function requestJson(req){
 export function makeT1EClaimGateway({
  origin,stage,authStore,claimStore,readiness,loginHandler,
  issueEnabled=false,issuerLedger=null,issuerRpc=null,issuerReadiness=null,
+ successorEnabled=false,executionService=null,
+ phase8Enabled=false,phase8Service=null,
  clock=()=>Math.floor(Date.now()/1000)
 }={}){
  const isConsent=stage==='CLAIM_CONSENT';
@@ -67,6 +71,10 @@ export function makeT1EClaimGateway({
    typeof issuerRpc?.send!=='function'||typeof issuerReadiness!=='function'
  ))throw Error('T1F_ISSUE_CONFIG_NOT_READY');
  const host=new URL(origin).host;
+ if(successorEnabled&&stage!=='CLAIM_CONSENT')throw Error('T1F_EXECUTION_REQUIRES_CONSENT_STAGE');
+ if(phase8Enabled&&(stage!=='CLAIM_CONSENT'||issueEnabled))throw Error('T1F_PHASE8_ISOLATED_CONSENT_REQUIRED');
+ const phase8=makePhase8Http({enabled:phase8Enabled,service:phase8Service,origin});
+ const execution=makeExecutionHttp({enabled:successorEnabled,service:executionService,origin});
  const active=async(req,csrf=false)=>{
   const cookies=cookieMap(req.headers.cookie);
   const token=cookies['__Host-mcpay_c1_session'];
@@ -98,7 +106,7 @@ export function makeT1EClaimGateway({
     status:isConsent?'T1E_RECIPIENT_CONSENT_ONLY':'T1E_ISOLATED_SIWE_READ_ONLY',
     chainId:10143,pinnedRecipient:PILOT_RECIPIENT,
     walletLoginEnabled:true,recipientClaimWriteEnabled:isConsent,
-    issuerIssueEnabled:issueEnabled,fundEnabled:false,settleEnabled:false,
+    issuerIssueEnabled:issueEnabled,successorEnabled,phase8Enabled,issuerTransactionEnabled:issueEnabled||successorEnabled||phase8Enabled,fundEnabled:false,settleEnabled:false,
     beneficiaryEligibilityVerified:false,
     onchainRecipientSignatureEnforced:false,
     originalCp30Connected:false
@@ -115,7 +123,7 @@ export function makeT1EClaimGateway({
     const snapshot=await claimStore.issuerReadiness();
     return writeJson(res,200,{
      originalUnit:0,generation:1,issuance:snapshot,
-     issuerTransactionEnabled:issueEnabled,
+     issuerTransactionEnabled:issueEnabled||successorEnabled||phase8Enabled,issuerIssueEnabled:issueEnabled,successorEnabled,phase8Enabled,
      nextAction:snapshot?.claimStage==='CONSENT_VERIFIED'?
       'AWAIT_EXPLICIT_WALLET_ISSUE_RELEASE':'AWAIT_BENEFICIARY_DURABLE_CONSENT'
     });
@@ -209,6 +217,18 @@ export function makeT1EClaimGateway({
      onchainIssued:false,issuerIssueEnabled:false,
      beneficiaryEligibilityVerified:false
     });
+   }
+   if(path.startsWith('/v1/t1f/phase8/')){
+    if(!phase8Enabled)throw ERR(405,'T1F_PHASE8_DISABLED');
+    const action=path.slice('/v1/t1f/phase8/'.length);
+    if(!['status','approval','prepare','bind','reconcile'].includes(action))throw ERR(405,'T1F_PHASE8_METHOD');
+    const issuer=['status','approval'].includes(action)?null:await active(req,method==='POST');
+    return await phase8({request:req,response:res,issuer,path,method,readBody:requestJson});
+   }
+   if(path.startsWith('/v1/t1f/successor/')){
+    if(!successorEnabled)throw ERR(405,'T1F_EXECUTION_DISABLED');
+    const issuer=await active(req,method==='POST');
+    return await execution({request:req,response:res,issuer,path,method,readBody:requestJson});
    }
    if(path.startsWith('/v1/t1f/')){
     if(!issueEnabled)throw ERR(405,'T1F_ISSUE_NOT_RELEASED');

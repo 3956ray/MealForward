@@ -1,0 +1,83 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {keccak256} from 'ethers';
+import {createExecutionController,validateExecution,validateChallenge,ISSUER,TARGET} from './public/t1f-execution-controller.mjs';
+import {makeChallenge} from './auth/siwe.mjs';
+const NOW=1792792000,ID='dddddddd-dddd-4ddd-8ddd-dddddddddddd',ROUND='cccccccc-cccc-4ccc-8ccc-cccccccccccc',H='0x'+'9'.repeat(64),ORIGIN='http://127.0.0.1:15449',CSRF='a'.repeat(43);
+const tx={from:ISSUER,to:TARGET,chainId:'0x279f',value:'0x0',nonce:'0x0',data:'0x1234'};
+const ready=()=>({status:'READY_TO_PREPARE',originalClaimStage:'ISSUE_UNKNOWN',serverTime:NOW,chainId:10143,issuer:ISSUER,target:TARGET,serverMayBroadcast:false,settlementEnabled:false,sendAgainPermitted:false,round:{id:ROUND,digest:H,expiresAt:NOW+300,prepareBefore:NOW+210,candidateDeadline:NOW+480,nonce:'0',roles:{owner:true,donor:true}},operation:null});
+function setup({mode='ok',timeoutMs=1000}={}){const listeners={},calls=[],requests=[];let account=ISSUER,chain='0x279f',stored=ready(),onRequest=null,bindFail=false,now=NOW;
+ const emit=(e)=>{for(const fn of listeners[e]||[])fn()};
+ const provider={on(e,fn){(listeners[e]??=[]).push(fn)},async request(q){calls.push(q);await onRequest?.(q);if(q.method==='wallet_requestPermissions')return [{parentCapability:'eth_accounts'}];if(q.method==='eth_accounts')return [account];if(q.method==='eth_chainId')return chain;if(q.method==='personal_sign')return '0x'+'a'.repeat(130);if(q.method==='eth_sendTransaction'){if(mode==='reject')throw Error('REJECTED');if(mode==='hang')return new Promise(()=>{});return H;}throw Error('BAD_METHOD')}};
+ const request=async(path,method,body)=>{requests.push({path,method,body});if(path.endsWith('pre-session'))return {csrf:CSRF};if(path.endsWith('challenge'))return makeChallenge({wallet:ISSUER,origin:ORIGIN,chainId:10143,nonce:'a'.repeat(64),challengeId:ROUND,issuedAt:NOW,expiresAt:NOW+180});if(path.endsWith('login'))return {authPilot:true,csrf:CSRF};if(path.endsWith('status'))return structuredClone(stored);if(path.endsWith('prepare')){stored={...ready(),status:'RECOVERY_ONLY',operation:{id:ID,operationId:H,stage:'ISSUE_UNKNOWN',revision:0,nonce:'0',deadline:NOW+480,calldataHash:keccak256(tx.data),txHash:null,receiptBlock:null,receiptBlockHash:null}};return {...structuredClone(stored),created:true,transaction:{...tx}};}if(path.endsWith('bind')){if(bindFail)throw Error('BIND_UNCERTAIN');stored.operation.txHash=body.txHash;stored.operation.revision=1;stored.operation.stage='ISSUE_HASH_BOUND';return structuredClone(stored)}if(path.endsWith('reconcile'))return structuredClone(stored);throw Error(path)};
+ const opts={provider,request,hashData:keccak256,origin:ORIGIN,clock:()=>now,timeoutMs},client=createExecutionController(opts);
+ return {client,calls,requests,opts,emit,setNow(v){now=v},setAccount(a){account=a},setChain(c){chain=c},onRequest(fn){onRequest=fn},failBind(v){bindFail=v},get stored(){return stored}};
+}
+const login=async f=>{await f.client.inspect();await f.client.challenge();await f.client.login();await f.client.refresh()};
+test('wallet inspect independent of backend and every signing/send action requires separate call',async()=>{const f=setup();await f.client.inspect();assert.equal(f.requests.length,0);assert.equal(f.calls.some(c=>c.method.includes('sign')||c.method.includes('send')),false);await f.client.challenge();assert.equal(f.calls.some(c=>c.method==='personal_sign'),false);await f.client.login();assert.equal(f.calls.filter(c=>c.method==='personal_sign').length,1);assert.equal(f.calls.some(c=>c.method==='eth_sendTransaction'),false)});
+test('explicit prepare and separate doubleclicked send burn payload once and bind same successor',async()=>{const f=setup();await login(f);await f.client.prepare();assert.equal(f.client.snapshot().canSend,true);assert.equal(f.calls.some(c=>c.method==='eth_sendTransaction'),false);const results=await Promise.allSettled([f.client.send(),f.client.send()]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(f.calls.filter(c=>c.method==='eth_sendTransaction').length,1);assert.equal(f.client.snapshot().canSend,false);assert.equal(f.stored.operation.txHash,H);assert.equal(f.requests.find(r=>r.path.endsWith('bind')).body.successorId,ID);await assert.rejects(()=>f.client.prepare());});
+test('rejection, timeout, reload and provider events never regenerate wallet bytes',async()=>{for(const mode of ['reject','hang','reload','account','chain']){const f=setup({mode,timeoutMs:20});await login(f);await f.client.prepare();if(mode==='reload'){const reload=createExecutionController(f.opts);await reload.refresh();assert.equal(reload.snapshot().canSend,false);await assert.rejects(()=>reload.prepare());}else if(mode==='account'||mode==='chain'){f.emit(mode==='account'?'accountsChanged':'chainChanged');assert.equal(f.client.snapshot().canSend,false);await assert.rejects(()=>f.client.send());}else{await assert.rejects(()=>f.client.send());assert.equal(f.client.snapshot().canSend,false);await assert.rejects(()=>f.client.send());}assert.equal(f.calls.filter(c=>c.method==='eth_sendTransaction').length,mode==='reject'||mode==='hang'?1:0);}});
+test('account/chain switches during awaited wallet reads or wallet request fail closed',async()=>{for(const method of ['eth_accounts','eth_chainId','eth_sendTransaction']){const f=setup();await login(f);await f.client.prepare();f.onRequest(async q=>{if(q.method===method)f.emit('accountsChanged')});await assert.rejects(()=>f.client.send());assert.equal(f.client.snapshot().canSend,false);assert.equal(f.requests.some(r=>r.path.endsWith('bind')),false);}});
+test('bind uncertainty retains same hash for retry and reconcile, never sends twice',async()=>{const f=setup();await login(f);await f.client.prepare();f.failBind(true);await assert.rejects(()=>f.client.send());assert.equal(f.client.snapshot().receivedHash,H);f.failBind(false);await f.client.bind();await f.client.reconcile();assert.equal(f.calls.filter(c=>c.method==='eth_sendTransaction').length,1);const binds=f.requests.filter(r=>r.path.endsWith('bind'));assert.ok(binds.every(r=>r.body.txHash===H&&r.body.successorId===ID));});
+test('strict response and SIWE challenge validation reject tampering',()=>{const s=ready();assert.equal(validateExecution(s,{now:NOW}),s);for(const x of [{...s,serverMayBroadcast:true},{...s,extra:1},{...s,issuer:TARGET}])assert.throws(()=>validateExecution(x,{now:NOW}));const c=makeChallenge({wallet:ISSUER,origin:ORIGIN,chainId:10143,nonce:'a'.repeat(64),challengeId:ROUND,issuedAt:NOW,expiresAt:NOW+180});validateChallenge(c,{origin:ORIGIN,now:NOW});for(const key of Object.keys(c))assert.throws(()=>validateChallenge({...c,[key]:null},{origin:ORIGIN,now:NOW}));});
+test('service delay, context changes without events and invalid transaction fields discard the one-shot payload',async()=>{
+ for(const kind of ['delay','account','chain','from','to','chainId','value','nonce','data']){
+  const f=setup({timeoutMs:15});await login(f);
+  if(kind==='account'||kind==='chain'){await f.client.prepare();if(kind==='account')f.setAccount(TARGET);else f.setChain('0x1');await assert.rejects(()=>f.client.send());assert.equal(f.calls.filter(c=>c.method==='eth_sendTransaction').length,0);}
+  else{const original=f.opts.request;const options={...f.opts,request:async(...args)=>{const s=await original(...args);if(args[0].endsWith('prepare')){if(kind==='delay')await new Promise(r=>setTimeout(r,30));else s.transaction[kind]=kind==='data'?'0xabcd':kind==='value'?'0x1':kind==='nonce'?'0x1':kind==='chainId'?'0x1':TARGET===s.transaction[kind]?ISSUER:TARGET;}return s}};const c=createExecutionController(options);await c.challenge();await c.login();await c.refresh();await assert.rejects(()=>c.prepare());await new Promise(r=>setTimeout(r,35));assert.equal(c.snapshot().canSend,false);assert.equal(f.calls.filter(q=>q.method==='eth_sendTransaction').length,0);}
+ }
+});
+test('public snapshots never retain transaction bytes after prepare or invalidation',async()=>{const f=setup();await login(f);await f.client.prepare();assert.doesNotMatch(JSON.stringify(f.client.snapshot()),/0x1234|"transaction"|"data"/);f.client.invalidate();assert.doesNotMatch(JSON.stringify(f.client.snapshot()),/0x1234|"transaction"|"data"/);});
+test('permissions require separate explicit connect; account event during picker may settle but retired provider cannot',async()=>{const f=setup();assert.equal(f.calls.length,0);f.onRequest(q=>{if(q.method==='wallet_requestPermissions')f.emit('accountsChanged')});await f.client.connect();assert.equal(f.client.snapshot().checked,true);assert.equal(f.client.snapshot().recovery,false);assert.equal(f.calls.filter(q=>q.method==='wallet_requestPermissions').length,1);assert.equal(f.requests.length,0);const g=setup();g.onRequest(q=>{if(q.method==='wallet_requestPermissions')g.client.invalidate()});await assert.rejects(()=>g.client.connect());assert.equal(g.calls.some(q=>q.method==='personal_sign'||q.method==='eth_sendTransaction'),false);});
+test('initial unauthenticated refresh, refused SIWE and transient challenge errors allow explicit retry through prepare',async()=>{
+ for(const failure of ['refresh401','siweRefused','challengeTransient']){
+  const f=setup();let fail=true;const original=f.opts.request;
+  const c=createExecutionController({...f.opts,request:async(...args)=>{if(fail&&(failure==='refresh401'&&args[0].endsWith('status')||failure==='challengeTransient'&&args[0].endsWith('challenge')))throw Error('HTTP_FAILURE');return original(...args)}});
+  if(failure==='refresh401')await assert.rejects(()=>c.refresh());
+  else if(failure==='challengeTransient')await assert.rejects(()=>c.challenge());
+  else{await c.challenge();f.onRequest(q=>{if(fail&&q.method==='personal_sign')throw Error('USER_REFUSED_SIWE')});await assert.rejects(()=>c.login());}
+  assert.equal(c.snapshot().recovery,false);assert.equal(c.snapshot().error,'EXECUTION_ACTION_FAILED_RETRY');
+  fail=false;await c.challenge();await c.login();await c.refresh();assert.equal(c.snapshot().authenticated,true);assert.equal(c.snapshot().state.operation,null);assert.equal(c.snapshot().recovery,false);await c.prepare();assert.equal(c.snapshot().canSend,true);
+ }
+});
+test('prepare dispatch loss/timeout and postprepare refusal/bind uncertainty stay sticky across successful login and even READY reads',async()=>{
+ for(const failure of ['prepareLoss','prepareTimeout','sendRefused','bindUncertain','payloadRefresh','reloadOperation']){
+  const f=setup({mode:failure==='sendRefused'?'reject':'ok',timeoutMs:15});const original=f.opts.request;let pretendReady=false;
+  const options={...f.opts,request:async(...args)=>{if(pretendReady&&args[0].endsWith('status'))return ready();const s=await original(...args);if(args[0].endsWith('prepare')){if(failure==='prepareLoss')throw Error('COMMITTED_RESPONSE_LOST');if(failure==='prepareTimeout')await new Promise(r=>setTimeout(r,30));}return s;}};
+  const c=createExecutionController(options);await c.challenge();await c.login();await c.refresh();
+  if(failure.startsWith('prepare'))await assert.rejects(()=>c.prepare());
+  else{await c.prepare();if(failure==='sendRefused')await assert.rejects(()=>c.send());if(failure==='bindUncertain'){f.failBind(true);await assert.rejects(()=>c.send());}if(failure==='payloadRefresh')await c.refresh();}
+  const active=failure==='reloadOperation'?createExecutionController(options):c;
+  if(failure==='reloadOperation')await active.refresh();
+  assert.equal(active.snapshot().recovery,true);assert.equal(active.snapshot().canSend,false);
+  // A later auth success or contradictory empty read never erases earlier reservation uncertainty.
+  pretendReady=true;await active.challenge();await active.login();await active.refresh();assert.equal(active.snapshot().authenticated,true);assert.equal(active.snapshot().state.status,'READY_TO_PREPARE');assert.equal(active.snapshot().recovery,true);await assert.rejects(()=>active.prepare());assert.equal(active.snapshot().canSend,false);
+ }
+});
+
+test('reload/relogin can explicitly recover original hash; malformed input does not bind or enable send',async()=>{
+ const f=setup();await login(f);await f.client.prepare();f.failBind(true);await assert.rejects(()=>f.client.send());f.failBind(false);
+ const c=createExecutionController(f.opts);await c.challenge();await c.login();await c.refresh();assert.equal(c.snapshot().receivedHash,null);
+ const before=f.requests.length;await assert.rejects(()=>c.recoverHash('bad'));assert.equal(c.snapshot().error,'ORIGINAL_TRANSACTION_HASH_INVALID');assert.equal(f.requests.length,before);
+ await c.recoverHash(H);assert.equal(c.snapshot().state.operation.txHash,H);assert.equal(c.snapshot().canSend,false);await assert.rejects(()=>c.recoverHash('0x'+'8'.repeat(64)));await c.reconcile();assert.equal(f.calls.filter(q=>q.method==='eth_sendTransaction').length,1);
+});
+test('account change or provider retirement during hash recovery suppresses late UI application',async()=>{
+ for(const kind of ['account','provider','unannounced']){const f=setup();await login(f);await f.client.prepare();await f.client.refresh();let release;const original=f.opts.request;const c=createExecutionController({...f.opts,request:async(...args)=>{const result=await original(...args);if(args[0].endsWith('bind'))await new Promise(r=>{release=r});return result}});await c.challenge();await c.login();await c.refresh();const pending=c.recoverHash(H);while(!release)await new Promise(r=>setTimeout(r,0));if(kind==='account')f.emit('accountsChanged');else if(kind==='provider')c.invalidate();else f.setAccount(TARGET);release();await assert.rejects(()=>pending);assert.equal(c.snapshot().state.operation.txHash,null);assert.equal(c.snapshot().canSend,false);assert.equal(c.snapshot().authenticated,kind==='unannounced');}
+});
+
+// Regression: a prepared page must not advertise send after its actual cutoff.
+test('prepare/send capabilities expire at the cutoff without another request',async()=>{
+ const f=setup();await login(f);assert.equal(f.client.snapshot().canPrepare,true);
+ await f.client.prepare();const requests=f.requests.length,calls=f.calls.length;
+ f.setNow(NOW+209);assert.equal(f.client.snapshot().canSend,true);assert.equal(f.client.snapshot().windowRemainingSeconds,1);
+ f.setNow(NOW+210);assert.equal(f.client.snapshot().canSend,false);assert.equal(f.client.snapshot().windowExpired,true);
+ f.setNow(NOW+211);assert.equal(f.client.snapshot().canSend,false);assert.equal(f.requests.length,requests);assert.equal(f.calls.length,calls);
+ await assert.rejects(()=>f.client.send());assert.equal(f.calls.some(q=>q.method==='eth_sendTransaction'),false);
+ const g=setup();await login(g);g.setNow(NOW+210);assert.equal(g.client.snapshot().canPrepare,false);
+});
+test('cutoff reached during wallet reads prevents provider send and reports a closed window',async()=>{
+ const f=setup();await login(f);await f.client.prepare();f.setNow(NOW+209);
+ f.onRequest(q=>{if(q.method==='eth_chainId')f.setNow(NOW+210)});
+ await assert.rejects(()=>f.client.send());assert.equal(f.client.snapshot().windowExpired,true);assert.equal(f.client.snapshot().canSend,false);
+ assert.equal(f.calls.some(q=>q.method==='eth_sendTransaction'),false);
+});
