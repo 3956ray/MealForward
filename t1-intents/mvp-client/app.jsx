@@ -124,6 +124,10 @@ export function App({
     setHash("");
   }
   useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+  useEffect(() => {
     let alive = true;
     if (externalAuth) {
       wallet.current = externalAuth.wallet;
@@ -141,7 +145,6 @@ export function App({
       },
     });
     setProviders(wallet.current.providers());
-    const tick = setInterval(() => setNow(Date.now()), 1000);
     void run(async () => {
       const bootRevision = revision.current;
       setStatus(await api("/status"));
@@ -160,7 +163,6 @@ export function App({
       alive = false;
       revision.current++;
       pendingScan.current = null;
-      clearInterval(tick);
       wallet.current.dispose();
       stopCamera();
     };

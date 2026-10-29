@@ -10,7 +10,7 @@ export function useProductAuth(api, walletFactory = createMvpWallet) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
-  const wallet = useRef(null), revision = useRef(0), sessionRef = useRef(null), attempt = useRef(0);
+  const wallet = useRef(null), revision = useRef(0), sessionRef = useRef(null), attempt = useRef(0), actionLock = useRef(false);
   function invalidate() {
     revision.current++;
     sessionRef.current = null;
@@ -33,7 +33,8 @@ export function useProductAuth(api, walletFactory = createMvpWallet) {
     setError("");
   }
   async function login() {
-    if (busy || !selected || !wallet.current) return null;
+    if (actionLock.current || !selected || !wallet.current) return null;
+    actionLock.current = true;
     setBusy(true); setError("");
     let r = revision.current;
     const loginAttempt = ++attempt.current;
@@ -64,15 +65,19 @@ export function useProductAuth(api, walletFactory = createMvpWallet) {
     } catch (e) {
       if (r === revision.current) setError(errorText(e));
       return null;
-    } finally { setBusy(false); }
+    } finally { actionLock.current = false; setBusy(false); }
   }
   async function logout() {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setBusy(true);
     const old = sessionRef.current;
     attempt.current++;
     invalidate();
     setOpen(true);
-    if (old?.csrf) try { await api("/auth/logout", { body: {}, csrf: old.csrf }); }
+    try { if (old?.csrf) await api("/auth/logout", { body: {}, csrf: old.csrf }); }
     catch (e) { setError(errorText(e)); }
+    finally { actionLock.current = false; setBusy(false); }
   }
   return { session, sessionRef, wallet, providers, selected, select, busy, error, open, setOpen, login, logout, invalidate };
 }
