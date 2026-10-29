@@ -77,6 +77,14 @@ test('anonymous landing treats protected business-list denial as a normal state'
  assert.equal(sessionReads,0);assert.equal(document.querySelector('[role="alert"]'),null);
  assert.ok(document.body.textContent.includes('支持一餐')); assert.equal(document.querySelectorAll('.store-card').length,3); assert.equal(document.querySelectorAll('.store-card button:disabled').length,2); await unmount();
 });
+test('home kitchen scroll preserves selected business',async()=>{
+ await navigate('businessId=2&role=home'); await mount(async path=>path==='/businesses' ? businesses : path==='/me' ? session : path==='/status' ? {enabled:true,writesEnabled:true} : {state:{phase:'SETTLED'},operations:[]});
+ let scrolled=false; document.getElementById('kitchens').scrollIntoView=()=>{scrolled=true;};
+ const button=[...document.querySelectorAll('.hero button')].find(b=>b.textContent.includes('支持一餐'));
+ await act(async()=>button.click()); assert.equal(scrolled,true); assert.equal(location.hash,'#businessId=2&role=home');
+ const card=document.querySelector('.store-card button:not(:disabled)'); await act(async()=>{card.click();await tick();});
+ assert.equal(location.hash,'#businessId=2&role=donor'); await unmount();
+});
 test('original stylesheet is reused verbatim and recipient build has no wallet dependency',async()=>{
  const original=await readFile(new URL('../source.css',import.meta.url),'utf8');
  const generated=await readFile(new URL('../../public/mvp/product-original.css',import.meta.url),'utf8');assert.equal(generated,original);
