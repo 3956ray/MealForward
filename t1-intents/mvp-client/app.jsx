@@ -135,6 +135,11 @@ export function App({
       return () => { alive = false; revision.current++; stopCamera(); };
     }
     wallet.current = walletFactory({
+      onDiscovery: () => {
+        queueMicrotask(() => {
+          if (alive) setProviders(wallet.current?.providers() || []);
+        });
+      },
       onChange: () => {
         if (alive) {
           invalidate();

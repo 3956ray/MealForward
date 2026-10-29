@@ -509,3 +509,15 @@ test.after(async () => {
   dom.window.close();
   await rm(tmp, { recursive: true, force: true });
 });
+test('standalone late wallet discovery refreshes choices without clearing verified session', async () => {
+  let discovery, providers = [{id:'first',name:'First wallet'}], reads=0;
+  const walletFactory = opts => { discovery=opts.onDiscovery; return {...factory(opts),providers:()=>providers}; };
+  const api=async path=>{if(path==='/status')return status;if(path==='/me'){reads++;return session;}if(path==='/setup')return setup();throw Error(path);};
+  await mount(App,{api,walletFactory});
+  try {
+    assert.ok(document.body.textContent.includes('退出登录'));
+    await act(async()=>{providers=[...providers,{id:'late',name:'Late extension'}];discovery();await new Promise(r=>setTimeout(r,10));});
+    assert.ok([...document.querySelectorAll('select option')].some(x=>x.value==='late'&&x.textContent==='Late extension'));
+    assert.ok(document.body.textContent.includes('退出登录'));assert.equal(reads,1);
+  } finally { await act(async()=>root.unmount()); }
+});

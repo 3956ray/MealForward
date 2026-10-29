@@ -14,6 +14,8 @@
 
 ## 2026-10-29 钱包选择与被动恢复（仅源码，待父 Agent 独审/发布）
 
+- 独审修复：独立 setup/merchant 页面补充 `onDiscovery` 刷新钱包列表，保留 `onChange` 身份失效语义。晚到扩展可见且不会清除已验证 session；新增针对性 DOM 回归。修复后客户端 36/36、运行时 5/5、build `b749401674bede156e3d` PASS，仍仅源码未发布。
+
 - 基线 `441dd23`；本阶段只改 `t1-intents/mvp-client/**` 和构建产物 `public/mvp/**`。新增扩展钱包卡片弹窗、连接/签名/验证进度、无资金/无 Gas 登录说明、重试及焦点圈定/返回/Escape/安全关闭；当前角色顶部显示“当前工作台”，已登录首页显示“进入工作台”。
 - EIP-6963 与 injected 按 provider 对象去重，显示已发现名称，不载入钱包元数据图标。发现事件独立于账户/网络身份失效事件，晚到公告不撤销已验证登录。
 - 仅持久化钱包 provider id/rdns；不存账户、会话、CSRF 或签名。启动 2.5 秒内寻找唯一匹配 provider，单次 `/me` 与被动 `eth_accounts`/`eth_chainId` 校验 server role/address/10143 后恢复；不自动请求权限、签名、交易或切链。失配/失效/缺扩展需显式登录，退出清除记忆，账户变化撤销身份，异步结果按 revision 失效。
