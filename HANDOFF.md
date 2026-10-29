@@ -4,11 +4,24 @@
 >
 > **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：原始前端复用版与第二笔业务支持已发布，入口 /mvp/product.html，等待用户一次第二张券验收。第一笔SETTLED及原六笔操作完整保留，沿用现有合约和已有测试USDC。新程序支持按业务隔离、单笔串行处理与10份上限；不代表第二张券真人验收已完成。** 以下最新记录优先于后面的历史阶段。
+> **当前状态：已按用户指定的 Three Stores Sites v8 前端修正并发布到 /mvp/product.html，等待一次第二张券真人验收。原站作为视觉来源保持不变；当前仅清禾测试厨房接通，另外两家明确未开放。第一笔SETTLED及6操作记录保留；同一既有USDC/合约，不新部署。** 以下最新记录优先于历史阶段。
 
 
 
 
+
+
+
+## 2026-10-29 10:41 正确 Three Stores 前端已发布
+
+- 用户指定原站 https://mealforward-three-stores.ochre-jelly-7528.chatgpt.site/ ，Sites project appgprj_6aca52912fa0819182f9619176eac3e5 v8，源码 e412ae14d6b92453634a0036f9aac986dcc821ac。此前仓库src/App.tsx不是用户意指的原始前端，本次纠正。直接复用原CSS、三张照片、碗标与首页/店铺视觉；原Sites未改动，模拟业务状态未迁入。
+- 正式测试入口：https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html 。私密领取仍/mvp/product-recipient.html。产品与API同源。仅清禾厨房连接固定Owner，另两店未开放。
+- 部署commit d5d4b233f9c5e5dedf0a977f7bcb73089197528f（应用d69fc87532fc6cedf75e0f081487b8b8d3837c52）；build f4a26c2e103256e1eb9d。Render dep-dbhb44afngtc73b5lst0，2026-10-29 10:41:12 UTC+8 live；service srv-dbdgstivcj2c73fnqcc0 / workspace tea-db7q3ou7bikc73bp2bt0，autoDeploy off，writesEnabled=true。后续文档commit不改变运行版本。PR47仍draft未合并。
+- 本地22客户端+5runtime PASS，构建与生成资源一致；独立审查/修复复审PASS。修复首页滚动重置业务编号、原图映射，补全3JPEG线上精确校验。桌面首页/卡片/商家及390px商家/领取页面浏览器检查通过；本机静态预览无后台，不能当真人登录成功证据。
+- 同SHA CI：MVP https://github.com/3956ray/MealForward/actions/runs/40807604982 PASS（含双券PG+Anvil完整流程），兼容 https://github.com/3956ray/MealForward/actions/runs/40807605002 PASS。公网smoke16资源含3JPEG精确字节/类型、网络10143、既有USDC、权限拒绝及旧Phase8 ISSUED均PASS。内置浏览器公网导航工具超时；未声称公网浏览器MetaMask验收通过。
+- 发布后只读实库仍只有business1 SETTLED/revision10/data指纹408e76f0c970880598786deeb7bfb39c，6原操作。没有创建business2，没有数据库迁移/配置变化/合约改动/钱包签名或交易。
+- 下一步用户仅做一次第二券测试：Owner商家工作台登录→业务记录确认第一笔→创建下一笔并签报价→Donor授权/捐赠7→Issuer发券/私密链接→Owner验码交餐→180秒→结算。每步核对第2笔，正常5笔交易及登录/报价签名。验收第二券SETTLED、商家+7USDC和第一笔保留。详细docs/superpowers/2026-10-29-second-voucher-acceptance.md。无需重新部署代币或合约。
+- 回退：该次仅呈现与固定静态资源allowlist变更；有资金/状态异常关闭MVP_WALLET_ACTIONS_ENABLED，保留查询与原hash恢复，不能重置记录/重发UNKNOWN。仍单商家/7USDC/串行/10份上限。
 
 
 ## 2026-10-29 Three Stores 前端修正（源码完成，未发布）
