@@ -1,0 +1,75 @@
+/** Isolated UI checks with a synthetic API. Never loads an existing browser profile. */
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {createServer} from 'node:http';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'/Users/mili/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs');
+const root=new URL('../',import.meta.url),directory=await mkdtemp(join(tmpdir(),'mealforward-product-browser-'));
+const output=join(directory,'ui.mjs');
+const source=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import{CatalogProduct}from'./catalog-product.jsx';
+let drafts=[],requests=[],settings={hours:null,announcement:'',restingToday:false,restDay:null,revision:0};const owner={wallet:'0x'+'a'.repeat(40),stores:['kitchen']};
+const catalog={asset:{symbol:'测试 USDC',decimals:6},fundingEnabled:false,claimEnabled:true,stores:[{id:'kitchen',name:'清禾厨房',owner:owner.wallet}],meals:[{id:'meal',storeId:'kitchen',version:1,name:'时蔬暖心套餐',description:'当季蔬菜、米饭与热汤。',unitPrice:'7000000',windows:[[660,840],[1020,1200]],remaining:'30',claimable:'18',fundingDeadline:2000000000,listed:true}]};
+const voucher={id:'voucher-original',claimId:'claim-original',name:'时蔬暖心套餐',version:1,windows:[[660,840]],state:'ISSUED',expiresAt:Math.floor(Date.now()/1000)+7200};
+async function api(path,options={}){requests.push({path,...options});window.__requests=requests;if(path==='/catalog')return catalog;if(path==='/catalog-operations'||path==='/approvals')return {items:[]};if(path==='/kitchens/kitchen/settings'){if(options.method==='PUT'){settings={...options.body,revision:settings.revision+1,restingToday:options.body.restToday,restDay:options.body.restToday?'2026-10-30':null};Object.assign(catalog.stores[0],settings);}return settings;}if(path.startsWith('/drafts?'))return {items:drafts};if(path.startsWith('/drafts/')&&options.method==='PUT'){const item={...options.body,id:path.split('/').at(-1),revision:options.body.expectedRevision+1};drafts=[item];return item;}if(path==='/support-reviews')return {...catalog.meals[0],id:'review',quantity:options.body.quantity,amount:(7000000n*BigInt(options.body.quantity)).toString(),expiresAt:2000000000};if(path==='/publication-reviews')return {...drafts[0],id:'publish-review'};if(path==='/orders')return {items:[]};if(path==='/vouchers')return {items:[]};if(path==='/claim-reviews')return {...catalog.meals[0],id:'claim-review',lifetimeSeconds:7200,expiresAt:Math.floor(Date.now()/1000)+120};if(path==='/claim-intents')return {id:'claim-original',state:'SEND_UNKNOWN'};if(path==='/claims/claim-original')return {id:'claim-original',state:'CONFIRMED',voucherId:voucher.id};if(path==='/vouchers/'+voucher.id)return voucher;if(path==='/vouchers/'+voucher.id+'/display')return {code:'123456',expiresAt:Math.floor(Date.now()/1000)+120};throw Error('Unexpected API '+path);}
+function App(){const[session,setSession]=useState(owner);return <CatalogProduct api={api} session={session} onLogin={()=>setSession(owner)} onLogout={()=>setSession(null)}/>;}createRoot(document.getElementById('root')).render(<App/>);`;
+await build({stdin:{contents:source,resolveDir:root.pathname,loader:'jsx'},outfile:output,bundle:true,format:'esm',define:{'process.env.NODE_ENV':'"production"'}});
+const resources={'/ui.mjs':['text/javascript',await readFile(output)],'/catalog.css':['text/css',await readFile(new URL('catalog.css',root))],'/source.css':['text/css',await readFile(new URL('source.css',root))],'/product.css':['text/css',await readFile(new URL('product.css',root))]};
+const server=createServer((req,res)=>{const resource=resources[req.url];res.writeHead(200,{'content-type':resource?.[0]||'text/html'});res.end(resource?.[1]||'<html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/source.css"><link rel="stylesheet" href="/product.css"><link rel="stylesheet" href="/catalog.css"><div id="root"></div><script type="module" src="/ui.mjs"></script></html>');});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
+let browser;const errors=[],results=[];
+try{
+  browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+  for(const width of [390,1440]){
+    const context=await browser.newContext({viewport:{width,height:950}}),page=await context.newPage();
+    page.on('pageerror',e=>errors.push(e.message));
+    await context.addInitScript(()=>{Date.now=()=>Date.UTC(2026,9,30,4,0,0);});
+    await context.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
+    await page.goto(base);await page.getByRole('heading',{name:'时蔬暖心套餐'}).waitFor();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'horizontal overflow');
+    await page.getByRole('button',{name:'支持餐食',exact:true}).click();
+    await page.getByLabel('支持份数').fill('12');await page.getByRole('button',{name:'审核资助',exact:true}).click();
+    await page.getByText('审核总额：84 测试 USDC').waitFor();
+    assert(await page.getByRole('button',{name:'确认原资助请求'}).isDisabled());
+    assert.equal(await page.evaluate(()=>window.__requests.some(r=>r.path==='/support-intents')),false);
+    await page.keyboard.press('Escape');await page.getByRole('button',{name:'商家餐品管理'}).click();
+    await page.getByRole('button',{name:'新增餐品'}).click();
+    await page.getByLabel('餐品名称',{exact:true}).fill('新版本草稿');await page.getByLabel('餐品说明').fill('新内容仅保存在私有草稿');
+    await page.getByLabel('单价').fill('8.25');await page.getByLabel('可资助数量').fill('40');await page.getByLabel('资助截止').fill('2030-01-01T12:00');
+    await page.getByRole('button',{name:'保存草稿'}).click();await page.getByText('草稿已保存；公开菜单尚未改变。关闭后可在餐品管理中审核发布。').waitFor();
+    await page.getByRole('button',{name:'关闭',exact:true}).click();await page.getByRole('button',{name:'审核发布',exact:true}).click();
+    await page.getByText('发布服务尚未开放。').waitFor();
+    await page.screenshot({path:join(directory,`catalog-${width}.png`),fullPage:true});
+    await page.getByRole('button',{name:'关闭',exact:true}).click();
+    await page.getByRole('button',{name:'厨房设置',exact:true}).click();
+    await page.getByLabel('营业时段1开始').fill('09:00');await page.getByLabel('营业时段1结束').fill('21:00');
+    await page.getByLabel('商家公告',{exact:true}).fill('请到店出示餐券。');
+    await page.getByRole('button',{name:'保存营业时间与公告',exact:true}).click();
+    await page.getByText('营业时间与公告已保存。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'今日休息',exact:true}).click();
+    await page.getByText('已标记今日休息，次日自动恢复营业状态。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'厨房与餐品'}).click();await page.getByRole('button',{name:'刷新目录',exact:true}).click();
+    await page.getByText('今日休息',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'领取餐食',exact:true}).isDisabled(),false);
+    assert.equal(await page.locator('[role=alert]').allTextContents().then(v=>v.some(x=>x.includes('Unexpected API'))),false);
+    assert.equal(await page.getByRole('heading',{name:'新版本草稿',exact:true}).count(),0);
+    await page.getByRole('button',{name:'领取餐食',exact:true}).click();
+    await page.getByRole('button',{name:'确认领取',exact:true}).click();
+    await page.getByText('领取结果待核对',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'查询原领取',exact:true}).click();
+    await page.getByRole('button',{name:'打开餐券',exact:true}).click();
+    await page.getByRole('button',{name:'生成短时取餐码',exact:true}).click();
+    await page.getByRole('status',{name:'短时取餐码'}).waitFor();
+    assert.match(await page.getByLabel('餐券保存链接').inputValue(),/#voucher=voucher-original$/);
+    assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.path==='/claim-intents').length),1);
+    await page.screenshot({path:join(directory,`voucher-${width}.png`),fullPage:true});
+    await page.getByRole('button',{name:'退出登录',exact:true}).click();
+    assert.equal(await page.getByRole('status',{name:'短时取餐码'}).count(),0);
+    assert.equal(await page.getByRole('button',{name:'商家餐品管理'}).count(),0);
+    results.push({width,result:'PASS'});await context.close();
+  }
+  assert.deepEqual(errors,[]);
+  await writeFile(join(directory,'results.json'),JSON.stringify({mode:'isolated synthetic API; no wallet/backend/chain acceptance',results,errors},null,2));
+  console.log(JSON.stringify({results,evidence:directory,errors}));
+}finally{await browser?.close();await new Promise(r=>server.close(r));await rm(output,{force:true});}

@@ -22,7 +22,11 @@ dist-dynamic/
 # CP24 isolated harness build/runtime helpers
 .venv
 local-e2e-harness/dist/
+t1-intents/public/product-v2/
 
 # CP30-C0 bounded, non-secret verification artifacts only
 !cp30-contracts/evidence/
 !cp30-contracts/evidence/**
+
+# Isolated new-product acceptance databases and process state
+.local-product-acceptance/
