@@ -1,0 +1,22 @@
+/* Product v2 only; keep the accepted original MVP styles unchanged. */
+.product-app { padding-bottom: 3rem; }
+.product-app .product-header { display: block; padding-block: 20px; }
+.product-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.product-topbar strong { font-size: 1.05rem; }
+.product-nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
+.product-app .product-nav .button { flex: 0 0 auto; white-space: nowrap; margin: 0; padding: 10px 14px; font-size: .9rem; }
+.product-app .button { margin: 4px 8px 4px 0; }
+.product-app .product-topbar .button { margin: 0; padding: 10px 14px; }
+.product-app label { display: grid; gap: 6px; margin-block: 12px; }
+.product-app input:not([type=checkbox]), .product-app textarea, .product-app select { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #bac5ba; border-radius: 7px; background: #fffefa; color: #243f34; font: inherit; }
+.product-app textarea { min-height: 90px; resize: vertical; }
+.product-app .panel { margin-block: 14px; }
+.product-app [aria-label="短时取餐码"] { margin-block: 18px; padding: 18px; text-align: center; background: #eef3e9; border-radius: 12px; }
+.product-app [aria-label="短时取餐码"] strong { font-size: 2rem; letter-spacing: .2em; }
+.product-app [role=alert]:not(:empty) { margin-block: 12px; color: #873e29; }
+@media (max-width: 600px) { .product-app .product-header { padding-block: 14px; } .product-app h1 { font-size: 2rem; } .product-app .panel { padding: 18px; } }
+/* New cards have two independent actions and variable merchant notices. */
+.product-app .store-card { display: flex; grid-row: auto; min-width: 0; }
+.product-app .store-body { display: flex; flex: 1; flex-direction: column; gap: 8px; grid-row: auto; padding: 24px; }
+.product-app .store-body > button { position: static; grid-area: auto; width: 100%; margin: 4px 0; }
+.product-app .store-body > button:first-of-type { margin-top: auto; }

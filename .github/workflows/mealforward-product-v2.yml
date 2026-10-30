@@ -1,0 +1,84 @@
+name: MealForward product MVP candidate
+on:
+  push:
+    branches:
+      - codex/mealforward-product-mvp-20261031
+    paths:
+      - 'mvp-contracts/**'
+      - 't1-intents/product-v2/**'
+      - 't1-intents/mvp-client/**'
+      - 't1-intents/auth/**'
+      - 't1-intents/package*.json'
+      - '.github/workflows/mealforward-product-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: product-v2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  candidate:
+    env:
+      FOUNDRY_OFFLINE: "false"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.1
+      - name: Install pinned packages without lifecycle scripts
+        run: |
+          npm ci --prefix mvp-contracts --ignore-scripts --no-audit --no-fund
+          npm ci --prefix t1-intents --ignore-scripts --no-audit --no-fund
+          npm ci --prefix t1-intents/mvp-client --ignore-scripts --no-audit --no-fund
+      - name: Check runtime dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=high --prefix t1-intents
+          npm audit --omit=dev --audit-level=high --prefix t1-intents/mvp-client
+      - name: Contract state transitions and independent accounting fuzz
+        run: |
+          forge build --root mvp-contracts
+          forge test --root mvp-contracts -vv
+      - name: Service, wallet, UI and legacy compatibility
+        run: |
+          node --test --test-concurrency=1 t1-intents/product-v2/*.test.mjs t1-intents/mvp-runtime.test.mjs t1-intents/mvp/http.test.mjs
+          npm test --prefix t1-intents/mvp-client
+          npm run build:catalog --prefix t1-intents/mvp-client
+      - name: Real isolated chain integration
+        run: |
+          node t1-intents/product-v2/adapter-local.ci.mjs
+          MEALFORWARD_RUN_LOCAL_NONCE=1 node --test t1-intents/product-v2/nonce-cancellation.test.mjs
+          MF_TEST_LOCAL_PROVIDER=1 node --test t1-intents/mvp-client/tests/product-network.test.mjs
+  legacy-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: t1c-disposable-only
+          POSTGRES_DB: mf_t1c_http_ci
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mf_t1c_http_ci"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      MF_T1C_DISPOSABLE_ONLY: ack-fresh-t1c-postgres17
+      MF_T1C_HTTP_DISPOSABLE_ONLY: ack-original-siwe-pg17
+      DATABASE_URL: postgres://postgres:t1c-disposable-only@127.0.0.1:5433/mf_t1c_http_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix t1-intents --ignore-scripts --no-audit --no-fund
+      - run: node --test t1-intents/http-auth.test.mjs

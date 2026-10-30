@@ -17,15 +17,16 @@ const newToken = () => randomBytes(32).toString('base64url');
 const cookies = header => Object.fromEntries((header || '').split(';').map(v => v.trim().split(/=(.*)/s).slice(0,2)).filter(x=>x.length===2 && x[0]));
 const cookie = (name,value,age) => `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${age}`;
 
-export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=newToken,newId=randomUUID,namespace=null}) {
+export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=newToken,newId=randomUUID,namespace=null,walletLoginChainId=10143}) {
   const ns=namespace;
   // Only complete, explicitly supported namespace tuples are accepted.
-  if(ns && !['mvp','mvp_usdc'].some(id=>{
+  if(ns && !(ns.prefix==='/v1/product'&&ns.sessionCookie==='__Host-mf_product_v2_session'&&ns.preCookie==='__Host-mf_product_v2_pre'&&ns.csrfHeader==='x-mf-product-v2-csrf'&&ns.bootstrapHeader==='x-mf-product-v2-bootstrap') && !['mvp','mvp_usdc'].some(id=>{
     const header=id.replaceAll('_','-');
     return ns.prefix==='/v1/mvp' && ns.sessionCookie==='__Host-mf_'+id+'_session' && ns.preCookie==='__Host-mf_'+id+'_pre' && ns.csrfHeader==='x-'+header+'-csrf' && ns.bootstrapHeader==='x-'+header+'-bootstrap';
   }))throw Error('INVALID_AUTH_NAMESPACE');
   const sessionCookie=ns?.sessionCookie||SESSION_COOKIE,preCookie=ns?.preCookie||PRE_COOKIE,csrfHeader=ns?.csrfHeader||'x-c1-csrf',bootstrapHeader=ns?.bootstrapHeader||'x-c1-bootstrap';
   if (typeof origin !== 'string' || !/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) && !/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)) throw Error('PINNED_PUBLIC_ORIGIN_REQUIRED');
+  if(walletLoginChainId!==10143 && !(walletLoginChainId===31337 && ns?.prefix==='/v1/product' && /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)))throw Error('INVALID_AUTH_CHAIN');
   const expectedHost = new URL(origin).host;
   const json = (res,status,value,additional={}) => {
     res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',...additional});
@@ -59,7 +60,7 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
         originalPrincipalCompatible:false,serverTime:now
       });
       if(path==='/v1/identity/setup' && method==='GET')return json(res,200,{
-        walletLoginEnabled:true,walletLoginChainId:10143,walletLoginOrigin:origin,authPilot:true
+        walletLoginEnabled:true,walletLoginChainId,walletLoginOrigin:origin,authPilot:true
       });
       if(path==='/v1/stores' && method==='GET')
         return json(res,503,{error:'ORIGINAL_BUSINESS_NOT_CONNECTED',mode:'CP31_AUTH_PILOT_ONLY'});
@@ -85,7 +86,7 @@ export function makePilotHandler({store,siwe,origin,clock=nowSeconds,issueToken=
         if(!exact(body,['address']) || typeof body.address!=='string' || !ADDRESS.test(body.address) || BigInt(body.address)===0n)throw issueError(422,'INVALID_ADDRESS');
         const pre=cookies(req.headers.cookie)[preCookie],csrf=req.headers[csrfHeader];
         if(typeof pre!=='string'||pre.length!==43||typeof csrf!=='string'||csrf.length!==43)throw issueError(403,'CSRF');
-        const challenge=siwe.makeChallenge({wallet:body.address.toLowerCase(),origin,chainId:10143,nonce:randomBytes(32).toString('hex'),challengeId:newId(),issuedAt:now,expiresAt:now+180});
+        const challenge=siwe.makeChallenge({wallet:body.address.toLowerCase(),origin,chainId:walletLoginChainId,nonce:randomBytes(32).toString('hex'),challengeId:newId(),issuedAt:now,expiresAt:now+180});
         if(!await store.createChallenge({preHash:HASH(pre),csrfHash:HASH(csrf),challenge,now}))throw issueError(409,'CHALLENGE_REJECTED');
         return json(res,200,challenge);
       }
