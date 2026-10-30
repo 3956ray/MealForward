@@ -1,19 +1,21 @@
 /** Independent concurrency review using copy-on-commit transactions like the PG store. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
 import {makeOperationCancellations} from './operation-cancellations.mjs';
 import {makeProductService} from './service.mjs';
 import {makeApprovalService} from './approval.mjs';
 import {makePublicationService} from './publication.mjs';
 import {makeRedemptionService} from './redemption.mjs';
+const pepper='p'.repeat(32),session=createHmac('sha256',pepper).update('session:initial-session').digest('hex');
 const wallet='0x'+'1'.repeat(40),recipient='0x'+'2'.repeat(40),escrow='0x'+'3'.repeat(40),originalHash='0x'+'4'.repeat(64),cancelHash='0x'+'5'.repeat(64),blockHash='0x'+'6'.repeat(64);
 function fixture(group,kind){
  const transaction={from:wallet,to:escrow,nonce:'0x3',chainId:'0x7a69',value:'0x0',data:'0x12345678'};
- let db={intents:{},approvals:{},publications:{},redemptions:{},vouchers:{voucher:{id:'voucher',storeId:'kitchen',wallet:recipient,generation:1,expiresAt:1000,state:'ISSUED',pendingRedemptionId:'original',pendingSettlementId:'original'}},verificationHandles:{handle:{wallet,session:'session',voucherId:'voucher',operationId:'original',displayGeneration:1,consumed:true}},displays:{voucher:{hash:'private'}}};
- db[group].original={id:'original',kind,wallet,state:'SEND_UNKNOWN',candidateHash:originalHash,transaction,voucherId:'voucher',storeId:'kitchen',generation:1,handle:'handle',session:'session',displayGeneration:1,expiresAt:100,handedOverConfirmedAt:50};
+ let db={intents:{},approvals:{},publications:{},redemptions:{},vouchers:{voucher:{id:'voucher',storeId:'kitchen',wallet:recipient,generation:1,expiresAt:1000,state:'ISSUED',pendingRedemptionId:'original',pendingSettlementId:'original'}},verificationHandles:{handle:{wallet,session,voucherId:'voucher',operationId:'original',displayGeneration:1,consumed:true}},displays:{voucher:{hash:'private'}}};
+ db[group].original={id:'original',kind,wallet,state:'SEND_UNKNOWN',candidateHash:originalHash,transaction,voucherId:'voucher',storeId:'kitchen',generation:1,handle:'handle',session,displayGeneration:1,expiresAt:100,handedOverConfirmedAt:50};
  let tail=Promise.resolve(),ids=0;const store={read:async()=>structuredClone(db),transact(fn){const run=tail.then(async()=>{const next=structuredClone(db),result=await fn(next);db=next;return structuredClone(result);});tail=run.catch(()=>{});return run;}};
  const proof={verified:true,finalized:true,invalidated:true,operationId:'original',kind,wallet,originalNonce:3,chainId:31337,txHash:cancelHash,blockNumber:10,blockHash,finalizedBlockNumber:20,finalizedBlockHash:blockHash,chainTime:200};
- const chain={catalog:async()=>({verified:true,blockNumber:20,stores:[{id:'kitchen',owner:wallet}],meals:[]}),verifyOperationCancellation:async()=>proof,voucherState:async()=>({verified:true,finalized:true,voucherId:'voucher',storeId:'kitchen',generation:1,owner:wallet,recipient,chainTime:200,expiresAt:1000,state:'ISSUED'})};
+ const chain={catalog:async()=>({verified:true,blockNumber:20,stores:[{id:'kitchen',owner:wallet}],meals:[]}),verifyOperationCancellation:async()=>proof,voucherState:async()=>({verified:true,finalized:true,voucherId:'voucher',storeId:'kitchen',generation:1,owner:wallet,recipient,chainTime:200,expiresAt:1000,unitPrice:'1',state:'ISSUED'})};
  const cancellations=makeOperationCancellations({store,chain,newId:()=>`replacement-${++ids}`,clock:()=>200});
  return {store,chain,cancellations,transaction,proof,db:()=>db};
 }
@@ -35,4 +37,13 @@ test('expired raw ISSUED voucher needs no separate expire transaction to release
 });
 test('confirmed original wins over a concurrently returning cancellation proof',async()=>{
  const f=fixture('intents','support');let release,enter;const entered=new Promise(r=>enter=r);f.chain.verifyOperationCancellation=async()=>{enter();return new Promise(r=>release=r);};const cancellation=f.cancellations.record(wallet,'intents','original',{txHash:cancelHash});await entered;await f.store.transact(s=>{s.intents.original.state='CONFIRMED';});release(f.proof);assert.equal((await cancellation).state,'CONFIRMED');assert.equal(f.db().intents.original.cancellationProof,undefined);
+});
+
+test('recovered handover keeps session ownership, requires explicit transfer, and only expires on final chain time',async()=>{
+ const f=fixture('redemptions','handover'),merchant=makeRedemptionService({store:f.store,chain:f.chain,pepper,clock:()=>200}),result=await f.cancellations.record(wallet,'redemptions','original',{txHash:cancelHash}),id=result.replacementOperationId;
+ assert.equal((await merchant.operation(wallet,id,'initial-session')).canConfirmHandover,true);assert.equal((await merchant.operation(wallet,id,'new-session')).canConfirmHandover,false);assert.equal((await merchant.operation(wallet,id,'new-session')).handle,undefined);
+ await assert.rejects(merchant.resumeHandover(wallet,id,'new-session',{previousDeviceStopped:false}),/PREVIOUS_DEVICE_CONFIRMATION_REQUIRED/);await merchant.resumeHandover(wallet,id,'new-session',{previousDeviceStopped:true});
+ assert.equal((await merchant.operation(wallet,id,'initial-session')).canConfirmHandover,false);assert.equal((await merchant.operation(wallet,id,'new-session')).canConfirmHandover,true);await assert.rejects(merchant.cancel(wallet,id,'new-session'),/HANDOVER_RESPONSIBILITY_MUST_CONTINUE/);await assert.rejects(merchant.cancel(recipient,id,'new-session'),/OPERATION_NOT_FOUND/);
+ f.chain.voucherState=async()=>({verified:true,finalized:true,voucherId:'voucher',storeId:'kitchen',generation:1,owner:wallet,recipient,chainTime:1000,expiresAt:1000,unitPrice:'1',state:'ISSUED'});
+ assert.equal((await merchant.cancel(wallet,id,'new-session',true)).state,'CANCELLED');assert.equal(f.db().vouchers.voucher.pendingRedemptionId,undefined);assert.equal(f.db().vouchers.voucher.state,'EXPIRED');
 });

@@ -207,7 +207,8 @@ test('explicit cancellation of an unhanded lock requires original session and fi
   await rejects(()=>f.service.prepareHandover(OWNER,'session',{handle:lock.handle,requestId:'after-cancel',handedOver:true}),'HANDOVER_LOCK_REQUIRED');
 });
 test('voucher expiry or original window end never automatically releases a lock',async()=>{
-  const f=fixture(),lock=await f.reserve();f.tick(7200);
+  const f=fixture(),lock=await f.reserve();
+  await rejects(()=>f.service.cancel(OWNER,lock.id,'new-session'),'HANDOVER_LOCK_REQUIRED');f.tick(7200);
   await rejects(()=>f.service.prepareHandover(OWNER,'session',{handle:lock.handle,requestId:'expired',handedOver:true}),'VOUCHER_UNAVAILABLE');
   assert.equal((await f.store.read()).vouchers[VOUCHER].pendingRedemptionId,lock.id);
   const g=fixture();await g.store.transact(s=>{s.vouchers[VOUCHER].expiresAt+=86400;});const other=await g.reserve();g.tick(7200);
@@ -235,10 +236,11 @@ test('owner explicitly transfers original unhanded lock to a new login and previ
   assert.equal(Object.keys((await f.store.read()).redemptions).length,1);
 });
 test('final expired voucher proof lets a new owner session explicitly release its original lock',async()=>{
-  const f=fixture(),lock=await f.reserve();f.tick(7200);
+  const f=fixture(),lock=await f.reserve();
+  await rejects(()=>f.service.cancel(OWNER,lock.id,'new-session'),'HANDOVER_LOCK_REQUIRED');f.tick(7200);
   await rejects(()=>f.service.resumeHandover(OWNER,lock.id,'new-session',{previousDeviceStopped:true}),'HANDOVER_RESUME_UNVERIFIED');
-  await rejects(()=>f.service.cancel(OWNER,lock.id,'new-session'),'HANDOVER_LOCK_REQUIRED');
-  f.chainState.state='EXPIRED';f.chainState.finalized=false;
+  // Raw on-chain ISSUED can still be expired by its immutable final deadline.
+  f.chainState.finalized=false;
   await rejects(()=>f.service.cancel(OWNER,lock.id,'new-session'),'CANCELLATION_NOT_YET_SAFE');
   f.chainState.finalized=true;f.chainState.voucherId=WRONG_HASH;
   await rejects(()=>f.service.cancel(OWNER,lock.id,'new-session'),'VOUCHER_EVIDENCE_UNVERIFIED');

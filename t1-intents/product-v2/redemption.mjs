@@ -182,7 +182,7 @@ export function makeRedemptionService({store,chain,pepper,clock=()=>Math.floor(D
         await owner(wallet,v.storeId);const e=await evidence(v,wallet);
         // Finalized chain time past this immutable permit proves it can no
         // longer authorize a handover. Local clock/UNKNOWN are never enough.
-        const expired=e.state==='EXPIRED'&&e.chainTime>=v.expiresAt,cancelled=e.state==='CANCELLED';
+        const expired=['ISSUED','EXPIRED'].includes(e.state)&&e.chainTime>=v.expiresAt,cancelled=e.state==='CANCELLED';
         if(requireInvalidated)check(expired||cancelled,'VOUCHER_STILL_VALID');
         check(e.finalized===true&&(e.state==='ISSUED'||expired||cancelled)&&(cancelled||op.state==='AWAITING_HANDOVER'||e.chainTime>op.permit.deadline),'CANCELLATION_NOT_YET_SAFE');
         if(op.recoveredFrom&&!expired&&!cancelled)check(false,'HANDOVER_RESPONSIBILITY_MUST_CONTINUE');

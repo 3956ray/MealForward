@@ -18,6 +18,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   candidate:
+    env:
+      FOUNDRY_OFFLINE: "false"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
