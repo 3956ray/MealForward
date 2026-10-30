@@ -42,7 +42,9 @@ jobs:
           npm audit --omit=dev --audit-level=high --prefix t1-intents
           npm audit --omit=dev --audit-level=high --prefix t1-intents/mvp-client
       - name: Contract state transitions and independent accounting fuzz
-        run: forge test --root mvp-contracts -vv
+        run: |
+          forge build --root mvp-contracts
+          forge test --root mvp-contracts -vv
       - name: Service, wallet, UI and legacy compatibility
         run: |
           node --test --test-concurrency=1 t1-intents/product-v2/*.test.mjs t1-intents/mvp-runtime.test.mjs t1-intents/mvp/http.test.mjs
