@@ -57,7 +57,7 @@
 - 浏览器拒签作废：支持者拒签后显式零转账作废，再资助仅扣一次餐款；商家确认实际交餐后拒签，作废并真实等原 permit 过期，保留原责任继续钱包确认。1440/390 餐品卡两个按钮均不重叠并可真实点击。
 - 浏览器断网恢复：真实交易已发送后丢弃 RPC 返回，刷新仍保留 SEND_UNKNOWN；补原哈希后确认原付款，未增加发送或扣款。
 - 浏览器使用本地合成测试钱包，不使用用户真实钱包，不等同公网验收。两处实测发现的界面问题（切钱包后保存链接与旧领取目标冲突、并行请求丢失券列表）已修复。
-- 新的独立 GitHub workflow 验证合约、后台、前端和实际本地链适配器，并为旧认证模块提供它要求的真实 CI PostgreSQL 环境。未运行成功前不称 CI 已通过。
+- 新独立 GitHub workflow 已在代码提交 `c69a20162d54a600fe13f2e5bb13898ebbc9334e` 全部通过：[CI 41098323191](https://github.com/3956ray/MealForward/actions/runs/41098323191)。验证合约、后台、前端、真实链适配器、真实nonce作废和真实wallet provider，并为旧认证提供真实 CI PostgreSQL。前两次CI分别暴露offline编译器和缺测试资产构建文件，均修复后重跑。
 
 本地浏览器证据分别保存在 `/tmp/mealforward-real-browser-acceptance-resumed/`、`/tmp/mealforward-real-browser-closure/`、`/tmp/mealforward-real-browser-recovery/`、`/tmp/mealforward-real-browser-cancellation/`。它们是本机运行证据，目录可能随系统清理，不应作为长期公开链接。
 
@@ -71,7 +71,7 @@
 
 ## 公网验收剩余前置项
 
-1. 完成独立源码审查及 CI，固定候选提交与部署产物。
+1. 已完成独立源码审查及上述 CI；公网部署时须固定该候选代码和重新核验部署产物。
 2. 部署新测试网合约，建立专用平台权限、Gas 余额及严格 manifest；不能把旧合约地址当新合约或自动迁移旧记录。
 3. 创建新专用数据库角色/数据空间，配置新独立服务的 TLS 连接和秘密；不在交接、Git、工具输出或日志中写密钥/签名/连接串。
 4. 验证公网 HTTPS、最终区块读取、平台 Claim、后台持续处理和恢复后，再由用户以自己的测试钱包做人工验收。

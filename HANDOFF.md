@@ -9,9 +9,10 @@
 - 钱包拒签不能只靠错误码释放。新增显式同原 nonce 的零转账作废：最终链证明原交易不可执行后才解除占用；已交餐责任保留并恢复，旧查询不能复活已取消请求。真实浏览器已验证拒签→作废→新资助，以及保留交餐责任的恢复，无重复扣款/交餐。
 - 当前可打开的新版本机入口：`http://127.0.0.1:56527/product-v2/index.html`。独立运行目录 `.local-product-acceptance/run-8f9140bb-ecd1-40ce-b981-33871d317bfa`；3餐、7份待领取、领取账户未使用。运行需保持，停止后按 README 重新 seed；不要回收这个供用户验收的进程。早期49664/51117/55219测试环境已按各自PID正常关闭。
 - 最新本地回归：合约71/71；后台183通过、3个显式依赖用例默认跳过；前端151通过、1个真实provider用例默认跳过。已另外执行真实PG+Anvil+HTTP 5/5、真实nonce作废9/9，索引攻击回归和四组浏览器验收通过；跳过项不冒充通过。
-- Git分支 `codex/mealforward-product-mvp-20261031`；[独立草稿PR48](https://github.com/3956ray/MealForward/pull/48)。旧PR47/服务分支未更新。首次CI旧认证测试成功，新候选因旧foundry配置的offline模式无法下载编译器失败；已在独立workflow显式关闭offline，等待重跑，不视为代码测试已通过。普通Git传输网络超时后使用GitHub API上传，逐提交核对tree/SHA相同；无force覆盖旧分支。
+- Git分支 `codex/mealforward-product-mvp-20261031`；[独立草稿PR48](https://github.com/3956ray/MealForward/pull/48)。旧PR47/服务分支未更新。最终代码提交 `c69a20162d54a600fe13f2e5bb13898ebbc9334e` 的 [CI 41098323191](https://github.com/3956ray/MealForward/actions/runs/41098323191) 已全部 success（candidate + legacy-auth）；包含真实链适配器、nonce作废和真实钱包provider测试。前两次CI暴露的offline编译及测试资产未构建问题已修复并重跑，不能将失败记录删成首次即通过。普通Git传输网络超时后使用GitHub API上传，逐提交核对tree/SHA相同；无force覆盖旧分支。
 - 实施/验收/局限：[2026-10-31 MVP 验收文档](docs/superpowers/2026-10-31-mvp-acceptance.md)。本机启动：[acceptance.README.md](t1-intents/product-v2/acceptance.README.md)。`seed` 可准备一家厨房、三餐、7份已资助餐食。
 - 本轮没有云写入、真实测试网合约部署、旧记录迁移或用户钱包操作。开始时只读确认旧 Render live 为 `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa`，PR47 draft/open；原两笔记录仍 SETTLED，rev10/9，fingerprint `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`。
+- 已向用户提出下一步配置选择：新建专用测试网部署/领取/验券账户，或使用已有账户；尚未收到答复。没有生成或索取真实私钥，也未擅自使用旧账户。
 - 公网实链验收仍需：固定候选提交/CI，新合约与专用平台账户/Gas、专用数据库角色及新服务配置，然后人工测试钱包验收。不能用本机测试替代这项。
 - 所有 `.local-product-acceptance/`、测试账户密钥、签名、会话和连接串均不得加入 Git 或交接。运行私钥仅在隔离进程内；重启用新目录，不恢复旧测试身份。
 
