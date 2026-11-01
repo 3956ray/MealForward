@@ -7,7 +7,8 @@
 - 部署钱包 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`；Claim `0x41DCBFED391b79FAC7B2951dD136c6B7e1384259`；验券 `0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3`；Monad10143、既有测试资产、7200秒。finalized块 `76126404` 预检 nonce19、当时费用上限 `0.696025764 MON`，非永久报价，点击发送前再次检查。
 - 工具服务无密钥、不签名、不发送。用户在Chrome连接MetaMask并亲自确认部署。客户端先记录UNKNOWN，服务端对 `.local-product-acceptance/product-v2-deployment-attempt.json` 用 `wx` 原子创建，并同步文件及父目录后持久化原nonce/dataHash/费用后才允许调用钱包；拒签/断线不自动解锁。换端口或新浏览器仍服从原attempt。**不得删除attempt来重试**；异常只能查原Hash或先取得原nonce已被最终作废的证据再另行审核。
 - 已有attempt时，恢复入口不再要求新部署余额/nonce/估价门槛。原交易核验包含原nonce/预算、tx与receipt完整关联、CREATE地址、最终块/规范链重查、固定runtime及构造权限。还没有真实部署Hash/新合约地址。
-- 本轮局部测试 **17/17**（含异步reserve期间刷新/连接竞争、切账户、跨浏览器恢复及final receipt否定用例）；实际HTTP对异源Origin及错误Host均403；Chrome显示准确角色/费用，连接前发送按钮禁用。独立审查提出的artifact pin、持久admission、原review关联、异步packet漂移、恢复门槛问题均已修复；独审已复核此前16项及实际HTTP；最后建议补齐文件与目录fsync，现已修复并新增并发admission测试通过。新增工具仅本地验证，不能套用下方应用CI通过结论。
+- 本轮局部测试 **17/17**（含异步reserve期间刷新/连接竞争、切账户、跨浏览器恢复及final receipt否定用例）；实际HTTP对异源Origin及错误Host均403；Chrome显示准确角色/费用，连接前发送按钮禁用。独立审查提出的artifact pin、持久admission、原review关联、异步packet漂移、恢复门槛问题均已修复；独立审查已再次运行17/17通过，文件及目录fsync与并发admission复核完成，本轮范围未见剩余明确阻断。新增工具仅本地验证，不能套用下方应用CI通过结论。
+- 部署审核工具本地功能提交 `7a47ced`；本轮未推送，未运行新增工具的GitHub CI。当前审核进程会话 `24992`，末次启动预检finalized块 `76126993`。
 - 下一步：用户从审核页部署并提供原交易Hash → 本工具只读核验最终部署 → 写入新manifest，建立专用数据库角色/命名空间和独立Render服务，链接既有secrets组并验证地址派生、权限和预算 → 公网完整验收。新服务未上线前不能把旧公网URL称为新版。若用户未签名，到此等待，不代点钱包确认。
 
 # 2026-10-31 新产品全栈验收候选（前阶段证据）
