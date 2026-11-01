@@ -1,4 +1,16 @@
-# 2026-10-31 新产品全栈验收候选（当前入口）
+# 2026-11-02 配置组已确认，等待用户部署新合约
+
+- 用户确认两项后台签名配置已保存。Chrome Render 控制台只读核实工作区 LaoDao (`tea-db7q3ou7bikc73bp2bt0`) 存在 `mealforward-product-v2-secrets`，ID `evg-dbjmfkijnfac738emjhg`，列表显示 **2 项变量**。未打开密钥值；变量名、地址派生和签名能力仍需新版服务启动门禁验证，不得把计数核验写成密钥有效性核验。
+- Render 服务列表仍只有旧服务；本轮未创建/更改服务、链接配置组、迁移云数据库或广播交易。旧两笔结算数据未操作；本轮未重新查询其指纹，以下指纹属于前次证据。
+- 新增本机人工部署审核工具：`t1-intents/product-v2/deployment-review{.mjs,-client.mjs,.html}`。入口 **http://127.0.0.1:49988/**，运行会话以当前49988监听进程为准，Chrome 已打开。原产品本机验收入口56527保持不动。这是部署工具，不是已上线的新产品。
+- 固定合约源仍为 `c69a20162d54a600fe13f2e5bb13898ebbc9334e`；编译 creation code hash `0x3fdd567c59002116e5496f483c7263af959eac3658e5a1da925a2bb99bd7eb87`，含用户确认构造参数的 initcode hash `0x6321edd23da748ec2d658d39aa18ede154b38c2deece9de548386dbfcd1c0c82`。ABI/runtime/immutable-reference元数据另有完整digest pin，变更拒绝启动；不更改旧合约。
+- 部署钱包 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`；Claim `0x41DCBFED391b79FAC7B2951dD136c6B7e1384259`；验券 `0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3`；Monad10143、既有测试资产、7200秒。finalized块 `76126404` 预检 nonce19、当时费用上限 `0.696025764 MON`，非永久报价，点击发送前再次检查。
+- 工具服务无密钥、不签名、不发送。用户在Chrome连接MetaMask并亲自确认部署。客户端先记录UNKNOWN，服务端对 `.local-product-acceptance/product-v2-deployment-attempt.json` 用 `wx` 原子创建，并同步文件及父目录后持久化原nonce/dataHash/费用后才允许调用钱包；拒签/断线不自动解锁。换端口或新浏览器仍服从原attempt。**不得删除attempt来重试**；异常只能查原Hash或先取得原nonce已被最终作废的证据再另行审核。
+- 已有attempt时，恢复入口不再要求新部署余额/nonce/估价门槛。原交易核验包含原nonce/预算、tx与receipt完整关联、CREATE地址、最终块/规范链重查、固定runtime及构造权限。还没有真实部署Hash/新合约地址。
+- 本轮局部测试 **17/17**（含异步reserve期间刷新/连接竞争、切账户、跨浏览器恢复及final receipt否定用例）；实际HTTP对异源Origin及错误Host均403；Chrome显示准确角色/费用，连接前发送按钮禁用。独立审查提出的artifact pin、持久admission、原review关联、异步packet漂移、恢复门槛问题均已修复；独审已复核此前16项及实际HTTP；最后建议补齐文件与目录fsync，现已修复并新增并发admission测试通过。新增工具仅本地验证，不能套用下方应用CI通过结论。
+- 下一步：用户从审核页部署并提供原交易Hash → 本工具只读核验最终部署 → 写入新manifest，建立专用数据库角色/命名空间和独立Render服务，链接既有secrets组并验证地址派生、权限和预算 → 公网完整验收。新服务未上线前不能把旧公网URL称为新版。若用户未签名，到此等待，不代点钱包确认。
+
+# 2026-10-31 新产品全栈验收候选（前阶段证据）
 
 本节覆盖下方历史阶段的“尚未接通适配器”“退款未实现”“停业规则待定”等描述。本地全栈及真实浏览器验收已完成，源码已提交独立 PR48；**尚未公开部署，不得把旧公网地址说成新版**。
 
@@ -12,7 +24,9 @@
 - Git分支 `codex/mealforward-product-mvp-20261031`；[独立草稿PR48](https://github.com/3956ray/MealForward/pull/48)。旧PR47/服务分支未更新。最终代码提交 `c69a20162d54a600fe13f2e5bb13898ebbc9334e` 的 [CI 41098323191](https://github.com/3956ray/MealForward/actions/runs/41098323191) 已全部 success（candidate + legacy-auth）；包含真实链适配器、nonce作废和真实钱包provider测试。前两次CI暴露的offline编译及测试资产未构建问题已修复并重跑，不能将失败记录删成首次即通过。普通Git传输网络超时后使用GitHub API上传，逐提交核对tree/SHA相同；无force覆盖旧分支。
 - 实施/验收/局限：[2026-10-31 MVP 验收文档](docs/superpowers/2026-10-31-mvp-acceptance.md)。本机启动：[acceptance.README.md](t1-intents/product-v2/acceptance.README.md)。`seed` 可准备一家厨房、三餐、7份已资助餐食。
 - 本轮没有云写入、真实测试网合约部署、旧记录迁移或用户钱包操作。开始时只读确认旧 Render live 为 `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa`，PR47 draft/open；原两笔记录仍 SETTLED，rev10/9，fingerprint `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`。
-- 已向用户提出下一步配置选择：新建专用测试网部署/领取/验券账户，或使用已有账户；尚未收到答复。没有生成或索取真实私钥，也未擅自使用旧账户。
+- 2026-11-01 用户选择使用已有账户，并按所问三个角色顺序提供地址：部署 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`；平台 Claim `0x41DCBFED391b79FAC7B2951dD136c6B7e1384259`；验券签名 `0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3`。此角色映射依据回复顺序，已向用户说明，不沿用旧 Issuer 的业务角色。
+- 公开 RPC 只读核验：10143 finalized 块 `75993081`，hash `0x6337a8d8bd4e45f9d732992f96f1bcccac3dc911d2f090b746362412729fdc2a`，三地址校验和有效且无链上代码；当时 MON 余额依次 `12.48128412649` / `4.75645287341` / `4.88475715247`。未估算部署总费用，不据此保证预算充足；未签名或广播。
+- 此时后台签名配置位置尚未提供；该阻碍已由上方2026-11-02配置组确认记录更新。没有读取或索取私钥，尚未执行公网部署。
 - 公网实链验收仍需：固定候选提交/CI，新合约与专用平台账户/Gas、专用数据库角色及新服务配置，然后人工测试钱包验收。不能用本机测试替代这项。
 - 所有 `.local-product-acceptance/`、测试账户密钥、签名、会话和连接串均不得加入 Git 或交接。运行私钥仅在隔离进程内；重启用新目录，不恢复旧测试身份。
 
