@@ -97,3 +97,16 @@ test('previously delivered continuation only ends after explicit invalidation ve
  await mount(fixture((p,o)=>{if(p==='/merchant/operations')return {items:[replacement]};if(p==='/merchant/operations/replacement')return replacement;if(p==='/merchant/operations/replacement/cancel-invalidated'){checks++;if(!invalidated)throw Error('VOUCHER_STILL_VALID');return {...replacement,state:'CANCELLED'};}if(o)throw Error('unexpected write');}));
  try{await click('查看原处理');assert.equal(button('尚未交餐，取消处理'),undefined);await click('核验餐券已失效并结束处理');assert.equal(checks,1);assert.match(document.body.textContent,/VOUCHER_STILL_VALID/);assert.ok(button('继续原交餐确认'));invalidated=true;await click('核验餐券已失效并结束处理');assert.equal(checks,2);assert.match(document.body.textContent,/原操作已取消/);assert.equal(button('继续原交餐确认'),undefined);}finally{await clean();}
 });
+test('settled meals move out of the payable list while kitchen names preserve the store identity',async()=>{
+ let settled=false;const item={voucherId:'v-paid',name:'测试餐',unitPrice:'1000000',receiver:'0x111',chainTime:1000,settlementAvailableAt:900};
+ await mount(fixture(p=>p.startsWith('/merchant/payouts?')?{items:[{...item,state:settled?'SETTLED':'HANDED_OVER'}]}:p==='/merchant/settlement-reviews'?{id:'review-paid',...item}:undefined),{catalog:{stores:[{id:'s',name:'留膳厨房'}]}});
+ try{
+  const option=document.querySelector('select option');assert.equal(option.textContent,'留膳厨房');assert.equal(option.value,'s');
+  assert.equal(document.querySelector('[aria-label="待结算餐食"] article h3').textContent,'测试餐');assert.ok(button('审核结算'));
+  await click('审核结算');assert.ok(document.querySelector('[aria-label="结算审核"]'));
+  settled=true;await click('刷新结算记录');assert.equal(document.querySelector('[aria-label="结算审核"]'),null);
+  assert.equal(document.querySelector('[aria-label="待结算餐食"] article'),null);
+  assert.equal(document.querySelector('[aria-label="已结算记录"] article h3').textContent,'测试餐');
+  assert.equal(button('审核结算'),undefined);assert.equal(document.querySelector('[aria-label="已结算记录"] button'),null);
+ }finally{await clean();}
+});

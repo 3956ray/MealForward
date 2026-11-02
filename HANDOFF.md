@@ -1,3 +1,12 @@
+# 2026-11-02 结算展示优化与合并付款评估
+
+- 用户确认优化：验券与结算按HANDED_OVER待结算、SETTLED已结算分区；已结算无结算入口。厨房名称来自公共catalog，权限/选择值仍使用原storeId。刷新发现已结算会关闭旧审核，不能因刷新清除未知交易记录。
+- 改动：`t1-intents/mvp-client/merchant-product.jsx`、`catalog-product.jsx`。回归覆盖打开审核后另一会话完成结算、刷新移入历史并移除旧确认入口。客户端152通过/1既有跳过；独立catalog构建通过。部署状态待本节后续更新，未将本地测试冒充公网钱包验证。
+- 授权/资金方向已核：approve调用资产合约，spender为共享新版Escrow `0x999Edd25dBB7716D63a5360350dbD892b82312bD`，不是商家钱包；fund通过safeTransferFrom把付款者资金转入Escrow，交餐并结算后才给商家。
+- 原子合笔候选：EIP-5792，必须查询实际钱包/10143的atomic能力，保持原付款人并验证batchID/status/receipts。不能直接把现有两个请求换成sendCalls：当前fund要求finalized allowance，approval核验块末额度等于审批额，外层交易to/data/nonce及单操作journal也不适配batch。普通helper调用fund会改变msg.sender，禁止这样绕过。
+- 只读RPC对实际资产nonces与DOMAIN_SEPARATOR均返回ABI结果，但不足以证明完整permit兼容。EIP-2612路线仍需合约入口设计；一笔链上交易不必然只有一次签名。本轮未启用批量付款、未改合约/密钥/数据库、未发钱包交易。参考：https://docs.metamask.io/metamask-connect/evm/guides/send-transactions/batch-transactions/ 与 https://eips.ethereum.org/EIPS/eip-5792 。
+- 仍待明确实现与验收：atomic能力探测、batch专用操作/幂等恢复、付款人/金额/原请求事件证据、拒签/未知结果/失败禁止自动降级重付；不默认无限额授权。原公网退款、过期及跨账户异常矩阵继续待验收。
+
 # 2026-11-02 首次公网真实钱包主链路验收通过
 
 - 用户反馈厨房 `8286ae1e-686b-4d5e-9582-1411882e93b8` 的餐品“111”显示已结算，并提供资助者授权/付款Hash。本轮只读查询云端操作白名单字段与公开RPC，没有登录、签名或发送交易。
