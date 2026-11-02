@@ -1,7 +1,11 @@
 # 2026-11-02 结算展示优化与合并付款评估
 
+- **已上线**：代码 `75e207ff3651bee42beb00dde686383a8ac0e481`，Render `dep-dbk3rfk9v7es73bkd6h0` live，服务 `srv-dbjv7lnf3r2c73d7ri50`。入口 https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。CI https://github.com/3956ray/MealForward/actions/runs/41407192957 candidate/legacy-auth均通过；独立商家测试20/20通过、审查通过。
+- 公网HTML/configuration/catalog均200，实际catalog.mjs与本地构建逐字节一致，SHA256 `ec1751690d1f60a308699ac68fcb82efbf2d5c9c4dcb2fc5bd9c1eab2b7349bb`。只读DB汇总仍1张SETTLED券。本轮没有新增钱包验收或模拟真实付款。旧服务未部署。回退可选上一live源码293dcb2，仅前端变更无需数据迁移。
+- 已知另项待办：settlements准备请求遇明确的插入前4xx时，现有UI可能保留SEND_UNKNOWN占位；后续仅针对无id的新占位及redemption.mjs确认的确定拒绝码清理，禁止扩大到网络/5xx、已有handover或真实未决交易。本轮通过刷新撤销过期审核，降低此入口但不宣称完整修复该遗留问题。
+
 - 用户确认优化：验券与结算按HANDED_OVER待结算、SETTLED已结算分区；已结算无结算入口。厨房名称来自公共catalog，权限/选择值仍使用原storeId。刷新发现已结算会关闭旧审核，不能因刷新清除未知交易记录。
-- 改动：`t1-intents/mvp-client/merchant-product.jsx`、`catalog-product.jsx`。回归覆盖打开审核后另一会话完成结算、刷新移入历史并移除旧确认入口。客户端152通过/1既有跳过；独立catalog构建通过。部署状态待本节后续更新，未将本地测试冒充公网钱包验证。
+- 改动：`t1-intents/mvp-client/merchant-product.jsx`、`catalog-product.jsx`。回归覆盖打开审核后另一会话完成结算、刷新移入历史并移除旧确认入口。客户端152通过/1既有跳过；独立catalog构建通过。部署与实际公网检查见本节顶部；不将本地测试冒充公网钱包验证。
 - 授权/资金方向已核：approve调用资产合约，spender为共享新版Escrow `0x999Edd25dBB7716D63a5360350dbD892b82312bD`，不是商家钱包；fund通过safeTransferFrom把付款者资金转入Escrow，交餐并结算后才给商家。
 - 原子合笔候选：EIP-5792，必须查询实际钱包/10143的atomic能力，保持原付款人并验证batchID/status/receipts。不能直接把现有两个请求换成sendCalls：当前fund要求finalized allowance，approval核验块末额度等于审批额，外层交易to/data/nonce及单操作journal也不适配batch。普通helper调用fund会改变msg.sender，禁止这样绕过。
 - 只读RPC对实际资产nonces与DOMAIN_SEPARATOR均返回ABI结果，但不足以证明完整permit兼容。EIP-2612路线仍需合约入口设计；一笔链上交易不必然只有一次签名。本轮未启用批量付款、未改合约/密钥/数据库、未发钱包交易。参考：https://docs.metamask.io/metamask-connect/evm/guides/send-transactions/batch-transactions/ 与 https://eips.ethereum.org/EIPS/eip-5792 。
