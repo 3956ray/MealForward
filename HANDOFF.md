@@ -1,15 +1,26 @@
+# 2026-11-02 新版公网已启动，进入用户钱包验收
+
+- 用户确认已关联 `mealforward-product-v2-secrets` 后，先查无自动新部署，再触发 `dep-dbjvpo6tlv9c73ee14og`。Render现已 **live**，实际源码 `293dcb251a00a3419a901833bc3fb18fd12dfc15`（CI41379703713通过），服务ID `srv-dbjv7lnf3r2c73d7ri50`。正式测试入口：**https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html**。
+- 启动日志明确出现 `MealForward product testnet ready`。这意味着真实新DB权限检查、新合约/资产/runtimeHash/两角色及签名账户派生地址门禁均通过；未读取或输出私钥。沿用10143、2h、新escrow0x999Edd25dBB7716D63a5360350dbD892b82312bD。
+- 公网HTTP 10项检查通过：页面/configuration/catalog/ledger 200；匿名me/vouchers/claim-intents 401；外域Origin 403；local-wallet与旧mvp路径404。configuration中的新合约、10143与7200秒核对通过；HTML带CSP且无本地钱包脚本。catalog.mjs及3份CSS实际均200。证据 `/tmp/mealforward-public-smoke.json`。
+- 当前公开目录无厨房/餐品，链上各资金份数/金额均0；这是独立空环境，不是故障。用户第一步：Chrome MetaMask切换Monad Testnet，钱包登录 → **厨房设置** 登记厨房，之后 **商家餐品管理** 发布餐品，再资助→领取→验券→交餐→180秒后结算。平台手续费由已配置Claim账户支付；真实完整闭环仍待用户钱包验收，不能冒充已完成。
+- 本轮浏览器控制再次30秒超时，未完成公网实际页面交互/桌面手机视觉验收，也未替用户登录或点击钱包确认。此前本地浏览器证据与本轮公网HTTP证据须区分。
+- 云库复查：后台初始化/轮询使新state revision递增（本轮观察47），不代表新增业务；旧两笔仍rev10/9，指纹408e76f0c970880598786deeb7bfb39c / 517254d2bdad4ef3dffc14ab23806c39保持一致。旧服务/旧合约未改动。
+- 后续以用户首次登记/资助等原交易Hash和网页反馈验收，遇UNKNOWN只查原操作，不重放。Render free休眠/重启属于测试环境限制，未承诺全天后台可用。
+
 # 2026-11-02 新测试网合约已部署，独立公网服务准备中
 
 - 用户本人提交部署交易 `0xa2a6f0ae0aa3d1e7fde5f17af4c819d2c8fb371abf2395e0db25a6be17bccf6f`。本机审核工具已核验原nonce19/费用上限、完整tx/receipt/CREATE地址、固定代码/权限及最终规范块。新escrow **`0x999Edd25dBB7716D63a5360350dbD892b82312bD`**，部署块 `76236334`，runtime hash `0x01e6c1d78fa77c28ba77df0ceb07ca8aa560e14831b533153503f7e5ea95a8ff`。领取/验券角色及7200秒与原审核一致。公开manifest：`t1-intents/product-v2/monad-deployment.json`，其中记录此次核验的finalized块证据。
-- 新建Render服务 `srv-dbjv7lnf3r2c73d7ri50`，名称 `mealforward-product-v2-laodao`，URL `https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html`；此URL**尚不可验收**，签名配置组未链接、首次启动预期拒绝。独立产品分支，autoDeploy=no，free/singapore，Node24.21.0；不修改旧服务。创建时构建提交为远端143634c；加固后的本轮源码仍待推送和部署，不能将首次构建说成最新部署。
+- 新建Render服务 `srv-dbjv7lnf3r2c73d7ri50`，名称 `mealforward-product-v2-laodao`，URL `https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html`；此URL**尚不可验收**，签名配置组未链接、首次启动预期拒绝。独立产品分支，autoDeploy=no，free/singapore，Node24.21.0；不修改旧服务。创建时构建提交为远端143634c；加固代码293dcb2已推送、CI通过并触发新部署；最新状态见下方，不能将首次143634构建说成最新部署。
 - Supabase项目 `ketfrukrcuosrqynnsay` 新建私有schema `mf_product_v2`、专用runtime角色，迁移 `20261102021140_product_v2_private_runtime`。新角色独立LOGIN凭证通过SCRAM单独配置，密码不进迁移历史；无管理员/继承/旧schema权限。新session pepper和专用DSN已注入**新服务**，未读旧服务环境值。临时本机安全保存路径 `.local-product-acceptance/product-v2-cloud-credentials.json`（0600/ignored），不得输出或提交；平台钱包私钥仍只在用户的Render组中，本轮未读取。
 - 已用新登录账户和验证TLS实际连接云数据库，完整新版 `verifyProductPermissions` PASS，包括非系统schema中的有效PUBLIC表/列/序列权限与可执行SECURITY DEFINER检查。旧两笔记录保持rev10/9、指纹 `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`（迁移前已实查，阶段结束还需复查）。
 - cloud entry现在固定本次合约、资产/代码摘要、两个权限、部署起点、2h和平台Claim费用预算：300gwei、单笔上限0.3MON、1,000,000 gas。不能任填自洽manifest切到旧/别的合约。default image digest取仓库hero-meal.jpg实际字节keccak。
 - 验证：本轮product-v2测试186通过/3个显式依赖默认跳过；独立权限单测7/7、真实隔离PG的PUBLIC表/列/序列/SECDEF漂移测试通过；server-entry/runtime14/14。独立审查复核固定manifest及权限门禁未见剩余明确代码阻断。云端真实钱包业务验收尚未运行。
-- 加固代码 `e724144` 已推送，CI 41379056307 首次失败于部署审核工具的调试元数据hash差异（creation bytecode pin通过）；改为固定canonical ABI/runtime bytes/immutable ranges，忽略sourceMap/AST分组编号。干净forge重编译和19项审核工具测试通过，独审确认实际验证边界未放宽；修复后的CI待查询。
+- 加固代码 `e724144` 已推送，CI 41379056307 首次失败于部署审核工具的调试元数据hash差异（creation bytecode pin通过）；改为固定canonical ABI/runtime bytes/immutable ranges，忽略sourceMap/AST分组编号。干净forge重编译和19项审核工具测试通过，独审确认实际验证边界未放宽；修复提交 `293dcb251a00a3419a901833bc3fb18fd12dfc15` 已推送；[CI 41379703713](https://github.com/3956ray/MealForward/actions/runs/41379703713) 全部success（candidate/legacy-auth，含真实隔离链集成），不能把首次失败抹去。
 - 新服务首次部署 `dep-dbjv7m7f3r2c73d7rkag`：构建成功，启动拒绝（签名组未链接），状态update_failed，未出现live。Render日志首次503后再次读取成功。浏览器工具连续两次超时且重置，尚不能代为打开链接组界面；MCP没有环境组关联功能。应让用户在新服务Environment里链接既有组，不能复制密钥进聊天。
 - 阶段结束复查：新DB revision0、登录角色非superuser/非inherit/非bypassrls；完整加强权限门禁以真实新登录身份再次PASS。旧两笔指纹与迁移前完全一致。
-- 下一步：确认修复后CI → 新服务链接 `mealforward-product-v2-secrets`（仅此新服务，不复制/展示密钥）→ 手动部署固定候选，验证启动时派生的signer地址和新DB权限 → 公网匿名/越权/页面门禁 → 用户登记厨房、发布、资助、Claim和到店闭环。free Render可能休眠，后台不是全天候保证，验收阶段需说明限制。
+- 最新部署 `dep-dbjvm38ae00c73fdmc5g` 已精确使用CI通过的 `293dcb251a00a3419a901833bc3fb18fd12dfc15`，当前update_failed，签名组尚未关联，未出现live。PR48描述已同步实际合约/数据库/CI及公网待验收状态。
+- 下一步（唯一待用户操作）：打开 https://dashboard.render.com/web/srv-dbjv7lnf3r2c73d7ri50 → Environment → Link Environment Group → 选择 `mealforward-product-v2-secrets` 并关联。无须再输入私钥。用户回复后先查是否已自动部署；若没有再手动触发最新候选，验证启动signer派生/DB权限及公网匿名/越权/页面检查，最后真实钱包完整验收。不能在尚未live时把新URL称为可测试网站。free Render可能休眠，worker不是全天候保证。
 
 # 2026-11-02 配置组已确认，等待用户部署新合约
 
