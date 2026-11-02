@@ -1,3 +1,12 @@
+# 2026-11-02 首次公网真实钱包主链路验收通过
+
+- 用户反馈厨房 `8286ae1e-686b-4d5e-9582-1411882e93b8` 的餐品“111”显示已结算，并提供资助者授权/付款Hash。本轮只读查询云端操作白名单字段与公开RPC，没有登录、签名或发送交易。
+- 最终链核验块 `76251070`，hash `0x7826ade3f7307743ede6d5ee2e4f5a526c4632cb33d852c954912469c6b66104`：授权 **3 USDC**、资助 **3份×1 USDC**；其中1份领取→交餐→结算成功，实际代币转账 **1 USDC** 到 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`。批次剩余2份可领取，claimed/handedOver/refundPending/refunded均0，settled=1。不能将此描述为3份全结算。
+- 原交易：授权 `0xcb9ce0a80452c1697ca2d1922ebccdf74069a11507ac2634734c1b90ea50b06a`；资助 `0xd3099d742ceccdcf2f5fd693fd78053368ad9645c1010f3c6f431e7326aef122`；平台Claim `0xff2b199a6d22f00e469a47f1917c9061f86ddae2c0ef3bdc793f57f524dd13bc`；交餐 `0xc23369e5aca48d3b7805be468dcad19272458a410595a4c4ba051582818242e5`；结算 `0x18eb6c9289efc6ce8fece551f22d8b95950ea2d90badf80cfca9282cfaa80b17`。
+- 五笔receipt均status1且最终规范链确认；核验准确合约/资产、授权spender与付款者匹配、资助Transfer与Funded金额一致、Claim/HandedOver/Settled同批次同券关联、券最终SETTLED、结算Transfer收款人及金额一致。Claim交易from为固定平台账户，领取Gas由平台支付。交餐到结算实际间隔 **279秒**，满足180秒门槛。摘要证据 `/tmp/mealforward-first-live-cycle.json`（只含公开交易/汇总，无领取秘密）。
+- 云端登记/发布/授权/资助/领取/交餐/结算对应操作均CONFIRMED。此证据证明一次真实公网主流程，不覆盖退款、过期、跨账户私密券访问、拒签/断网恢复等全部公网异常验收；这些仍不能以本地测试替代。
+- 用户反馈界面仍将“已结算”项展示于“待结算餐食”标题下，且厨房用UUID显示。记为后续展示优化，本轮未擅自改动应用或部署。
+
 # 2026-11-02 新版公网已启动，进入用户钱包验收
 
 - 用户确认已关联 `mealforward-product-v2-secrets` 后，先查无自动新部署，再触发 `dep-dbjvpo6tlv9c73ee14og`。Render现已 **live**，实际源码 `293dcb251a00a3419a901833bc3fb18fd12dfc15`（CI41379703713通过），服务ID `srv-dbjv7lnf3r2c73d7ri50`。正式测试入口：**https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html**。
