@@ -1,5 +1,5 @@
--- New private product storage specification; NOT a deployed Supabase migration.
--- Apply only to a newly created disposable local test database in this phase.
+-- Private product storage. Applied to dedicated cloud schema in migration
+-- 20261102021140_product_v2_private_runtime; credentials are provisioned separately.
 CREATE SCHEMA mf_product_v2;
 REVOKE ALL ON SCHEMA mf_product_v2 FROM PUBLIC;
 CREATE ROLE mf_product_v2_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;

@@ -1,11 +1,13 @@
 /** Dedicated cloud entry. No environment, signer or socket is accessed on import. */
 import {pathToFileURL} from 'node:url';
+import {readFileSync} from 'node:fs';
 import {Pool} from 'pg';
 import {FetchRequest,JsonRpcProvider,Wallet} from 'ethers';
 import {verifiedSupabasePoolerTls} from '../supabase-tls.mjs';
 import {productStore} from './store.mjs';
 import {makeProductHost} from './host.mjs';
 const requireValue=(ok,code)=>{if(!ok)throw Error(code);};
+export const approvedProductDeployment=Object.freeze(JSON.parse(readFileSync(new URL('./monad-deployment.json',import.meta.url),'utf8')));
 export function productServerConfiguration(env){
  requireValue(env.MF_PRODUCT_ENABLED==='true','PRODUCT_EXPLICIT_ENABLE_REQUIRED');
  const origin=env.MF_PRODUCT_ORIGIN;
@@ -15,6 +17,8 @@ export function productServerConfiguration(env){
  requireValue(db.protocol==='postgresql:'&&db.hostname==='aws-0-ap-southeast-2.pooler.supabase.com'&&['5432','6543'].includes(db.port)&&decodeURIComponent(db.username)==='mf_product_v2_runtime.ketfrukrcuosrqynnsay'&&db.password&&db.pathname==='/postgres'&&!db.search&&!db.hash,'PRODUCT_DEDICATED_DATABASE_REQUIRED');
  requireValue(rpc.protocol==='https:'&&!rpc.username&&!rpc.password&&!rpc.hash,'PRODUCT_HTTPS_RPC_REQUIRED');
  requireValue(manifest?.chainId===10143&&manifest.asset?.toLowerCase()==='0x534b2f3a21130d7a60830c2df862319e593943a3'&&manifest.policySeconds===7200,'PRODUCT_TESTNET_MANIFEST_REQUIRED');
+ const pinned=['chainId','asset','escrow','escrowCodeHash','assetCodeHash','claimAuthority','redemptionAuthority','assetDecimals','deploymentBlock','policySeconds','maxFeePerGas','maxTransactionFee','claimGasLimit'];
+ requireValue(pinned.every(k=>typeof manifest[k]===typeof approvedProductDeployment[k]&&String(manifest[k]).toLowerCase()===String(approvedProductDeployment[k]).toLowerCase()),'PRODUCT_APPROVED_DEPLOYMENT_REQUIRED');
  for(const name of ['MF_PRODUCT_CLAIM_KEY','MF_PRODUCT_REDEMPTION_KEY'])requireValue(/^0x[0-9a-f]{64}$/i.test(env[name]||''),'PRODUCT_DEDICATED_SIGNERS_REQUIRED');
  requireValue(typeof env.MF_PRODUCT_CREDENTIAL_PEPPER==='string'&&env.MF_PRODUCT_CREDENTIAL_PEPPER.length>=32,'PRODUCT_CREDENTIAL_KEY_REQUIRED');
  requireValue(/^0x[0-9a-f]{64}$/i.test(env.MF_PRODUCT_DEFAULT_IMAGE_DIGEST||'')&&BigInt(env.MF_PRODUCT_DEFAULT_IMAGE_DIGEST)!==0n,'PRODUCT_IMAGE_DIGEST_REQUIRED');

@@ -21,6 +21,26 @@ export async function verifyProductPermissions(pool){
     WHERE (left(nspname,3)='mf_' AND nspname<>'mf_product_v2' AND has_schema_privilege(current_user,oid,'USAGE'))
       OR (left(nspname,3)<>'pg_' AND nspname<>'information_schema' AND has_schema_privilege(current_user,oid,'CREATE'))`);
   check(legacy.rows.length===0,'PRODUCT_LEGACY_OR_DDL_ACCESS');
+  // NOINHERIT does not remove PUBLIC grants. Check effective cross-schema
+  // access, including column-only grants and privileged callable entry points.
+  // CASE is deliberate: PostgreSQL need not evaluate WHERE predicates in order.
+  const externalRelations=await pool.query(`SELECT n.nspname,c.relname,c.relkind
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE left(n.nspname,3)<>'pg_' AND n.nspname NOT IN ('information_schema','mf_product_v2')
+      AND has_schema_privilege(current_user,n.oid,'USAGE')
+      AND CASE
+        WHEN c.relkind IN ('r','p','v','m','f') THEN
+          has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')
+        WHEN c.relkind='S' THEN has_sequence_privilege(current_user,c.oid,'USAGE,SELECT,UPDATE')
+        ELSE false END`);
+  check(externalRelations.rows.length===0,'PRODUCT_EXTERNAL_RELATION_ACCESS');
+  const externalDefiners=await pool.query(`SELECT n.nspname,p.proname
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE left(n.nspname,3)<>'pg_' AND n.nspname NOT IN ('information_schema','mf_product_v2')
+      AND p.prosecdef AND has_schema_privilege(current_user,n.oid,'USAGE')
+      AND has_function_privilege(current_user,p.oid,'EXECUTE')`);
+  check(externalDefiners.rows.length===0,'PRODUCT_EXTERNAL_DEFINER_ACCESS');
   const access=(await pool.query(`SELECT c.relname,c.relkind,c.relrowsecurity,
     c.relowner=(SELECT oid FROM pg_roles WHERE rolname=current_user) AS owned,
     has_table_privilege(current_user,c.oid,'SELECT') AS can_select,

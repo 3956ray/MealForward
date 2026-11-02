@@ -11,6 +11,7 @@ function memoryPool(role='mf_product_v2_runtime'){
  if(q.startsWith('SELECT nspowner='))return result([{owned:false,can_use:true,can_create:false,can_create_schema:false}]);
  if(q.startsWith('SELECT nspname FROM pg_namespace'))return result();
  if(q.startsWith('SELECT c.relname,c.relkind,c.relrowsecurity'))return result(['state','pre_sessions','challenges','sessions','schema_version'].map(relname=>({relname,relkind:'r',relrowsecurity:true,owned:false,can_select:true,can_insert:relname!=='schema_version',can_update:relname!=='schema_version',can_delete:false,can_truncate:false,can_reference:false,can_trigger:false})));
+ if(q.includes('has_sequence_privilege')||q.includes('p.prosecdef'))return result();
  if(q.startsWith('SELECT p.proname FROM pg_proc'))return result();
  if(q==='SELECT id FROM mf_product_v2.state WHERE id=1')return result([{id:1}]);
  if(q==='SELECT current_user AS role')return result([{role}]);if(q.includes('schema_version'))return result([{version:1}]);

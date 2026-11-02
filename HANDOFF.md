@@ -1,3 +1,13 @@
+# 2026-11-02 新测试网合约已部署，独立公网服务准备中
+
+- 用户本人提交部署交易 `0xa2a6f0ae0aa3d1e7fde5f17af4c819d2c8fb371abf2395e0db25a6be17bccf6f`。本机审核工具已核验原nonce19/费用上限、完整tx/receipt/CREATE地址、固定代码/权限及最终规范块。新escrow **`0x999Edd25dBB7716D63a5360350dbD892b82312bD`**，部署块 `76236334`，runtime hash `0x01e6c1d78fa77c28ba77df0ceb07ca8aa560e14831b533153503f7e5ea95a8ff`。领取/验券角色及7200秒与原审核一致。公开manifest：`t1-intents/product-v2/monad-deployment.json`，其中记录此次核验的finalized块证据。
+- 新建Render服务 `srv-dbjv7lnf3r2c73d7ri50`，名称 `mealforward-product-v2-laodao`，URL `https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html`；此URL**尚不可验收**，签名配置组未链接、首次启动预期拒绝。独立产品分支，autoDeploy=no，free/singapore，Node24.21.0；不修改旧服务。创建时构建提交为远端143634c；加固后的本轮源码仍待推送和部署，不能将首次构建说成最新部署。
+- Supabase项目 `ketfrukrcuosrqynnsay` 新建私有schema `mf_product_v2`、专用runtime角色，迁移 `20261102021140_product_v2_private_runtime`。新角色独立LOGIN凭证通过SCRAM单独配置，密码不进迁移历史；无管理员/继承/旧schema权限。新session pepper和专用DSN已注入**新服务**，未读旧服务环境值。临时本机安全保存路径 `.local-product-acceptance/product-v2-cloud-credentials.json`（0600/ignored），不得输出或提交；平台钱包私钥仍只在用户的Render组中，本轮未读取。
+- 已用新登录账户和验证TLS实际连接云数据库，完整新版 `verifyProductPermissions` PASS，包括非系统schema中的有效PUBLIC表/列/序列权限与可执行SECURITY DEFINER检查。旧两笔记录保持rev10/9、指纹 `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`（迁移前已实查，阶段结束还需复查）。
+- cloud entry现在固定本次合约、资产/代码摘要、两个权限、部署起点、2h和平台Claim费用预算：300gwei、单笔上限0.3MON、1,000,000 gas。不能任填自洽manifest切到旧/别的合约。default image digest取仓库hero-meal.jpg实际字节keccak。
+- 验证：本轮product-v2测试186通过/3个显式依赖默认跳过；独立权限单测7/7、真实隔离PG的PUBLIC表/列/序列/SECDEF漂移测试通过；server-entry/runtime14/14。独立审查复核固定manifest及权限门禁未见剩余明确代码阻断。云端真实钱包业务验收尚未运行。
+- 下一步：推送加固源码并核CI → 新服务链接 `mealforward-product-v2-secrets`（仅此新服务，不复制/展示密钥）→ 手动部署固定候选，验证启动时派生的signer地址和新DB权限 → 公网匿名/越权/页面门禁 → 用户登记厨房、发布、资助、Claim和到店闭环。free Render可能休眠，后台不是全天候保证，验收阶段需说明限制。
+
 # 2026-11-02 配置组已确认，等待用户部署新合约
 
 - 用户确认两项后台签名配置已保存。Chrome Render 控制台只读核实工作区 LaoDao (`tea-db7q3ou7bikc73bp2bt0`) 存在 `mealforward-product-v2-secrets`，ID `evg-dbjmfkijnfac738emjhg`，列表显示 **2 项变量**。未打开密钥值；变量名、地址派生和签名能力仍需新版服务启动门禁验证，不得把计数核验写成密钥有效性核验。

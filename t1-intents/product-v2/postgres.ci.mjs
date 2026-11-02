@@ -25,10 +25,30 @@ try {
   await admin.query(await readFile(new URL('./schema.sql',import.meta.url),'utf8'));
   pool=new pg.Pool({host:'127.0.0.1',port,user:'product_test',database:'postgres',options:'-c role=mf_product_v2_runtime'});
   await verifyProductPermissions(pool);
-  const drift=async(grant,restore)=>{await admin.query(grant);await assert.rejects(()=>verifyProductPermissions(pool));await admin.query(restore);await verifyProductPermissions(pool);};
+  const drift=async(grant,restore,code)=>{await admin.query(grant);await assert.rejects(()=>verifyProductPermissions(pool),code?{code}:undefined);await admin.query(restore);await verifyProductPermissions(pool);};
   await drift('GRANT TRUNCATE ON mf_product_v2.state TO mf_product_v2_runtime','REVOKE TRUNCATE ON mf_product_v2.state FROM mf_product_v2_runtime');
   await drift('GRANT UPDATE(version) ON mf_product_v2.schema_version TO mf_product_v2_runtime','REVOKE UPDATE(version) ON mf_product_v2.schema_version FROM mf_product_v2_runtime');
   await drift('ALTER TABLE mf_product_v2.state DISABLE ROW LEVEL SECURITY','ALTER TABLE mf_product_v2.state ENABLE ROW LEVEL SECURITY');
+  // PUBLIC privileges still apply to a NOINHERIT role. Exercise real catalog
+  // functions over mixed tables/indexes/sequences; wrong-kind calls must not run.
+  await admin.query(`CREATE TABLE public.legacy_review(id integer PRIMARY KEY,secret text);
+    CREATE SEQUENCE public.legacy_review_seq;
+    CREATE FUNCTION public.legacy_review_definer() RETURNS integer LANGUAGE sql SECURITY DEFINER AS 'SELECT 1';
+    REVOKE EXECUTE ON FUNCTION public.legacy_review_definer() FROM PUBLIC;`);
+  await verifyProductPermissions(pool);
+  for(const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])
+    await drift(`GRANT ${privilege} ON public.legacy_review TO PUBLIC`,`REVOKE ${privilege} ON public.legacy_review FROM PUBLIC`,'PRODUCT_EXTERNAL_RELATION_ACCESS');
+  for(const privilege of ['SELECT','INSERT','UPDATE','REFERENCES'])
+    await drift(`GRANT ${privilege}(secret) ON public.legacy_review TO PUBLIC`,`REVOKE ${privilege}(secret) ON public.legacy_review FROM PUBLIC`,'PRODUCT_EXTERNAL_RELATION_ACCESS');
+  for(const privilege of ['USAGE','SELECT','UPDATE'])
+    await drift(`GRANT ${privilege} ON SEQUENCE public.legacy_review_seq TO PUBLIC`,`REVOKE ${privilege} ON SEQUENCE public.legacy_review_seq FROM PUBLIC`,'PRODUCT_EXTERNAL_RELATION_ACCESS');
+  await drift('GRANT EXECUTE ON FUNCTION public.legacy_review_definer() TO PUBLIC','REVOKE EXECUTE ON FUNCTION public.legacy_review_definer() FROM PUBLIC','PRODUCT_EXTERNAL_DEFINER_ACCESS');
+  // An inaccessible namespace is not an effective entry point until USAGE is granted.
+  await admin.query(`CREATE SCHEMA legacy_review_private;
+    CREATE TABLE legacy_review_private.records(id integer);
+    GRANT SELECT ON legacy_review_private.records TO PUBLIC;`);
+  await verifyProductPermissions(pool);
+  await drift('GRANT USAGE ON SCHEMA legacy_review_private TO mf_product_v2_runtime','REVOKE USAGE ON SCHEMA legacy_review_private FROM mf_product_v2_runtime','PRODUCT_EXTERNAL_RELATION_ACCESS');
   const auth=productAuthStore(pool),now=1800000000,preHash='1'.repeat(64),csrfHash='2'.repeat(64),sessionHash='3'.repeat(64),sessionCsrfHash='4'.repeat(64);
   await auth.createPre({preHash,csrfHash,expiresAt:now+300});
   const challenge={challengeId:'12345678-1234-1234-1234-123456789abc',expiresAt:now+180};
