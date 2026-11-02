@@ -6,7 +6,10 @@
 - 已用新登录账户和验证TLS实际连接云数据库，完整新版 `verifyProductPermissions` PASS，包括非系统schema中的有效PUBLIC表/列/序列权限与可执行SECURITY DEFINER检查。旧两笔记录保持rev10/9、指纹 `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`（迁移前已实查，阶段结束还需复查）。
 - cloud entry现在固定本次合约、资产/代码摘要、两个权限、部署起点、2h和平台Claim费用预算：300gwei、单笔上限0.3MON、1,000,000 gas。不能任填自洽manifest切到旧/别的合约。default image digest取仓库hero-meal.jpg实际字节keccak。
 - 验证：本轮product-v2测试186通过/3个显式依赖默认跳过；独立权限单测7/7、真实隔离PG的PUBLIC表/列/序列/SECDEF漂移测试通过；server-entry/runtime14/14。独立审查复核固定manifest及权限门禁未见剩余明确代码阻断。云端真实钱包业务验收尚未运行。
-- 下一步：推送加固源码并核CI → 新服务链接 `mealforward-product-v2-secrets`（仅此新服务，不复制/展示密钥）→ 手动部署固定候选，验证启动时派生的signer地址和新DB权限 → 公网匿名/越权/页面门禁 → 用户登记厨房、发布、资助、Claim和到店闭环。free Render可能休眠，后台不是全天候保证，验收阶段需说明限制。
+- 加固代码 `e724144` 已推送，CI 41379056307 首次失败于部署审核工具的调试元数据hash差异（creation bytecode pin通过）；改为固定canonical ABI/runtime bytes/immutable ranges，忽略sourceMap/AST分组编号。干净forge重编译和19项审核工具测试通过，独审确认实际验证边界未放宽；修复后的CI待查询。
+- 新服务首次部署 `dep-dbjv7m7f3r2c73d7rkag`：构建成功，启动拒绝（签名组未链接），状态update_failed，未出现live。Render日志首次503后再次读取成功。浏览器工具连续两次超时且重置，尚不能代为打开链接组界面；MCP没有环境组关联功能。应让用户在新服务Environment里链接既有组，不能复制密钥进聊天。
+- 阶段结束复查：新DB revision0、登录角色非superuser/非inherit/非bypassrls；完整加强权限门禁以真实新登录身份再次PASS。旧两笔指纹与迁移前完全一致。
+- 下一步：确认修复后CI → 新服务链接 `mealforward-product-v2-secrets`（仅此新服务，不复制/展示密钥）→ 手动部署固定候选，验证启动时派生的signer地址和新DB权限 → 公网匿名/越权/页面门禁 → 用户登记厨房、发布、资助、Claim和到店闭环。free Render可能休眠，后台不是全天候保证，验收阶段需说明限制。
 
 # 2026-11-02 配置组已确认，等待用户部署新合约
 

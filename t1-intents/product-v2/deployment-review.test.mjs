@@ -77,6 +77,19 @@ test('runtime metadata drift cannot weaken code verification',async()=>{
   const changed=structuredClone(artifact);changed.deployedBytecode.immutableReferences={};
   await assert.rejects(makeReview({},changed),/UNPINNED_VERIFICATION/);
 });
+test('debug source maps, AST ids and object key order are not deployment identities',async()=>{
+  const copy=structuredClone(artifact);
+  copy.deployedBytecode.sourceMap='different debug-only source ids';
+  copy.deployedBytecode.immutableReferences=Object.fromEntries(Object.values(copy.deployedBytecode.immutableReferences).map((v,i)=>['compilerAst'+i,v]));
+  const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).reverse().map(k=>[k,reorder(v[k])])):v;
+  assert.ok(await makeReview({},reorder(copy)));
+});
+test('ABI, runtime bytes and immutable offsets remain strictly pinned',async()=>{
+  for(const mutate of [a=>{a.abi=a.abi.slice(1);},a=>{a.deployedBytecode.object='0x00';},a=>{Object.values(a.deployedBytecode.immutableReferences)[0][0].start++;}]){
+    const changed=structuredClone(artifact);mutate(changed);
+    await assert.rejects(makeReview({},changed),/UNPINNED_VERIFICATION/);
+  }
+});
 test('wrong deployed authorities and changed finality both fail verification',async()=>{
   const provider=finalizedProvider(),original=provider.send;
   provider.send=async(method,args)=>method==='eth_call'?'0x'+'0'.repeat(64):original(method,args);

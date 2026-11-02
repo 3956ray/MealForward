@@ -16,6 +16,13 @@ export const TARGET = Object.freeze({
 });
 const requireThat = (ok, code) => { if (!ok) throw new Error(code); };
 const same = (a,b) => String(a).toLowerCase() === String(b).toLowerCase();
+export function verificationArtifactDigest(artifact) {
+  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
+  const immutableRanges=Object.values(artifact.deployedBytecode.immutableReferences).flat().sort((a,b)=>a.start-b.start||a.length-b.length);
+  // Source maps and compiler AST ids are debug metadata, not verification inputs.
+  // Pin the exact ABI, runtime bytes and every masked byte range instead.
+  return keccak256(toUtf8Bytes(JSON.stringify(canonical({abi:artifact.abi,runtime:artifact.deployedBytecode.object,immutableRanges}))));
+}
 export function normalizedRuntime(code, references) {
   requireThat(/^0x(?:[0-9a-f]{2})+$/i.test(code), 'INVALID_RUNTIME');
   let out=code.slice(2).toLowerCase();
@@ -31,7 +38,7 @@ export function assertDeploymentTransaction(tx, data) {
 }
 export async function makeReview(provider, artifact) {
   requireThat(keccak256(artifact.bytecode.object)==='0x3fdd567c59002116e5496f483c7263af959eac3658e5a1da925a2bb99bd7eb87','UNPINNED_DEPLOYMENT_ARTIFACT');
-  requireThat(keccak256(toUtf8Bytes(JSON.stringify({abi:artifact.abi,deployedBytecode:artifact.deployedBytecode})))==='0xd49c99430045c7f2c257d0f98cd22a5390f73100935fb8aecdeebe54cc6c1e50','UNPINNED_VERIFICATION_ARTIFACT');
+  requireThat(verificationArtifactDigest(artifact)==='0x252fb729e495158b3cbb30fa0bb6902b0e74ab2bdbe60e38c40eda0a61842b72','UNPINNED_VERIFICATION_ARTIFACT');
   const {data}=await new ContractFactory(artifact.abi,artifact.bytecode.object).getDeployTransaction(
     TARGET.asset,TARGET.claimAuthority,TARGET.redemptionAuthority,TARGET.policySeconds);
   const abi=new Interface(artifact.abi);
