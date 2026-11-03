@@ -11,7 +11,7 @@ function fixture(){
  return {store,chain,service:makeAtomicFundingService({store,chain,service:{},clock:()=>100})};
 }
 test('wallet call ID cannot overwrite canonical funding batch identity',async()=>{
- const f=fixture(),a=await f.service.attempt(wallet,'op');assert.match(a.operation.walletBatchId,/^mf-/);assert.equal(a.operation.batchId,undefined);
+ const f=fixture(),a=await f.service.attempt(wallet,'op');assert.match(a.operation.walletBatchId,/^0x[0-9a-f]{128}$/);assert.equal(a.operation.batchId,undefined);
  await f.service.recordBatch(wallet,'op',{batchId:a.operation.walletBatchId,transactionHashes:[hash]});
  const done=await f.service.status(wallet,'op');assert.equal(done.batchId,batch);assert.equal(done.walletBatchId,a.operation.walletBatchId);assert.equal(done.state,'CONFIRMED');
 });
