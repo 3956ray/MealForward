@@ -1,3 +1,4 @@
+import {atomicCalls} from './atomic-wire.mjs';
 /** New product domain. No access to the legacy MVP schema, signer or runtime.
  * The chain adapter supplies verified catalog/transaction evidence; it never sends.
  * This module is not mounted by the live MVP server.
@@ -83,7 +84,7 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
       if(typeof chain.identity==='function'){
         const value=await chain.identity(address);
         check(value?.verified===true&&value.wallet===address&&Array.isArray(value.stores)&&value.stores.every(v=>typeof v==='string'),'IDENTITY_UNVERIFIED',503);
-        return {wallet:address,stores:[...new Set(value.stores)]};
+        return {wallet:address,stores:[...new Set(value.stores)],...(value.targetId?{targetId:value.targetId,legacyTarget:value.legacyTarget===true}:{})};
       }
       // Compatibility for isolated domain fixtures. The deployed adapter provides
       // identity separately so pending catalog reconciliation cannot block login.
@@ -151,18 +152,21 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
         state.reviews[review.id] = review; return review;
       }));
     },
-    async confirmSupport(address, body) {
+    async confirmSupport(address, body, {mode='legacy'}={}) {
       address = wallet(address); exact(body,['reviewId','requestId']);
       // Capability off is a hard server gate, never a frontend-only hiding rule.
       check(chain.fundingEnabled === true && chain.prepareFunding,'FUNDING_NOT_CONNECTED',503);
+      const atomicAccount=mode==='atomic'?await chain.verifyAtomicAccount?.(address):null;
+      check(mode==='legacy'||mode==='atomic'&&chain.atomicFundingEnabled===true&&atomicAccount?.verified===true&&atomicAccount.finalized===true,'ATOMIC_NOT_ENABLED');
       const snapshot = await catalog();
       return store.transact(async state => {
-        const requestKey = `${address}:${id(body.requestId)}`, payload = {action:'confirmSupport',...body};
+        const requestKey = `${address}:${id(body.requestId)}`, payload = {action:'confirmSupport',...body,...(mode==='atomic'?{mode}:{})};
         const original = state.requests[requestKey];
         if (original) { check(original.hash === digest(payload),'REQUEST_CONFLICT'); return dto(intentFor(state,address,original.result.id)); }
         const review = state.reviews[id(body.reviewId)];
         check(review?.wallet === address && review.kind === 'support','REVIEW_NOT_FOUND',404);
         if (review.intentId) {
+          check((state.intents[review.intentId].mode||'legacy')===mode,'FUNDING_MODE_CONFLICT');
           state.requests[requestKey]={hash:digest(payload),result:{id:review.intentId}};
           return dto(intentFor(state,address,review.intentId));
         }
@@ -172,11 +176,12 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
         const meal = current(snapshot,review.storeId,review.mealId,review.version);
         check(meal.termsHash === review.termsHash && meal.unitPrice === review.unitPrice,'MEAL_VERSION_CHANGED');
         check(BigInt(review.quantity) <= available(state,snapshot,meal),'INSUFFICIENT_INVENTORY');
-        await allowance(address,review.amount);
+        if(mode!=='atomic')await allowance(address,review.amount);
         const intent = {...copy(review),id:newId(),reviewId:review.id,kind:'support',state:'PREPARED',createdAt:clock()};
         // Adapter only constructs and verifies calldata; it must not sign/send.
         intent.transaction = await chain.prepareFunding(copy(intent));
         try {intent.transaction=validateFundingTransaction(intent,chain.target,intent.transaction);} catch {fail('TRANSACTION_UNVERIFIED',503);}
+        if(mode==='atomic'){intent.mode='atomic';intent.atomicAccount=atomicAccount;intent.calls=atomicCalls(intent,chain.target);}
         state.intents[intent.id] = intent; review.intentId = intent.id;
         state.requests[requestKey] = {hash:digest(payload),result:{id:intent.id}};
         return dto(intent);
@@ -188,6 +193,7 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
       address=wallet(address); check(chain.fundingEnabled === true,'FUNDING_NOT_CONNECTED',503);
       return store.transact(async state => {
         const intent=intentFor(state,address,intentId);
+        check(intent.mode!=='atomic','ATOMIC_ROUTE_REQUIRED');
         check(intent.state==='PREPARED','ALREADY_ATTEMPTED');
         check(intent.expiresAt>clock(),'REVIEW_EXPIRED');
         await allowance(address,intent.amount);
@@ -209,6 +215,7 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
       txHash=txHash.toLowerCase();
       return store.transact(state => {
         const intent=intentFor(state,address,intentId);
+        check(intent.mode!=='atomic','ATOMIC_ROUTE_REQUIRED');
         check(['SEND_UNKNOWN','HASH_BOUND','CONFIRMED','REVERTED'].includes(intent.state),'ATTEMPT_REQUIRED');
         check(!intent.txHash || intent.txHash===txHash,'HASH_CONFLICT');
         // An unverified pasted/provider hash is not authority. Keep every
@@ -219,6 +226,7 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
     },
     async reconcile(address,intentId) {
       address=wallet(address); const original=intentFor(await store.read(),address,intentId);
+      if(original.mode==='atomic')return dto(original);
       if (!original.candidateHash || !['SEND_UNKNOWN','HASH_BOUND'].includes(original.state)) return dto(original);
       check(typeof chain.verifyFunding==='function','VERIFIER_NOT_CONNECTED',503);
       // verifyFunding must bind sender/nonce/input/value/chain/target, finalized

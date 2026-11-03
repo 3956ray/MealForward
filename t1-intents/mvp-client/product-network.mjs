@@ -91,6 +91,9 @@ export function createProductWallet({view = globalThis.window, configuration=nul
       if(disposed||selection!==selectedRevision||current()!==provider)fail('CONTEXT_CHANGED');
       return observe(provider,generation);
     },
+    async atomicCapabilities(account){const p=current(),revision=generation;await assertWallet(p,revision,account);const value=await p.request({method:'wallet_getCapabilities',params:[account,['0x'+policy().chainId.toString(16)]]});stable(p,revision);return value;},
+    async atomicCallsStatus(id){const p=current(),revision=generation;const value=await p.request({method:'wallet_getCallsStatus',params:[id]});stable(p,revision);return value;},
+    async sendAtomicCalls(account,request,assertCurrent){const p=current(),revision=generation;await assertWallet(p,revision,account);assertCurrent();if(request.atomicRequired!==true||request.from!==account||Number(BigInt(request.chainId))!==policy().chainId||request.calls?.length!==2)fail('ATOMIC_PACKET');return p.request({method:'wallet_sendCalls',params:[request]});},
     signMessage(account,message,assertCurrent){
       if(typeof message!=='string'||message.length>8192)fail('MESSAGE');
       return action(account,'personal_sign',client=>client.signMessage({message}),assertCurrent);

@@ -1,3 +1,27 @@
+# 2026-11-03 · 单次资助与自动结算（V3 候选，未上线）
+
+- [实现说明、费用及发布步骤](docs/superpowers/2026-11-03-atomic-funding-auto-settlement.md) · [产品演进 HTML](docs/product-evolution/index.html) · [演进 Markdown](docs/product-evolution/mealforward-evolution.md)。本节更新下方同日早期记录；此前的线上验收属于 V2。
+- 已开发：新共享托管合约 ProductEscrowV3；合并精确金额授权和资助，真实钱包不支持时明确提示两步。商家交餐后链上等待 180 秒，独立 worker 付 Gas、自动提交，合约只能付给固定商家。到账由最终结算事件及 USDC 转账共同证明；退款回原资助者。已上架一份餐成功利用批处理时，共四笔交易：资助、发券、交餐、结算。既有 V2 合约、数据与资金不迁移。
+- 平台 Claim/结算共享持久签名记录；未知结果只恢复原包。目标、领取限制及用户会话跨版本校验。为防平台 nonce 争用，平台签名账户只允许领取及恢复已有操作。回退默认关闭新资助（MF_PRODUCT_NEW_FUNDING_ENABLED=false），保留 dual-target web/worker 和旧券手动结算。
+- 本地验证：120 项合约测试通过；后台与部署工具全套、前端套件、390/1440px 浏览器检查、临时 PostgreSQL 及 Anvil 集成通过。Anvil 验证同笔授权/付款回滚、179/180 秒边界、第三方触发及手动竞争只支付一次。本地兼容账户是测试账户，不代表真实 MetaMask 一次确认已验收。
+- 公网现况：[现网 V2](https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html) 保持旧规则；V3 允许列表为空。三个用户地址核查时未启用已验证的委托账户；默认显示两步。已准备本机部署审核页，本人用 MetaMask 签署部署后要核验原 Hash，再登记新目标。还需实际钱包批次验收、旧签名进程停机交接、独立 worker 运行并关页验到账，才能开放新资助。
+- 收费资源尚未创建。新 Render 单实例独立 worker 估算 US$7/月，另计税费、超额使用及链上 Gas；[预配置清单](t1-intents/product-v3/worker-deployment-plan.json)。不得让旧执行器与新 worker 同时创建签名。未合并 PR、未部署 V3，未改动原有资金。
+
+# 2026-11-03 产品演进 HTML 与 Markdown 交付
+
+- 用户要求建立持续记录MealForward变化的HTML文档，纳入架构图、流程图、精简说明并配套MD。已新增 `docs/product-evolution/index.html`（离线生成页）与 `mealforward-evolution.md`（维护源），包含当前版本、系统架构、一份餐流程、资金路径、按日期的演进、已定规则及下一步、证据入口。
+- 绘图复用Mermaid 11.12.0（MIT，2026-11-03 GitHub API查询90,983 Stars），Markdown转换固定Marked 16.4.1；依赖和lockfile只在独立文档目录，不改应用依赖。HTML内嵌3张SVG和许可证，无运行时CDN、字体或外部请求。`template.html`管理版式；`build.mjs`从MD元数据生成日期、版本状态和7/5/180指标，避免另改HTML。后续产品变更应同步更新此MD的当前说明与日期变更记录，再重建HTML。
+- 构建：`npm ci --prefix docs/product-evolution --ignore-scripts`；`npm run build --prefix docs/product-evolution`。使用已有Playwright和隔离的无头Google Chrome；可通过PLAYWRIGHT_MODULE/PLAYWRIGHT_CHANNEL指定本机安装。用户阅读HTML无需安装任何依赖。预览 http://127.0.0.1:59345/ （仅本机临时文档服务，非公网部署；只允许文档及两个证据文件）。
+- 验证：构建成功；离线file页面1440px/390px均显示3图/6节、无整页横向溢出、目录跳转/缩放/适配/打印样式通过，无外部网络请求与浏览器错误；最终版本元数据、MD下载入口和HTTP本地预览再次检查通过。独立只读内容/离线审查通过，其日期指标维护建议已改为MD元数据驱动。截图 `/tmp/mealforward-evolution-final-1440.png`、`/tmp/mealforward-evolution-final-390.png`。本轮没有重跑应用链上测试或新增真实钱包验收。
+- 应用状态仍采用2026-11-02已核验快照75e207f，不是2026-11-03实时云端审计；授权付款合并、自动结算仍明确待开发。未部署应用、未提交/推送、未改云库或签名账户。保留已有未提交HANDOFF内容及交易流程MD，未覆盖其他工作。
+
+# 2026-11-02 当前完整交易/签名数量说明
+
+- 用户要求明确一份餐从创建到商家收到USDC的全过程。本轮核对已部署源码对应的catalog、fund、claim、redeem、settle、登录与前端入口，仅更新文档。
+- 完整说明：[交易与签名流程](docs/superpowers/2026-11-02-transaction-and-signature-flow.md)。正常无足额授权：新厨房+新餐品到第一份到账7笔；已登记厨房+新餐品6笔；已上架餐品5笔。首次7笔=商家4+donor2+平台1；有效会话外，每次登录另有消息签名但无链上交易。
+- 全部履约不能一笔原子交易完成；授权付款可探测钱包支持后合并。当前交餐/结算间隔180秒；自动结算需新合约固定收款与代发权限设计，未实现、未改变当前规则或迁移资产。donor单次确认、商家交餐一次后自动到账仅为体验建议，不是交付声明。
+- 应用部署仍75e207f，最近Git源码/既有交接提交ab019f5；本轮不重跑代码测试、不修改公网/数据库或发送交易。保留此前公网验收范围与待办。
+
 # 2026-11-02 结算展示优化与合并付款评估
 
 - **已上线**：代码 `75e207ff3651bee42beb00dde686383a8ac0e481`，Render `dep-dbk3rfk9v7es73bkd6h0` live，服务 `srv-dbjv7lnf3r2c73d7ri50`。入口 https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。CI https://github.com/3956ray/MealForward/actions/runs/41407192957 candidate/legacy-auth均通过；独立商家测试20/20通过、审查通过。

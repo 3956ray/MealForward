@@ -4,7 +4,7 @@ import {fail} from './service.mjs';
  * authorize must validate the product session cookie and (for writes) CSRF.
  * Never pass an address taken from request JSON/headers as an authenticated user.
  */
-export function makeProductHttp({service,claims=null,redemptions=null,publications=null,approvals=null,settings=null,cancellations=null,configuration=null,authorize,origin,enabled=false}) {
+export function makeProductHttp({service,atomic=null,claims=null,redemptions=null,publications=null,approvals=null,settings=null,cancellations=null,configuration=null,authorize,origin,enabled=false}) {
   if (typeof authorize!=='function' || !/^https:\/\/[a-z0-9-]+\.onrender\.com$|^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)) throw Error('PRODUCT_AUTH_AND_ORIGIN_REQUIRED');
   const host=new URL(origin).host;
   return async(req,res) => {
@@ -36,6 +36,10 @@ export function makeProductHttp({service,claims=null,redemptions=null,publicatio
       else if (redemptions&&req.method==='GET'&&path==='/merchant/payouts'&&[...url.searchParams.keys()].join()==='storeId') value=await redemptions.payouts(session.wallet,url.searchParams.get('storeId'));
       else if(publications&&req.method==='GET'&&path==='/merchant/refunds'&&[...url.searchParams.keys()].join()==='storeId')value=await publications.refunds(session.wallet,url.searchParams.get('storeId'));
       else if (url.search) fail('INVALID_REQUEST',422);
+      else if(atomic&&req.method==='GET'&&(match=path.match(/^\/atomic-funding\/by-request\/([a-zA-Z0-9_-]{1,96})$/)))value=await atomic.byRequest(session.wallet,match[1]);
+      else if(atomic&&req.method==='GET'&&path==='/atomic-funding/capability')value=await atomic.capability(session.wallet);
+      else if(atomic&&req.method==='POST'&&path==='/atomic-funding/prepare')value=await atomic.prepare(session.wallet,body);
+      else if(atomic&&(match=path.match(/^\/atomic-funding\/([a-zA-Z0-9_-]{1,96})\/(attempt|batch|status|cancel-expired)$/))){if(match[2]==='status'&&req.method==='GET')value=await atomic.status(session.wallet,match[1]);else if(match[2]==='attempt'&&req.method==='POST'&&body&&Object.keys(body).length===0)value=await atomic.attempt(session.wallet,match[1]);else if(match[2]==='cancel-expired'&&req.method==='POST'&&body&&Object.keys(body).length===0)value=await atomic.cancelExpired(session.wallet,match[1]);else if(match[2]==='batch'&&req.method==='POST')value=await atomic.recordBatch(session.wallet,match[1],body);else fail('INVALID_REQUEST',422);}
       else if(cancellations&&['GET','POST'].includes(req.method)&&(match=path.match(/^\/operation-cancellations\/(intents|approvals|publications|redemptions)\/([a-zA-Z0-9_-]{1,96})$/)))value=await cancellations[req.method==='GET'?'get':'record'](session.wallet,match[1],match[2],...(req.method==='POST'?[body]:[]));
       else if(settings&&['GET','PUT'].includes(req.method)&&(match=path.match(/^\/kitchens\/([a-zA-Z0-9_-]{1,96})\/settings$/))) value=await settings[req.method==='GET'?'get':'save'](session.wallet,match[1],...(req.method==='PUT'?[body]:[]));
       else if (req.method==='PUT' && (match=path.match(/^\/drafts\/([a-zA-Z0-9_-]{1,96})$/))) value=await service.saveDraft(session.wallet,match[1],body);

@@ -8,11 +8,14 @@ import {validateProductChallenge} from './product-login.mjs';
 /** Separate entry; no legacy role/payer/transaction guard is relaxed. */
 export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}) {
   const [session,setSession]=useState(null),[providers,setProviders]=useState([]),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [targetId,setTargetId]=useState(()=>new URLSearchParams(globalThis.location?.search||'').get('target')||''),[targets,setTargets]=useState([]);
+  const targetRef=useRef(targetId);targetRef.current=targetId;
   const walletRef=useRef(null),epoch=useRef(0),csrf=useRef(null),loginLock=useRef(false),sessionRef=useRef(null),journalRef=useRef(null);
   sessionRef.current=session;
   const api=useCallback(async(path,options={})=>{
     const ticket=epoch.current;
     const headers={'Content-Type':'application/json'},method=options.method||'GET';
+    if(targetRef.current)headers['x-mf-product-target']=targetRef.current;
     if(csrf.current)headers['x-mf-product-v2-csrf']=csrf.current;
     if(path==='/auth/pre-session')headers['x-mf-product-v2-bootstrap']='1';
     const response=await fetchImpl('/v1/product'+path,{method,headers,credentials:'same-origin',cache:'no-store',...(options.body?{body:JSON.stringify(options.body)}:{})});
@@ -39,6 +42,14 @@ export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}
     setProviders(walletRef.current.providers());
     return()=>{invalidate();walletRef.current?.dispose();};
   },[walletFactory]);
+  useEffect(()=>{let live=true;api('/configuration').then(c=>{if(!live)return;setTargets(c.targets||[]);if(!targetRef.current&&c.targetId){const oldLink=globalThis.location?.hash?.startsWith('#voucher=');const selected=oldLink?c.targets?.find(t=>t.automaticSettlement!==true)?.id:c.targetId;if(selected){targetRef.current=selected;setTargetId(selected);}}}).catch(()=>{});return()=>{live=false;};},[api]);
+  async function switchTarget(id){
+    if(!targets.some(t=>t.id===id)||busy)return;const previous=sessionRef.current,previousCsrf=csrf.current;epoch.current++;sessionRef.current=null;setSession(null);setBusy(true);setError('');targetRef.current=id;setTargetId(id);
+    const url=new URL(location.href);url.searchParams.set('target',id);url.hash='';window.history.replaceState(null,'',url);
+    try{const config=await api('/configuration');validateProductConfiguration(config,location.origin);walletRef.current.configure(config);const ticket=epoch.current;
+      if(previous){const inspected=await walletRef.current.inspect();if(ticket!==epoch.current||inspected.account?.toLowerCase()!==previous.wallet.toLowerCase()||inspected.chainId!==config.chainId)throw Error('钱包已变化，请重新登录。');const me=await api('/me');if(ticket!==epoch.current||me.wallet?.toLowerCase()!==previous.wallet.toLowerCase())throw Error('登录身份不匹配。');csrf.current=previousCsrf;setSession(me);}
+    }catch(e){csrf.current=null;setSession(null);setError(e.message);}finally{setBusy(false);}
+  }
   async function login(providerId){
     if(loginLock.current)return;loginLock.current=true;setBusy(true);setError('');
     try {
@@ -72,6 +83,6 @@ export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}
   }
   async function logout(){epoch.current++;sessionRef.current=null;setSession(null);try{await api('/auth/logout',{method:'POST',body:{}});}catch(e){setError(e.message);}finally{csrf.current=null;}}
   const cancellationEpoch=epoch.current;
-  return <><CatalogProduct walletClient={walletRef.current} configuration={()=>api('/configuration')} isCurrent={()=>epoch.current===cancellationEpoch&&sessionRef.current?.wallet===session?.wallet} api={api} session={session} onLogin={()=>{setError('');setOpen(true);}} onLogout={logout} onRefresh={refresh} onWalletOperation={sendOperation}/>{open&&<section className="container panel" role="dialog" aria-modal="true" aria-label="钱包登录"><h2>选择钱包</h2>{providers.map(p=><button className="button" key={p.id} disabled={busy} onClick={()=>login(p.id)}>{p.name}</button>)}{!providers.length&&<p>未发现钱包扩展。安装钱包后刷新此页。</p>}<button disabled={busy} onClick={()=>setOpen(false)}>关闭</button><p role="alert">{error}</p></section>}{error&&!open&&<p className="container" role="alert">{error}</p>}</>;
+  return <>{targets.length>1&&<section className="container panel"><label>业务版本<select aria-label="业务版本" disabled={busy} value={targetId} onChange={e=>switchTarget(e.target.value)}>{targets.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>{targets.find(t=>t.id===targetId)?.acceptingFunding===false&&<p>这里保留历史餐券与订单，已资助餐食仍可领取；新增资助请切换新版业务。</p>}</section>}<CatalogProduct key={targetId} walletClient={walletRef.current} configuration={()=>api('/configuration')} isCurrent={()=>epoch.current===cancellationEpoch&&sessionRef.current?.wallet===session?.wallet} api={api} session={session} onLogin={()=>{setError('');setOpen(true);}} onLogout={logout} onRefresh={refresh} onWalletOperation={sendOperation}/>{open&&<section className="container panel" role="dialog" aria-modal="true" aria-label="钱包登录"><h2>选择钱包</h2>{providers.map(p=><button className="button" key={p.id} disabled={busy} onClick={()=>login(p.id)}>{p.name}</button>)}{!providers.length&&<p>未发现钱包扩展。安装钱包后刷新此页。</p>}<button disabled={busy} onClick={()=>setOpen(false)}>关闭</button><p role="alert">{error}</p></section>}{error&&!open&&<p className="container" role="alert">{error}</p>}</>;
 }
 if(document.getElementById('root'))createRoot(document.getElementById('root')).render(<CatalogEntry/>);

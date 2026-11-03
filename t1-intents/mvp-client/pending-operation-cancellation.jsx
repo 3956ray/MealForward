@@ -7,8 +7,9 @@ const quantity=v=>typeof v==='string'&&/^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(v);
 const same=(a,b)=>address(a)&&address(b)&&a.toLowerCase()===b.toLowerCase();
 const pending=s=>['SEND_UNKNOWN','HASH_BOUND'].includes(s),terminal=s=>['CANCELLED','CONFIRMED','REVERTED'].includes(s);
 const fail=()=>{throw Error('作废交易与原请求不一致，未发送。');};
-export function cancellationPath(operation){const path=productOperationPath(operation),group=path.split('/')[1];return '/operation-cancellations/'+({intents:'intents',approvals:'approvals','catalog-operations':'publications',merchant:'redemptions'}[group])+'/'+encodeURIComponent(operation.id);}
+export function cancellationPath(operation){if(operation?.mode==='atomic')fail();const path=productOperationPath(operation),group=path.split('/')[1];return '/operation-cancellations/'+({intents:'intents',approvals:'approvals','catalog-operations':'publications',merchant:'redemptions'}[group])+'/'+encodeURIComponent(operation.id);}
 export function validateCancellationPacket(packet,operation,session,configuration){
+ if(operation?.mode==='atomic')fail();
  const config=validateProductConfiguration(configuration),tx=packet?.transaction;
  if(packet?.id!==operation.id||packet?.kind!==operation.kind||!same(packet?.wallet,session?.wallet)||!same(operation.wallet??operation.receiver,session.wallet)||!pending(packet.state))fail();
  if(!tx||Object.keys(tx).sort().join()!=='chainId,data,from,nonce,to,value'||!same(tx.from,session.wallet)||!same(tx.to,session.wallet)||tx.value!=='0x0'||tx.data!=='0x'||!quantity(tx.chainId)||BigInt(tx.chainId)!==BigInt(config.chainId)||!quantity(tx.nonce)||!Number.isSafeInteger(Number(BigInt(tx.nonce))))fail();

@@ -3,7 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {formatAmount} from './catalog-state.mjs';
 const terminal=o=>['CONFIRMED','REVERTED','REJECTED','CANCELLED'].includes(o?.state);
 export function ClosureProduct({api,walletClient,configuration,isCurrent,session,active,catalog,onWalletOperation,onChanged,storage=globalThis.sessionStorage}){
- const wallet=session?.wallet?.toLowerCase()||'',storeId=session?.stores?.[0],key='mf-product-closure:'+wallet+':'+(storeId||'');
+ const wallet=session?.wallet?.toLowerCase()||'',storeId=session?.stores?.[0],key='mf-product-closure:'+wallet+':'+(storeId||'')+(session?.targetId&&!session.legacyTarget?':'+session.targetId:'');
  const [snapshot,setSnapshot]=useState(null),[operation,setOperation]=useState(null),[ack,setAck]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const scope=useRef({wallet,storeId,active,epoch:0}),lock=useRef(false),opRef=useRef(null);
  if(scope.current.wallet!==wallet||scope.current.storeId!==storeId||scope.current.active!==active){scope.current={wallet,storeId,active,epoch:scope.current.epoch+1};lock.current=false;opRef.current=null;}

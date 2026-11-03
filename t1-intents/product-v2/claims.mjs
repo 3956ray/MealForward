@@ -1,6 +1,7 @@
 /** Wallet-bound claims. Platform outbox is internal; no signer/secret in HTTP DTOs. */
 import {createHmac,randomInt,randomUUID} from 'node:crypto';
 import {fail,validateWindows} from './service.mjs';
+import {laneAvailable,reservePacket,updatePacket} from './platform-outbox.mjs';
 import {validateClaimPacket} from './claim-wire.mjs';
 const check=(v,c,s=409)=>{if(!v)fail(c,s);};
 const copy=v=>structuredClone(v);
@@ -91,19 +92,20 @@ export function makeClaimService({store,chain,policySeconds,pepper,clock=()=>Mat
       enabled();
       return store.transact(async s=>{
         initialize(s);
-        if(Object.values(s.claims).some(c=>['SIGNED','SEND_UNKNOWN','HASH_BOUND'].includes(c.state)))return null;
+        if(!laneAvailable(s,chain.target))return null;
         const intent=Object.values(s.claims).find(c=>c.state==='QUEUED');if(!intent)return null;
         const packet=await chain.signClaim(copy(intent));
         if(packet?.verified===true&&packet.unavailable===true&&packet.reason==='STORE_CLOSED'&&!packet.raw&&!packet.hash){check(packet.finalized===true&&Number.isSafeInteger(packet.blockNumber)&&packet.blockNumber>=0&&/^0x[0-9a-f]{64}$/i.test(packet.blockHash||'')&&packet.storeId===intent.storeId&&packet.batchId===intent.batchId&&packet.unitIndex===intent.unitIndex&&packet.expectedGeneration===intent.expectedGeneration,'CLAIM_CLOSURE_UNVERIFIED',503);intent.state='REJECTED';intent.reason='STORE_CLOSED';return publicClaim(intent);}
         check(packet?.verified===true&&/^0x[0-9a-f]{64}$/i.test(packet.hash)&&typeof packet.raw==='string'&&/^0x[0-9a-f]+$/i.test(packet.raw),'CLAIM_PACKET_UNVERIFIED',503);
         try{validateClaimPacket(intent,chain.target,packet);}catch{fail('CLAIM_PACKET_UNVERIFIED',503);}
+        reservePacket(s,chain.target,intent,'claim',packet);
         intent.packet=packet.raw;intent.txHash=packet.hash.toLowerCase();intent.state='SIGNED';return publicClaim(intent);
       });
     },
     async dispatch(id) {
       enabled();const packet=await store.transact(s=>{
         const intent=s.claims?.[ref(id)];check(intent?.state==='SIGNED','CLAIM_ALREADY_ATTEMPTED');
-        intent.state='SEND_UNKNOWN';intent.attemptedAt=clock();return {raw:intent.packet,hash:intent.txHash};
+        intent.state='SEND_UNKNOWN';updatePacket(s,chain.target,intent,intent.state);intent.attemptedAt=clock();return {raw:intent.packet,hash:intent.txHash};
       });
       // Admission is persisted before a single broadcast. A thrown/lost response
       // never clears the hash or schedules a second send. Recovery is read-only.
@@ -129,6 +131,7 @@ export function makeClaimService({store,chain,policySeconds,pepper,clock=()=>Mat
             intent.voucherId=voucherId;
           }
           intent.state=evidence.outcome;delete intent.packet;
+          updatePacket(s,chain.target,intent,intent.state);
         }
         return publicClaim(intent);
       });

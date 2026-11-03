@@ -14,7 +14,7 @@ const hash=v=>createHash('sha256').update(canonical(v)).digest('hex');
 const pending=o=>['AWAITING_HANDOVER','PREPARED','SEND_UNKNOWN','HASH_BOUND'].includes(o.state);
 const initialize=s=>{for(const k of ['redemptions','verificationHandles','redemptionReviews','redemptionRequests','redemptionRates'])s[k]||={};return s;};
 function publicOperation(o,session){
-  return {id:o.id,kind:o.kind,state:o.state,storeId:o.storeId,voucherId:o.voucherId,generation:o.generation,name:o.name,version:o.version,
+  return {automaticSettlement:o.automaticSettlement===true,id:o.id,kind:o.kind,state:o.state,storeId:o.storeId,voucherId:o.voucherId,generation:o.generation,name:o.name,version:o.version,
     unitPrice:o.unitPrice,amount:o.amount,receiver:o.receiver,createdAt:o.createdAt,windows:copy(o.windows),...(o.recoveredFrom?{handoverPreviouslyConfirmed:true,recoveredFrom:o.recoveredFrom}:{}),...(o.expiresAt?{expiresAt:o.expiresAt}:{}),
     ...(o.state==='AWAITING_HANDOVER'?{canConfirmHandover:o.session===session,...(o.session===session?{handle:o.handle}:{})}:{}),
     ...(o.txHash?{txHash:o.txHash}:{}),...(o.candidateHash?{candidateHash:o.candidateHash}:{}),
@@ -25,7 +25,7 @@ function windowEnd(windows,now){
   const interval=windows.find(([a,b])=>minute>=a&&minute<b);return interval?start+interval[1]*60:0;
 }
 
-export function makeRedemptionService({store,chain,pepper,clock=()=>Math.floor(Date.now()/1000),newId=randomUUID}){
+export function makeRedemptionService({store,chain,pepper,autoSettlements,clock=()=>Math.floor(Date.now()/1000),newId=randomUUID}){
   check(typeof pepper==='string'&&pepper.length>=32,'CREDENTIAL_KEY_REQUIRED',503);
   const codeHash=code=>createHmac('sha256',pepper).update(code).digest('hex');
   const scope=value=>{check(typeof value==='string'&&value.length>0&&value.length<=256,'SESSION_REQUIRED',401);return codeHash('session:'+value);};
@@ -49,7 +49,7 @@ export function makeRedemptionService({store,chain,pepper,clock=()=>Math.floor(D
     check(r.hash===hash(payload),'REQUEST_CONFLICT');return owned(s,wallet,r.id);
   }
   function remember(s,wallet,requestId,payload,id){s.redemptionRequests[requestKey(wallet,requestId)]={hash:hash(payload),id};}
-  function base(v,wallet,e,kind){return {id:newId(),kind,state:'PREPARED',wallet,storeId:v.storeId,voucherId:v.id,name:v.name,version:v.version,
+  function base(v,wallet,e,kind){return {automaticSettlement:chain.target?.automaticSettlement===true,id:newId(),kind,state:'PREPARED',wallet,storeId:v.storeId,voucherId:v.id,name:v.name,version:v.version,
     generation:v.generation,windows:copy(v.windows),unitPrice:e.unitPrice,amount:e.unitPrice,receiver:wallet,createdAt:clock()};}
   const api={
     async check(wallet,sessionScope,body){
@@ -68,7 +68,7 @@ export function makeRedemptionService({store,chain,pepper,clock=()=>Math.floor(D
         const end=windowEnd(v.windows,e.chainTime);check(end>0,'OUTSIDE_SERVICE_WINDOW');
         const expiresAt=Math.min(display.expiresAt,v.expiresAt,end);check(expiresAt>e.chainTime,'INVALID_CODE');
         const handle=newId();s.verificationHandles[handle]={wallet,session,voucherId,displayGeneration:display.generation,displayHash:display.hash,expiresAt,consumed:false};
-        return {handle,name:v.name,version:v.version,windows:copy(v.windows),unitPrice:e.unitPrice,expiresAt,state:'VALID'};
+        return {automaticSettlement:chain.target?.automaticSettlement===true,receiver:wallet,handle,name:v.name,version:v.version,windows:copy(v.windows),unitPrice:e.unitPrice,expiresAt,state:'VALID'};
       });
     },
     async reserveHandover(wallet,sessionScope,body){
@@ -117,7 +117,8 @@ export function makeRedemptionService({store,chain,pepper,clock=()=>Math.floor(D
       wallet=address(wallet);ref(storeId);await owner(wallet,storeId);const s=await store.read(),items=[];
       for(const v of Object.values(s.vouchers||{}).filter(v=>v.storeId===storeId)){
         const e=await evidence(v,wallet);if(!['HANDED_OVER','SETTLED'].includes(e.state))continue;
-        items.push({voucherId:v.id,name:v.name,version:v.version,unitPrice:e.unitPrice,amount:e.unitPrice,receiver:wallet,state:e.state,
+        const automatic=chain.target?.automaticSettlement===true,automaticTasks=automatic&&autoSettlements?await autoSettlements.status(v.id):[];
+        items.push({automaticSettlement:automatic,settlementTask:automaticTasks.find(t=>t.generation===v.generation)||null,voucherId:v.id,name:v.name,version:v.version,unitPrice:e.unitPrice,amount:e.unitPrice,receiver:wallet,state:e.state,
           chainTime:e.chainTime,settlementAvailableAt:e.settlementAvailableAt,canSettle:e.state==='HANDED_OVER'&&e.chainTime>=e.settlementAvailableAt});
       }return {items};
     },

@@ -1,0 +1,7 @@
+{
+  "name": "mealforward-evolution-document",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "node build.mjs"},
+  "devDependencies": {"mermaid": "11.12.0", "marked": "16.4.1"}
+}

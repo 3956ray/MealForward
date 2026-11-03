@@ -10,7 +10,7 @@ export function KitchenProduct({api,walletClient,configuration,isCurrent,session
  const scope=useRef({identity,epoch:0,active}),lock=useRef(false),opRef=useRef(null),requestIds=useRef(new Map());
  if(scope.current.identity!==identity){scope.current={identity,epoch:scope.current.epoch+1,active};lock.current=false;opRef.current=null;}
  if(scope.current.active!==active){scope.current.active=active;scope.current.epoch++;lock.current=false;}
- const epoch=scope.current.epoch,key='mf-product-kitchen:'+identity,valid=e=>scope.current.epoch===e;
+ const epoch=scope.current.epoch,key='mf-product-kitchen:'+identity+(session?.targetId&&!session.legacyTarget?':'+session.targetId:''),valid=e=>scope.current.epoch===e;
  const meals=(catalog?.meals||[]).filter(m=>stores.includes(m.storeId)),meal=meals.find(m=>m.storeId+':'+m.id===selected)||meals[0];
  const visible=operation?.epoch===epoch?operation:null,visibleReview=review?.epoch===epoch?review:null;
  const remember=(o,e=epoch)=>{if(terminal(o))requestIds.current.clear();storage.setItem(key,JSON.stringify(saved(o)));if(valid(e)){opRef.current={...o,epoch:e};setOperation(opRef.current);}};

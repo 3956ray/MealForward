@@ -110,3 +110,13 @@ test('settled meals move out of the payable list while kitchen names preserve th
   assert.equal(button('审核结算'),undefined);assert.equal(document.querySelector('[aria-label="已结算记录"] button'),null);
  }finally{await clean();}
 });
+
+test('automatic settlement explains destination and platform fees before physical handover',async()=>{
+ let sends=0;await mount(fixture(p=>p==='/merchant/check'?{...check,automaticSettlement:true,receiver:'original-merchant'}:p==='/merchant/locks'?{...reserved,automaticSettlement:true,receiver:'original-merchant'}:undefined),{onWalletOperation:async()=>sends++});
+ try{await enterCode();await click('检查餐券');const checked=document.querySelector('[aria-label="验券结果"]').textContent;assert.match(checked,/至少等待180秒/);assert.match(checked,/original-merchant/);assert.match(checked,/手续费由平台承担/);await click('开始处理此餐券');assert.match(document.querySelector('[aria-label="交餐处理权"]').textContent,/无需再次确认钱包/);assert.equal(sends,0);assert.equal(button('确认已交餐').disabled,true);}finally{await clean();}
+});
+test('automatic settlement waiting, pending, delayed and paid states stay read-only; manual fallback is collapsed',async()=>{
+ const states=[['WAITING','等待平台自动结算'],['SIGNED','正在结算'],['SEND_UNKNOWN','正在结算'],['HASH_BOUND','正在结算'],['DELAYED','结算延迟'],['REVERTED','结算延迟']];
+ for(const [state,label] of states){const calls=[];const payout={voucherId:'v',name:'自动餐款',unitPrice:'7000000',state:'HANDED_OVER',settlementAvailableAt:1180,receiver:'original-merchant',chainTime:state==='WAITING'?1179:1180,automaticSettlement:true,settlementTask:{state}};await mount(fixture((p,o)=>{calls.push([p,o]);if(p.startsWith('/merchant/payouts?'))return {items:[payout]};}),{onWalletOperation:()=>assert.fail('must never send automatically')});try{assert.match(document.body.textContent,new RegExp(label));const details=document.querySelector('details');assert.ok(details);assert.equal(details.open,false);assert.equal(button('审核结算').closest('details'),details);assert.match(details.textContent,/手续费由本钱包承担/);assert.equal(button('审核结算').disabled,state==='WAITING');assert.equal(calls.filter(([,o])=>o?.method==='POST').length,0);}finally{await clean();}}
+ await mount(fixture(p=>p.startsWith('/merchant/payouts?')?{items:[{voucherId:'paid',name:'到账餐款',unitPrice:'7000000',state:'SETTLED',receiver:'original-merchant',automaticSettlement:true}]}:undefined));try{const paid=document.querySelector('[aria-label="已结算记录"]');assert.match(paid.textContent,/到账餐款/);assert.match(paid.textContent,/已结算/);assert.match(paid.textContent,/结算已经完成/);assert.equal(button('审核结算'),undefined);}finally{await clean();}
+});

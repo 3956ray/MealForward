@@ -7,7 +7,7 @@ const address=v=>typeof v==='string'&&/^0x[0-9a-f]{40}$/i.test(v)&&BigInt(v)!==0
 const groups=new Set(['intents','approvals','publications','redemptions']);
 const pending=o=>['SEND_UNKNOWN','HASH_BOUND'].includes(o.state);
 export function makeOperationCancellations({store,chain,clock=()=>Math.floor(Date.now()/1000),newId=randomUUID}){
- function owned(s,w,group,id){check(address(w),'UNAUTHENTICATED',401);check(groups.has(group)&&/^[a-zA-Z0-9_-]{1,96}$/.test(id),'INVALID_REQUEST',422);const op=s[group]?.[id];check(op?.wallet===w.toLowerCase(),'OPERATION_NOT_FOUND',404);return op;}
+ function owned(s,w,group,id){check(address(w),'UNAUTHENTICATED',401);check(groups.has(group)&&/^[a-zA-Z0-9_-]{1,96}$/.test(id),'INVALID_REQUEST',422);const op=s[group]?.[id];check(op?.wallet===w.toLowerCase(),'OPERATION_NOT_FOUND',404);check(op.mode!=='atomic','ATOMIC_CANCELLATION_REQUIRES_BATCH_PROOF');return op;}
  function dto(o){const nonce=o.transaction?.nonce;return {id:o.id,kind:o.kind,wallet:o.wallet,state:o.state,originalNonce:nonce,...(pending(o)?{transaction:{from:o.wallet,to:o.wallet,chainId:o.transaction.chainId,nonce,value:'0x0',data:'0x'}}:{}),...(o.cancellationHash?{cancellationHash:o.cancellationHash}:{}),...(o.cancellationReason?{reason:o.cancellationReason}:{}),...(o.replacementOperationId?{replacementOperationId:o.replacementOperationId}:{})};}
  async function reconcile(w,group,id){
   const snapshot=await store.read(),original=owned(snapshot,w,group,id);check(pending(original)||original.cancellationProof,'CANCELLATION_NOT_AVAILABLE');

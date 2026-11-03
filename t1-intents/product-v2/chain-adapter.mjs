@@ -2,6 +2,7 @@
  * The only broadcast is an already persisted SEND_UNKNOWN platform outbox packet.
  * Catalog projection is bounded by stored records, never by a uint256 quantity.
  */
+import {validateSettlementPacket} from './settlement-wire.mjs';
 import {makeFundingIndex} from './funding-index.mjs';
 import {makeNonceCancellationVerifier} from './nonce-cancellation.mjs';
 import {AbiCoder,Contract,Interface,Transaction,getCreateAddress,keccak256,toUtf8Bytes} from 'ethers';
@@ -15,6 +16,7 @@ const TERMS='tuple(uint256 unitPrice,bytes32 bodyDigest,bytes32 imageDigest,uint
 export const productChainInterface=new Interface([
   ...fundingInterface.fragments,...publicationInterface.fragments,...redemptionInterface.fragments,...claimInterface.fragments,
   'function asset() view returns(address)','function claimAuthority() view returns(address)','function redemptionAuthority() view returns(address)',
+  'function contractVersion() view returns(uint256)','function batchReceiver(bytes32) view returns(address)',
   'function policySeconds() view returns(uint256)','function storeOwner(bytes32) view returns(address)',
   'function storeClosed(bytes32) view returns(bool)','function batchRefunded(bytes32) view returns(bool)',
   'function currentVersion(bytes32,bytes32) view returns(uint256)',
@@ -68,7 +70,7 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
   check(hash(m.escrowCodeHash)&&hash(m.assetCodeHash)&&m.assetDecimals===6&&[7200,259200].includes(m.policySeconds)&&Number.isSafeInteger(m.deploymentBlock)&&m.deploymentBlock>=0,'CHAIN_MANIFEST_REQUIRED');
   check(Number.isSafeInteger(maxRecords)&&maxRecords>0&&maxRecords<=10000,'CHAIN_RECORD_LIMIT_REQUIRED');
   check(uint(m.maxFeePerGas)>0n&&uint(m.maxTransactionFee)>0n&&uint(m.claimGasLimit)>0n&&uint(m.claimGasLimit)<=5000000n,'CHAIN_BUDGET_REQUIRED');
-  const target=Object.freeze({chainId:m.chainId,escrow:lower(m.escrow),asset:lower(m.asset),claimAuthority:lower(m.claimAuthority),redemptionAuthority:lower(m.redemptionAuthority),maxFeePerGas:m.maxFeePerGas,maxTransactionFee:m.maxTransactionFee});
+  const target=Object.freeze({chainId:m.chainId,escrow:lower(m.escrow),asset:lower(m.asset),claimAuthority:lower(m.claimAuthority),redemptionAuthority:lower(m.redemptionAuthority),maxFeePerGas:m.maxFeePerGas,maxTransactionFee:m.maxTransactionFee,...(m.contractVersion===3?{contractVersion:3,automaticSettlement:true}:{} )});
   const escrow=new Contract(target.escrow,productChainInterface,provider),asset=new Contract(target.asset,productAssetInterface,provider);
   const enabled=!!claimSigner&&!!redemptionSigner;
   const records=value=>{const result=Object.values(value||{});check(result.length<=maxRecords,'CHAIN_PROJECTION_LIMIT');return result;};
@@ -84,6 +86,7 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
     check(same(token,target.asset)&&same(issuer,target.claimAuthority)&&same(verifier,target.redemptionAuthority)&&policy===BigInt(m.policySeconds)&&decimals===BigInt(m.assetDecimals),'CHAIN_TARGET_MISMATCH');
     if(claimSigner)check(await signerAddress(claimSigner)===target.claimAuthority,'CHAIN_SIGNER_MISMATCH');
     if(redemptionSigner)check(await signerAddress(redemptionSigner)===target.redemptionAuthority,'CHAIN_SIGNER_MISMATCH');
+    if(m.contractVersion===3)check(await escrow.contractVersion(o)===3n,'CHAIN_VERSION_MISMATCH');
     await canonical(block);return ctx;
   }
   async function finish(ctx,result){await canonical(ctx.block);return result;}
@@ -103,6 +106,12 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
   }
   async function finishReceipt(p,result){if(p.block)await canonical(p.block);return finish(p.ctx,result);}
   function event(r,where,iface,name,optional=false){const all=r.logs.filter(log=>same(log.address,where)).map(log=>{let parsed;try{parsed=iface.parseLog(log);}catch{return null;}if(parsed?.name===name)check(log.removed!==true&&log.blockNumber===r.blockNumber&&same(log.blockHash,r.blockHash)&&same(log.transactionHash,r.hash||r.transactionHash),'CHAIN_EVENT_BLOCK_MISMATCH');return parsed;}).filter(e=>e?.name===name);check(all.length===1||(optional&&all.length===0),'CHAIN_EVENT_MISMATCH');return all[0]?.args;}
+  function settlementEvents(r,op){
+    const parsed=r.logs.map((log,index)=>{if(log.removed===true||log.blockNumber!==r.blockNumber||!same(log.blockHash,r.blockHash)||!same(log.transactionHash,r.hash||r.transactionHash))fail('CHAIN_EVENT_BLOCK_MISMATCH');let value;try{value=same(log.address,target.escrow)?productChainInterface.parseLog(log):same(log.address,target.asset)?productAssetInterface.parseLog(log):null;}catch{}return {index,value};});
+    const matches=parsed.filter(x=>x.value?.name==='Settled'&&x.value.args.voucherId===op.voucherId);check(matches.length===1,'SETTLEMENT_EVENT_MISMATCH');
+    const match=matches[0],transfers=parsed.filter(x=>x.index<match.index&&x.value?.name==='Transfer'),transfer=transfers.at(-1)?.value.args;
+    check(transfer&&same(transfer.from,target.escrow)&&same(transfer.to,op.receiver)&&transfer.value===uint(op.amount),'SETTLEMENT_TRANSFER_MISMATCH');return {settled:match.value.args,transfer};
+  }
   async function batchCheck(intent,ctx){const key=intent.source==='chain-index'&&intent.id===null?intent.batchId:await escrow.requestKey(intent.wallet,chainReference(intent.id),options(ctx));check(hash(key),'CHAIN_BATCH_MISMATCH');const b=await escrow.getBatch(key,options(ctx));
     check(same(b.payer,intent.wallet)&&b.storeId===chainReference(intent.storeId)&&b.mealId===chainReference(intent.mealId)&&b.version===BigInt(intent.version)&&b.termsHash===intent.termsHash&&b.quantity===uint(intent.quantity)&&b.unitPrice===uint(intent.unitPrice)&&b.amount===uint(intent.amount),'CHAIN_BATCH_MISMATCH');return {id:key,b,intent};}
   async function metadata(op,ctx){const terms=await escrow.getTerms(chainReference(op.storeId),chainReference(op.mealId),op.version,options(ctx));
@@ -178,6 +187,7 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
   }});
   const api={target,fundingEnabled:enabled,approvalEnabled:enabled,publicationEnabled:enabled,claimEnabled:enabled,redemptionEnabled:enabled,
     syncFundingIndex:()=>fundingIndex.sync(),
+    async atomicRequestKey(wallet,id){const ctx=await context();return finish(ctx,await escrow.requestKey(wallet,chainReference(id),options(ctx)));},
     async verifyTarget(){const ctx=await context();return finish(ctx,{verified:true,...target,policySeconds:m.policySeconds,blockNumber:ctx.block.number,blockHash:ctx.block.hash});},
     async identity(wallet){check(address(wallet),'CHAIN_INVALID_WALLET');const ctx=await context(),s=await store.read(),stores=[];
       for(const op of records(s.publications).filter(p=>p.kind==='registration'&&p.state==='CONFIRMED'&&p.confirmedBlock<=ctx.block.number&&same(p.wallet,wallet))){const owner=await escrow.storeOwner(chainReference(op.storeId),options(ctx));check(same(owner,wallet),'CHAIN_OWNER_MISMATCH');stores.push(op.storeId);}
@@ -231,6 +241,40 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
       }fail('CLAIM_UNAVAILABLE');
     },
     async eligibility(wallet){const ctx=await context();return finish(ctx,{verified:true,nextEligibleAt:number(await escrow.nextEligibleAt(wallet,options(ctx))),policySeconds:m.policySeconds,chainTime:ctx.block.timestamp});},
+    async signAutoSettlement(op){
+      check(target.automaticSettlement===true&&claimSigner,'SETTLEMENT_SIGNING_NOT_AUTHORIZED');const ctx=await context(),v=await escrow.getVoucher(op.voucherId,options(ctx)),b=await escrow.getBatch(v.batchId,options(ctx)),owner=await escrow.storeOwner(b.storeId,options(ctx));
+      check(v.status===2n&&v.generation===BigInt(op.generation)&&v.settlementAvailableAt<=BigInt(ctx.block.timestamp)&&same(owner,op.receiver)&&b.unitPrice===uint(op.amount)&&b.storeId===chainReference(op.storeId),'SETTLEMENT_STATE_CHANGED');
+      const fee=await provider.getFeeData(),gasLimit=uint(m.settlementGasLimit||m.claimGasLimit),price=fee.maxFeePerGas??fee.gasPrice;
+      check(price!==null&&price>0n&&price<=uint(m.maxFeePerGas)&&gasLimit*price<=uint(m.maxTransactionFee),'SETTLEMENT_GAS_BUDGET_EXCEEDED');
+      check(await provider.getBalance(target.claimAuthority,'pending')>=gasLimit*price,'PLATFORM_BALANCE_LOW');
+      const fees=fee.maxFeePerGas!==null?{type:2,maxFeePerGas:price,maxPriorityFeePerGas:fee.maxPriorityFeePerGas??0n}:{type:0,gasPrice:price};
+      check(fees.maxPriorityFeePerGas===undefined||fees.maxPriorityFeePerGas<=price,'SETTLEMENT_FEE_UNVERIFIED');
+      const wire=redemptionTransaction({...op,kind:'settlement',wallet:target.claimAuthority},target,await nonce(target.claimAuthority));
+      await canonical(ctx.block);const raw=await claimSigner.signTransaction({...wire,gasLimit,...fees});const packet={raw,hash:keccak256(raw)};validateSettlementPacket(op,target,packet);return finish(ctx,{verified:true,...packet});
+    },
+    async broadcastAutoSettlement(raw){const ctx=await context(),tx=Transaction.from(raw);
+      await store.transact(s=>{const matches=records(s.autoSettlements).filter(t=>t.state==='SEND_UNKNOWN'&&t.packet===raw&&same(t.txHash,tx.hash));check(matches.length===1,'SETTLEMENT_OUTBOX_REQUIRED');const op=matches[0];validateSettlementPacket(op,target,{raw,hash:tx.hash});check(!op.adapterBroadcastHash,'SETTLEMENT_ALREADY_BROADCAST');op.adapterBroadcastHash=tx.hash;});
+      await canonical(ctx.block);const sent=await provider.broadcastTransaction(raw);check(same(sent.hash,tx.hash),'SETTLEMENT_BROADCAST_HASH_MISMATCH');return tx.hash;
+    },
+    async verifyAutoSettlement(op){const tx=validateSettlementPacket(op,target,{raw:op.packet,hash:op.txHash}),p=await receipt(op.txHash,transaction(tx));if(!p)return {verified:false};const result={...p.base,voucherId:op.voucherId,generation:op.generation};
+      if(p.base.outcome==='CONFIRMED'){
+        const {settled:e,transfer:t}=settlementEvents(p.receipt,op),v=await escrow.getVoucher(op.voucherId,p.o),b=await escrow.getBatch(v.batchId,p.o);
+        check(e.voucherId===op.voucherId&&same(e.owner,op.receiver)&&e.amount===uint(op.amount)&&v.status===3n&&v.generation===BigInt(op.generation)&&b.storeId===chainReference(op.storeId)&&b.unitPrice===e.amount&&same(t.from,target.escrow)&&same(t.to,op.receiver)&&t.value===e.amount);
+        Object.assign(result,{receiver:op.receiver,amount:op.amount});
+      }return finishReceipt(p,result);
+    },
+    async findSettlement(op){
+      const ctx=await context(),v=await escrow.getVoucher(op.voucherId,options(ctx));if(v.status!==3n||v.generation!==BigInt(op.generation))return finish(ctx,{verified:false});
+      const saved=(await store.read()).autoSettlements?.[op.key];let from=saved?.scanCursor??op.scanFrom??m.deploymentBlock;if(saved?.scanCursorHash&&!same((await provider.getBlock(from-1))?.hash,saved.scanCursorHash))from=m.deploymentBlock;const to=Math.min(ctx.block.number,from+9);if(from>to)return finish(ctx,{verified:false});
+      const logs=await provider.getLogs({address:target.escrow,topics:[productChainInterface.getEvent('Settled').topicHash,op.voucherId],fromBlock:from,toBlock:to});
+      check(logs.length<=1,'SETTLEMENT_MULTIPLE_EVENTS');
+      if(logs.length){const log=logs[0],tx=await provider.getTransaction(log.transactionHash);check(tx,'SETTLEMENT_TRANSACTION_MISSING');const p=await receipt(log.transactionHash,transaction(tx));check(p?.base.finalized===true&&p.base.outcome==='CONFIRMED','SETTLEMENT_RECEIPT_UNVERIFIED');
+        const {settled:e,transfer:t}=settlementEvents(p.receipt,op),at=await escrow.getVoucher(op.voucherId,p.o),b=await escrow.getBatch(at.batchId,p.o);
+        check(e.voucherId===op.voucherId&&same(e.owner,op.receiver)&&e.amount===uint(op.amount)&&at.status===3n&&at.generation===BigInt(op.generation)&&b.storeId===chainReference(op.storeId)&&b.unitPrice===e.amount&&same(t.from,target.escrow)&&same(t.to,op.receiver)&&t.value===e.amount);
+        return finishReceipt(p,{...p.base,voucherId:op.voucherId,generation:op.generation,receiver:op.receiver,amount:op.amount});
+      }
+      const cursorBlock=await provider.getBlock(to);await canonical(cursorBlock);await canonical(ctx.block);await store.transact(s=>{const t=s.autoSettlements?.[op.key];if(t&&t.scanCursor===saved?.scanCursor){t.scanCursor=to+1;t.scanCursorHash=cursorBlock.hash;}});return finish(ctx,{verified:false});
+    },
     async signClaim(intent){check(claimSigner&&intent.state==='QUEUED','CLAIM_SIGNING_NOT_AUTHORIZED');const ctx=await context(),b=await escrow.getBatch(intent.batchId,options(ctx));
       check(b.quantity>uint(intent.unitIndex)&&b.storeId===chainReference(intent.storeId)&&b.mealId===chainReference(intent.mealId)&&b.version===BigInt(intent.version)&&b.termsHash===intent.termsHash,'CLAIM_STATE_CHANGED');
       if(await escrow.storeClosed(b.storeId,options(ctx)))return finish(ctx,{verified:true,finalized:true,unavailable:true,reason:'STORE_CLOSED',blockNumber:ctx.block.number,blockHash:ctx.block.hash,storeId:intent.storeId,batchId:intent.batchId,unitIndex:intent.unitIndex,expectedGeneration:intent.expectedGeneration});
@@ -241,6 +285,7 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
       check(price!==null&&price>0n&&price<=uint(m.maxFeePerGas)&&gasLimit*price<=uint(m.maxTransactionFee),'CLAIM_GAS_BUDGET_EXCEEDED');
       const fees=fee.maxFeePerGas!==null?{type:2,maxFeePerGas:price,maxPriorityFeePerGas:fee.maxPriorityFeePerGas??0n}:{type:0,gasPrice:price};
       check(fees.maxPriorityFeePerGas===undefined||fees.maxPriorityFeePerGas<=price,'CLAIM_FEE_UNVERIFIED');
+      check(await provider.getBalance(target.claimAuthority,'pending')>=gasLimit*price,'PLATFORM_BALANCE_LOW');
       await canonical(ctx.block);const raw=await claimSigner.signTransaction({chainId:m.chainId,to:target.escrow,nonce:await nonce(target.claimAuthority),data:claimCalldata(intent),value:0n,gasLimit,...fees});
       const packet={raw,hash:keccak256(raw)};validateClaimPacket(intent,target,packet);return finish(ctx,{verified:true,...packet});
     },

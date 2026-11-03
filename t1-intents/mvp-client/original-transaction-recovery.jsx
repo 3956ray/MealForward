@@ -8,7 +8,7 @@ const hash=value=>typeof value==='string'&&/^0x[0-9a-f]{64}$/i.test(value);
 export function OriginalTransactionRecovery({operation,api,onRecovered,walletClient,session,configuration,isCurrent}){
  const wallet=address(operation?.wallet)?operation.wallet.toLowerCase():'';
  let path=null;try{path=productOperationPath(operation);}catch{}
- const visible=Boolean(wallet&&path&&['SEND_UNKNOWN','HASH_BOUND'].includes(operation?.state));
+ const visible=Boolean(operation?.mode!=='atomic'&&wallet&&path&&['SEND_UNKNOWN','HASH_BOUND'].includes(operation?.state));
  const bound=hash(operation?.txHash)?operation.txHash.toLowerCase():null;
  const key=JSON.stringify([wallet,path,operation?.state,bound]);
  const scope=useRef({key,epoch:0,busy:false});

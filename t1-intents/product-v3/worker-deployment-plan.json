@@ -1,0 +1,22 @@
+{
+  "status": "PREPARED_NOT_CREATED",
+  "serviceName": "mealforward-product-settlement-worker",
+  "type": "worker",
+  "runtime": "node",
+  "region": "singapore",
+  "plan": "0.5c-512mb",
+  "instances": 1,
+  "estimatedMonthlyComputeUSD": 7,
+  "pricingCheckedOn": "2026-11-03",
+  "pricingSource": "https://render.com/pricing",
+  "repository": "https://github.com/3956ray/MealForward",
+  "branch": "codex/mealforward-product-mvp-20261031",
+  "autoDeploy": false,
+  "buildCommand": "npm ci --prefix t1-intents --include=dev --ignore-scripts --no-audit --no-fund",
+  "startCommand": "node t1-intents/product-v3/server-entry.mjs",
+  "publicEnvironment": {"MF_PRODUCT_ENABLED": "true", "MF_PRODUCT_PROCESS_ROLE": "worker", "MF_PRODUCT_ORIGIN": "https://mealforward-product-v2-laodao.onrender.com"},
+  "existingConfigurationReferences": ["MF_PRODUCT_DATABASE_URL", "MF_PRODUCT_RPC_URL", "MF_PRODUCT_MANIFEST", "MF_PRODUCT_CREDENTIAL_PEPPER", "MF_PRODUCT_DEFAULT_IMAGE_DIGEST"],
+  "existingSignerEnvironmentGroup": "mealforward-product-v2-secrets",
+  "activationPrerequisites": ["V3 user-signed deployment finalized and approved manifest committed", "candidate CI and independent review pass", "legacy signing process actually stopped and pending packets audited", "MF_PRODUCT_LEGACY_WORKER_STOPPED=true only after that handoff", "MF_PRODUCT_ACTIVE_TARGET matches approved registry target", "monthly cost disclosed before service creation"],
+  "rollback": "Disable new funding while dual-target web and recovery worker continue servicing existing obligations. Never restart the pre-outbox legacy signing loop."
+}
