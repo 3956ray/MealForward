@@ -3,6 +3,7 @@
 - [实现说明、费用及发布步骤](docs/superpowers/2026-11-03-atomic-funding-auto-settlement.md) · [产品演进 HTML](docs/product-evolution/index.html) · [演进 Markdown](docs/product-evolution/mealforward-evolution.md)。本节更新下方同日早期记录；此前的线上验收属于 V2。
 - 已开发：新共享托管合约 ProductEscrowV3；合并精确金额授权和资助，真实钱包不支持时明确提示两步。商家交餐后链上等待 180 秒，独立 worker 付 Gas、自动提交，合约只能付给固定商家。到账由最终结算事件及 USDC 转账共同证明；退款回原资助者。已上架一份餐成功利用批处理时，共四笔交易：资助、发券、交餐、结算。既有 V2 合约、数据与资金不迁移。
 - 平台 Claim/结算共享持久签名记录；未知结果只恢复原包。目标、领取限制及用户会话跨版本校验。为防平台 nonce 争用，平台签名账户只允许领取及恢复已有操作。回退默认关闭新资助（MF_PRODUCT_NEW_FUNDING_ENABLED=false），保留 dual-target web/worker 和旧券手动结算。
+- 源码提交 fc4339a；[候选 CI 已通过](https://github.com/3956ray/MealForward/actions/runs/41568752496)，包括独立链集成与旧登录检查。[草稿 PR #48](https://github.com/3956ray/MealForward/pull/48)。
 - 本地验证：120 项合约测试通过；后台与部署工具全套、前端套件、390/1440px 浏览器检查、临时 PostgreSQL 及 Anvil 集成通过。Anvil 验证同笔授权/付款回滚、179/180 秒边界、第三方触发及手动竞争只支付一次。本地兼容账户是测试账户，不代表真实 MetaMask 一次确认已验收。
 - 公网现况：[现网 V2](https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html) 保持旧规则；V3 允许列表为空。三个用户地址核查时未启用已验证的委托账户；默认显示两步。已准备本机部署审核页，本人用 MetaMask 签署部署后要核验原 Hash，再登记新目标。还需实际钱包批次验收、旧签名进程停机交接、独立 worker 运行并关页验到账，才能开放新资助。
 - 收费资源尚未创建。新 Render 单实例独立 worker 估算 US$7/月，另计税费、超额使用及链上 Gas；[预配置清单](t1-intents/product-v3/worker-deployment-plan.json)。不得让旧执行器与新 worker 同时创建签名。未合并 PR、未部署 V3，未改动原有资金。
