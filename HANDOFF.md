@@ -1,3 +1,12 @@
+# 2026-11-05 · V3 用户部署已核验并登记
+
+- 用户部署交易 0xc18a31a07599226b7e1e0819fd0da14e9a988cf1a9e562b377932c0e4717f910，新合约 0x8718838C4B21519AEA83733DD9dC559B4cef7cae，Monad Testnet 10143，部署区块 76968957。再次调用审核器验证最终交易、代码、资产及角色，finalizedBlock 76969067。已登记 product-v3/approved-deployments.json。
+- 登记不代表上线：新资助仍默认关闭，生产尚未切换，旧签名进程未交接，未创建收费服务。下一步为常驻 worker 费用确认、双版本后台部署和真实钱包验收。批处理实现允许列表仍关闭。本节覆盖此前待部署及空清单状态。
+
+# 2026-11-05 · 恢复本机 V3 部署审核入口
+
+- 用户反馈无法访问；原 54849 端口连接失败，已重启现有 review-server，固定 http://127.0.0.1:54849/ 。页面 HTTP 200、preflight 返回 V3 / Monad Testnet 10143 及原部署账户；仅本机 Chrome 使用。服务退出后须重新启动；不是公网入口。未发送部署或钱包交易，未改应用及云服务。
+
 # 2026-11-03 · 单次资助与自动结算（V3 候选，未上线）
 
 - [实现说明、费用及发布步骤](docs/superpowers/2026-11-03-atomic-funding-auto-settlement.md) · [产品演进 HTML](docs/product-evolution/index.html) · [演进 Markdown](docs/product-evolution/mealforward-evolution.md)。本节更新下方同日早期记录；此前的线上验收属于 V2。

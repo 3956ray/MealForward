@@ -1,1 +1,27 @@
-[]
+[
+  {
+    "chainId": 10143,
+    "deployer": "0xC4F8a468f10d5f98DCfF3282516125E97F26433b",
+    "asset": "0x534b2f3a21130d7a60830c2df862319e593943a3",
+    "assetCodeHash": "0x96215e6049ed615cdc22fea7701e85458a8e51a2df3e7d45e8f9fa1d521b5a78",
+    "claimAuthority": "0x41DCBFED391b79FAC7B2951dD136c6B7e1384259",
+    "redemptionAuthority": "0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3",
+    "policySeconds": 7200,
+    "contractVersion": 3,
+    "maxFeePerGas": "300000000000",
+    "maxTransactionFee": "300000000000000000",
+    "claimGasLimit": "1000000",
+    "settlementGasLimit": "1000000",
+    "reviewStatus": "VERIFIED_APPROVED",
+    "creationCodeHash": "0x46d42d619518518c78adb453437890040ad5bc3535df23913abba7299190f19c",
+    "verificationArtifactHash": "0x78ade420bdacfdc07afff5d923348a7d786bb9b830fe108b999fdc08e2b23a9a",
+    "escrow": "0x8718838C4B21519AEA83733DD9dC559B4cef7cae",
+    "escrowCodeHash": "0xebbf4e5825a402d8b3466d3c5ecdd2a7579e13f379f15c9b3f6f10c44b59ffa2",
+    "assetDecimals": 6,
+    "deploymentBlock": 76968957,
+    "transactionHash": "0xc18a31a07599226b7e1e0819fd0da14e9a988cf1a9e562b377932c0e4717f910",
+    "finalizedBlock": 76969067,
+    "finalizedHash": "0x9d842614f02fcd8226cacfbfa049453968aec4833af679173dfa5f515bda23a4",
+    "approvedOn": "2026-11-05"
+  }
+]
