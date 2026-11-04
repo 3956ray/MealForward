@@ -1,3 +1,21 @@
+# 2026-11-05 · 用户改用 Render 免费 Web
+
+- 覆盖前述付费 Worker 方案；不再要求银行卡，不创建 Worker。新增明确 web-with-worker 模式，同一免费服务运行网页、Claim 与结算队列。休眠期间任务暂停，唤醒后恢复原操作；用户已选择此限制。
+- 当前为实现/发布阶段，尚未切换线上；需旧进程停机交接，不能仅设置交接字符串就声称完成。
+
+# 2026-11-05 · Worker creation awaits billing setup
+
+- User explicitly approved linking mealforward-product-v2-secrets. Selected that group in the prepared creation form; Auto-Deploy visibly Off, $7/month Singapore worker, new funding false and legacy handoff false.
+- Clicking Deploy background worker opened Render Add Card modal. It states a temporary $1 verification authorization. No card details entered. Render service inventory confirms no mealforward-product-settlement-worker exists yet. Ask user to complete billing directly in Render; never request card details in chat.
+- Existing web/legacy signing process remain unchanged. Continue from prepared worker form after billing is ready, then configure database/manifest/pepper, perform actual old-process shutdown and pending-operation audit before enabling worker. No new service or V3 website rollout is claimed.
+
+# 2026-11-05 · Worker rollout preparation
+
+- User approved the $7/month worker and proceeding until real-wallet testing. Production web remains V2 commit 75e207f; no production configuration or signing process changed yet.
+- Registration commit 19619b7 passed full CI: https://github.com/3956ray/MealForward/actions/runs/41875724633 . Read-only database aggregates: approvals 1, claims 1, intents 1, publications 2, redemptions 2, all CONFIRMED; no pending signatures found.
+- Render creation form prepared for mealforward-product-settlement-worker, Singapore, 0.5c-512mb, $7/month, V3 start command. Creation not submitted. New funding and legacy-worker handoff flags remain false.
+- Browser extension timed out; native Chrome UI works. Signing environment group mealforward-product-v2-secrets is available. Browser policy requires action-time confirmation before granting this new process access to signing credentials; async confirmation requested, association not performed. Check user's reply before continuing. Do not mark legacy handoff complete until the old process actually stops.
+
 # 2026-11-05 · V3 用户部署已核验并登记
 
 - 用户部署交易 0xc18a31a07599226b7e1e0819fd0da14e9a988cf1a9e562b377932c0e4717f910，新合约 0x8718838C4B21519AEA83733DD9dC559B4cef7cae，Monad Testnet 10143，部署区块 76968957。再次调用审核器验证最终交易、代码、资产及角色，finalizedBlock 76969067。已登记 product-v3/approved-deployments.json。
