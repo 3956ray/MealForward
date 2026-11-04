@@ -14,7 +14,8 @@
 <header class="hero"><div class="hero-top"><div class="eyebrow">MEALFORWARD / LIVING RECORD</div><span class="status">Product V2 · 测试网</span></div><h1>让每一次变化，有迹可循。<span>留膳的系统架构、餐食流程与产品演进，一份持续更新的记录。</span></h1><div class="tools"><a href="mealforward-evolution.md" download>下载 Markdown</a><button type="button" id="print">打印 / 保存 PDF</button><a href="https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html" target="_blank" rel="noopener noreferrer">打开测试站 ↗</a></div><div class="metrics"><div class="metric"><strong>7<small>笔</small></strong><span>新厨房、新餐品到首次结算</span></div><div class="metric"><strong>5<small>笔</small></strong><span>已上架餐品：资助到结算</span></div><div class="metric"><strong>180<small>秒</small></strong><span>链上交餐至允许结算</span></div></div><p style="font-size:11px;color:var(--muted);margin-bottom:0">正常成功路径 · 无已有足额授权 · 不含登录消息签名 · 非实时监控</p></header>
 <article class="content"><p>把产品如何运转、已经改变什么、下一步要做什么，放在同一份记录里。</p>
 <p>文档更新：<strong>2026-11-03（北京时间）</strong>。线上状态采用 <strong>2026-11-02 已核验快照</strong>，本页不是实时监控。</p>
-<h2 id="section-1">01 · 当前版本</h2><p>2026-11-05：V3 新合约 0x8718838C4B21519AEA83733DD9dC559B4cef7cae 已由用户部署、独立核验并登记；网站与后台尚未切换，公网自动结算仍待验收。</p>
+<h2 id="section-1">01 · 当前版本</h2><p>部署方式调整：按用户选择，复用 Render 免费 Web，在同一服务处理页面与结算任务。休眠期间自动结算暂停，唤醒后恢复；不新增每月 7 美元 Worker。</p>
+<p>2026-11-05：V3 新合约 0x8718838C4B21519AEA83733DD9dC559B4cef7cae 已由用户部署、独立核验并登记；免费 Web 已接通 V3，后台心跳及新旧目录隔离通过；真实钱包资助、领取、交餐、自动到账仍待验收。</p>
 <ul>
 <li><strong>已上线</strong>：独立 Product V2 测试网版本，包含厨房登记、餐品发布、资助、平台代领、私密餐券、验券、交餐及结算入口。</li>
 <li><strong>已验证</strong>：一次公网真实钱包主流程。资助 3 USDC / 3 份，其中 <strong>1 份完成结算，商家收到 1 USDC</strong>；该次核验时剩余 2 份待领取。</li>

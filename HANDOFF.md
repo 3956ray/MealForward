@@ -1,3 +1,11 @@
+# 2026-11-05 · Free web V3 deployment
+
+- User chose existing Render Free web; paid Worker creation cancelled, no billing/card needed for this rollout. Service srv-dbjv7lnf3r2c73d7ri50 suspended and verified stopped; database recheck found only CONFIRMED operations. Start command changed to product-v3/server-entry.mjs, process role web-with-worker, legacy handoff true. Existing signer/environment/database configuration reused.
+- Commit b46dbe9 live as dep-dblmqpijnfac73a5iqq0; new target configuration verified publicly, legacy catalog read succeeded, persistent workerStatus pending/delayed/unresolved=0, lowBalance=false. Enabling new test funding triggers dep-dblmruajnfac73a5lha0; verify terminal status and acceptingFunding before reporting ready.
+- Local full backend: 296 pass/3 explicit integration skips; targeted free-mode/settlement checks 16 pass. CI https://github.com/3956ray/MealForward/actions/runs/41878849088 remains queued, not PASS. Prior full registration CI passed. No real V3 fund/claim/handover/settlement performed.
+- Test URL https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html uses V3 default, history selector retains V2. New V3 catalog empty, merchant must register kitchen/publish a test meal using wallet. Atomic implementation allowlist remains off; two-step donor compatibility is expected for the current accounts. Platform wallet is reserved for automated submissions.
+- Free service suspends when idle; queue is persistent in PostgreSQL and resumes on wake. 180 seconds is earliest settlement, not a wake/scheduling guarantee. No keepalive workaround added. Rollback: NEW_FUNDING_ENABLED=false, retain V3-aware runtime/queue; never restart the pre-outbox V2 signer.
+
 # 2026-11-05 · 用户改用 Render 免费 Web
 
 - 覆盖前述付费 Worker 方案；不再要求银行卡，不创建 Worker。新增明确 web-with-worker 模式，同一免费服务运行网页、Claim 与结算队列。休眠期间任务暂停，唤醒后恢复原操作；用户已选择此限制。
