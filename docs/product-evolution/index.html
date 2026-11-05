@@ -21,7 +21,7 @@
 <li><strong>已验证</strong>：一次公网真实钱包主流程。资助 3 USDC / 3 份，其中 <strong>1 份完成结算，商家收到 1 USDC</strong>；该次核验时剩余 2 份待领取。</li>
 <li><strong>待验收</strong>：退款、过期、跨账户访问、拒签和断网恢复的完整公网矩阵。本地实现或测试通过，不等于真实钱包全部验收。</li>
 <li><strong>付款兼容性</strong>：当前实际钱包尚未通过原子批处理准入，donor 仍使用提前说明的授权/付款两步；不能声称单次钱包确认已验收。</li>
-<li><strong>原前端接入候选</strong>：继承原 Site 首页、照片、厨房卡片、商家侧栏与弹窗，接入现有真实 API；仍使用同一网址。桌面/手机本地流程已验证，发布状态见 HANDOFF 最新记录。</li>
+<li><strong>原前端接入已上线</strong>：继承原 Site 首页、照片、厨房卡片、商家侧栏与弹窗，接入现有真实 API；仍使用同一网址。桌面/手机本地流程与独立审查通过，e4f7632 已在原免费服务上线；真实钱包 V3 闭环仍待验收。</li>
 </ul>
 <p><a href="https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html">打开新版测试站</a> · <a href="https://github.com/3956ray/MealForward/actions/runs/41407192957">查看已通过的版本 CI</a></p>
 <h2 id="section-2">02 · V2 已验收架构（历史基线）</h2><p>网站负责交互，后台校验身份、资格和操作，数据库保存资料及链上索引。<strong>USDC 由共享 Escrow 托管；商家、平台后台都不直接保管 donor 的餐款。</strong></p>
