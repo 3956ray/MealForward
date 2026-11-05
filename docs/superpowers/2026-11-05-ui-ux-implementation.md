@@ -1,6 +1,6 @@
 # MealForward 温暖小厨房 UI：本地实现与接入说明
 
-状态：本地候选，未提交、未发布；2026-11-05。原免费服务与线上代码不变。
+状态：用户已授权发布当前 UI；实际发布结果以 HANDOFF 顶部为准。2026-11-05。
 
 ## 本轮实现
 
@@ -12,18 +12,18 @@
 
 ## thirdweb（用户暂无 Client ID）
 
-锁定 thirdweb 5.122.1（Apache-2.0）、@radix-ui/react-dialog 1.3.1（MIT）、lucide-react 1.69.0（ISC）。完整直接依赖许可证追加到构建产物 THIRD_PARTY_NOTICES.txt。
+thirdweb 5.122.1 接入代码保留，但发布前 npm audit 检出其间接依赖高风险公告，已从默认安装和构建隔离；后续须选取审计通过的 SDK 版本并复验后才能启用。锁定 @radix-ui/react-dialog 1.3.1（MIT）、lucide-react 1.69.0（ISC）。完整直接依赖许可证追加到构建产物 THIRD_PARTY_NOTICES.txt。
 
 构建环境配置：
 
 - `MF_PRODUCT_WALLET_UI=thirdweb`
 - `MF_THIRDWEB_CLIENT_ID=<公开 Client ID>`
 
-缺少任一配置继续现有连接器。不得配置 Secret Key 到前端。当前默认 legacy，没有开启收费服务或更改线上配置。有 Client ID 后须在 thirdweb 控制台限制允许域名，并重新核实当前套餐/用量政策后再启用。
+缺少任一配置继续现有连接器。启用前还必须单独安装通过安全审计的 thirdweb 依赖；当前发布包不含 thirdweb。不得配置 Secret Key 到前端。当前默认 legacy，没有开启收费服务或更改线上配置。有 Client ID 后须在 thirdweb 控制台限制允许域名，并重新核实当前套餐/用量政策后再启用。
 
 `thirdweb-login.jsx` 只启用外部钱包，autoConnect=false，无社交/邮箱/in-app wallet，无账户抽象配置。连接后需用户点击“验证并登录”，再进入原 challenge/签名/会话校验。EIP1193 Provider 通过 product-network.registerExternal 接回既有账户/网络事件、Wagmi/Viem 和交易日志保护；SDK 不承担付款或后台身份授权。
 
-官方参考：https://portal.thirdweb.com/wallets/adapters 与 https://portal.thirdweb.com/typescript/v5/eip1193/toProvider 。已核对安装包导出及类型，默认和显式启用分支均构建通过。启用构建使用合成 Client ID，仅证明打包，不证明联网连接。
+官方参考：https://portal.thirdweb.com/wallets/adapters 与 https://portal.thirdweb.com/typescript/v5/eip1193/toProvider 。已核对安装包导出及类型，此前安装 SDK 时默认和显式启用分支均构建通过；安全隔离后本次只构建默认现有连接器。启用构建使用合成 Client ID，仅证明打包，不证明联网连接。
 
 ## 已有证据与限制
 
