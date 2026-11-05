@@ -55,3 +55,12 @@ test('registered wallet cannot open a second kitchen by switching contract targe
  const r=await f.request('/registration-reviews',{target:NEW,auth,method:'POST',body:{name:'Second kitchen',requestId:'second-kitchen'}});
  assert.equal(r.status,409);assert.equal(r.body.error,'ACCOUNT_STORE_EXISTS');assert.equal(Object.keys((await f.scope(NEW).read()).publications||{}).length,0);
 });
+
+test('impact is global public read-only and rejects invalid ranges and cross-origin requests',async t=>{
+ const f=await fixture(t);for(const target of [OLD,NEW]){const r=await f.request('/impact?days=30',{target});assert.equal(r.status,200);assert.equal(r.body.coverage,'syncing');assert.equal(r.body.metrics,null);}
+ assert.equal((await f.request('/impact?days=14')).status,422);
+ assert.equal((await f.request('/impact?days=7&days=30')).status,422);
+ assert.equal((await f.request('/impact',{method:'POST',body:{}})).status,405);
+ assert.equal((await f.request('/impact',{headers:{origin:'https://evil.invalid'}})).status,403);
+ assert.deepEqual(f.legacy.counts(),{signs:0,sends:0,autoSigns:0,autoSends:0});
+});

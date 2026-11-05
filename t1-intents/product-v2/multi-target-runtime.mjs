@@ -1,3 +1,4 @@
+import {makeImpactService} from './impact.mjs';
 import {targetIdOf} from './target-registry.mjs';
 import {makeTargetStore} from './target-store.mjs';
 import {makeProductRuntime} from './runtime.mjs';
@@ -18,9 +19,19 @@ export async function makeMultiTargetRuntime({registry,store,chains,pool,origin,
    }};
   runtimes.set(id,await makeProductRuntime({pool,chain:wrapped,stateStore:scope,origin,pepper,policySeconds:registry.get(id).policySeconds,defaultImageDigest,enabled:true,profile,clock,configurationExtra:{targetId:id,activeTargetId:registry.activeTargetId,targets}}));
  }
+ const impact=makeImpactService({store,chains,registry,clock});
  let busy=false,next=0;
- return {scopes,targetIds:ids,
+ return {scopes,targetIds:ids,tickImpact:()=>impact.refresh(),
   async handler(req,res){if(!req.url.startsWith('/v1/product/'))return false;
+   const url=new URL(req.url,origin);
+   if(url.pathname==='/v1/product/impact'){
+    const send=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
+    if(req.method!=='GET') {send(405,{error:'METHOD_NOT_ALLOWED'});return true;}
+    if(req.headers.host!==new URL(origin).host||url.origin!==origin||req.headers.origin&&req.headers.origin!==origin||req.headers['sec-fetch-site']&&req.headers['sec-fetch-site']!=='same-origin'){send(403,{error:'ORIGIN_DENIED'});return true;}
+    const query=[...url.searchParams],days=url.searchParams.get('days')||'30';
+    if(query.length>1||query.some(([k])=>k!=='days')||!['7','30','90'].includes(days)){send(422,{error:'IMPACT_RANGE_INVALID'});return true;}
+    try{send(200,await impact.read(Number(days)));}catch{send(503,{error:'IMPACT_UNAVAILABLE'});}return true;
+   }
    const requested=req.headers['x-mf-product-target'],id=requested===undefined?registry.activeTargetId:requested;
    if(typeof id!=='string'||!runtimes.has(id)){res.writeHead(400,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'UNKNOWN_TARGET'}));return true;}
    return runtimes.get(id).handler(req,res);

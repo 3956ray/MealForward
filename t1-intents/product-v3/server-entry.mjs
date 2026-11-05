@@ -26,8 +26,8 @@ export async function startMultiTargetServer(env=process.env){
  const config=multiTargetConfiguration(env),pool=new Pool({connectionString:config.connectionString,ssl:verifiedSupabasePoolerTls(),max:4,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
  pool.on('error',()=>process.stderr.write('PRODUCT_DATABASE_UNAVAILABLE\n'));
  const request=new FetchRequest(config.rpcUrl);request.timeout=10000;const provider=new JsonRpcProvider(request,undefined,{batchMaxCount:1,cacheTimeout:-1});
- const store=productStore(pool),chains=new Map();let server,timer,stopping=false,active=Promise.resolve();
- async function stop(){if(stopping)return;stopping=true;clearTimeout(timer);if(server?.listening)await new Promise(resolve=>server.close(resolve));await active;await pool.end();provider.destroy();}
+ const store=productStore(pool),chains=new Map();let server,timer,impactTimer,stopping=false,active=Promise.resolve(),impactActive=Promise.resolve();
+ async function stop(){if(stopping)return;stopping=true;clearTimeout(timer);clearTimeout(impactTimer);if(server?.listening)await new Promise(resolve=>server.close(resolve));await active;await impactActive;await pool.end();provider.destroy();}
  try{
   for(const id of config.registry.ids()){
    const manifest=config.registry.get(id),scope=makeTargetStore({store,registry:config.registry,targetId:id});
@@ -39,6 +39,7 @@ export async function startMultiTargetServer(env=process.env){
   }
   if(config.role!=='web'){
    const monitor=makeWorkerMonitor({store,provider,targets:config.registry.ids().map(id=>config.registry.get(id))});
+   const runImpact=()=>{if(stopping)return;impactActive=runtime.tickImpact().catch(()=>{}).finally(()=>{if(!stopping)impactTimer=setTimeout(runImpact,30000);});};runImpact();
    const run=()=>{if(stopping)return;active=runtime.tickClaims().then(()=>monitor.sample()).catch(()=>process.stderr.write('PRODUCT_WORKER_RECOVERY_PENDING\n')).finally(()=>{if(!stopping)timer=setTimeout(run,2000);});};run();
   }
   return {server,stop,role:config.role};

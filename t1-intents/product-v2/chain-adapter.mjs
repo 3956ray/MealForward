@@ -194,6 +194,55 @@ export function makeProductChain({provider,manifest,store,claimSigner,redemption
       return finish(ctx,{verified:true,wallet:lower(wallet),stores:[...new Set(stores)]});
     },
     async catalog(){const ctx=await context(),p=await projection(ctx);return finish(ctx,{verified:true,blockNumber:ctx.block.number,blockHash:ctx.block.hash,chainTime:ctx.block.timestamp,asset:{address:target.asset,symbol:profile==='local-acceptance'?'TEST':'USDC',decimals:m.assetDecimals},stores:p.stores,meals:p.meals,accounting:p.accounting});},
+    async impactSnapshot(){
+      const ctx=await context(),p=await projection(ctx),fields=['funded','available','claimed','handedOver','settled','refundPending','refunded'],stores=[],funding=[],deliveries=[],seen=new Set();
+      for(const kitchen of p.stores){const a=await escrow.getStoreAccounting(chainReference(kitchen.id),options(ctx));conserved(a);stores.push({id:kitchen.id,name:kitchen.name,closed:kitchen.closed,counts:Object.fromEntries(fields.map(k=>[k,String(a[k+'Quantity'])]))});}
+      const history=p.s.impactHistory;
+      if(history){check(history.escrow===target.escrow&&history.chainId===target.chainId,'IMPACT_TARGET_MISMATCH');if(history.cursor){const b=await provider.getBlock(history.cursor.number);check(history.cursor.number<=ctx.block.number&&same(b?.hash,history.cursor.hash),'IMPACT_HISTORY_REORG');}}
+      const events=records(history?.events),batches=new Map(p.batches),units=new Map(p.units);
+      for(const e of events){check(e.blockNumber<=ctx.block.number,'IMPACT_EVENT_FUTURE');
+       if(e.kind==='Funded'&&!batches.has(e.batchId)){
+        const kitchen=stores.find(k=>chainReference(k.id)===e.storeRef);if(!kitchen)continue;
+        const b=await escrow.getBatch(e.batchId,options(ctx));check(b.storeId===e.storeRef&&String(b.quantity)===e.quantity&&same(b.payer,e.payer),'IMPACT_BATCH_MISMATCH');
+        const meal=p.meals.find(v=>v.storeId===kitchen.id&&chainReference(v.id)===b.mealId&&BigInt(v.version)===b.version);
+        batches.set(e.batchId,{b,intent:{storeId:kitchen.id,txHash:e.txHash},meal});
+       }
+      }
+      for(const e of events)if(e.kind==='Claimed'&&batches.has(e.batchId)){
+       const key=unitKey(e.batchId,e.unitIndex);if(!units.has(key)){const index=uint(e.unitIndex),u=await escrow.getUnit(e.batchId,index,options(ctx));units.set(key,{batchId:e.batchId,index,u});}
+      }
+      for(const [id,entry] of batches){funding.push({id,storeId:entry.intent.storeId,name:entry.meal?.name||entry.intent.name||'历史餐品',quantity:String(entry.b.quantity),amount:String(entry.b.amount),at:number(entry.b.fundedAt),txHash:entry.intent.txHash});}
+      for(const unit of units.values())if([2n,3n].includes(unit.u.status)){
+       const v=await escrow.getVoucher(unit.u.voucherId,options(ctx)),batch=batches.get(unit.batchId);
+       check(batch&&v.batchId===unit.batchId&&v.unitIndex===unit.index&&v.generation===unit.u.generation&&v.status===unit.u.status&&address(v.recipient)&&v.settlementAvailableAt>=180n,'IMPACT_VOUCHER_MISMATCH');
+       const id=unit.u.voucherId+':'+String(v.generation);if(seen.has(id))continue;seen.add(id);
+       deliveries.push({id,storeId:batch.intent.storeId,recipient:lower(v.recipient),at:number(v.settlementAvailableAt)-180});
+      }
+      const complete=stores.every(k=>funding.filter(f=>f.storeId===k.id).reduce((n,f)=>n+BigInt(f.quantity),0n)===BigInt(k.counts.funded)&&BigInt(deliveries.filter(d=>d.storeId===k.id).length)===BigInt(k.counts.handedOver)+BigInt(k.counts.settled));
+      return finish(ctx,{verified:true,chainId:target.chainId,chainTime:ctx.block.timestamp,checkedAt:Math.floor(Date.now()/1000),blockNumber:ctx.block.number,blockHash:ctx.block.hash,complete,stores,funding,deliveries});
+    },
+    async scanImpactHistory(){
+      const ctx=await context(),snapshot=await store.read(),prior=snapshot.impactHistory;
+      check(!prior||prior.escrow===target.escrow&&prior.chainId===target.chainId,'IMPACT_TARGET_MISMATCH');
+      if(prior?.cursor){const b=await provider.getBlock(prior.cursor.number);check(prior.cursor.number<=ctx.block.number&&same(b?.hash,prior.cursor.hash),'IMPACT_HISTORY_REORG');}
+      const names=['Funded','Claimed','HandedOver','Settled'],topics=names.map(n=>productChainInterface.getEvent(n).topicHash),events=[],receipts=[];
+      const hashes=[...new Set(['intents','claims','redemptions','autoSettlements'].flatMap(k=>records(snapshot[k]).filter(o=>o.state==='CONFIRMED'&&o.confirmedBlock<=ctx.block.number&&hash(o.txHash)).map(o=>o.txHash)))].filter(h=>!prior?.receipts?.[h]).slice(0,4);
+      async function ingest(logs){check(logs.length<=2048,'IMPACT_LOG_LIMIT');for(const log of logs){if(!same(log.address,target.escrow)||!topics.includes(log.topics[0]))continue;
+       check(log.removed!==true&&hash(log.transactionHash)&&hash(log.blockHash)&&Number.isSafeInteger(log.blockNumber)&&log.blockNumber<=ctx.block.number&&Number.isSafeInteger(log.index??log.logIndex),'IMPACT_LOG_INVALID');
+       const block=await provider.getBlock(log.blockNumber);await canonical(block);check(same(block.hash,log.blockHash),'IMPACT_EVENT_REORG');
+       const parsed=productChainInterface.parseLog(log),a=parsed.args,id=target.chainId+':'+target.escrow+':'+lower(log.transactionHash)+':'+(log.index??log.logIndex);
+       events.push({id,kind:parsed.name,blockNumber:log.blockNumber,blockHash:log.blockHash,txHash:lower(log.transactionHash),at:block.timestamp,...(parsed.name==='Funded'?{batchId:a.batchId,storeRef:a.storeId,payer:lower(a.payer),quantity:String(a.quantity)}:{}),...(parsed.name==='Claimed'?{batchId:a.batchId,unitIndex:String(a.unitIndex)}:{})});
+      }}
+      for(const h of hashes){const receipt=await provider.getTransactionReceipt(h);check(receipt&&receipt.status===1&&receipt.blockNumber<=ctx.block.number,'IMPACT_RECEIPT_PENDING');await ingest(receipt.logs);receipts.push(h);}
+      const from=(prior?.cursor?.number??m.deploymentBlock-1)+1,to=Math.min(from+9,ctx.block.number);let cursor=prior?.cursor;
+      if(from<=to){const logs=await provider.getLogs({address:target.escrow,fromBlock:from,toBlock:to,topics:[topics]});await ingest(logs);const b=await provider.getBlock(to);await canonical(b);cursor={number:to,hash:b.hash};}
+      await canonical(ctx.block);
+      await store.transact(s=>{const current=s.impactHistory;if(JSON.stringify(current?.cursor)!==JSON.stringify(prior?.cursor))return;
+       const next=structuredClone(current||{chainId:target.chainId,escrow:target.escrow,events:{},receipts:{}});
+       for(const e of events){if(next.events[e.id])check(JSON.stringify(next.events[e.id])===JSON.stringify(e),'IMPACT_EVENT_CONFLICT');next.events[e.id]=e;}
+       check(Object.keys(next.events).length<=maxRecords,'IMPACT_EVENT_LIMIT');for(const h of receipts)next.receipts[h]=true;next.cursor=cursor;s.impactHistory=next;
+      });
+    },
     async fundingAllowance(wallet){const ctx=await context(),allowance=await asset.allowance(wallet,target.escrow,options(ctx));return finish(ctx,{verified:true,finalized:true,blockNumber:ctx.block.number,blockHash:ctx.block.hash,owner:lower(wallet),asset:target.asset,spender:target.escrow,allowance:String(allowance)});},
     async refundState(batchId){const ctx=await context();return finish(ctx,await refundInfo(batchId,ctx));},
     async refundableBatches(storeId,wallet){const ctx=await context(),s=await store.read(),storeRef=chainReference(storeId),owner=await escrow.storeOwner(storeRef,options(ctx));check(same(owner,wallet),'CHAIN_OWNER_MISMATCH');const closed=await escrow.storeClosed(storeRef,options(ctx)),items=[];

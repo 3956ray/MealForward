@@ -6,7 +6,7 @@ const claimPending=new Set(['QUEUED','SIGNED','SEND_UNKNOWN','HASH_BOUND']);
 const walletPending=new Set(['AWAITING_HANDOVER','PREPARED','SEND_UNKNOWN','HASH_BOUND']);
 const walletCollections=['intents','approvals','publications','redemptions'];
 const entityCollections=['kitchens','publishedMeals','drafts','reviews','intents','requests','approvals','approvalRequests','publications','publicationReviews','publicationRequests','claims','claimReviews','claimRequests','vouchers','displays','verificationHandles','redemptions','redemptionReviews','redemptionRequests','kitchenSettings','kitchenSettingRequests','indexedBatches','autoSettlements'];
-const reserved=new Set(['targetStates','platformOutbox','redemptionRates']);
+const reserved=new Set(['targetStates','platformOutbox','redemptionRates','impactProjection']);
 export const TARGET_SCOPE=Symbol.for('mealforward.product.targetScope');
 const address=value=>{check(typeof value==='string'&&/^0x[0-9a-f]{40}$/i.test(value),'INVALID_WALLET');return value.toLowerCase();};
 export function makeTargetStore({store,registry,targetId,clock=()=>Math.floor(Date.now()/1000)}) {
