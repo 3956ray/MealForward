@@ -58,6 +58,7 @@ test('registered wallet cannot open a second kitchen by switching contract targe
 
 test('impact is global public read-only and rejects invalid ranges and cross-origin requests',async t=>{
  const f=await fixture(t);for(const target of [OLD,NEW]){const r=await f.request('/impact?days=30',{target});assert.equal(r.status,200);assert.equal(r.body.coverage,'syncing');assert.equal(r.body.metrics,null);}
+ assert.equal((await f.request('/impact?days=all')).status,200);
  assert.equal((await f.request('/impact?days=14')).status,422);
  assert.equal((await f.request('/impact?days=7&days=30')).status,422);
  assert.equal((await f.request('/impact',{method:'POST',body:{}})).status,405);
