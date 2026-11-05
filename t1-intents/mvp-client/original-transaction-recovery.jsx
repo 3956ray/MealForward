@@ -1,3 +1,5 @@
+import {t as tr,translateError} from './locale.mjs';
+import {useLanguage} from './locale-react.jsx';
 import {PendingOperationCancellation} from './pending-operation-cancellation.jsx';
 import React,{useEffect,useRef,useState} from 'react';
 import {productOperationPath} from './product-wallet.mjs';
@@ -6,6 +8,7 @@ const hash=value=>typeof value==='string'&&/^0x[0-9a-f]{64}$/i.test(value);
 
 /** Original-hash controls only record/query. The separate cancellation sibling requires its own consent. */
 export function OriginalTransactionRecovery({operation,api,onRecovered,walletClient,session,configuration,isCurrent}){
+ useLanguage();
  const wallet=address(operation?.wallet)?operation.wallet.toLowerCase():'';
  let path=null;try{path=productOperationPath(operation);}catch{}
  const visible=Boolean(operation?.mode!=='atomic'&&wallet&&path&&['SEND_UNKNOWN','HASH_BOUND'].includes(operation?.state));
@@ -35,17 +38,17 @@ export function OriginalTransactionRecovery({operation,api,onRecovered,walletCli
    if(result?.id!==operation.id||result?.kind!==operation.kind||!address(owner)||owner.toLowerCase()!==wallet){
     throw Error('返回的原操作与当前钱包不一致，请重新读取原操作。');
    }
-   setFeedback({epoch,busy:false,message:result.state==='CONFIRMED'?'原交易已确认。':result.state==='REVERTED'?'原交易执行失败，请查看原操作。':'原交易结果仍待核验，不会再次发送。'});
+   setFeedback({epoch,busy:false,message:result.state==='CONFIRMED'?tr("原交易已确认。"):result.state==='REVERTED'?tr("原交易执行失败，请查看原操作。"):tr("原交易结果仍待核验，不会再次发送。")});
    if(current())await onRecovered?.(result);
-  }catch(err){if(current())setFeedback({epoch,busy:false,error:err.message||'暂时无法核验，请保留原交易编号。'});}
+  }catch(err){if(current())setFeedback({epoch,busy:false,error:err.message||tr("暂时无法核验，请保留原交易编号。")});}
   finally{if(current())scope.current.busy=false;}
  }
  if(!visible)return null;
- return <><section aria-label="找回原交易">
-  <p>从钱包交易记录复制原交易编号，仅核验，不会再次付款</p>
-  <label>原交易编号<input aria-label="原交易编号" autoComplete="off" spellCheck={false} placeholder="0x…" value={value} readOnly={Boolean(bound)} disabled={busy} onChange={e=>{if(!bound)setDraft({epoch,value:e.target.value.trim()});}} style={{width:'100%',overflowWrap:'anywhere'}}/></label>
-  {bound?<p>该编号已通过验证，不能更换；可以继续查询原交易。</p>:<p>请粘贴完整编号：0x 开头，后面为 64 位字符。未验证的编号可以修正。</p>}
-  <button className="button outline" disabled={busy||!hash(value)||typeof api!=='function'} onClick={recover}>{busy?'正在核验原交易…':'核验原交易编号'}</button>
-  {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
+ return <><section aria-label={tr("找回原交易")}>
+  <p>{tr("从钱包交易记录复制原交易编号，仅核验，不会再次付款")}</p>
+  <label>{tr("原交易编号")}<input aria-label={tr("原交易编号")} autoComplete="off" spellCheck={false} placeholder="0x…" value={value} readOnly={Boolean(bound)} disabled={busy} onChange={e=>{if(!bound)setDraft({epoch,value:e.target.value.trim()});}} style={{width:'100%',overflowWrap:'anywhere'}}/></label>
+  {bound?<p>{tr("该编号已通过验证，不能更换；可以继续查询原交易。")}</p>:<p>{tr("请粘贴完整编号：0x 开头，后面为 64 位字符。未验证的编号可以修正。")}</p>}
+  <button className="button outline" disabled={busy||!hash(value)||typeof api!=='function'} onClick={recover}>{busy?tr("正在核验原交易…"):tr("核验原交易编号")}</button>
+  {error&&<p role="alert">{translateError(error)}</p>}{message&&<p role="status">{translateError(message)}</p>}
  </section><PendingOperationCancellation operation={operation} api={api} onRecovered={onRecovered} walletClient={walletClient} session={session} configuration={configuration} isCurrent={isCurrent}/></>;
 }

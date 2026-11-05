@@ -1,3 +1,5 @@
+import {t as tr,translateError} from './locale.mjs';
+import {useLanguage} from './locale-react.jsx';
 import React,{Suspense,lazy,useCallback,useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {CatalogProduct,Dialog} from './catalog-product.jsx';
@@ -11,6 +13,7 @@ const ThirdwebLogin=thirdwebEnabled?lazy(()=>import('./thirdweb-login.jsx')):nul
 
 /** Separate entry; no legacy role/payer/transaction guard is relaxed. */
 export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}) {
+ useLanguage();
   const [session,setSession]=useState(null),[providers,setProviders]=useState([]),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [targetId,setTargetId]=useState(()=>new URLSearchParams(globalThis.location?.search||'').get('target')||''),[targets,setTargets]=useState([]);
   const targetRef=useRef(targetId);targetRef.current=targetId;
@@ -26,7 +29,7 @@ export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}
     let value;try{value=await response.json();}catch{throw Error('新产品服务尚未接通。');}
     if(!response.ok){
       if(response.status===401&&epoch.current===ticket){epoch.current++;csrf.current=null;sessionRef.current=null;setSession(null);}
-      throw Object.assign(Error(value.error==='PRODUCT_NOT_CONNECTED'?'新产品服务尚未开放，原钱包版仍可使用。':value.error||'请求未完成，请查询原记录。'),{code:value.error,status:response.status});
+      throw Object.assign(Error(value.error==='PRODUCT_NOT_CONNECTED'?tr("新产品服务尚未开放，原钱包版仍可使用。"):value.error||tr("请求未完成，请查询原记录。")),{code:value.error,status:response.status});
     }
     if(epoch.current!==ticket)throw Error('钱包已变化，请重新登录。');
     if(method==='GET'&&/^\/(intents|approvals|catalog-operations|merchant\/operations)\/[a-zA-Z0-9_-]+$/.test(path)&&['SEND_UNKNOWN','HASH_BOUND'].includes(value.state)&&sessionRef.current){
@@ -65,7 +68,7 @@ export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}
       walletRef.current.configure(configuration);
       walletRef.current.select(providerId);
       const connection=await (alreadyConnected?walletRef.current.inspect():walletRef.current.connect()),ticket=epoch.current;
-      if(connection.chainId!==configuration.chainId)throw Error(configuration.profile==='local-acceptance'?'请在钱包中选择本地验收网络。':'请在钱包中选择 Monad Testnet。');
+      if(connection.chainId!==configuration.chainId)throw Error(configuration.profile==='local-acceptance'?tr("请在钱包中选择本地验收网络。"):tr("请在钱包中选择 Monad Testnet。"));
       const check=()=>{if(epoch.current!==ticket)throw Error('钱包已变化，请重新登录。');};
       const pre=await api('/auth/pre-session',{method:'POST',body:{}});check();csrf.current=pre.csrf;
       const challenge=await api('/identity/wallet/challenge',{method:'POST',body:{address:connection.account}});check();
@@ -87,6 +90,6 @@ export function CatalogEntry({fetchImpl=fetch,walletFactory=createProductWallet}
   }
   async function logout(){epoch.current++;sessionRef.current=null;setSession(null);try{await api('/auth/logout',{method:'POST',body:{}});}catch(e){setError(e.message);}finally{csrf.current=null;}}
   const cancellationEpoch=epoch.current;
-  return <><CatalogProduct key={targetId} walletClient={walletRef.current} configuration={()=>api('/configuration')} isCurrent={()=>epoch.current===cancellationEpoch&&sessionRef.current?.wallet===session?.wallet} api={api} session={session} onLogin={()=>{setError('');setOpen(true);}} onLogout={logout} onRefresh={refresh} onWalletOperation={sendOperation}/>{targets.length>1&&<details className="container history-target"><summary>查看历史订单与餐券</summary><label>订单范围<select aria-label="业务版本" disabled={busy} value={targetId} onChange={e=>switchTarget(e.target.value)}>{targets.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>{targets.find(t=>t.id===targetId)?.acceptingFunding===false&&<p>这里保留历史餐券与订单，已资助餐食仍可领取；新增资助请切换新版业务。</p>}</details>}{open&&<Dialog title="钱包登录" onClose={()=>{if(!busy)setOpen(false);}}><p className="wallet-intro">连接钱包，找回你的餐券与支持记录。</p><p className="notice">验证身份的签名不会付款，也不收取 Gas。</p>{thirdwebEnabled?<Suspense fallback={<p role="status">正在加载钱包列表…</p>}><ThirdwebLogin clientId={thirdwebClientId} busy={busy} onVerify={provider=>login(walletRef.current.registerExternal(provider),true)}/></Suspense>:<><h3>选择钱包</h3>{providers.map(p=><button className="button" key={p.id} disabled={busy} onClick={()=>login(p.id)}>{p.name}</button>)}{!providers.length&&<p>未发现钱包扩展。请在钱包内置浏览器打开此页面，或安装钱包后刷新。</p>}</>}{busy&&<p role="status">请在钱包中完成身份验证，随后返回这里。</p>}<p role="alert">{error}</p></Dialog>}{error&&!open&&<p className="container" role="alert">{error}</p>}</>;
+  return <><CatalogProduct key={targetId} walletClient={walletRef.current} configuration={()=>api('/configuration')} isCurrent={()=>epoch.current===cancellationEpoch&&sessionRef.current?.wallet===session?.wallet} api={api} session={session} onLogin={()=>{setError('');setOpen(true);}} onLogout={logout} onRefresh={refresh} onWalletOperation={sendOperation}/>{targets.length>1&&<details className="container history-target"><summary>{tr("查看历史订单与餐券")}</summary><label>{tr("订单范围")}<select aria-label={tr("业务版本")} disabled={busy} value={targetId} onChange={e=>switchTarget(e.target.value)}>{targets.map(t=><option key={t.id} value={t.id}>{tr(t.label)}</option>)}</select></label>{targets.find(t=>t.id===targetId)?.acceptingFunding===false&&<p>{tr("这里保留历史餐券与订单，已资助餐食仍可领取；新增资助请切换新版业务。")}</p>}</details>}{open&&<Dialog title={tr("钱包登录")} onClose={()=>{if(!busy)setOpen(false);}}><p className="wallet-intro">{tr("连接钱包，找回你的餐券与支持记录。")}</p><p className="notice">{tr("验证身份的签名不会付款，也不收取 Gas。")}</p>{thirdwebEnabled?<Suspense fallback={<p role="status">{tr("正在加载钱包列表…")}</p>}><ThirdwebLogin clientId={thirdwebClientId} busy={busy} onVerify={provider=>login(walletRef.current.registerExternal(provider),true)}/></Suspense>:<><h3>{tr("选择钱包")}</h3>{providers.map(p=><button className="button" key={p.id} disabled={busy} onClick={()=>login(p.id)}>{tr(p.name)}</button>)}{!providers.length&&<p>{tr("未发现钱包扩展。请在钱包内置浏览器打开此页面，或安装钱包后刷新。")}</p>}</>}{busy&&<p role="status">{tr("请在钱包中完成身份验证，随后返回这里。")}</p>}<p role="alert">{translateError(error)}</p></Dialog>}{error&&!open&&<p className="container" role="alert">{translateError(error)}</p>}</>;
 }
 if(document.getElementById('root'))createRoot(document.getElementById('root')).render(<CatalogEntry/>);

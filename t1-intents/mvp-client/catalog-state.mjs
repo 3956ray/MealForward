@@ -1,3 +1,4 @@
+import {t as tr} from './locale.mjs';
 export function integer(value, { positive = true } = {}) {
   const text = String(value);
   if (!/^(0|[1-9][0-9]*)$/.test(text) || (positive && text === '0') || BigInt(text) >= 2n ** 256n) throw Error('请输入有效的整数份数');
@@ -55,4 +56,4 @@ export function supportPayload(meal, quantity, now = Date.now() / 1000) {
   if (!meal.listed || Number(meal.fundingDeadline) <= now || BigInt(qty) > BigInt(integer(meal.remaining, {positive:false}))) throw Error('当前可资助数量或期限已变化，请刷新餐品');
   return {storeId:meal.storeId, mealId:meal.id, version:meal.version, quantity:qty};
 }
-export const intentLabel = state => ({CONFIRMED:'资助已确认', FINAL_SUCCEEDED:'资助已确认', PREPARED:'等待钱包付款', SEND_UNKNOWN:'付款结果待核对', HASH_BOUND:'原交易确认中', REVERTED:'原交易已失败'}[state] || '原请求处理中');
+export const intentLabel = state => ({CONFIRMED:tr("资助已确认"), FINAL_SUCCEEDED:tr("资助已确认"), PREPARED:tr("等待钱包付款"), SEND_UNKNOWN:tr("付款结果待核对"), HASH_BOUND:tr("原交易确认中"), REVERTED:tr("原交易已失败")}[state] || tr("原请求处理中"));

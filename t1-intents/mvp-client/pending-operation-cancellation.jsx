@@ -1,3 +1,5 @@
+import {t as tr} from './locale.mjs';
+import {useLanguage} from './locale-react.jsx';
 import React,{useEffect,useRef,useState} from 'react';
 import {productOperationPath} from './product-wallet.mjs';
 import {validateProductConfiguration} from './product-network.mjs';
@@ -19,6 +21,7 @@ export function validateCancellationPacket(packet,operation,session,configuratio
 }
 /** A separate, explicit self-transfer. It never resends the original business call. */
 export function PendingOperationCancellation({operation,api,onRecovered,walletClient,session,configuration,isCurrent,storage=globalThis.localStorage}){
+ useLanguage();
  const wallet=address(session?.wallet)?session.wallet.toLowerCase():'',owner=operation?.wallet??operation?.receiver;
  let path='',originalPath='';try{path=cancellationPath(operation);originalPath=productOperationPath(operation);}catch{}
  const visible=Boolean(path&&same(owner,wallet)&&pending(operation?.state)&&typeof api==='function'&&typeof isCurrent==='function');
@@ -42,10 +45,10 @@ export function PendingOperationCancellation({operation,api,onRecovered,walletCl
    result=await api('/merchant/operations/'+encodeURIComponent(redirect));check();
    if(result?.id!==redirect||result.kind!=='handover'||!same(result.wallet??result.receiver,wallet)||result.handoverPreviouslyConfirmed!==true||operation.voucherId&&operation.voucherId!==result.voucherId)fail();
   }
-  update({message:redirect?'原交餐记录已保留，请继续完成钱包确认，勿重复交餐。':result.state==='CANCELLED'?'原请求已安全作废，可以继续其他操作。':result.state==='CONFIRMED'?'原交易已先完成，请查看原结果。':'仍待链上核验，原请求继续保留。'});await onRecovered?.(result);
+  update({message:redirect?tr("原交餐记录已保留，请继续完成钱包确认，勿重复交餐。"):result.state==='CANCELLED'?tr("原请求已安全作废，可以继续其他操作。"):result.state==='CONFIRMED'?tr("原交易已先完成，请查看原结果。"):tr("仍待链上核验，原请求继续保留。")});await onRecovered?.(result);
  }
  async function bind(txHash){check();const proof=verifyResult(await api(path,{method:'POST',body:{txHash:txHash.toLowerCase()}}));check();await refreshOriginal(proof);}
- async function task(run){if(!visible||scope.current.busy)return;scope.current.busy=true;update({busy:true,error:'',message:''});try{check();await run();}catch(e){if(current())update({error:e.message||'作废未确认，原请求仍保留。'});}finally{if(current()){scope.current.busy=false;update({busy:false});}}}
+ async function task(run){if(!visible||scope.current.busy)return;scope.current.busy=true;update({busy:true,error:'',message:''});try{check();await run();}catch(e){if(current())update({error:e.message||tr("作废未确认，原请求仍保留。")});}finally{if(current()){scope.current.busy=false;update({busy:false});}}}
  async function recover(){if(!hash(entered))return;await task(()=>bind(entered));}
  async function send(){if(!value.accepted||!walletClient?.sendCancellationTransaction||savedHash)return;
   await task(async()=>{
@@ -61,16 +64,16 @@ export function PendingOperationCancellation({operation,api,onRecovered,walletCl
    const txHash=await walletClient.sendCancellationTransaction(wallet,tx,check);
    if(!hash(txHash))throw Error('钱包未返回有效的作废交易编号，原请求仍保留。');
    // Save under the OLD wallet even if it changed while the prompt was open.
-   try{remember({fingerprint,hash:txHash.toLowerCase()});}catch(error){if(current())update({hash:txHash.toLowerCase(),accepted:false});throw Error('无法保存作废交易，请保留此编号并核验：'+txHash);}
+   try{remember({fingerprint,hash:txHash.toLowerCase()});}catch(error){if(current())update({hash:txHash.toLowerCase(),accepted:false});throw Error(tr("无法保存作废交易，请保留此编号并核验：")+txHash);}
    check();update({hash:txHash.toLowerCase(),accepted:false});await bind(txHash);
   });
  }
  if(!visible)return null;
- return <section aria-label="安全作废原请求"><h3>不再继续原请求</h3><p>作废会向自己的钱包发送一笔零金额交易，可能产生 Gas 费用。不会重新发送原付款、授权或交餐操作。若原交易先完成，请查询原结果；只有链上确认作废后才能释放原请求。</p>
- <label><input type="checkbox" aria-label="确认零转账作废及Gas费用" checked={Boolean(value.accepted)} disabled={value.busy||Boolean(savedHash)} onChange={e=>update({accepted:e.target.checked})}/>我了解零转账作废交易及可能的 Gas 费用</label>
- <button className="button outline" disabled={!value.accepted||value.busy||Boolean(savedHash)||!walletClient?.sendCancellationTransaction||!configuration||storageError} onClick={send}>在钱包确认作废交易</button>
- <label>已有作废交易编号<input aria-label="已有作废交易编号" value={entered} disabled={value.busy} autoComplete="off" spellCheck={false} onChange={e=>update({hash:e.target.value.trim()})} style={{width:'100%'}}/></label>
- <button className="button outline" disabled={value.busy||!hash(entered)} onClick={recover}>核验作废交易</button>
+ return <section aria-label={tr("安全作废原请求")}><h3>{tr("不再继续原请求")}</h3><p>{tr("作废会向自己的钱包发送一笔零金额交易，可能产生 Gas 费用。不会重新发送原付款、授权或交餐操作。若原交易先完成，请查询原结果；只有链上确认作废后才能释放原请求。")}</p>
+ <label><input type="checkbox" aria-label={tr("确认零转账作废及Gas费用")} checked={Boolean(value.accepted)} disabled={value.busy||Boolean(savedHash)} onChange={e=>update({accepted:e.target.checked})}/>{tr("我了解零转账作废交易及可能的 Gas 费用")}</label>
+ <button className="button outline" disabled={!value.accepted||value.busy||Boolean(savedHash)||!walletClient?.sendCancellationTransaction||!configuration||storageError} onClick={send}>{tr("在钱包确认作废交易")}</button>
+ <label>{tr("已有作废交易编号")}<input aria-label={tr("已有作废交易编号")} value={entered} disabled={value.busy} autoComplete="off" spellCheck={false} onChange={e=>update({hash:e.target.value.trim()})} style={{width:'100%'}}/></label>
+ <button className="button outline" disabled={value.busy||!hash(entered)} onClick={recover}>{tr("核验作废交易")}</button>
  {value.error&&<p role="alert">{value.error}</p>}{value.message&&<p role="status">{value.message}</p>}
  </section>;
 }

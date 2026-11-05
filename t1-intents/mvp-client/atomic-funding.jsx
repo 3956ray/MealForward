@@ -1,6 +1,9 @@
+import {t as tr,translateError} from './locale.mjs';
+import {useLanguage} from './locale-react.jsx';
 import React,{useEffect,useRef,useState} from 'react';
 import {atomicCapability,createAtomicCoordinator} from './atomic-wallet.mjs';
 export function AtomicFundingChoice({api,walletClient,session,configuration,isCurrent,review,operation,children}){
+ useLanguage();
  const recoveryKey=review&&session?'mf-atomic-prepare:'+session.wallet.toLowerCase()+':'+review.id:null;
  const restore=()=>{try{const r=JSON.parse(globalThis.localStorage?.getItem(recoveryKey)||'null');return r?.wallet===session?.wallet.toLowerCase()&&r.reviewId===review?.id?{requestId:r.requestId,state:'PREPARING_UNKNOWN'}:null;}catch{return null;}};
  const [enabled,setEnabled]=useState(null),[op,setOp]=useState(()=>operation||restore()),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -14,7 +17,7 @@ export function AtomicFundingChoice({api,walletClient,session,configuration,isCu
  function send(){act(async()=>{const c=await coordinator(),original=op;setOp({...original,state:'SEND_UNKNOWN'});const result=await c.send(original);if(current())setOp(result);});}
  function recover(){act(async()=>{let result;if(!op.id)result=await api('/atomic-funding/by-request/'+encodeURIComponent(op.requestId));else{const original=await api('/atomic-funding/'+op.id+'/status');result=original.state==='SEND_UNKNOWN'?await (await coordinator()).recover(original):original;}if(current())setOp(result);});}
  function cancelExpired(){act(async()=>{const result=await api('/atomic-funding/'+op.id+'/cancel-expired',{method:'POST',body:{}});if(current())setOp(result);});}
- if(enabled===null&&!op)return <p>正在核验钱包付款方式…</p>;
- if(!enabled&&!op)return <><p>当前钱包或账户实现尚未通过单次确认核验。需要先确认精确额度授权，再单独确认付款；授权本身不扣餐款。</p>{children}</>;
- return <section aria-label="合并授权付款"><p>已验证的钱包可将精确额度授权与付款合并；两步必须全部成功。首次账户升级可能还需钱包确认。</p>{!op?<button disabled={busy} onClick={prepare}>审核合并授权与付款</button>:<><p>{op.state==='CANCELLED'?'链上已确认原付款过期且未完成，可以重新选择餐品。':op.state==='CONFIRMED'?'资助已确认':op.state==='PREPARED'?'请在钱包确认本次合并付款':'原批次待核验，不会改用另一次付款。'}</p>{op.state==='PREPARED'&&<button disabled={busy} onClick={send}>钱包确认合并付款</button>}<button disabled={busy} onClick={recover}>查询原付款批次</button>{op.id&&op.state==='SEND_UNKNOWN'&&op.expiresAt<=Math.floor(Date.now()/1000)&&<button disabled={busy} onClick={cancelExpired}>核验过期并解除未付款占位</button>}</>}{error&&<p role="alert">{error}</p>}</section>;
+ if(enabled===null&&!op)return <p>{tr("正在核验钱包付款方式…")}</p>;
+ if(!enabled&&!op)return <><p>{tr("当前钱包或账户实现尚未通过单次确认核验。需要先确认精确额度授权，再单独确认付款；授权本身不扣餐款。")}</p>{children}</>;
+ return <section aria-label={tr("合并授权付款")}><p>{tr("已验证的钱包可将精确额度授权与付款合并；两步必须全部成功。首次账户升级可能还需钱包确认。")}</p>{!op?<button disabled={busy} onClick={prepare}>{tr("审核合并授权与付款")}</button>:<><p>{op.state==='CANCELLED'?tr("链上已确认原付款过期且未完成，可以重新选择餐品。"):op.state==='CONFIRMED'?tr("资助已确认"):op.state==='PREPARED'?tr("请在钱包确认本次合并付款"):tr("原批次待核验，不会改用另一次付款。")}</p>{op.state==='PREPARED'&&<button disabled={busy} onClick={send}>{tr("钱包确认合并付款")}</button>}<button disabled={busy} onClick={recover}>{tr("查询原付款批次")}</button>{op.id&&op.state==='SEND_UNKNOWN'&&op.expiresAt<=Math.floor(Date.now()/1000)&&<button disabled={busy} onClick={cancelExpired}>{tr("核验过期并解除未付款占位")}</button>}</>}{error&&<p role="alert">{translateError(error)}</p>}</section>;
 }
