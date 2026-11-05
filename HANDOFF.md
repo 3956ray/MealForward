@@ -1,3 +1,12 @@
+# 2026-11-05 · 原 Site 产品界面接回真实服务（本地候选）
+
+- 用户纠正：通过原 Site 产品前端验收，不再提供另一套简化测试界面。继承 `sites-frontend/dist` 的首页 Hero、照片、厨房卡片、工作台侧栏与页内付款/编辑弹窗；React 仅承载现有真实 V3 接口与已验证钱包模块，不加载演示 model 或虚构身份/库存。
+- 实现入口仍为 `t1-intents/mvp-client/catalog-entry.jsx`，构建仍输出 `/product-v2/index.html`；未新增网站或服务。新 `site-layout.jsx`、`site-route.mjs` 支持 #home / #stores / #store/:id / #mine/orders / #mine/coupons / #merchant/* / #register / #ledger / #about。旧 #voucher= 与 target 保持；浏览器刷新/返回不发付款或领券交易。资助审核与餐品编辑继续弹窗。
+- 历史版本选择收进页尾“查看历史订单与餐券”，默认新业务不展示技术选择器。原样复用 V3 交易恢复、权限和自动结算后台；未修改合约、环境变量、私钥或存量资金。
+- 独立审查发现普通钱包可直接打开商家餐品路由的 UI 权限缺口，已加入厨房权限门禁及 edit guard；后台始终拒绝越权。独立复核通过，新增路由权限回归通过。
+- 本轮已验证：前端最终167通过/1跳过；390px/1440px浏览器流程通过，包含厨房详情刷新、草稿、资助审核、休息、Claim未知恢复、私密码退出清理；Host 5项通过。最终修复后浏览器再次通过；发布结果待后续记录。不冒充真实钱包验收。
+- 旧部署 b46dbe9 的 CI 已完成 SUCCESS：https://github.com/3956ray/MealForward/actions/runs/41878849088 。本轮改动尚未上线；线上仍为下方记录，计划原免费服务 srv-dbjv7lnf3r2c73d7ri50 手动部署。回退保留 V3-aware runtime 和所有任务，不能重启旧 V2 signer。
+
 # 2026-11-05 · Free web V3 deployment
 
 - User chose existing Render Free web; paid Worker creation cancelled, no billing/card needed for this rollout. Service srv-dbjv7lnf3r2c73d7ri50 suspended and verified stopped; database recheck found only CONFIRMED operations. Start command changed to product-v3/server-entry.mjs, process role web-with-worker, legacy handoff true. Existing signer/environment/database configuration reused.

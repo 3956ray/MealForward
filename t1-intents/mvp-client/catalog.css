@@ -20,3 +20,47 @@
 .product-app .store-body { display: flex; flex: 1; flex-direction: column; gap: 8px; grid-row: auto; padding: 24px; }
 .product-app .store-body > button { position: static; grid-area: auto; width: 100%; margin: 4px 0; }
 .product-app .store-body > button:first-of-type { margin-top: auto; }
+/* Original Site shell and page hierarchy, with live product actions. */
+.site-product .header {flex-wrap:wrap;gap:20px}
+.site-product .header nav {align-items:center;gap:22px}
+.site-product .header-actions {gap:14px;flex-wrap:wrap}
+.site-product .header .button {margin:0}
+.site-product .header [aria-current=page] {border-bottom:2px solid var(--green)}
+.site-product .workspace-entry {display:flex;justify-content:flex-end;gap:18px;padding-bottom:16px}
+.site-product .store-card {flex-direction:column}
+.site-product .store-photo {display:block;flex-shrink:0}
+.site-product .store-heading {font-size:20px;font-family:var(--serif);text-decoration:underline;text-underline-offset:4px}
+.site-product .store-grid {margin-bottom:48px}
+.site-product .hero {padding-bottom:70px}
+.site-product .section-head {padding-top:32px}
+.site-product .merchant-shell {display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;min-height:65vh;margin-top:20px}
+.site-product .merchant-sidebar {padding:20px;background:var(--soft);border-radius:8px;align-self:start}
+.site-product .merchant-sidebar h2 {font-size:22px;overflow-wrap:anywhere}
+.site-product .merchant-sidebar nav {display:grid;margin:20px 0;gap:10px}
+.site-product .merchant-sidebar button {text-align:left;padding:12px}
+.site-product .merchant-sidebar [aria-current=page] {background:var(--green);color:white;border-radius:4px}
+.site-product .merchant-content {min-width:0;overflow-wrap:anywhere}
+.site-product .overview-grid {display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.site-product footer {padding-inline:28px;margin-top:40px}
+.site-product .how-section {padding-inline:28px;border-radius:10px}
+.site-product .empty {margin:30px 0}
+.site-product .site-content {min-width:0}
+@media(max-width:760px){
+ .site-product .header {padding:20px;gap:16px}
+ .site-product .header nav {order:3;flex-basis:100%;margin:0;justify-content:space-between}
+ .site-product .header-actions {gap:12px;margin-left:auto}
+ .site-product .brand span {font-size:22px}
+ .site-product .brand small {font-size:12px}
+ .site-product .merchant-shell {grid-template-columns:1fr;gap:20px}
+ .site-product .merchant-sidebar nav {display:flex;overflow:auto;gap:6px;margin:10px 0}
+ .site-product .merchant-sidebar button {white-space:nowrap}
+ .site-product .overview-grid {grid-template-columns:1fr}
+ .site-product .workspace-entry {justify-content:flex-start;flex-wrap:wrap}
+ .site-product .how-section {padding-inline:20px}
+ .site-product .section-head {align-items:start}
+ .site-product footer>div {flex-wrap:wrap;gap:12px}
+}
+.site-product .hero-note:before {content:'✓';font-size:11px;flex-shrink:0}
+.history-target {margin:20px auto 40px;color:var(--muted);font-size:14px}
+.history-target label {display:grid;gap:8px;margin:12px 0}
+.history-target select {max-width:100%;padding:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}

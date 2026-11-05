@@ -11,6 +11,7 @@ export async function makeProductHost(options){
   const runtime=options.runtime||await makeProductRuntime(options);
   const publicDirectory=new URL('../public/product-v2/',import.meta.url);
   const files=new Map([['index.html','text/html; charset=utf-8'],['catalog.mjs','text/javascript; charset=utf-8'],['source.css','text/css; charset=utf-8'],['product.css','text/css; charset=utf-8'],['catalog.css','text/css; charset=utf-8'],['THIRD_PARTY_NOTICES.txt','text/plain; charset=utf-8']]);
+  for(const name of ['hero-meal.jpg','bowl.jpg','vegetables.jpg'])files.set('assets/'+name,'image/jpeg');
   const security={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"};
   const server=createServer(async(req,res)=>{
     try{

@@ -16,6 +16,7 @@ async function api(path,options={}){requests.push({path,...options});window.__re
 function App(){const[session,setSession]=useState(owner);return <CatalogProduct api={api} session={session} onLogin={()=>setSession(owner)} onLogout={()=>setSession(null)}/>;}createRoot(document.getElementById('root')).render(<App/>);`;
 await build({stdin:{contents:source,resolveDir:root.pathname,loader:'jsx'},outfile:output,bundle:true,format:'esm',define:{'process.env.NODE_ENV':'"production"'}});
 const resources={'/ui.mjs':['text/javascript',await readFile(output)],'/catalog.css':['text/css',await readFile(new URL('catalog.css',root))],'/source.css':['text/css',await readFile(new URL('source.css',root))],'/product.css':['text/css',await readFile(new URL('product.css',root))]};
+for(const name of ['hero-meal.jpg','bowl.jpg'])resources['/assets/'+name]=['image/jpeg',await readFile(new URL('../../sites-frontend/dist/assets/'+name,root))];
 const server=createServer((req,res)=>{const resource=resources[req.url];res.writeHead(200,{'content-type':resource?.[0]||'text/html'});res.end(resource?.[1]||'<html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/source.css"><link rel="stylesheet" href="/product.css"><link rel="stylesheet" href="/catalog.css"><div id="root"></div><script type="module" src="/ui.mjs"></script></html>');});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
 let browser;const errors=[],results=[];
@@ -28,6 +29,13 @@ try{
     await context.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
     await page.goto(base);await page.getByRole('heading',{name:'时蔬暖心套餐'}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'horizontal overflow');
+    await page.screenshot({path:join(directory,`home-${width}.png`),fullPage:true});
+    await page.getByRole('link',{name:'清禾厨房',exact:true}).first().click();
+    await page.waitForURL('**/#store/kitchen');
+    await page.reload();await page.getByRole('heading',{name:'清禾厨房',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method&&r.method!=='GET').length),0);
+    await page.getByRole('button',{name:'厨房与餐品',exact:true}).click();
+    await page.waitForURL('**/#stores');
     await page.getByRole('button',{name:'支持餐食',exact:true}).click();
     await page.getByLabel('支持份数').fill('12');await page.getByRole('button',{name:'审核资助',exact:true}).click();
     await page.getByText('审核总额：84 测试 USDC').waitFor();

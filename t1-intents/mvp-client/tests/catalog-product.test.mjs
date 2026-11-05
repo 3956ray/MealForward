@@ -16,7 +16,7 @@ const now=Math.floor(Date.now()/1000),owner={wallet:'0x111',stores:['store']};
 const catalog={stores:[{id:'store',name:'厨房'}],asset:{symbol:'USDC',decimals:6},fundingEnabled:false,meals:[{id:'meal',storeId:'store',name:'热餐',description:'原餐品',version:1,unitPrice:'7000001',remaining:'30',fundingDeadline:now+86400,windows:[[0,1440]],listed:true}]};
 let root,api,session;
 const tick=()=>new Promise(r=>setTimeout(r,0));
-async function mount(call,s=owner){api=call;session=s;document.body.innerHTML='<div id="root"></div>';root=createRoot(document.getElementById('root'));await render();}
+async function mount(call,s=owner){window.history.replaceState(null,'','/');api=call;session=s;document.body.innerHTML='<div id="root"></div>';root=createRoot(document.getElementById('root'));await render();}
 async function render(extra={}){await act(async()=>{root.render(React.createElement(CatalogProduct,{api,session,...extra}));await tick();});}
 async function click(text){await act(async()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent===text);assert.ok(b,text);b.click();await tick();});}
 async function clean(){await act(async()=>root.unmount());}
@@ -79,3 +79,8 @@ test('required approval prepares authorization alone; confirmed authorization st
 test('approval preparation response cannot reopen a closed dialog or leak across wallets',async()=>{
  for(const changeIdentity of [false,true]){let finish;await mount(async(path,o)=>{if(path==='/catalog')return {...catalog,fundingEnabled:true,approvalEnabled:true};if(path==='/support-reviews')return {...o.body,id:'r',amount:'7000001',approvalRequired:true,expiresAt:now+300};if(path==='/approvals')return new Promise(r=>finish=r);throw Error(path);});try{await click('支持餐食');await click('审核资助');await click('授权本次金额');if(changeIdentity){session=null;await render();}else await click('关闭');await act(async()=>{finish({id:'a',kind:'approval',state:'CONFIRMED'});await tick();});assert.equal(document.querySelector('[role=dialog]'),null);}finally{await clean();}}
 });
+
+ test('direct merchant route cannot offer draft writes to a wallet without a kitchen',async()=>{
+ const calls=[];await mount(async(path,o)=>{calls.push({path,o});return path==='/catalog'?catalog:{items:[]};},{wallet:'0x222',stores:[]});
+ try{await act(async()=>{window.location.hash='#merchant/meals';window.dispatchEvent(new window.HashChangeEvent('hashchange'));await tick();});assert.ok(document.body.textContent.includes('开设你的厨房'));assert.ok(![...document.querySelectorAll('button')].some(b=>b.textContent==='新增餐品'));assert.ok(!calls.some(c=>c.o?.method==='PUT'));}finally{await clean();}
+ });
