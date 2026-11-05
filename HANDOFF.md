@@ -1,3 +1,26 @@
+# 2026-11-06 · 全站中文 / English 已上线
+
+- 应用提交 `f1810578dad689d2868d3eff2325043b11a69ed2`；仓库3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42060040283 。后续仅文档收尾提交。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，重试部署 `dep-dbmahi59fdbs73cahha0` 于北京时间2026-11-06 00:04:47 LIVE，目标f181057。原网址：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署关闭、套餐/环境/权限未改。
+- 导航语言图标选择中文/English，默认中文、保存偏好、跨标签页同步；当前应用各角色页面/弹窗/恢复提示翻译。商家输入与签名协议原文不改；第三方钱包本身语言由钱包控制。无新依赖、付费服务或迁移，thirdweb继续关闭。
+- 181项前端测试通过、1跳过，完整CI通过。新增验证切换保留路由、份数和弹窗，不重放业务；存储受限/跨标签页/错误翻译通过。CUA本地英文390/768/1440无横向溢出，刷新偏好保留；完整应用英文钱包选择与只读目录检查通过。
+- 公网文件HTTP200及SHA256核对一致：catalog.mjs `7eab77e09b8e2898a1bbb0baabe924e233d2cad3745d2728711e237b52120315`；catalog.css `6ec80da9fc1ee13ea344cbaa56c749595289966946cd858a1445ced5bb6da9d6`。真实impact API complete/stale=false，资助5/交餐1/受助钱包1/厨房2。
+- 公网Chrome原生AX确认中文首页导航已有语言选择及真实看板。随后浏览器交互被用户窗口变化/工具超时中断，未完成公网英文切换截图；不把本地英文样例截图当成线上验收。未执行实际钱包签名或付款。
+- 发布后只读实库revision15219：pending/delayed/unresolved均0，lowBalance/backlogAlert=false，impact_stale=false。后台继续原V2/V3、180秒规则与任务恢复。
+- 首次部署dep-dbmaftegekts738gqgng为update_failed，启动仅给出PRODUCT_MULTI_TARGET_STARTUP_REJECTED，根因未细分；同提交重试成功，不关闭启动校验。后续若再发生，应按启动阶段增补脱敏诊断，不先放宽校验。
+- 文档：[双语说明](docs/superpowers/2026-11-05-bilingual-ui.md)，演进HTML/Markdown已同步。下一步用户在原站语言图标切换查看；如需回退，用上一仍识别V3的应用7f37705，不回滚业务数据或资金。
+
+# 2026-11-06 · 双语首次部署启动失败，保留原服务并重试
+
+- dep-dbmaftegekts738gqgng 为 update_failed；构建成功，启动输出 PRODUCT_MULTI_TARGET_STARTUP_REJECTED。异常未细分，不把临时RPC问题写成已确认根因；后台代码/环境未改。
+- 日志随后显示原服务正常ready及worker无待办。保留全部启动校验，重试同一个已通过CI的f181057，不修改合约、数据、权限或签名逻辑。待第二次部署核验。
+
+# 2026-11-05 · 双语CI通过，原站部署中
+
+- 应用远端HEAD `f1810578dad689d2868d3eff2325043b11a69ed2`，CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42060040283 ，包括依赖审计、合约、UI/服务兼容与隔离链。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50` 自动部署仍关闭，手动部署 `dep-dbmaftegekts738gqgng`，已核对提交，当前build_in_progress。未修改套餐、环境或权限。
+- 部署前只读实库revision15033；pending/delayed/unresolved均0、lowBalance/backlogAlert=false、impact_stale=false。下一步等待LIVE、核验静态文件/公开API与线上语言入口。
+
 # 2026-11-05 · 全站双语候选已验证，准备发布
 
 - 当前应用新增中文/English图标下拉，默认中文、记忆选择、跨标签页同步；覆盖公开页面、商家工作台、钱包提示与交易恢复。用户内容保留原文，不改变签名或业务参数。
