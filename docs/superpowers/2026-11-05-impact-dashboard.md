@@ -30,3 +30,7 @@ CUA Chrome 使用同一实际组件，预览顶部明确标注示例数据；检
 发布目标：原 Render Free srv-dbjv7lnf3r2c73d7ri50，原分支 codex/mealforward-product-mvp-20261031，autoDeploy off。CI通过后手动部署；状态/真实API核验补记 HANDOFF。若故障可回退 UI/统计功能，但保留 V3-aware 后台及全部新旧订单、签名任务；不得清空统计或业务数据库。
 
 后续扩容边界：超过4096事件或大量历史脱离应用记录时，需要提高有界回填吞吐/独立统计存储；当前失败时保留旧结果，不输出错误总数。缺少跨版本厨房映射时保持分别计数并标注历史版本。
+
+## 发布结果
+
+2026-11-05 21:33:52（北京时间）应用1e95dbc部署至原免费服务，部署dep-dbm8amu1egvs73bl9nh0为LIVE；CI https://github.com/3956ray/MealForward/actions/runs/42036160424 全部通过。公网聚合覆盖完整：资助5、交餐1、受助钱包1、厨房2；份额守恒，浏览器页面实际显示相同结果。前端脚本与CSS摘要匹配本地。详见HANDOFF最新证据。

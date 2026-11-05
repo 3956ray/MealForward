@@ -1,3 +1,20 @@
+# 2026-11-05 · 善意足迹 Dashboard 已上线并核对真实数据
+
+- 应用提交 `1e95dbc0d28665268dbf7090b1c654314e7b74de`；GitHub `3956ray/MealForward`，分支 `codex/mealforward-product-mvp-20261031`，原PR48。CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42036160424 。
+- Render Free `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbm8amu1egvs73bl9nh0` LIVE，完成北京时间2026-11-05 21:33:52。入口：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html#impact 。自动部署仍关闭，套餐/环境组/合约/钱包/180秒规则不变。
+- 公网匿名API HTTP200、coverage=complete、stale=false，30日趋势30行，榜单2家。真实聚合：funded=5、delivered=1、users=1（钱包去重）、kitchens=2；available=4、settled=1，其余份额0。六类份额守恒，公开DTO未含recipient/voucherId/secret/displayCode。
+- 线上 catalog.mjs SHA256 `11c0fb57fd126a401c92d9596a22370dfb5b9e6276422f2008d80a215e5af868` 与本地构建相同。CSS也已逐字节摘要核验一致。前端175通过/1跳过、后台295通过/3跳过；CI含Anvil和合约完整回归，生产依赖0漏洞。
+- 发布后只读实库revision12825：V2核验块77207924、V3块77207931，二者complete=true；任务pending/delayed/unresolved=0，lowBalance/backlogAlert=false。原私有JSONB追加统计投影与游标，无SQL迁移，不读取私人凭据。
+- CUA Chrome普通线上标签已实际显示上述指标、折线/环形图、两家榜单和两笔资助记录。浏览器扩展控制最初超时，改用CUA原生浏览器操作完成核验；不是仅HTTP验收。本地390/768/1440示例数据响应式及键盘/范围/榜单交互已检查。未代用户登录或签名，真实钱包原业务验收未重复。
+- 文档：[实现与统计边界](docs/superpowers/2026-11-05-impact-dashboard.md)，产品演进HTML/Markdown同步。后续扩容注意4096事件边界、每轮10块回填及免费休眠延迟；同名厨房未批准映射时分别标注版本。回退保留V3后台、全部订单/任务与统计快照，不能恢复旧V2 signer。
+- 本条为部署后的文档收尾，后续文档提交不触发部署；线上应用版本仍1e95dbc。
+
+# 2026-11-05 · Dashboard CI 通过，原免费服务部署中
+
+- 候选/远端 HEAD `1e95dbc0d28665268dbf7090b1c654314e7b74de`；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42036160424 （包含合约、服务/钱包/UI、隔离链和旧认证）。
+- 原 Render Free 服务 `srv-dbjv7lnf3r2c73d7ri50`，工作区 `tea-db7q3ou7bikc73bp2bt0`，部署 `dep-dbm8amu1egvs73bl9nh0` 已确认目标1e95dbc，当前 build_in_progress，尚不宣称上线。
+- 发布前只读实库revision12702，任务pending/delayed/unresolved均0，余额/积压无告警。未读取或修改私人凭据，未改权限/套餐/环境变量/合约。
+
 # 2026-11-05 · 善意足迹 Dashboard 候选完成，待 CI 与上线核验
 
 - 原免费服务不变，留膳品牌/「留一膳，待一人」/ #impact（兼容 #ledger）已实现；Recharts 3.10.1 + shadcn Dashboard 信息结构，许可证随构建。
