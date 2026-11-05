@@ -1,3 +1,20 @@
+# 2026-11-05 · 温暖厨房 UI 已上线
+
+- 用户明确授权更新线上；应用提交 `d71c423da2ba9b2cd5baedf1e62c073c600f01b2`，Render部署 `dep-dbm6v8h5efls73cm71rg` 已核验LIVE，完成北京时间2026-11-05 20:00:42。原免费服务/URL/配置不变：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。
+- CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42023084136 。前端171通过/1跳过、后台283通过/3跳过；完整CI包括合约/隔离实链/旧认证。前端运行依赖审计0漏洞。未替用户进行真实钱包验收。
+- 公网 catalog.mjs SHA256 `c03c961d4a25524dfe0f081f7c9ec5dfcc9e291b37c243f947afef3c0c395abc`、catalog.css `ee76509233afae0f175f2d15a649aa2811729358f454b327583b3655f25d5c07` 与本地完全一致；configuration HTTP200，V3自动结算/新资助开启，V2新资助关闭且历史保留。
+- 发布后只读实库revision10743，worker checkedAt1793880122，pending/delayed/unresolved=0，lowBalance/backlogAlert=false。未改业务记录、合约、资金或凭据权限。
+- CUA本轮线上浏览器打开超时、重取标签失败；未宣称完成新的公网浏览器视觉检查。发布依据为Render LIVE、线上文件摘要、配置与后台状态；此前390/768/1440本地合成浏览器检查保持有效。
+- thirdweb 代码保留但SDK从本次安装隔离，未启用；未来需解决其依赖审计、配置Client ID及真实钱包验证后再启用。仍需完成实施文档中的后续UX项，不将本次上线冒充完整方案验收。
+- 本条以后仅文档提交，不触发autoDeploy（off）。回退保留V3-aware后台和原持久任务，不能重启旧V2 signer。
+
+# 2026-11-05 · UI 发布 CI 通过，Render 部署中
+
+- 修正后提交 `d71c423da2ba9b2cd5baedf1e62c073c600f01b2` 已核验远端一致；CI https://github.com/3956ray/MealForward/actions/runs/42023084136 SUCCESS，两任务全部通过。此前8886b8d CI因新增SDK依赖审计失败，未部署。
+- 当前前端依赖审计0漏洞，清洁npm ci、默认构建和前端171通过/1跳过；后台283通过/3跳过。thirdweb隔离代码保留、默认安装不包含SDK。
+- 已触发原服务部署 `dep-dbm6v8h5efls73cm71rg`，确认源提交d71c423；当前build_in_progress，尚未标记LIVE。配置/费用不变。
+- 发布前只读实库 revision10634，任务pending/delayed/unresolved均0，lowBalance/backlogAlert=false。只读聚合，不读领取秘密。
+
 # 2026-11-05 · 发布依赖审计修正
 
 - 首次候选8886b8d的本地审计发现thirdweb引入间接高风险依赖（34条含24 high），未部署该提交。保留thirdweb-login.jsx代码，但从默认package安装移除SDK；构建在关闭开关时显式隔离该模块，恢复此前已验证钱包依赖锁作为基线，再增加Radix/Lucide。
