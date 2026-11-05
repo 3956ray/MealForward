@@ -1,3 +1,9 @@
+# 2026-11-06 · 用户指定语言图标替换候选
+
+- 以用户提供的 icons8-语言技能-48.png 原始字节替换语言入口Lucide图标，按24px显示；内嵌本地PNG，无外部图片请求。中文/English选择、44px触控及无障碍标签保持。
+- 代码：t1-intents/mvp-client/language-icon.mjs 与 locale-react.jsx。当前线上仍为下方f181057，待构建、既有语言测试、CI及原免费服务发布。
+- 不改钱包/后台/数据/配置/费用。当前repo/分支/PR48/服务/链目标沿用下方记录。
+
 # 2026-11-06 · 全站中文 / English 已上线
 
 - 应用提交 `f1810578dad689d2868d3eff2325043b11a69ed2`；仓库3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42060040283 。后续仅文档收尾提交。
