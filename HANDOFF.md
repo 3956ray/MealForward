@@ -1,3 +1,11 @@
+# 2026-11-06 · 用户指定语言图标已上线
+
+- 应用提交 `cfb54e4860134bfeb2922d801f0587190c2bb6ab`；原repo/分支/PR48不变。CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42067833401 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbmb781srm7s73fkalg0` 于北京时间2026-11-06 00:50:49 LIVE；原URL：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署仍关闭，套餐/环境/权限不变。
+- 用户指定48px PNG完整原始1008字节内嵌，显示24px；保留语言下拉、选择记忆与无障碍标签。代码language-icon.mjs/locale-react.jsx，无额外图片请求或依赖。钱包/后台/数据不改。
+- 生产构建、4项已有语言测试及完整CI通过。公网脚本SHA256 `0a1553fe9c5c5f7a9a54c1762945e1de842e2b9b9fdd18afdf882906dc2417e9` 与本地一致，确认包含用户PNG原始数据；本轮未重复浏览器视觉或钱包验收。
+- 发布后只读实库revision16063：pending/delayed/unresolved=0，lowBalance/backlogAlert=false。下一步用户刷新原站查看；可用上一f181057回退UI，保留V3后台和业务数据。后续仅交接文档提交。
+
 # 2026-11-06 · 用户指定语言图标替换候选
 
 - 以用户提供的 icons8-语言技能-48.png 原始字节替换语言入口Lucide图标，按24px显示；内嵌本地PNG，无外部图片请求。中文/English选择、44px触控及无障碍标签保持。
