@@ -27,6 +27,8 @@ settlementDelay: 180
 
 [打开新版测试站](https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html) · [查看已通过的版本 CI](https://github.com/3956ray/MealForward/actions/runs/41407192957)
 
+商家表单更新（2026-11-05）：营业与用餐时段改为固定冒号的数字输入；资助截止选择日期，按北京时间当天结束；保存草稿成功后回餐品管理。应用后台限制每个钱包最多注册一家厨房，跨版本检查并保留原登记恢复，现有店铺及历史履约不自动改写。发布证据见 HANDOFF。
+
 ## 02 · V2 已验收架构（历史基线）
 
 网站负责交互，后台校验身份、资格和操作，数据库保存资料及链上索引。**USDC 由共享 Escrow 托管；商家、平台后台都不直接保管 donor 的餐款。**
