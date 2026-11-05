@@ -1,3 +1,20 @@
+# 2026-11-05 · 善意足迹第二版已上线
+
+- 应用提交 `7f377057312e880654a78051f41242a65a21a8c3`；仓库3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，原PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42051790357 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbm9rv1srm7s73fgpbqg` LIVE，完成北京时间2026-11-05 23:18:30。原URL：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html#impact 。自动部署关闭，环境/服务费用/权限/钱包/资金/180秒规则不变。
+- 改动：突出交餐成果；累计阶梯面积图/每日并列柱状图，默认全部历史并保留日期窗口前累计基数；领取状态卡、前5家贡献条榜单、前5笔记录、展开细节。页面可见每60秒读取且回到页面刷新，非实时推送。
+- 公网GET impact?days=all HTTP200，coverage=complete、stale=false，资助5/交餐1/受助钱包1/厨房2；11月2日新增3餐/交1餐，11月5日新增2餐/交0餐，中间两日新增0。累计末值5/1与指标一致，新增和亦一致。真实公开数据，不含预览示例。
+- 线上catalog.mjs SHA256 `a8b2388e5f554ad76f5fe32e6f08fe901f39e6dc894c0b0bffa5251bd1dde515` 与本地一致；CSS摘要也核对一致。本地前端177通过/1跳过、后台298通过/3跳过，CI含完整隔离链与依赖审计。
+- 发布后只读实库revision14353：pending/delayed/unresolved均0，lowBalance/backlogAlert=false，impact_stale=false。未读取私人凭据或直接写业务数据库。
+- CUA本地390/768/1440样例页面布局、阶梯/柱状模式、键盘数据表及全部12家榜单通过，console无error。公网最终浏览器操作被Mac锁屏阻断，未获得第二版公网截图，不宣称已完成公网视觉或真实钱包验收；已完成Render LIVE、文件摘要、真实API和后台状态核验。后续解锁后可打开原#impact复查。
+- 实施边界见docs/superpowers/2026-11-05-impact-dashboard.md第二版小节；产品演进HTML/Markdown同步。统计投影/游标不迁移，回退必须保留V3-aware后台与原全部订单/任务。此后仅文档收尾提交，不触发部署。
+
+# 2026-11-05 · Dashboard第二版CI通过，原站部署中
+
+- 远端应用HEAD `7f377057312e880654a78051f41242a65a21a8c3`，CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42051790357 ，包含完整合约/服务/钱包/UI/隔离链及旧认证门禁。
+- 原免费服务 `srv-dbjv7lnf3r2c73d7ri50` 部署 `dep-dbm9rv1srm7s73fgpbqg`，已核对目标7f37705，当前build_in_progress。未调整服务套餐、环境或权限。
+- 发布前只读实库revision14299，pending/delayed/unresolved均0，余额与积压无告警。下一步等待LIVE并核验公开API与页面。
+
 # 2026-11-05 · 善意足迹第二版候选：成果优先/累计图/自动刷新
 
 - 用户已确认重设计并复用原开源组件。突出已送出热餐，默认「累计成果＋全部」阶梯面积图，新增模式为并列柱状图；右侧改为状态卡，榜单前5家+贡献条，最近记录前5笔。已删除的标题副文案未恢复。
