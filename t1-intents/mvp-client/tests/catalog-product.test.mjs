@@ -4,7 +4,7 @@ import {build} from 'esbuild';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {JSDOM} from 'jsdom';
-import {amountFor,beijingInput,beijingSeconds,draftPayload,formatAmount,priceInput,supportPayload} from '../catalog-state.mjs';
+import {amountFor,beijingInput,beijingSeconds,draftPayload,formatAmount,priceInput,supportPayload,fundingDateSeconds} from '../catalog-state.mjs';
 const dir=await mkdtemp(tmpdir()+'/mf-catalog-');
 const nodeModules=new URL('../node_modules/',import.meta.url).pathname;
 await build({entryPoints:[new URL('../catalog-product.jsx',import.meta.url).pathname],outfile:dir+'/component.mjs',bundle:true,format:'esm',platform:'node',jsx:'transform',tsconfigRaw:{compilerOptions:{jsx:'react'}},plugins:[{name:'react',setup(b){b.onResolve({filter:/^react$/},()=>({path:nodeModules+'react/index.js',external:true}));}}]});
@@ -25,7 +25,7 @@ test('exact integer amounts and UTC+8 times independent of machine timezone',()=
  assert.throws(()=>priceInput('1.0000001'));assert.throws(()=>amountFor('1','1.5'));assert.throws(()=>amountFor('1','0'));
  assert.equal(beijingSeconds('2026-10-30T12:00'),Date.parse('2026-10-30T04:00:00Z')/1000);assert.equal(beijingInput(beijingSeconds('2026-10-30T12:00')),'2026-10-30T12:00');assert.throws(()=>beijingSeconds('2026-02-30T12:00'));
  assert.equal(supportPayload(catalog.meals[0],'20').quantity,'20');assert.throws(()=>supportPayload(catalog.meals[0],'31'));
- const d=draftPayload({name:'餐品',description:'说明',price:'7.1',quantity:'40',deadline:'2099-01-01T12:00',windows:[['11:00','14:00'],['17:00','24:00']]},6);assert.equal(d.quantity,'40');assert.equal(d.windows[1][1],1440);
+ const d=draftPayload({name:'餐品',description:'说明',price:'7.1',quantity:'40',deadline:'2099-01-01',windows:[['11:00','14:00'],['17:00','24:00']]},6);assert.equal(d.quantity,'40');assert.equal(d.windows[1][1],1440);
 });
 test('closed funding permits review but never creates payment intent or says success',async()=>{
  const calls=[];await mount(async(path,o)=>{calls.push(path);if(path==='/catalog')return catalog;if(path==='/support-reviews')return {...o.body,id:'review',amount:amountFor('7000001',o.body.quantity),expiresAt:now+300};throw Error(path);});
@@ -46,7 +46,7 @@ test('login returns to previously selected meal without creating request',async(
 test('saving original draft retains public menu and sends expected revision',async()=>{
  const draft={id:'d',storeId:'store',name:'新草稿',description:'尚未发布',unitPrice:'8000000',quantity:'40',revision:2,windows:[[0,1440]],fundingDeadline:now+86400};let saved;
  await mount(async(path,o)=>{if(path==='/catalog')return catalog;if(path.startsWith('/drafts?'))return {items:[draft]};if(path==='/drafts/d'){saved=o.body;return {...draft,...o.body,revision:3};}throw Error(path);});
- try{await click('商家餐品管理');await click('编辑草稿');await click('保存草稿');assert.equal(saved.expectedRevision,2);assert.equal(saved.quantity,'40');assert.equal(saved.unitPrice,'8000000');assert.ok(document.body.textContent.includes('公开菜单尚未改变'));await click('关闭');await click('厨房与餐品');assert.ok(!document.body.textContent.includes('新草稿'));assert.ok(document.body.textContent.includes('热餐'));}finally{await clean();}
+ try{await click('商家餐品管理');await click('编辑草稿');await click('保存草稿');assert.equal(saved.expectedRevision,2);assert.equal(saved.quantity,'40');assert.equal(saved.unitPrice,'8000000');assert.equal(document.querySelector('[role=dialog]'),null);assert.equal(window.location.hash,'#merchant/meals');await click('厨房与餐品');assert.ok(!document.body.textContent.includes('新草稿'));assert.ok(document.body.textContent.includes('热餐'));}finally{await clean();}
 });
 test('prepared intent is recoverable and never presented as paid',async()=>{
  let created=0;
@@ -84,3 +84,8 @@ test('approval preparation response cannot reopen a closed dialog or leak across
  const calls=[];await mount(async(path,o)=>{calls.push({path,o});return path==='/catalog'?catalog:{items:[]};},{wallet:'0x222',stores:[]});
  try{await act(async()=>{window.location.hash='#merchant/meals';window.dispatchEvent(new window.HashChangeEvent('hashchange'));await tick();});assert.ok(document.body.textContent.includes('开设你的厨房'));assert.ok(![...document.querySelectorAll('button')].some(b=>b.textContent==='新增餐品'));assert.ok(!calls.some(c=>c.o?.method==='PUT'));}finally{await clean();}
  });
+
+test('date-only funding cutoff includes Beijing day and rejects invalid dates or time input',()=>{
+ assert.equal(fundingDateSeconds('2030-01-01'),Date.parse('2030-01-01T23:59:59+08:00')/1000);
+ assert.throws(()=>fundingDateSeconds('2030-02-30'));assert.throws(()=>fundingDateSeconds('2030-01-01T12:00'));
+});

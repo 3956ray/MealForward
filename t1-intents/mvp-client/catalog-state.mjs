@@ -30,6 +30,11 @@ export function beijingSeconds(value) {
   if (!Number.isSafeInteger(result) || beijingInput(result) !== value) throw Error('截止时间无效');
   return result;
 }
+// A selected date includes that entire Beijing calendar day. Legacy timestamps stay intact until edited.
+export function fundingDateSeconds(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw Error('请选择资助截止日期');
+  return beijingSeconds(value+'T23:59')+59;
+}
 export function windowMinutes(value) {
   if (!/^\d{2}:\d{2}$/.test(value)) throw Error('用餐时间格式无效');
   const [h, m] = value.split(':').map(Number);
@@ -40,7 +45,7 @@ export const timeLabel = minute => String(Math.floor(minute / 60)).padStart(2, '
 export function draftPayload(form, decimals, now = Date.now() / 1000) {
   const windows = form.windows.map(([a, b]) => [windowMinutes(a), windowMinutes(b)]);
   if (!windows.length || windows.length > 2 || windows.some(([a, b]) => a >= b) || (windows.length === 2 && windows[0][1] > windows[1][0])) throw Error('用餐时段不能重叠或倒置');
-  const fundingDeadline = beijingSeconds(form.deadline);
+  const fundingDeadline = fundingDateSeconds(form.deadline);
   if (fundingDeadline <= now) throw Error('资助截止时间必须在未来');
   if (!form.name.trim() || form.name.trim().length > 100 || !form.description.trim() || form.description.length > 2000) throw Error('请填写餐品名称及合适长度的说明');
   return {name:form.name.trim(), description:form.description.trim(), unitPrice:priceInput(form.price, decimals), windows, quantity:integer(form.quantity), fundingDeadline};

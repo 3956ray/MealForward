@@ -64,3 +64,7 @@
 .history-target {margin:20px auto 40px;color:var(--muted);font-size:14px}
 .history-target label {display:grid;gap:8px;margin:12px 0}
 .history-target select {max-width:100%;padding:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.product-app .time-field {margin-block:12px;display:grid;gap:6px}
+.product-app .time-input {display:flex;align-items:center;gap:8px;width:max-content;max-width:100%}
+.product-app .time-input input {width:64px;text-align:center;font-variant-numeric:tabular-nums}
+.product-app .time-input>span {font-weight:700}

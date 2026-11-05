@@ -23,6 +23,11 @@ export function makePublicationService({store,chain,clock=()=>Math.floor(Date.no
  const requestKey=(w,id)=>`${w}:${ref(id)}`;
  const deadline=d=>check(Number.isSafeInteger(d)&&d>clock(),'FUNDING_DEADLINE_PASSED',422);
  const availableWallet=(s,w)=>check(!['publications','intents','redemptions','approvals'].some(k=>Object.values(s[k]||{}).some(o=>o.wallet===w&&pending(o))),'WALLET_OPERATION_PENDING');
+ function singleKitchen(s,w,snapshot){
+  const records=k=>store.globalRecords?store.globalRecords(s,k):Object.values(s[k]||{});
+  check(!snapshot.stores.some(k=>k.owner?.toLowerCase()===w)&&!records('kitchens').some(k=>k.owner?.toLowerCase()===w)&&!records('publications').some(o=>o.kind==='registration'&&o.wallet===w&&o.state==='CONFIRMED'),'ACCOUNT_STORE_EXISTS');
+  check(!records('publications').some(o=>o.kind==='registration'&&o.wallet===w&&pending(o)),'REGISTRATION_PENDING');
+ }
  function previous(s,w,body,action){const r=s.publicationRequests[requestKey(w,body.requestId)];if(!r)return null;check(r.hash===fingerprint({action,...body}),'REQUEST_CONFLICT');return r;}
  async function create(s,w,body,action,fields){
   const old=previous(s,w,body,action);if(old)return dto(operationFor(s,w,old.id));
@@ -60,13 +65,13 @@ export function makePublicationService({store,chain,clock=()=>Math.floor(Date.no
    check(e.closed===true&&!e.refunded,'REFUND_UNAVAILABLE');uint(e.quantity);uint(e.amount);const payer=wallet(e.payer);
    return store.transact(async s=>{initialize(s);return create(s,w,body,'refund',{storeId:body.storeId,batchId:body.batchId,payer,quantity:e.quantity,amount:e.amount,expiresAt:clock()+120});});
   },
-  async reviewRegistration(w,body){w=wallet(w);exact(body,['name','requestId']);check(typeof body.name==='string'&&body.name.trim().length>0&&body.name.length<=100,'INVALID_NAME',422);
-   return store.transact(s=>{initialize(s);const old=previous(s,w,body,'registration-review');if(old)return copy(s.publicationReviews[old.id]);
+  async reviewRegistration(w,body){w=wallet(w);exact(body,['name','requestId']);check(typeof body.name==='string'&&body.name.trim().length>0&&body.name.length<=100,'INVALID_NAME',422);const snapshot=await catalog();
+   return store.transact(s=>{initialize(s);const old=previous(s,w,body,'registration-review');if(old)return copy(s.publicationReviews[old.id]);singleKitchen(s,w,snapshot);
     const r={id:newId(),storeId:newId(),name:body.name.trim(),wallet:w,expiresAt:clock()+600};s.publicationReviews[r.id]=r;s.publicationRequests[requestKey(w,body.requestId)]={hash:fingerprint({action:'registration-review',...body}),id:r.id};return copy(r);});},
-  async confirmRegistration(w,body){w=wallet(w);enabled();exact(body,['reviewId','requestId']);const recovered=await replay(w,body,'registration');if(recovered)return recovered;
+  async confirmRegistration(w,body){w=wallet(w);enabled();exact(body,['reviewId','requestId']);const recovered=await replay(w,body,'registration');if(recovered)return recovered;const snapshot=await catalog();
    return store.transact(async s=>{initialize(s);const old=previous(s,w,body,'registration');if(old)return dto(operationFor(s,w,old.id));const r=s.publicationReviews[ref(body.reviewId)];check(r?.wallet===w,'REVIEW_NOT_FOUND',404);
     if(r.operationId){s.publicationRequests[requestKey(w,body.requestId)]={hash:fingerprint({action:'registration',...body}),id:r.operationId};return dto(operationFor(s,w,r.operationId));}
-    check(r.expiresAt>clock(),'REVIEW_EXPIRED');const op=await create(s,w,body,'registration',{storeId:r.storeId,name:r.name,reviewId:r.id,expiresAt:r.expiresAt});r.operationId=op.id;return op;});},
+    check(r.expiresAt>clock(),'REVIEW_EXPIRED');singleKitchen(s,w,snapshot);const op=await create(s,w,body,'registration',{storeId:r.storeId,name:r.name,reviewId:r.id,expiresAt:r.expiresAt});r.operationId=op.id;return op;});},
   async confirmPublication(w,body){w=wallet(w);enabled();exact(body,['reviewId','requestId']);const recovered=await replay(w,body,'publication');if(recovered)return recovered;const snapshot=await catalog();
    return store.transact(async s=>{initialize(s);const old=previous(s,w,body,'publication');if(old)return dto(operationFor(s,w,old.id));const r=s.reviews?.[ref(body.reviewId)];check(r?.wallet===w&&r.kind==='publication','REVIEW_NOT_FOUND',404);
     if(r.operationId){s.publicationRequests[requestKey(w,body.requestId)]={hash:fingerprint({action:'publication',...body}),id:r.operationId};return dto(operationFor(s,w,r.operationId));}

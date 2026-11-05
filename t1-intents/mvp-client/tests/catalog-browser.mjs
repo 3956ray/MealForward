@@ -44,14 +44,14 @@ try{
     await page.keyboard.press('Escape');await page.getByRole('button',{name:'商家餐品管理'}).click();
     await page.getByRole('button',{name:'新增餐品'}).click();
     await page.getByLabel('餐品名称',{exact:true}).fill('新版本草稿');await page.getByLabel('餐品说明').fill('新内容仅保存在私有草稿');
-    await page.getByLabel('单价').fill('8.25');await page.getByLabel('可资助数量').fill('40');await page.getByLabel('资助截止').fill('2030-01-01T12:00');
-    await page.getByRole('button',{name:'保存草稿'}).click();await page.getByText('草稿已保存；公开菜单尚未改变。关闭后可在餐品管理中审核发布。').waitFor();
-    await page.getByRole('button',{name:'关闭',exact:true}).click();await page.getByRole('button',{name:'审核发布',exact:true}).click();
+    await page.getByLabel('单价').fill('8.25');await page.getByLabel('可资助数量').fill('40');await page.getByLabel('资助截止').fill('2030-01-01');
+    await page.getByRole('button',{name:'保存草稿'}).click();await page.getByRole('heading',{name:'餐品管理',exact:true}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
+    await page.getByRole('button',{name:'审核发布',exact:true}).click();
     await page.getByText('发布服务尚未开放。').waitFor();
     await page.screenshot({path:join(directory,`catalog-${width}.png`),fullPage:true});
     await page.getByRole('button',{name:'关闭',exact:true}).click();
     await page.getByRole('button',{name:'厨房设置',exact:true}).click();
-    await page.getByLabel('营业时段1开始').fill('09:00');await page.getByLabel('营业时段1结束').fill('21:00');
+    await page.getByLabel('营业时段1开始小时').fill('09');await page.getByLabel('营业时段1开始分钟').fill('00');await page.getByLabel('营业时段1结束小时').fill('21');await page.getByLabel('营业时段1结束分钟').fill('00');
     await page.getByLabel('商家公告',{exact:true}).fill('请到店出示餐券。');
     await page.getByRole('button',{name:'保存营业时间与公告',exact:true}).click();
     await page.getByText('营业时间与公告已保存。',{exact:true}).waitFor();
