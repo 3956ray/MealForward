@@ -22,7 +22,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.
 let browser;const errors=[],results=[];
 try{
   browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
-  for(const width of [390,1440]){
+  for(const width of [390,768,1440]){
     const context=await browser.newContext({viewport:{width,height:950}}),page=await context.newPage();
     page.on('pageerror',e=>errors.push(e.message));
     await context.addInitScript(()=>{Date.now=()=>Date.UTC(2026,9,30,4,0,0);});
@@ -34,14 +34,14 @@ try{
     await page.waitForURL('**/#store/kitchen');
     await page.reload();await page.getByRole('heading',{name:'清禾厨房',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method&&r.method!=='GET').length),0);
-    await page.getByRole('button',{name:'厨房与餐品',exact:true}).click();
+    await page.getByRole('button',{name:width<760?'厨房':'厨房与餐品',exact:true}).click();
     await page.waitForURL('**/#stores');
     await page.getByRole('button',{name:'支持餐食',exact:true}).click();
     await page.getByLabel('支持份数').fill('12');await page.getByRole('button',{name:'审核资助',exact:true}).click();
     await page.getByText('审核总额：84 测试 USDC').waitFor();
     assert(await page.getByRole('button',{name:'确认原资助请求'}).isDisabled());
     assert.equal(await page.evaluate(()=>window.__requests.some(r=>r.path==='/support-intents')),false);
-    await page.keyboard.press('Escape');await page.getByRole('button',{name:'商家餐品管理'}).click();
+    await page.keyboard.press('Escape');if(width<760)await page.getByRole('button',{name:'工作台',exact:true}).click();await page.getByRole('button',{name:'商家餐品管理'}).click();
     await page.getByRole('button',{name:'新增餐品'}).click();
     await page.getByLabel('餐品名称',{exact:true}).fill('新版本草稿');await page.getByLabel('餐品说明').fill('新内容仅保存在私有草稿');
     await page.getByLabel('单价').fill('8.25');await page.getByLabel('可资助数量').fill('40');await page.getByLabel('资助截止').fill('2030-01-01');
@@ -57,19 +57,19 @@ try{
     await page.getByText('营业时间与公告已保存。',{exact:true}).waitFor();
     await page.getByRole('button',{name:'今日休息',exact:true}).click();
     await page.getByText('已标记今日休息，次日自动恢复营业状态。',{exact:true}).waitFor();
-    await page.getByRole('button',{name:'厨房与餐品'}).click();await page.getByRole('button',{name:'刷新目录',exact:true}).click();
+    await page.getByRole('button',{name:width<760?'厨房':'厨房与餐品',exact:true}).click();await page.getByRole('button',{name:'刷新目录',exact:true}).click();
     await page.getByText('今日休息',{exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'领取餐食',exact:true}).isDisabled(),false);
     assert.equal(await page.locator('[role=alert]').allTextContents().then(v=>v.some(x=>x.includes('Unexpected API'))),false);
     assert.equal(await page.getByRole('heading',{name:'新版本草稿',exact:true}).count(),0);
-    await page.getByRole('button',{name:'商家工作台',exact:true}).click();
+    await page.getByRole('button',{name:width<760?'工作台':'商家工作台',exact:true}).click();
     await page.getByRole('button',{name:'开始验券',exact:true}).click();
     await page.getByLabel('六位短时取餐码').waitFor();
     await page.getByRole('button',{name:'收款记录',exact:true}).click();
     await page.getByRole('heading',{name:'收款记录',exact:true}).waitFor();
     assert.equal(await page.getByLabel('六位短时取餐码').isVisible(),false);
     await page.getByRole('heading',{name:'已结算记录',exact:true}).waitFor();
-    await page.getByRole('button',{name:'厨房与餐品',exact:true}).click();
+    await page.getByRole('button',{name:width<760?'厨房':'厨房与餐品',exact:true}).click();
     await page.getByRole('button',{name:'领取餐食',exact:true}).click();
     await page.getByRole('button',{name:'确认领取',exact:true}).click();
     await page.getByText('领取结果待核对',{exact:true}).waitFor();

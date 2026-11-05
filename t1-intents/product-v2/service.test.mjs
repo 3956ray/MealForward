@@ -148,3 +148,12 @@ test('merchant HTTP preserves trusted session scope across lock, recovery, recon
     const count=calls.length;assert.equal((await post('/merchant/operations/locked/cancel',{sessionScope:'forged'})).status,422);assert.equal(calls.length,count);
   }finally{await new Promise(r=>server.close(r));}
 });
+
+test('pending recovery list is wallet-scoped and contains only minimal references',async()=>{
+ const f=fixture();const own=await f.confirm(A,await f.review(A));await f.confirm(B,await f.review(B));
+ const list=await f.service.pendingOperations(A);
+ assert.equal(list.items.length,1);assert.equal(list.items[0].id,own.id);
+ assert.deepEqual(Object.keys(list.items[0]).sort(),['collection','id','kind','state','targetId']);
+ await f.store.transact(s=>{s.intents[own.id].state='CONFIRMED';});
+ assert.deepEqual(await f.service.pendingOperations(A),{items:[]});
+});

@@ -54,3 +54,11 @@ test('explicit cancellation method only sends empty zero-value self transfer at 
  for(const patch of [{to:escrow},{data:'0x1234'},{value:'0x1'},{nonce:'0x03'},{chainId:10143},{from:other},{gas:'0x5208'}])assert.throws(()=>f.wallet.sendCancellationTransaction(owner,{...cancel,...patch}),/CANCELLATION_TRANSACTION/);
  assert.throws(()=>f.wallet.sendTransaction(owner,cancel),/TRANSACTION/);assert.equal(f.calls.filter(c=>c.method==='eth_sendTransaction').length,1);f.wallet.dispose();
 });
+
+test('external UI provider registration is passive and forwards identity invalidation',async()=>{
+ const f=fixture();const events=new Map(),calls=[];
+ const provider={request:async({method})=>{calls.push(method);if(method==='eth_accounts')return [owner];if(method==='eth_chainId')return '0x7a69';throw Error('unexpected signing call');},on:(name,fn)=>events.set(name,fn),removeListener:name=>events.delete(name)};
+ const id=f.wallet.registerExternal(provider);assert.deepEqual(calls,[]);f.wallet.select(id);
+ assert.equal((await f.wallet.inspect()).account,owner);const before=f.changes;events.get('accountsChanged')([other]);assert.equal(f.changes,before+1);
+ f.wallet.dispose();assert.equal(events.size,0);assert.deepEqual(calls,['eth_accounts','eth_chainId']);
+});

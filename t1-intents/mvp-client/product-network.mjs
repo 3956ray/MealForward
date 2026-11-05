@@ -80,6 +80,7 @@ export function createProductWallet({view = globalThis.window, configuration=nul
   }
   return Object.freeze({
     configure(next){if(disposed)fail('DISPOSED');const accepted=validateProductConfiguration(next,view?.location?.origin);const changedTarget=!configured||['profile','chainId','asset','escrow','redemptionAuthority'].some(k=>configured[k]!==accepted[k]);configured=accepted;if(changedTarget)changed();return configured;},
+    registerExternal(provider){if(typeof provider?.request!=='function')fail('SELECT_PROVIDER');const existing=[...choices].find(([,entry])=>entry.provider===provider);if(existing)return existing[0];const id='external-ui';add(id,'已连接的钱包',provider);return id;},
     providers:()=>[...choices].map(([id,{name,rdns}])=>({id,name,rdns})),
     select(id){if(!choices.has(id))fail('SELECT_PROVIDER');selected=id;selection++;generation++;attach(current());onChange()},
     inspect(){return observe(current(),generation)},

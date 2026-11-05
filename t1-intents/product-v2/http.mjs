@@ -32,7 +32,8 @@ export function makeProductHttp({service,atomic=null,claims=null,redemptions=nul
         try {body=JSON.parse(Buffer.concat(chunks).toString('utf8'));} catch {fail('INVALID_JSON',400);}
       }
       let value, match;
-      if (req.method==='GET' && path==='/drafts' && [...url.searchParams.keys()].join()==='storeId') value=await service.drafts(session.wallet,url.searchParams.get('storeId'));
+      if(req.method==='GET'&&path==='/pending-operations'&&!url.search)value=await service.pendingOperations(session.wallet);
+      else if (req.method==='GET' && path==='/drafts' && [...url.searchParams.keys()].join()==='storeId') value=await service.drafts(session.wallet,url.searchParams.get('storeId'));
       else if (redemptions&&req.method==='GET'&&path==='/merchant/payouts'&&[...url.searchParams.keys()].join()==='storeId') value=await redemptions.payouts(session.wallet,url.searchParams.get('storeId'));
       else if(publications&&req.method==='GET'&&path==='/merchant/refunds'&&[...url.searchParams.keys()].join()==='storeId')value=await publications.refunds(session.wallet,url.searchParams.get('storeId'));
       else if (url.search) fail('INVALID_REQUEST',422);

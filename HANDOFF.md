@@ -1,3 +1,40 @@
+# 2026-11-05 · 用户授权发布当前 UI 候选
+
+- 用户已查看本地预览并明确要求“更新线上网站”。本轮发布当前界面改动、原付款状态恢复与最小待处理引用接口；完整后续 UX 项仍按实施文档列为待办，不混称全量计划完成。
+- 继续使用原 Render Free 服务 srv-dbjv7lnf3r2c73d7ri50 / tea-db7q3ou7bikc73bp2bt0，分支 codex/mealforward-product-mvp-20261031，autoDeploy=off，原 V3 start command 不变。thirdweb 无 Client ID，默认 legacy 连接器；不更改配置、资金、合约或任务规则。
+- 发布前本地回归：前端171通过/1跳过，后台283通过/3跳过；git diff --check通过。新增依赖审计与本次CI/部署尚待完成，不能标记线上完成。
+- 回退以之前 V3-aware 构建8c297319为界面回退目标，保留当前数据库与平台任务；不可重启旧 V2 signer 或撤销原交易。
+
+# 2026-11-05 · 仅查看新版界面
+
+- 用户要求先看效果，不做测试。已打开本地构建预览 http://127.0.0.1:5188/product-v2/index.html ，使用现有最新 catalog 构建，不新建演示前端。
+- 临时预览入口 `/tmp/mealforward-ui-preview.mjs` 仅监听127.0.0.1，公开catalog/ledger/configuration读取原测试站；禁止写请求、登录和私人记录，不加载签名凭据。此轮未运行测试、未部署。页面已在内置浏览器保留。
+
+# 2026-11-05 · UI/UX 本地候选与 thirdweb 配置分支
+
+- 用户确认暂无 thirdweb Client ID，要求先完成接入代码。已锁定依赖、增加显式配置开关与 EIP1193 桥接，默认保留现有连接器；无线上环境配置变更。详细范围、配置与未完成项：[UI 实施记录](docs/superpowers/2026-11-05-ui-ux-implementation.md)。
+- 本地新增温暖厨房样式、Radix 弹窗、Lucide 手机导航、搜索筛选、支持记录分类、短时二维码与可用券优先；保留原服务/路由/交易保护。付款预检失败后重读后台，新增当前钱包最小待处理引用接口。
+- 前端171通过/1跳过；后台原全套281通过/3跳过，新服务隔离测试单独通过。390/768/1440合成API浏览器最终补测通过，0页面异常，证据目录 `/var/folders/9y/_gzp7rc975z1g51l_2mszz0m0000gn/T/mealforward-product-browser-QJwJ6N`。thirdweb启用/关闭均可构建，真实 SDK/钱包验收未运行。
+- 未提交、未推送、未部署；线上仍为下方 8c297319 / dep-dbm3pddg1s2s73c22400。没有动真实资金、业务记录或签名配置。当前工作树包含用户先前未提交的预检恢复修复，须继续保留。
+- 后续补齐批次退款/履约展示、商家概览指标、登录真实验收与全量可访问性；不能把这一阶段称为完整 UI 计划交付或已上线。
+
+# 2026-11-05 · 当前合约架构说明核对
+
+- 只读核对 ProductEscrowV3 / ProductFunding / ProductCatalog 源码。V3为单个共享Escrow，目录/资金模块通过继承组合，不是每店独立部署；claim限定平台，redeem要求原商家与平台短时许可，settle任何人可触发但固定原商家且至少180秒。
+- 向用户说明当前两步approve/fund、后台操作状态与链上状态分层、共享托管及平台信任边界、跨版本领取/单店规则中的后台职责，以及此前OPERATION_EXPIRED乐观UI错误。无应用、部署、数据库业务或链上操作变更。
+
+# 2026-11-05 · 过期资助被前端误显示为结果未知
+
+- 用户提供授权Hash并报告 OPERATION_EXPIRED。只读实库确认原support仍PREPARED，attemptedAt/txHash为空；不是已进入SEND_UNKNOWN的付款。
+- 根因：CatalogProduct.send在调用钱包模块前乐观设SEND_UNKNOWN；validateProductOperation在到期校验抛OPERATION_EXPIRED（早于journal、/attempt和钱包发送），异常后UI没有重读后台状态，错误显示零转账作废入口。
+- 安全即时恢复：点击“查询原请求”恢复服务端PREPARED显示，再“取消未发送操作”，重新选择餐品审核付款；不需零转账、不要把approve Hash粘贴为fund交易。未取消任何业务或广播；前端异常状态恢复修复仍待开发。
+
+# 2026-11-05 · 资助 WALLET_OPERATION_PENDING 排查
+
+- 用户确认错误出现在资助付款。只读实库查到 V3 一笔 support intent 为 PREPARED，未绑定 txHash/candidateHash；这是已准备的原资助请求仍占用钱包操作位，新请求因防重复付款而被拒绝。没有据此宣称链上付款成功。
+- 用户恢复入口：同一钱包、同一新版业务 → #mine/orders → 查看原请求 → 钱包确认；若不继续，原 PREPARED 请求可由用户点击“取消未发送操作”。不得通过数据库删除/解锁或重建付款绕过。
+- 本轮仅只读排查与交接更新，没有签名、发送、取消或更改任何业务记录。另有商家 publication SEND_UNKNOWN，须单独保留原恢复路径，与用户本次确认的资助问题分开处理。原始错误码的用户提示仍有改善空间。
+
 # 2026-11-05 · 表单优化最终验证通过
 
 - 完整CI复核 SUCCESS：https://github.com/3956ray/MealForward/actions/runs/41994517721 ，提交 `4b7767cf344e05f25c216de1245b51b3cb4fe5d5`。相对线上 `8c29731` 仅调整测试夹具和文档，应用代码完全相同，无需再次部署；原首次CI失败原因及修复保留在下方。

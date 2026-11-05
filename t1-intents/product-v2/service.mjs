@@ -188,6 +188,11 @@ export function makeProductService({store, chain, clock = () => Math.floor(Date.
       });
     },
     async intent(address, intentId) { return dto(intentFor(await store.read(),wallet(address),intentId)); },
+    async pendingOperations(address) {
+      address=wallet(address);const s=await store.read(),items=[];
+      for(const collection of ['intents','approvals','publications','redemptions'])for(const o of (store.globalRecords?store.globalRecords(s,collection):Object.values(s[collection]||{})))if(o.wallet?.toLowerCase()===address&&['AWAITING_HANDOVER','PREPARED','SEND_UNKNOWN','HASH_BOUND'].includes(o.state))items.push({id:o.id,kind:o.kind,state:o.state,targetId:o.targetId||store.targetId||null,collection});
+      return {items};
+    },
     async orders(address) { address=wallet(address); return {items:Object.values((await store.read()).intents).filter(i => i.wallet===address && i.kind==='support').map(dto)}; },
     async attempt(address, intentId) {
       address=wallet(address); check(chain.fundingEnabled === true,'FUNDING_NOT_CONNECTED',503);

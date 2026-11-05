@@ -7,9 +7,9 @@ import {JSDOM} from 'jsdom';
 import {amountFor,beijingInput,beijingSeconds,draftPayload,formatAmount,priceInput,supportPayload,fundingDateSeconds} from '../catalog-state.mjs';
 const dir=await mkdtemp(tmpdir()+'/mf-catalog-');
 const nodeModules=new URL('../node_modules/',import.meta.url).pathname;
-await build({entryPoints:[new URL('../catalog-product.jsx',import.meta.url).pathname],outfile:dir+'/component.mjs',bundle:true,format:'esm',platform:'node',jsx:'transform',tsconfigRaw:{compilerOptions:{jsx:'react'}},plugins:[{name:'react',setup(b){b.onResolve({filter:/^react$/},()=>({path:nodeModules+'react/index.js',external:true}));}}]});
+await build({entryPoints:[new URL('../catalog-product.jsx',import.meta.url).pathname],outfile:dir+'/component.mjs',bundle:true,format:'esm',platform:'node',jsx:'transform',tsconfigRaw:{compilerOptions:{jsx:'react'}},plugins:[{name:'react',setup(b){b.onResolve({filter:/^@radix-ui\/react-dialog$/},()=>({path:new URL("../node_modules/@radix-ui/react-dialog/dist/index.mjs",import.meta.url).pathname,external:true}));b.onResolve({filter:/^react$/},()=>({path:nodeModules+'react/index.js',external:true}));}}]});
 const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test'});
-Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,NodeFilter:dom.window.NodeFilter,Node:dom.window.Node,CustomEvent:dom.window.CustomEvent,MutationObserver:dom.window.MutationObserver,getComputedStyle:dom.window.getComputedStyle,HTMLInputElement:dom.window.HTMLInputElement,IS_REACT_ACT_ENVIRONMENT:true});
 const React=await import('react');const {act}=React;const {createRoot}=await import('react-dom/client');
 const {CatalogProduct}=await import(dir+'/component.mjs');
 const now=Math.floor(Date.now()/1000),owner={wallet:'0x111',stores:['store']};
@@ -88,4 +88,10 @@ test('approval preparation response cannot reopen a closed dialog or leak across
 test('date-only funding cutoff includes Beijing day and rejects invalid dates or time input',()=>{
  assert.equal(fundingDateSeconds('2030-01-01'),Date.parse('2030-01-01T23:59:59+08:00')/1000);
  assert.throws(()=>fundingDateSeconds('2030-02-30'));assert.throws(()=>fundingDateSeconds('2030-01-01T12:00'));
+});
+
+test('wallet preflight failure restores authoritative PREPARED state instead of offering nonce cancellation',async()=>{
+ const operation={id:'expired-local',kind:'support',state:'PREPARED',amount:'7000001',quantity:'1',transaction:{data:'synthetic'}};
+ await mount(async(path,o)=>{if(path==='/catalog')return {...catalog,fundingEnabled:true};if(path==='/support-reviews')return {...o.body,id:'review',amount:'7000001',expiresAt:now+300};if(path==='/support-intents'||path==='/intents/expired-local')return operation;throw Error(path);});
+ try{await render({onWalletOperation:async()=>{throw Object.assign(Error('OPERATION_EXPIRED'),{code:'OPERATION_EXPIRED'});}});await click('支持餐食');await click('审核资助');await click('确认原资助请求');await click('钱包确认');assert.ok([...document.querySelectorAll('button')].some(b=>b.textContent==='取消未发送操作'));assert.ok(!document.body.textContent.includes('付款结果待核对'));assert.ok(!document.body.textContent.includes('在钱包确认作废交易'));}finally{await clean();}
 });
