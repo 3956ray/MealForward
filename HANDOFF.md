@@ -1,3 +1,9 @@
+# 2026-11-06 · 公开 Logo 资源
+
+- 依据网站现有碗和蒸汽图案制作 512×512 PNG，奶油白背景和森林绿图案，用于 MonadVision 项目登记。文件 assets/mealforward-logo.png，公开链接指向 GitHub 公共仓库原始文件。
+- 仅添加品牌静态资源，无应用部署或服务配置变更。MonadVision 项目申请中还需项目 X 账号及联系 Telegram，测试网项目是否被接受由平台审核。
+- 仓库、线上服务和测试网业务目标沿用下方最新记录。
+
 # 2026-11-06 · 导航重设计已上线
 
 - 应用提交 `e5aa6e0ec538890fb77197b5e3080e706121d17f`，repo3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42145208661 。
