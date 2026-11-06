@@ -1,15 +1,497 @@
+# 2026-11-06 · 公开 Logo 资源
+
+- 依据网站现有碗和蒸汽图案制作 512×512 PNG，奶油白背景和森林绿图案，用于 MonadVision 项目登记。文件 assets/mealforward-logo.png，公开链接指向 GitHub 公共仓库原始文件。
+- 仅添加品牌静态资源，无应用部署或服务配置变更。MonadVision 项目申请中还需项目 X 账号及联系 Telegram，测试网项目是否被接受由平台审核。
+- 仓库、线上服务和测试网业务目标沿用下方最新记录。
+
+# 2026-11-06 · 导航重设计已上线
+
+- 应用提交 `e5aa6e0ec538890fb77197b5e3080e706121d17f`，repo3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42145208661 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbmj0kmk1f9s73b5g3qg` 于北京时间2026-11-06 09:43:18 LIVE。原URL https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署关闭、环境/套餐/权限未改。
+- 导航改品牌/主页面/个人工具三分区；「我的」收纳支持、餐券及商家工作台；语言入口保留用户图标，去边框白底。页面选中浅绿、钱包入口圆角实色。手机保留公共页面和底部快捷入口。Escape回焦、点击外部/焦点移出/账户或页面变化收起菜单。
+- 前端原181项通过/1跳过，新增菜单导航验证通过（合计182通过/1跳过）；完整CI与构建通过。CUA本地390英文、768/1440中文布局无横向溢出，切换及菜单检查通过。截图 /Users/mili/.codex/visualizations/2026/11/05/01a1ab55-8a04-7773-933d-89b5294e0712/navigation-preview.png 是本地预览；公网浏览器读取超时，未冒充线上视觉截图。未执行真实钱包操作。
+- 公网文件摘要一致：catalog.mjs `518e6e4684ec7e554f8bae64e42cd242ef2f365e21fdfcd8f370ae1e82067d62`；catalog.css `0eba48b530dc65c782961e005b6deba39778b09eb455c9b232b901274708f382`。真实impact complete/stale=false，资助5/交餐1/受助钱包1/厨房2。
+- 发布后只读实库revision17444，pending/delayed/unresolved=0、lowBalance/backlogAlert=false。原V2/V3、180秒、钱包、数据和业务参数不变。产品演进HTML/Markdown已更新；后续仅交接文档提交。
+- 下一步用户刷新原网址查看；回退可使用cfb54e4，保持V3后台与原数据/任务，不回滚资金。
+
+# 2026-11-06 · 导航栏重设计候选
+
+- 品牌/主导航/个人操作三分区；支持和餐券收进「我的」原生details，商家可进入工作台。语言图标去边框白底，仍用用户提供PNG；页面选中态浅绿，钱包入口圆角实色。
+- 手机保留顶部公共导航和底部快捷入口，英文长标签换行避免溢出。菜单支持Esc并回焦、外部点击/焦点移出/页面或账户变化关闭。原路由/语言记忆/交易规则不变。
+- 本地原181项前端通过/1跳过，加新增菜单交互测试通过（聚焦语言+导航共5项）；生产构建通过。CUA英文390、中文768/1440无横向溢出，菜单开关、Esc及语言切换核验；本地截图navigation-preview.png，未冒充线上截图。
+- 修改site-layout.jsx/catalog.css及已有locale测试，无新依赖或服务配置。当前线上仍cfb54e4；下一步CI及原免费服务发布，不执行钱包交易。原repo/分支/PR48、服务、V2/V3及资金规则沿用下方。
+
+# 2026-11-06 · 用户指定语言图标已上线
+
+- 应用提交 `cfb54e4860134bfeb2922d801f0587190c2bb6ab`；原repo/分支/PR48不变。CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42067833401 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbmb781srm7s73fkalg0` 于北京时间2026-11-06 00:50:49 LIVE；原URL：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署仍关闭，套餐/环境/权限不变。
+- 用户指定48px PNG完整原始1008字节内嵌，显示24px；保留语言下拉、选择记忆与无障碍标签。代码language-icon.mjs/locale-react.jsx，无额外图片请求或依赖。钱包/后台/数据不改。
+- 生产构建、4项已有语言测试及完整CI通过。公网脚本SHA256 `0a1553fe9c5c5f7a9a54c1762945e1de842e2b9b9fdd18afdf882906dc2417e9` 与本地一致，确认包含用户PNG原始数据；本轮未重复浏览器视觉或钱包验收。
+- 发布后只读实库revision16063：pending/delayed/unresolved=0，lowBalance/backlogAlert=false。下一步用户刷新原站查看；可用上一f181057回退UI，保留V3后台和业务数据。后续仅交接文档提交。
+
+# 2026-11-06 · 用户指定语言图标替换候选
+
+- 以用户提供的 icons8-语言技能-48.png 原始字节替换语言入口Lucide图标，按24px显示；内嵌本地PNG，无外部图片请求。中文/English选择、44px触控及无障碍标签保持。
+- 代码：t1-intents/mvp-client/language-icon.mjs 与 locale-react.jsx。当前线上仍为下方f181057，待构建、既有语言测试、CI及原免费服务发布。
+- 不改钱包/后台/数据/配置/费用。当前repo/分支/PR48/服务/链目标沿用下方记录。
+
+# 2026-11-06 · 全站中文 / English 已上线
+
+- 应用提交 `f1810578dad689d2868d3eff2325043b11a69ed2`；仓库3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42060040283 。后续仅文档收尾提交。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，重试部署 `dep-dbmahi59fdbs73cahha0` 于北京时间2026-11-06 00:04:47 LIVE，目标f181057。原网址：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署关闭、套餐/环境/权限未改。
+- 导航语言图标选择中文/English，默认中文、保存偏好、跨标签页同步；当前应用各角色页面/弹窗/恢复提示翻译。商家输入与签名协议原文不改；第三方钱包本身语言由钱包控制。无新依赖、付费服务或迁移，thirdweb继续关闭。
+- 181项前端测试通过、1跳过，完整CI通过。新增验证切换保留路由、份数和弹窗，不重放业务；存储受限/跨标签页/错误翻译通过。CUA本地英文390/768/1440无横向溢出，刷新偏好保留；完整应用英文钱包选择与只读目录检查通过。
+- 公网文件HTTP200及SHA256核对一致：catalog.mjs `7eab77e09b8e2898a1bbb0baabe924e233d2cad3745d2728711e237b52120315`；catalog.css `6ec80da9fc1ee13ea344cbaa56c749595289966946cd858a1445ced5bb6da9d6`。真实impact API complete/stale=false，资助5/交餐1/受助钱包1/厨房2。
+- 公网Chrome原生AX确认中文首页导航已有语言选择及真实看板。随后浏览器交互被用户窗口变化/工具超时中断，未完成公网英文切换截图；不把本地英文样例截图当成线上验收。未执行实际钱包签名或付款。
+- 发布后只读实库revision15219：pending/delayed/unresolved均0，lowBalance/backlogAlert=false，impact_stale=false。后台继续原V2/V3、180秒规则与任务恢复。
+- 首次部署dep-dbmaftegekts738gqgng为update_failed，启动仅给出PRODUCT_MULTI_TARGET_STARTUP_REJECTED，根因未细分；同提交重试成功，不关闭启动校验。后续若再发生，应按启动阶段增补脱敏诊断，不先放宽校验。
+- 文档：[双语说明](docs/superpowers/2026-11-05-bilingual-ui.md)，演进HTML/Markdown已同步。下一步用户在原站语言图标切换查看；如需回退，用上一仍识别V3的应用7f37705，不回滚业务数据或资金。
+
+# 2026-11-06 · 双语首次部署启动失败，保留原服务并重试
+
+- dep-dbmaftegekts738gqgng 为 update_failed；构建成功，启动输出 PRODUCT_MULTI_TARGET_STARTUP_REJECTED。异常未细分，不把临时RPC问题写成已确认根因；后台代码/环境未改。
+- 日志随后显示原服务正常ready及worker无待办。保留全部启动校验，重试同一个已通过CI的f181057，不修改合约、数据、权限或签名逻辑。待第二次部署核验。
+
+# 2026-11-05 · 双语CI通过，原站部署中
+
+- 应用远端HEAD `f1810578dad689d2868d3eff2325043b11a69ed2`，CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42060040283 ，包括依赖审计、合约、UI/服务兼容与隔离链。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50` 自动部署仍关闭，手动部署 `dep-dbmaftegekts738gqgng`，已核对提交，当前build_in_progress。未修改套餐、环境或权限。
+- 部署前只读实库revision15033；pending/delayed/unresolved均0、lowBalance/backlogAlert=false、impact_stale=false。下一步等待LIVE、核验静态文件/公开API与线上语言入口。
+
+# 2026-11-05 · 全站双语候选已验证，准备发布
+
+- 当前应用新增中文/English图标下拉，默认中文、记忆选择、跨标签页同步；覆盖公开页面、商家工作台、钱包提示与交易恢复。用户内容保留原文，不改变签名或业务参数。
+- 本地前端181通过/1跳过，生产构建通过；新增切换保留弹窗/份数/路由且无重放、错误翻译、存储受限测试。英文390/768/1440本地浏览器无横向溢出、刷新保留语言。样例看板不冒充真实数据。
+- 范围与维护见 docs/superpowers/2026-11-05-bilingual-ui.md。源码 t1-intents/mvp-client/locale*、messages-en.json 与现有页面；无依赖/数据库/服务配置变更。第三方钱包自身语言由钱包控制，thirdweb仍关闭。
+- 下一步应用提交、CI、原Render Free服务手动发布及公网核验；当前线上仍是下方7f37705。原repo/分支/PR48/服务/链目标不变，未操作钱包或业务资金。
+
+# 2026-11-05 · 善意足迹第二版已上线
+
+- 应用提交 `7f377057312e880654a78051f41242a65a21a8c3`；仓库3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，原PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42051790357 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbm9rv1srm7s73fgpbqg` LIVE，完成北京时间2026-11-05 23:18:30。原URL：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html#impact 。自动部署关闭，环境/服务费用/权限/钱包/资金/180秒规则不变。
+- 改动：突出交餐成果；累计阶梯面积图/每日并列柱状图，默认全部历史并保留日期窗口前累计基数；领取状态卡、前5家贡献条榜单、前5笔记录、展开细节。页面可见每60秒读取且回到页面刷新，非实时推送。
+- 公网GET impact?days=all HTTP200，coverage=complete、stale=false，资助5/交餐1/受助钱包1/厨房2；11月2日新增3餐/交1餐，11月5日新增2餐/交0餐，中间两日新增0。累计末值5/1与指标一致，新增和亦一致。真实公开数据，不含预览示例。
+- 线上catalog.mjs SHA256 `a8b2388e5f554ad76f5fe32e6f08fe901f39e6dc894c0b0bffa5251bd1dde515` 与本地一致；CSS摘要也核对一致。本地前端177通过/1跳过、后台298通过/3跳过，CI含完整隔离链与依赖审计。
+- 发布后只读实库revision14353：pending/delayed/unresolved均0，lowBalance/backlogAlert=false，impact_stale=false。未读取私人凭据或直接写业务数据库。
+- CUA本地390/768/1440样例页面布局、阶梯/柱状模式、键盘数据表及全部12家榜单通过，console无error。公网最终浏览器操作被Mac锁屏阻断，未获得第二版公网截图，不宣称已完成公网视觉或真实钱包验收；已完成Render LIVE、文件摘要、真实API和后台状态核验。后续解锁后可打开原#impact复查。
+- 实施边界见docs/superpowers/2026-11-05-impact-dashboard.md第二版小节；产品演进HTML/Markdown同步。统计投影/游标不迁移，回退必须保留V3-aware后台与原全部订单/任务。此后仅文档收尾提交，不触发部署。
+
+# 2026-11-05 · Dashboard第二版CI通过，原站部署中
+
+- 远端应用HEAD `7f377057312e880654a78051f41242a65a21a8c3`，CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42051790357 ，包含完整合约/服务/钱包/UI/隔离链及旧认证门禁。
+- 原免费服务 `srv-dbjv7lnf3r2c73d7ri50` 部署 `dep-dbm9rv1srm7s73fgpbqg`，已核对目标7f37705，当前build_in_progress。未调整服务套餐、环境或权限。
+- 发布前只读实库revision14299，pending/delayed/unresolved均0，余额与积压无告警。下一步等待LIVE并核验公开API与页面。
+
+# 2026-11-05 · 善意足迹第二版候选：成果优先/累计图/自动刷新
+
+- 用户已确认重设计并复用原开源组件。突出已送出热餐，默认「累计成果＋全部」阶梯面积图，新增模式为并列柱状图；右侧改为状态卡，榜单前5家+贡献条，最近记录前5笔。已删除的标题副文案未恢复。
+- API新增days=all及累计字段，7/30/90天包含历史基数；长历史按月有界汇总。前端可见时每60秒读取，返回页面刷新；隐藏暂停、同一请求防并发、卸载清理。后台核验周期/钱包/合约/180秒均不改。
+- 本地前端177通过/1跳过、后台298通过/3跳过、聚焦27项通过；390/768/1440示例页面检查通过，真实Recharts阶梯/柱状切换、键盘数据表、榜单展开与console无错误。示例仅本地，不冒充线上数据。
+- 文档已补充：[第二版实施记录](docs/superpowers/2026-11-05-impact-dashboard.md)。下一步提交、CI通过、原免费Render部署及公网核验；当前真实部署仍为下方636aea8。
+
+# 2026-11-05 · 看板标题下文案已删除并上线
+
+- 应用提交 `636aea864cab938dcf8b4ba95ab08c9b23444ed7`；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42039852638 。仅删除impact标题下指定整行文案；首页/页脚标语保留。
+- 原免费Render服务 `srv-dbjv7lnf3r2c73d7ri50` 部署 `dep-dbm8ulo8v5cc73du1im0` LIVE，完成北京时间2026-11-05 22:16:27；线上入口仍为原URL #impact。套餐/配置/资金/钱包/统计逻辑均不变。
+- 本地构建通过；发布后核对线上脚本摘要。最新本地catalog.mjs SHA256 `11a903542b2591b841991193c57d87ceed8428bd3b3c666c4c60781405ca8d39`。未重复真实钱包交易或浏览器视觉验收。
+- 已明确向用户说明：后台一轮核验结束后等待30秒再同步；前端打开、手动刷新或范围切换才读取，不是实时推送。休眠及RPC/链最终确认可能延迟，保留旧快照与更新时间。
+
+# 2026-11-05 · 善意足迹标题文案精简（发布准备）
+
+- 按用户要求删除看板标题下整行「留一膳，待一人。看看这一份份善意，走到了哪里。」；品牌与页脚标语保留。
+- 更新机制未改：后台完成一轮同步后等待30秒，页面打开/手动刷新/范围切换时读取快照；并非实时推送。免费服务休眠、RPC/最终确认延迟会影响新鲜度，旧快照状态仍保留。
+- 仅展示文案改动，构建验证后沿用原免费服务发布，资金/钱包/合约/数据接口不变。实际部署状态在完成后补记。
+
+# 2026-11-05 · 善意足迹 Dashboard 已上线并核对真实数据
+
+- 应用提交 `1e95dbc0d28665268dbf7090b1c654314e7b74de`；GitHub `3956ray/MealForward`，分支 `codex/mealforward-product-mvp-20261031`，原PR48。CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42036160424 。
+- Render Free `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbm8amu1egvs73bl9nh0` LIVE，完成北京时间2026-11-05 21:33:52。入口：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html#impact 。自动部署仍关闭，套餐/环境组/合约/钱包/180秒规则不变。
+- 公网匿名API HTTP200、coverage=complete、stale=false，30日趋势30行，榜单2家。真实聚合：funded=5、delivered=1、users=1（钱包去重）、kitchens=2；available=4、settled=1，其余份额0。六类份额守恒，公开DTO未含recipient/voucherId/secret/displayCode。
+- 线上 catalog.mjs SHA256 `11c0fb57fd126a401c92d9596a22370dfb5b9e6276422f2008d80a215e5af868` 与本地构建相同。CSS也已逐字节摘要核验一致。前端175通过/1跳过、后台295通过/3跳过；CI含Anvil和合约完整回归，生产依赖0漏洞。
+- 发布后只读实库revision12825：V2核验块77207924、V3块77207931，二者complete=true；任务pending/delayed/unresolved=0，lowBalance/backlogAlert=false。原私有JSONB追加统计投影与游标，无SQL迁移，不读取私人凭据。
+- CUA Chrome普通线上标签已实际显示上述指标、折线/环形图、两家榜单和两笔资助记录。浏览器扩展控制最初超时，改用CUA原生浏览器操作完成核验；不是仅HTTP验收。本地390/768/1440示例数据响应式及键盘/范围/榜单交互已检查。未代用户登录或签名，真实钱包原业务验收未重复。
+- 文档：[实现与统计边界](docs/superpowers/2026-11-05-impact-dashboard.md)，产品演进HTML/Markdown同步。后续扩容注意4096事件边界、每轮10块回填及免费休眠延迟；同名厨房未批准映射时分别标注版本。回退保留V3后台、全部订单/任务与统计快照，不能恢复旧V2 signer。
+- 本条为部署后的文档收尾，后续文档提交不触发部署；线上应用版本仍1e95dbc。
+
+# 2026-11-05 · Dashboard CI 通过，原免费服务部署中
+
+- 候选/远端 HEAD `1e95dbc0d28665268dbf7090b1c654314e7b74de`；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42036160424 （包含合约、服务/钱包/UI、隔离链和旧认证）。
+- 原 Render Free 服务 `srv-dbjv7lnf3r2c73d7ri50`，工作区 `tea-db7q3ou7bikc73bp2bt0`，部署 `dep-dbm8amu1egvs73bl9nh0` 已确认目标1e95dbc，当前 build_in_progress，尚不宣称上线。
+- 发布前只读实库revision12702，任务pending/delayed/unresolved均0，余额/积压无告警。未读取或修改私人凭据，未改权限/套餐/环境变量/合约。
+
+# 2026-11-05 · 善意足迹 Dashboard 候选完成，待 CI 与上线核验
+
+- 原免费服务不变，留膳品牌/「留一膳，待一人」/ #impact（兼容 #ledger）已实现；Recharts 3.10.1 + shadcn Dashboard 信息结构，许可证随构建。
+- 实施、统计口径、数据隐私与扩容边界：[Dashboard 文档](docs/superpowers/2026-11-05-impact-dashboard.md)。根 impactProjection/各 target impactHistory 持久化原私有 JSONB，最终链上核验；匿名接口只返回白名单聚合，无领取地址/餐券秘密。
+- 本地前端175通过/1跳过、后台295通过/3跳过、Anvil adapter完整链路通过；构建通过，生产依赖审计0漏洞。CUA Chrome检查390/768/1440无横向溢出；切换7天、键盘数据表、扩展榜单通过。页面预览为明确标注示例数据，不冒充真实统计。
+- 本阶段未部署、未真实钱包签名，未更改资金规则/合约/180秒调度。下一步：提交原分支、CI通过、原服务部署、核验公网数据与浏览器页面。上次实际LIVE仍为下方 d71c423。
+
+# 2026-11-05 · 用户反馈新版视觉不明显
+
+- 用户在正式原URL看不到明显新页面。重新请求线上CSS/JS核对发布摘要；CSS仍为ee765092…且包含Warm kitchen设计规则。此次是原页增量样式/组件更新，不是完整高保真页面重设计；不能继续称为整体UI方案已完成，也不能无证据归因浏览器缓存。
+- 新功能可见入口为#stores搜索/可资助/可领取筛选和手机底部导航；桌面首页结构/图片沿用旧版，thirdweb未启用。已向用户澄清实际交付范围。当前浏览器读取再次超时，未获得用户可见页面截图；未做新部署或业务操作。
+
+# 2026-11-05 · 温暖厨房 UI 已上线
+
+- 用户明确授权更新线上；应用提交 `d71c423da2ba9b2cd5baedf1e62c073c600f01b2`，Render部署 `dep-dbm6v8h5efls73cm71rg` 已核验LIVE，完成北京时间2026-11-05 20:00:42。原免费服务/URL/配置不变：https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。
+- CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42023084136 。前端171通过/1跳过、后台283通过/3跳过；完整CI包括合约/隔离实链/旧认证。前端运行依赖审计0漏洞。未替用户进行真实钱包验收。
+- 公网 catalog.mjs SHA256 `c03c961d4a25524dfe0f081f7c9ec5dfcc9e291b37c243f947afef3c0c395abc`、catalog.css `ee76509233afae0f175f2d15a649aa2811729358f454b327583b3655f25d5c07` 与本地完全一致；configuration HTTP200，V3自动结算/新资助开启，V2新资助关闭且历史保留。
+- 发布后只读实库revision10743，worker checkedAt1793880122，pending/delayed/unresolved=0，lowBalance/backlogAlert=false。未改业务记录、合约、资金或凭据权限。
+- CUA本轮线上浏览器打开超时、重取标签失败；未宣称完成新的公网浏览器视觉检查。发布依据为Render LIVE、线上文件摘要、配置与后台状态；此前390/768/1440本地合成浏览器检查保持有效。
+- thirdweb 代码保留但SDK从本次安装隔离，未启用；未来需解决其依赖审计、配置Client ID及真实钱包验证后再启用。仍需完成实施文档中的后续UX项，不将本次上线冒充完整方案验收。
+- 本条以后仅文档提交，不触发autoDeploy（off）。回退保留V3-aware后台和原持久任务，不能重启旧V2 signer。
+
+# 2026-11-05 · UI 发布 CI 通过，Render 部署中
+
+- 修正后提交 `d71c423da2ba9b2cd5baedf1e62c073c600f01b2` 已核验远端一致；CI https://github.com/3956ray/MealForward/actions/runs/42023084136 SUCCESS，两任务全部通过。此前8886b8d CI因新增SDK依赖审计失败，未部署。
+- 当前前端依赖审计0漏洞，清洁npm ci、默认构建和前端171通过/1跳过；后台283通过/3跳过。thirdweb隔离代码保留、默认安装不包含SDK。
+- 已触发原服务部署 `dep-dbm6v8h5efls73cm71rg`，确认源提交d71c423；当前build_in_progress，尚未标记LIVE。配置/费用不变。
+- 发布前只读实库 revision10634，任务pending/delayed/unresolved均0，lowBalance/backlogAlert=false。只读聚合，不读领取秘密。
+
+# 2026-11-05 · 发布依赖审计修正
+
+- 首次候选8886b8d的本地审计发现thirdweb引入间接高风险依赖（34条含24 high），未部署该提交。保留thirdweb-login.jsx代码，但从默认package安装移除SDK；构建在关闭开关时显式隔离该模块，恢复此前已验证钱包依赖锁作为基线，再增加Radix/Lucide。
+- 无Client ID，线上继续现有连接器。未来启用thirdweb必须先选取安全依赖组合、重新安装/审计/实际钱包验收，不可仅填写Client ID就视为可上线。
+- Render Markdown文档直连超时，已通过官方HTML部署与健康检查文档核对生命周期；服务配置未改。最终审计/CI/部署结果待下方后续记录。
+
+# 2026-11-05 · 商家/餐品存储与审核边界说明
+
+- 只读核对ProductCatalog的storeOwner/currentVersion/_terms/_offers mappings与service草稿/发布审核。商家归属、餐品价格/时段/库存/截止/版本在链上；名称说明草稿及发布快照在Supabase PostgreSQL JSONB状态，正文摘要绑定上链。
+- 明确告知用户：当前registerStore无平台入驻审批，reviewPublication是格式/权限/版本校验，不是人工真实性/定价审核；非零digest不能证明图片真实。单钱包单店为后台规则，合约尚可直接调用注册多个ID。讨论建议不等于已实现审核功能。
+- 本轮无代码/业务数据/部署变化。
+
+# 2026-11-05 · 用户授权发布当前 UI 候选
+
+- 用户已查看本地预览并明确要求“更新线上网站”。本轮发布当前界面改动、原付款状态恢复与最小待处理引用接口；完整后续 UX 项仍按实施文档列为待办，不混称全量计划完成。
+- 继续使用原 Render Free 服务 srv-dbjv7lnf3r2c73d7ri50 / tea-db7q3ou7bikc73bp2bt0，分支 codex/mealforward-product-mvp-20261031，autoDeploy=off，原 V3 start command 不变。thirdweb 无 Client ID，默认 legacy 连接器；不更改配置、资金、合约或任务规则。
+- 发布前本地回归：前端171通过/1跳过，后台283通过/3跳过；git diff --check通过。新增依赖审计与本次CI/部署尚待完成，不能标记线上完成。
+- 回退以之前 V3-aware 构建8c297319为界面回退目标，保留当前数据库与平台任务；不可重启旧 V2 signer 或撤销原交易。
+
+# 2026-11-05 · 仅查看新版界面
+
+- 用户要求先看效果，不做测试。已打开本地构建预览 http://127.0.0.1:5188/product-v2/index.html ，使用现有最新 catalog 构建，不新建演示前端。
+- 临时预览入口 `/tmp/mealforward-ui-preview.mjs` 仅监听127.0.0.1，公开catalog/ledger/configuration读取原测试站；禁止写请求、登录和私人记录，不加载签名凭据。此轮未运行测试、未部署。页面已在内置浏览器保留。
+
+# 2026-11-05 · UI/UX 本地候选与 thirdweb 配置分支
+
+- 用户确认暂无 thirdweb Client ID，要求先完成接入代码。已锁定依赖、增加显式配置开关与 EIP1193 桥接，默认保留现有连接器；无线上环境配置变更。详细范围、配置与未完成项：[UI 实施记录](docs/superpowers/2026-11-05-ui-ux-implementation.md)。
+- 本地新增温暖厨房样式、Radix 弹窗、Lucide 手机导航、搜索筛选、支持记录分类、短时二维码与可用券优先；保留原服务/路由/交易保护。付款预检失败后重读后台，新增当前钱包最小待处理引用接口。
+- 前端171通过/1跳过；后台原全套281通过/3跳过，新服务隔离测试单独通过。390/768/1440合成API浏览器最终补测通过，0页面异常，证据目录 `/var/folders/9y/_gzp7rc975z1g51l_2mszz0m0000gn/T/mealforward-product-browser-QJwJ6N`。thirdweb启用/关闭均可构建，真实 SDK/钱包验收未运行。
+- 未提交、未推送、未部署；线上仍为下方 8c297319 / dep-dbm3pddg1s2s73c22400。没有动真实资金、业务记录或签名配置。当前工作树包含用户先前未提交的预检恢复修复，须继续保留。
+- 后续补齐批次退款/履约展示、商家概览指标、登录真实验收与全量可访问性；不能把这一阶段称为完整 UI 计划交付或已上线。
+
+# 2026-11-05 · 当前合约架构说明核对
+
+- 只读核对 ProductEscrowV3 / ProductFunding / ProductCatalog 源码。V3为单个共享Escrow，目录/资金模块通过继承组合，不是每店独立部署；claim限定平台，redeem要求原商家与平台短时许可，settle任何人可触发但固定原商家且至少180秒。
+- 向用户说明当前两步approve/fund、后台操作状态与链上状态分层、共享托管及平台信任边界、跨版本领取/单店规则中的后台职责，以及此前OPERATION_EXPIRED乐观UI错误。无应用、部署、数据库业务或链上操作变更。
+
+# 2026-11-05 · 过期资助被前端误显示为结果未知
+
+- 用户提供授权Hash并报告 OPERATION_EXPIRED。只读实库确认原support仍PREPARED，attemptedAt/txHash为空；不是已进入SEND_UNKNOWN的付款。
+- 根因：CatalogProduct.send在调用钱包模块前乐观设SEND_UNKNOWN；validateProductOperation在到期校验抛OPERATION_EXPIRED（早于journal、/attempt和钱包发送），异常后UI没有重读后台状态，错误显示零转账作废入口。
+- 安全即时恢复：点击“查询原请求”恢复服务端PREPARED显示，再“取消未发送操作”，重新选择餐品审核付款；不需零转账、不要把approve Hash粘贴为fund交易。未取消任何业务或广播；前端异常状态恢复修复仍待开发。
+
+# 2026-11-05 · 资助 WALLET_OPERATION_PENDING 排查
+
+- 用户确认错误出现在资助付款。只读实库查到 V3 一笔 support intent 为 PREPARED，未绑定 txHash/candidateHash；这是已准备的原资助请求仍占用钱包操作位，新请求因防重复付款而被拒绝。没有据此宣称链上付款成功。
+- 用户恢复入口：同一钱包、同一新版业务 → #mine/orders → 查看原请求 → 钱包确认；若不继续，原 PREPARED 请求可由用户点击“取消未发送操作”。不得通过数据库删除/解锁或重建付款绕过。
+- 本轮仅只读排查与交接更新，没有签名、发送、取消或更改任何业务记录。另有商家 publication SEND_UNKNOWN，须单独保留原恢复路径，与用户本次确认的资助问题分开处理。原始错误码的用户提示仍有改善空间。
+
+# 2026-11-05 · 表单优化最终验证通过
+
+- 完整CI复核 SUCCESS：https://github.com/3956ray/MealForward/actions/runs/41994517721 ，提交 `4b7767cf344e05f25c216de1245b51b3cb4fe5d5`。相对线上 `8c29731` 仅调整测试夹具和文档，应用代码完全相同，无需再次部署；原首次CI失败原因及修复保留在下方。
+- 本地 Anvil 实链适配验收 PASS，明确验证重复厨房登记被拒绝，不同商家独立厨房仍完整履约。前端168通过/1跳过、后台281通过/3跳过、390/1440表单浏览器及公网匿名浏览检查通过，独立审查无阻断。
+- 用户可刷新原测试网站验证：固定冒号双数字营业/用餐时间、日期截止（UTC+8当日23:59:59）、草稿保存后回餐品管理、单账户禁止新增第二家厨房。已有交易/历史条款、V3合约、自动结算与免费部署配置未改写。
+- HANDOFF 与产品演进 Markdown/HTML 已更新；最终文档提交不触发服务部署。应用仍为下方记录的 LIVE 部署；真实钱包交易仍由用户亲自确认。
+
+# 2026-11-05 · 表单优化已上线，实链测试夹具修正中
+
+- 线上代码 `8c297319fcabd6cad4cd1dfacf7621e7f23b12c1`；Render `dep-dbm3pddg1s2s73c22400` LIVE（2026-11-05T08:23:37Z），原免费服务和原URL不变。
+- 公网390/1440匿名浏览检查通过，0页面异常/0写请求。线上catalog bundle与本地构建SHA256相同：ae88f0d228595f187768ddad7197e0655580c127ec2a3fbff33df75c1a7c9656。登录后的新表单通过本地浏览器合成接口验证，未代用户签名。
+- 发布后Supabase只读汇总：revision8135，worker checkedAt1793867056，pending/unresolved/delayed=0，lowBalance/backlogAlert=false；不读取真实领券秘密。
+- 首次CI https://github.com/3956ray/MealForward/actions/runs/41993826593 FAIL：旧 adapter-local.ci 在同一钱包注册第二/第三家厨房，被新 ACCOUNT_STORE_EXISTS 规则拦截。合约、服务/UI及旧身份测试阶段通过。已将独立厨房测试场景改用独立合成商家钱包，并新增原账户再次登记拒绝的实链断言；不放松业务规则。最终重跑状态待后续记录。
+
+# 2026-11-05 · 商家表单与单店规则（开发记录，已由上方发布记录覆盖）
+
+- 用户要求已实现：营业/用餐时段使用 HH : MM 两个只接受数字的输入框，冒号固定，失焦补齐单数字；提交仍检查0–24小时、0–59分钟、24:00、倒置及重叠。餐品新增和补量的资助截止改为 date，按北京时间当日23:59:59；既有已发布记录和订单不改写。
+- 保存草稿成功且原弹窗仍有效时关闭弹窗，回 #merchant/meals；失败保留输入，旧账户/已关闭弹窗的迟到响应不跳页。
+- 后台 publication review/confirm 在持久化事务内校验单钱包单店，已登记及未决登记均计入，并通过 target-store.globalRecords 跨新旧版本校验；原请求重放/恢复优先保留。已部署permissionless合约未改动，此为应用服务登记规则；不自动删除/合并既存店铺，也不阻断历史履约。
+- 本地后台281通过/3显式跳过；前端168通过/1显式跳过。390/1440浏览器通过，覆盖拆分营业时间、日期、草稿自动返回及原资金/券流程；独立审查无阻断，publication11项复核通过。浏览器验收脚本已适配新控件；本轮未重复真实链钱包付款。
+- 仍在原分支 codex/mealforward-product-mvp-20261031 / PR48。计划部署原 Render 免费服务，不新增资源、密钥权限或费用；上一上线为 e4f7632，待本轮最终上线证据覆盖。
+
+# 2026-11-05 · 原 Site 产品前端已上线
+
+- 线上代码 `e4f7632bc57bc85654800a17a36f80e921836b59`；Render `dep-dbm325o8v5cc73dedej0` 已核验 LIVE（2026-11-05T07:34:02Z）。同一免费服务 `srv-dbjv7lnf3r2c73d7ri50`，入口 https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。未新增服务/费用/环境变量，未部署合约或迁移资金。
+- 对应完整 CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/41987926954 。前端本地167通过/1显式跳过，Host 5项通过；独立审查与修复复核通过。390/1440本地浏览器覆盖首页/厨房详情刷新、支持审核、草稿、工作台验券与收款页面、休息、Claim恢复、私有码退出清理，通过，无页面异常。
+- 公网浏览器390/1440均通过：真实页面首页图片、目录跳转与刷新、未登录支持记录/厨房权限、公共账；0页面异常、0写请求。线上 catalog.mjs SHA256与本地构建相同（d7dd5763f106a6a2d17d45c02570c2e0980de302d0b98bfd29ff30e062b9f695）。此检查未登录钱包，不替代真人业务验收。
+- 发布后公网 configuration 核验 V3 自动结算开启、新资助开放、V2 新资助关闭且历史保留。Supabase 仅只读聚合核验：state revision6751，worker checkedAt1793864074，pending/unresolved/delayed=0，lowBalance/backlogAlert=false；未读取领取人私密数据。
+- 原 Site 结构通过 React 接入现有服务；仅复用原样式/资产/页面边界，未运行模拟模型。餐品卡片通用照片明确标注“餐食示意”，不是商家实拍。V3目录仍需商家真实登记与发布；NFT不构造模拟铸造成功。
+- 真实钱包 V3 资助→领取→交餐→自动到账仍待用户验收。原子付款钱包实现准入仍关闭，当前预期 donor 两步兼容付款；不得宣称单次钱包确认已实现公网验收。免费休眠延迟限制保留。
+- 后续提交仅更新证据文档与扩充商家页面浏览器检查，不改变本次部署的应用代码。继续沿用当前分支、PR48及原回退约束。
+
+# 2026-11-05 · 原 Site 产品界面接回真实服务（本地候选）
+
+- 用户纠正：通过原 Site 产品前端验收，不再提供另一套简化测试界面。继承 `sites-frontend/dist` 的首页 Hero、照片、厨房卡片、工作台侧栏与页内付款/编辑弹窗；React 仅承载现有真实 V3 接口与已验证钱包模块，不加载演示 model 或虚构身份/库存。
+- 实现入口仍为 `t1-intents/mvp-client/catalog-entry.jsx`，构建仍输出 `/product-v2/index.html`；未新增网站或服务。新 `site-layout.jsx`、`site-route.mjs` 支持 #home / #stores / #store/:id / #mine/orders / #mine/coupons / #merchant/* / #register / #ledger / #about。旧 #voucher= 与 target 保持；浏览器刷新/返回不发付款或领券交易。资助审核与餐品编辑继续弹窗。
+- 历史版本选择收进页尾“查看历史订单与餐券”，默认新业务不展示技术选择器。原样复用 V3 交易恢复、权限和自动结算后台；未修改合约、环境变量、私钥或存量资金。
+- 独立审查发现普通钱包可直接打开商家餐品路由的 UI 权限缺口，已加入厨房权限门禁及 edit guard；后台始终拒绝越权。独立复核通过，新增路由权限回归通过。
+- 本轮已验证：前端最终167通过/1跳过；390px/1440px浏览器流程通过，包含厨房详情刷新、草稿、资助审核、休息、Claim未知恢复、私密码退出清理；Host 5项通过。最终修复后浏览器再次通过；发布结果待后续记录。不冒充真实钱包验收。
+- 旧部署 b46dbe9 的 CI 已完成 SUCCESS：https://github.com/3956ray/MealForward/actions/runs/41878849088 。本轮改动尚未上线；线上仍为下方记录，计划原免费服务 srv-dbjv7lnf3r2c73d7ri50 手动部署。回退保留 V3-aware runtime 和所有任务，不能重启旧 V2 signer。
+
+# 2026-11-05 · Free web V3 deployment
+
+- User chose existing Render Free web; paid Worker creation cancelled, no billing/card needed for this rollout. Service srv-dbjv7lnf3r2c73d7ri50 suspended and verified stopped; database recheck found only CONFIRMED operations. Start command changed to product-v3/server-entry.mjs, process role web-with-worker, legacy handoff true. Existing signer/environment/database configuration reused.
+- Commit b46dbe9 live as dep-dblmqpijnfac73a5iqq0; new target configuration verified publicly, legacy catalog read succeeded, persistent workerStatus pending/delayed/unresolved=0, lowBalance=false. Final deployment dep-dblmruajnfac73a5lha0 is LIVE at commit b46dbe9. Public configuration confirms new target acceptingFunding=true, legacy=false and automaticSettlement=true. Ready for user wallet testing.
+- Local full backend: 296 pass/3 explicit integration skips; targeted free-mode/settlement checks 16 pass. CI https://github.com/3956ray/MealForward/actions/runs/41878849088 remains queued, not PASS. Prior full registration CI passed. No real V3 fund/claim/handover/settlement performed.
+- Test URL https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html uses V3 default, history selector retains V2. New V3 catalog empty, merchant must register kitchen/publish a test meal using wallet. Atomic implementation allowlist remains off; two-step donor compatibility is expected for the current accounts. Platform wallet is reserved for automated submissions.
+- Free service suspends when idle; queue is persistent in PostgreSQL and resumes on wake. 180 seconds is earliest settlement, not a wake/scheduling guarantee. No keepalive workaround added. Rollback: NEW_FUNDING_ENABLED=false, retain V3-aware runtime/queue; never restart the pre-outbox V2 signer.
+
+# 2026-11-05 · 用户改用 Render 免费 Web
+
+- 覆盖前述付费 Worker 方案；不再要求银行卡，不创建 Worker。新增明确 web-with-worker 模式，同一免费服务运行网页、Claim 与结算队列。休眠期间任务暂停，唤醒后恢复原操作；用户已选择此限制。
+- 当前为实现/发布阶段，尚未切换线上；需旧进程停机交接，不能仅设置交接字符串就声称完成。
+
+# 2026-11-05 · Worker creation awaits billing setup
+
+- User explicitly approved linking mealforward-product-v2-secrets. Selected that group in the prepared creation form; Auto-Deploy visibly Off, $7/month Singapore worker, new funding false and legacy handoff false.
+- Clicking Deploy background worker opened Render Add Card modal. It states a temporary $1 verification authorization. No card details entered. Render service inventory confirms no mealforward-product-settlement-worker exists yet. Ask user to complete billing directly in Render; never request card details in chat.
+- Existing web/legacy signing process remain unchanged. Continue from prepared worker form after billing is ready, then configure database/manifest/pepper, perform actual old-process shutdown and pending-operation audit before enabling worker. No new service or V3 website rollout is claimed.
+
+# 2026-11-05 · Worker rollout preparation
+
+- User approved the $7/month worker and proceeding until real-wallet testing. Production web remains V2 commit 75e207f; no production configuration or signing process changed yet.
+- Registration commit 19619b7 passed full CI: https://github.com/3956ray/MealForward/actions/runs/41875724633 . Read-only database aggregates: approvals 1, claims 1, intents 1, publications 2, redemptions 2, all CONFIRMED; no pending signatures found.
+- Render creation form prepared for mealforward-product-settlement-worker, Singapore, 0.5c-512mb, $7/month, V3 start command. Creation not submitted. New funding and legacy-worker handoff flags remain false.
+- Browser extension timed out; native Chrome UI works. Signing environment group mealforward-product-v2-secrets is available. Browser policy requires action-time confirmation before granting this new process access to signing credentials; async confirmation requested, association not performed. Check user's reply before continuing. Do not mark legacy handoff complete until the old process actually stops.
+
+# 2026-11-05 · V3 用户部署已核验并登记
+
+- 用户部署交易 0xc18a31a07599226b7e1e0819fd0da14e9a988cf1a9e562b377932c0e4717f910，新合约 0x8718838C4B21519AEA83733DD9dC559B4cef7cae，Monad Testnet 10143，部署区块 76968957。再次调用审核器验证最终交易、代码、资产及角色，finalizedBlock 76969067。已登记 product-v3/approved-deployments.json。
+- 登记不代表上线：新资助仍默认关闭，生产尚未切换，旧签名进程未交接，未创建收费服务。下一步为常驻 worker 费用确认、双版本后台部署和真实钱包验收。批处理实现允许列表仍关闭。本节覆盖此前待部署及空清单状态。
+
+# 2026-11-05 · 恢复本机 V3 部署审核入口
+
+- 用户反馈无法访问；原 54849 端口连接失败，已重启现有 review-server，固定 http://127.0.0.1:54849/ 。页面 HTTP 200、preflight 返回 V3 / Monad Testnet 10143 及原部署账户；仅本机 Chrome 使用。服务退出后须重新启动；不是公网入口。未发送部署或钱包交易，未改应用及云服务。
+
+# 2026-11-03 · 单次资助与自动结算（V3 候选，未上线）
+
+- [实现说明、费用及发布步骤](docs/superpowers/2026-11-03-atomic-funding-auto-settlement.md) · [产品演进 HTML](docs/product-evolution/index.html) · [演进 Markdown](docs/product-evolution/mealforward-evolution.md)。本节更新下方同日早期记录；此前的线上验收属于 V2。
+- 已开发：新共享托管合约 ProductEscrowV3；合并精确金额授权和资助，真实钱包不支持时明确提示两步。商家交餐后链上等待 180 秒，独立 worker 付 Gas、自动提交，合约只能付给固定商家。到账由最终结算事件及 USDC 转账共同证明；退款回原资助者。已上架一份餐成功利用批处理时，共四笔交易：资助、发券、交餐、结算。既有 V2 合约、数据与资金不迁移。
+- 平台 Claim/结算共享持久签名记录；未知结果只恢复原包。目标、领取限制及用户会话跨版本校验。为防平台 nonce 争用，平台签名账户只允许领取及恢复已有操作。回退默认关闭新资助（MF_PRODUCT_NEW_FUNDING_ENABLED=false），保留 dual-target web/worker 和旧券手动结算。
+- 源码提交 fc4339a；[候选 CI 已通过](https://github.com/3956ray/MealForward/actions/runs/41568752496)，包括独立链集成与旧登录检查。[草稿 PR #48](https://github.com/3956ray/MealForward/pull/48)。
+- 本地验证：120 项合约测试通过；后台与部署工具全套、前端套件、390/1440px 浏览器检查、临时 PostgreSQL 及 Anvil 集成通过。Anvil 验证同笔授权/付款回滚、179/180 秒边界、第三方触发及手动竞争只支付一次。本地兼容账户是测试账户，不代表真实 MetaMask 一次确认已验收。
+- 公网现况：[现网 V2](https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html) 保持旧规则；V3 允许列表为空。三个用户地址核查时未启用已验证的委托账户；默认显示两步。已准备本机部署审核页，本人用 MetaMask 签署部署后要核验原 Hash，再登记新目标。还需实际钱包批次验收、旧签名进程停机交接、独立 worker 运行并关页验到账，才能开放新资助。
+- 收费资源尚未创建。新 Render 单实例独立 worker 估算 US$7/月，另计税费、超额使用及链上 Gas；[预配置清单](t1-intents/product-v3/worker-deployment-plan.json)。不得让旧执行器与新 worker 同时创建签名。未合并 PR、未部署 V3，未改动原有资金。
+
+# 2026-11-03 产品演进 HTML 与 Markdown 交付
+
+- 用户要求建立持续记录MealForward变化的HTML文档，纳入架构图、流程图、精简说明并配套MD。已新增 `docs/product-evolution/index.html`（离线生成页）与 `mealforward-evolution.md`（维护源），包含当前版本、系统架构、一份餐流程、资金路径、按日期的演进、已定规则及下一步、证据入口。
+- 绘图复用Mermaid 11.12.0（MIT，2026-11-03 GitHub API查询90,983 Stars），Markdown转换固定Marked 16.4.1；依赖和lockfile只在独立文档目录，不改应用依赖。HTML内嵌3张SVG和许可证，无运行时CDN、字体或外部请求。`template.html`管理版式；`build.mjs`从MD元数据生成日期、版本状态和7/5/180指标，避免另改HTML。后续产品变更应同步更新此MD的当前说明与日期变更记录，再重建HTML。
+- 构建：`npm ci --prefix docs/product-evolution --ignore-scripts`；`npm run build --prefix docs/product-evolution`。使用已有Playwright和隔离的无头Google Chrome；可通过PLAYWRIGHT_MODULE/PLAYWRIGHT_CHANNEL指定本机安装。用户阅读HTML无需安装任何依赖。预览 http://127.0.0.1:59345/ （仅本机临时文档服务，非公网部署；只允许文档及两个证据文件）。
+- 验证：构建成功；离线file页面1440px/390px均显示3图/6节、无整页横向溢出、目录跳转/缩放/适配/打印样式通过，无外部网络请求与浏览器错误；最终版本元数据、MD下载入口和HTTP本地预览再次检查通过。独立只读内容/离线审查通过，其日期指标维护建议已改为MD元数据驱动。截图 `/tmp/mealforward-evolution-final-1440.png`、`/tmp/mealforward-evolution-final-390.png`。本轮没有重跑应用链上测试或新增真实钱包验收。
+- 应用状态仍采用2026-11-02已核验快照75e207f，不是2026-11-03实时云端审计；授权付款合并、自动结算仍明确待开发。未部署应用、未提交/推送、未改云库或签名账户。保留已有未提交HANDOFF内容及交易流程MD，未覆盖其他工作。
+
+# 2026-11-02 当前完整交易/签名数量说明
+
+- 用户要求明确一份餐从创建到商家收到USDC的全过程。本轮核对已部署源码对应的catalog、fund、claim、redeem、settle、登录与前端入口，仅更新文档。
+- 完整说明：[交易与签名流程](docs/superpowers/2026-11-02-transaction-and-signature-flow.md)。正常无足额授权：新厨房+新餐品到第一份到账7笔；已登记厨房+新餐品6笔；已上架餐品5笔。首次7笔=商家4+donor2+平台1；有效会话外，每次登录另有消息签名但无链上交易。
+- 全部履约不能一笔原子交易完成；授权付款可探测钱包支持后合并。当前交餐/结算间隔180秒；自动结算需新合约固定收款与代发权限设计，未实现、未改变当前规则或迁移资产。donor单次确认、商家交餐一次后自动到账仅为体验建议，不是交付声明。
+- 应用部署仍75e207f，最近Git源码/既有交接提交ab019f5；本轮不重跑代码测试、不修改公网/数据库或发送交易。保留此前公网验收范围与待办。
+
+# 2026-11-02 结算展示优化与合并付款评估
+
+- **已上线**：代码 `75e207ff3651bee42beb00dde686383a8ac0e481`，Render `dep-dbk3rfk9v7es73bkd6h0` live，服务 `srv-dbjv7lnf3r2c73d7ri50`。入口 https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。CI https://github.com/3956ray/MealForward/actions/runs/41407192957 candidate/legacy-auth均通过；独立商家测试20/20通过、审查通过。
+- 公网HTML/configuration/catalog均200，实际catalog.mjs与本地构建逐字节一致，SHA256 `ec1751690d1f60a308699ac68fcb82efbf2d5c9c4dcb2fc5bd9c1eab2b7349bb`。只读DB汇总仍1张SETTLED券。本轮没有新增钱包验收或模拟真实付款。旧服务未部署。回退可选上一live源码293dcb2，仅前端变更无需数据迁移。
+- 已知另项待办：settlements准备请求遇明确的插入前4xx时，现有UI可能保留SEND_UNKNOWN占位；后续仅针对无id的新占位及redemption.mjs确认的确定拒绝码清理，禁止扩大到网络/5xx、已有handover或真实未决交易。本轮通过刷新撤销过期审核，降低此入口但不宣称完整修复该遗留问题。
+
+- 用户确认优化：验券与结算按HANDED_OVER待结算、SETTLED已结算分区；已结算无结算入口。厨房名称来自公共catalog，权限/选择值仍使用原storeId。刷新发现已结算会关闭旧审核，不能因刷新清除未知交易记录。
+- 改动：`t1-intents/mvp-client/merchant-product.jsx`、`catalog-product.jsx`。回归覆盖打开审核后另一会话完成结算、刷新移入历史并移除旧确认入口。客户端152通过/1既有跳过；独立catalog构建通过。部署与实际公网检查见本节顶部；不将本地测试冒充公网钱包验证。
+- 授权/资金方向已核：approve调用资产合约，spender为共享新版Escrow `0x999Edd25dBB7716D63a5360350dbD892b82312bD`，不是商家钱包；fund通过safeTransferFrom把付款者资金转入Escrow，交餐并结算后才给商家。
+- 原子合笔候选：EIP-5792，必须查询实际钱包/10143的atomic能力，保持原付款人并验证batchID/status/receipts。不能直接把现有两个请求换成sendCalls：当前fund要求finalized allowance，approval核验块末额度等于审批额，外层交易to/data/nonce及单操作journal也不适配batch。普通helper调用fund会改变msg.sender，禁止这样绕过。
+- 只读RPC对实际资产nonces与DOMAIN_SEPARATOR均返回ABI结果，但不足以证明完整permit兼容。EIP-2612路线仍需合约入口设计；一笔链上交易不必然只有一次签名。本轮未启用批量付款、未改合约/密钥/数据库、未发钱包交易。参考：https://docs.metamask.io/metamask-connect/evm/guides/send-transactions/batch-transactions/ 与 https://eips.ethereum.org/EIPS/eip-5792 。
+- 仍待明确实现与验收：atomic能力探测、batch专用操作/幂等恢复、付款人/金额/原请求事件证据、拒签/未知结果/失败禁止自动降级重付；不默认无限额授权。原公网退款、过期及跨账户异常矩阵继续待验收。
+
+# 2026-11-02 首次公网真实钱包主链路验收通过
+
+- 用户反馈厨房 `8286ae1e-686b-4d5e-9582-1411882e93b8` 的餐品“111”显示已结算，并提供资助者授权/付款Hash。本轮只读查询云端操作白名单字段与公开RPC，没有登录、签名或发送交易。
+- 最终链核验块 `76251070`，hash `0x7826ade3f7307743ede6d5ee2e4f5a526c4632cb33d852c954912469c6b66104`：授权 **3 USDC**、资助 **3份×1 USDC**；其中1份领取→交餐→结算成功，实际代币转账 **1 USDC** 到 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`。批次剩余2份可领取，claimed/handedOver/refundPending/refunded均0，settled=1。不能将此描述为3份全结算。
+- 原交易：授权 `0xcb9ce0a80452c1697ca2d1922ebccdf74069a11507ac2634734c1b90ea50b06a`；资助 `0xd3099d742ceccdcf2f5fd693fd78053368ad9645c1010f3c6f431e7326aef122`；平台Claim `0xff2b199a6d22f00e469a47f1917c9061f86ddae2c0ef3bdc793f57f524dd13bc`；交餐 `0xc23369e5aca48d3b7805be468dcad19272458a410595a4c4ba051582818242e5`；结算 `0x18eb6c9289efc6ce8fece551f22d8b95950ea2d90badf80cfca9282cfaa80b17`。
+- 五笔receipt均status1且最终规范链确认；核验准确合约/资产、授权spender与付款者匹配、资助Transfer与Funded金额一致、Claim/HandedOver/Settled同批次同券关联、券最终SETTLED、结算Transfer收款人及金额一致。Claim交易from为固定平台账户，领取Gas由平台支付。交餐到结算实际间隔 **279秒**，满足180秒门槛。摘要证据 `/tmp/mealforward-first-live-cycle.json`（只含公开交易/汇总，无领取秘密）。
+- 云端登记/发布/授权/资助/领取/交餐/结算对应操作均CONFIRMED。此证据证明一次真实公网主流程，不覆盖退款、过期、跨账户私密券访问、拒签/断网恢复等全部公网异常验收；这些仍不能以本地测试替代。
+- 用户反馈界面仍将“已结算”项展示于“待结算餐食”标题下，且厨房用UUID显示。记为后续展示优化，本轮未擅自改动应用或部署。
+
+# 2026-11-02 新版公网已启动，进入用户钱包验收
+
+- 用户确认已关联 `mealforward-product-v2-secrets` 后，先查无自动新部署，再触发 `dep-dbjvpo6tlv9c73ee14og`。Render现已 **live**，实际源码 `293dcb251a00a3419a901833bc3fb18fd12dfc15`（CI41379703713通过），服务ID `srv-dbjv7lnf3r2c73d7ri50`。正式测试入口：**https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html**。
+- 启动日志明确出现 `MealForward product testnet ready`。这意味着真实新DB权限检查、新合约/资产/runtimeHash/两角色及签名账户派生地址门禁均通过；未读取或输出私钥。沿用10143、2h、新escrow0x999Edd25dBB7716D63a5360350dbD892b82312bD。
+- 公网HTTP 10项检查通过：页面/configuration/catalog/ledger 200；匿名me/vouchers/claim-intents 401；外域Origin 403；local-wallet与旧mvp路径404。configuration中的新合约、10143与7200秒核对通过；HTML带CSP且无本地钱包脚本。catalog.mjs及3份CSS实际均200。证据 `/tmp/mealforward-public-smoke.json`。
+- 当前公开目录无厨房/餐品，链上各资金份数/金额均0；这是独立空环境，不是故障。用户第一步：Chrome MetaMask切换Monad Testnet，钱包登录 → **厨房设置** 登记厨房，之后 **商家餐品管理** 发布餐品，再资助→领取→验券→交餐→180秒后结算。平台手续费由已配置Claim账户支付；真实完整闭环仍待用户钱包验收，不能冒充已完成。
+- 本轮浏览器控制再次30秒超时，未完成公网实际页面交互/桌面手机视觉验收，也未替用户登录或点击钱包确认。此前本地浏览器证据与本轮公网HTTP证据须区分。
+- 云库复查：后台初始化/轮询使新state revision递增（本轮观察47），不代表新增业务；旧两笔仍rev10/9，指纹408e76f0c970880598786deeb7bfb39c / 517254d2bdad4ef3dffc14ab23806c39保持一致。旧服务/旧合约未改动。
+- 后续以用户首次登记/资助等原交易Hash和网页反馈验收，遇UNKNOWN只查原操作，不重放。Render free休眠/重启属于测试环境限制，未承诺全天后台可用。
+
+# 2026-11-02 新测试网合约已部署，独立公网服务准备中
+
+- 用户本人提交部署交易 `0xa2a6f0ae0aa3d1e7fde5f17af4c819d2c8fb371abf2395e0db25a6be17bccf6f`。本机审核工具已核验原nonce19/费用上限、完整tx/receipt/CREATE地址、固定代码/权限及最终规范块。新escrow **`0x999Edd25dBB7716D63a5360350dbD892b82312bD`**，部署块 `76236334`，runtime hash `0x01e6c1d78fa77c28ba77df0ceb07ca8aa560e14831b533153503f7e5ea95a8ff`。领取/验券角色及7200秒与原审核一致。公开manifest：`t1-intents/product-v2/monad-deployment.json`，其中记录此次核验的finalized块证据。
+- 新建Render服务 `srv-dbjv7lnf3r2c73d7ri50`，名称 `mealforward-product-v2-laodao`，URL `https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html`；此URL**尚不可验收**，签名配置组未链接、首次启动预期拒绝。独立产品分支，autoDeploy=no，free/singapore，Node24.21.0；不修改旧服务。创建时构建提交为远端143634c；加固代码293dcb2已推送、CI通过并触发新部署；最新状态见下方，不能将首次143634构建说成最新部署。
+- Supabase项目 `ketfrukrcuosrqynnsay` 新建私有schema `mf_product_v2`、专用runtime角色，迁移 `20261102021140_product_v2_private_runtime`。新角色独立LOGIN凭证通过SCRAM单独配置，密码不进迁移历史；无管理员/继承/旧schema权限。新session pepper和专用DSN已注入**新服务**，未读旧服务环境值。临时本机安全保存路径 `.local-product-acceptance/product-v2-cloud-credentials.json`（0600/ignored），不得输出或提交；平台钱包私钥仍只在用户的Render组中，本轮未读取。
+- 已用新登录账户和验证TLS实际连接云数据库，完整新版 `verifyProductPermissions` PASS，包括非系统schema中的有效PUBLIC表/列/序列权限与可执行SECURITY DEFINER检查。旧两笔记录保持rev10/9、指纹 `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`（迁移前已实查，阶段结束还需复查）。
+- cloud entry现在固定本次合约、资产/代码摘要、两个权限、部署起点、2h和平台Claim费用预算：300gwei、单笔上限0.3MON、1,000,000 gas。不能任填自洽manifest切到旧/别的合约。default image digest取仓库hero-meal.jpg实际字节keccak。
+- 验证：本轮product-v2测试186通过/3个显式依赖默认跳过；独立权限单测7/7、真实隔离PG的PUBLIC表/列/序列/SECDEF漂移测试通过；server-entry/runtime14/14。独立审查复核固定manifest及权限门禁未见剩余明确代码阻断。云端真实钱包业务验收尚未运行。
+- 加固代码 `e724144` 已推送，CI 41379056307 首次失败于部署审核工具的调试元数据hash差异（creation bytecode pin通过）；改为固定canonical ABI/runtime bytes/immutable ranges，忽略sourceMap/AST分组编号。干净forge重编译和19项审核工具测试通过，独审确认实际验证边界未放宽；修复提交 `293dcb251a00a3419a901833bc3fb18fd12dfc15` 已推送；[CI 41379703713](https://github.com/3956ray/MealForward/actions/runs/41379703713) 全部success（candidate/legacy-auth，含真实隔离链集成），不能把首次失败抹去。
+- 新服务首次部署 `dep-dbjv7m7f3r2c73d7rkag`：构建成功，启动拒绝（签名组未链接），状态update_failed，未出现live。Render日志首次503后再次读取成功。浏览器工具连续两次超时且重置，尚不能代为打开链接组界面；MCP没有环境组关联功能。应让用户在新服务Environment里链接既有组，不能复制密钥进聊天。
+- 阶段结束复查：新DB revision0、登录角色非superuser/非inherit/非bypassrls；完整加强权限门禁以真实新登录身份再次PASS。旧两笔指纹与迁移前完全一致。
+- 最新部署 `dep-dbjvm38ae00c73fdmc5g` 已精确使用CI通过的 `293dcb251a00a3419a901833bc3fb18fd12dfc15`，当前update_failed，签名组尚未关联，未出现live。PR48描述已同步实际合约/数据库/CI及公网待验收状态。
+- 下一步（唯一待用户操作）：打开 https://dashboard.render.com/web/srv-dbjv7lnf3r2c73d7ri50 → Environment → Link Environment Group → 选择 `mealforward-product-v2-secrets` 并关联。无须再输入私钥。用户回复后先查是否已自动部署；若没有再手动触发最新候选，验证启动signer派生/DB权限及公网匿名/越权/页面检查，最后真实钱包完整验收。不能在尚未live时把新URL称为可测试网站。free Render可能休眠，worker不是全天候保证。
+
+# 2026-11-02 配置组已确认，等待用户部署新合约
+
+- 用户确认两项后台签名配置已保存。Chrome Render 控制台只读核实工作区 LaoDao (`tea-db7q3ou7bikc73bp2bt0`) 存在 `mealforward-product-v2-secrets`，ID `evg-dbjmfkijnfac738emjhg`，列表显示 **2 项变量**。未打开密钥值；变量名、地址派生和签名能力仍需新版服务启动门禁验证，不得把计数核验写成密钥有效性核验。
+- Render 服务列表仍只有旧服务；本轮未创建/更改服务、链接配置组、迁移云数据库或广播交易。旧两笔结算数据未操作；本轮未重新查询其指纹，以下指纹属于前次证据。
+- 新增本机人工部署审核工具：`t1-intents/product-v2/deployment-review{.mjs,-client.mjs,.html}`。入口 **http://127.0.0.1:49988/**，运行会话以当前49988监听进程为准，Chrome 已打开。原产品本机验收入口56527保持不动。这是部署工具，不是已上线的新产品。
+- 固定合约源仍为 `c69a20162d54a600fe13f2e5bb13898ebbc9334e`；编译 creation code hash `0x3fdd567c59002116e5496f483c7263af959eac3658e5a1da925a2bb99bd7eb87`，含用户确认构造参数的 initcode hash `0x6321edd23da748ec2d658d39aa18ede154b38c2deece9de548386dbfcd1c0c82`。ABI/runtime/immutable-reference元数据另有完整digest pin，变更拒绝启动；不更改旧合约。
+- 部署钱包 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`；Claim `0x41DCBFED391b79FAC7B2951dD136c6B7e1384259`；验券 `0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3`；Monad10143、既有测试资产、7200秒。finalized块 `76126404` 预检 nonce19、当时费用上限 `0.696025764 MON`，非永久报价，点击发送前再次检查。
+- 工具服务无密钥、不签名、不发送。用户在Chrome连接MetaMask并亲自确认部署。客户端先记录UNKNOWN，服务端对 `.local-product-acceptance/product-v2-deployment-attempt.json` 用 `wx` 原子创建，并同步文件及父目录后持久化原nonce/dataHash/费用后才允许调用钱包；拒签/断线不自动解锁。换端口或新浏览器仍服从原attempt。**不得删除attempt来重试**；异常只能查原Hash或先取得原nonce已被最终作废的证据再另行审核。
+- 已有attempt时，恢复入口不再要求新部署余额/nonce/估价门槛。原交易核验包含原nonce/预算、tx与receipt完整关联、CREATE地址、最终块/规范链重查、固定runtime及构造权限。还没有真实部署Hash/新合约地址。
+- 本轮局部测试 **17/17**（含异步reserve期间刷新/连接竞争、切账户、跨浏览器恢复及final receipt否定用例）；实际HTTP对异源Origin及错误Host均403；Chrome显示准确角色/费用，连接前发送按钮禁用。独立审查提出的artifact pin、持久admission、原review关联、异步packet漂移、恢复门槛问题均已修复；独立审查已再次运行17/17通过，文件及目录fsync与并发admission复核完成，本轮范围未见剩余明确阻断。新增工具仅本地验证，不能套用下方应用CI通过结论。
+- 部署审核工具本地功能提交 `7a47ced`；本轮未推送，未运行新增工具的GitHub CI。当前审核进程会话 `24992`，末次启动预检finalized块 `76126993`。
+- 下一步：用户从审核页部署并提供原交易Hash → 本工具只读核验最终部署 → 写入新manifest，建立专用数据库角色/命名空间和独立Render服务，链接既有secrets组并验证地址派生、权限和预算 → 公网完整验收。新服务未上线前不能把旧公网URL称为新版。若用户未签名，到此等待，不代点钱包确认。
+
+# 2026-10-31 新产品全栈验收候选（前阶段证据）
+
+本节覆盖下方历史阶段的“尚未接通适配器”“退款未实现”“停业规则待定”等描述。本地全栈及真实浏览器验收已完成，源码已提交独立 PR48；**尚未公开部署，不得把旧公网地址说成新版**。
+
+- 用户已确认永久停业时：未交餐券立即作废，原餐款退给资助者，解除对应领取人的间隔；已交餐部分仍可结算。已实现并通过真实浏览器/链测试。长期未使用退款期限仍未定。
+- 新版为独立 `/product-v2/index.html`，真实 PostgreSQL + 新合约 + 平台 Claim + HTTP/SIWE + 浏览器界面；本机测试使用 31337 和明确标记的本地测试钱包。公网默认仍是 10143，生产入口不能挂本地钱包桥。
+- 流程覆盖：厨房登记、餐品版本/补量/期限、精确授权/资助、原钱包领取与餐券链接、短时凭证/唯一处理权/实际交餐/180秒结算、公告/今日休息、永久停业/原付款人退款及公共账。
+- 已修复外部链上资助造成的跨店阻塞：逐店核算，10块分页索引，单店失败独立退避；EOA、辅助合约、构造函数和同笔交易多次 fund 均有实链回归。
+- 钱包拒签不能只靠错误码释放。新增显式同原 nonce 的零转账作废：最终链证明原交易不可执行后才解除占用；已交餐责任保留并恢复，旧查询不能复活已取消请求。真实浏览器已验证拒签→作废→新资助，以及保留交餐责任的恢复，无重复扣款/交餐。
+- 当前可打开的新版本机入口：`http://127.0.0.1:56527/product-v2/index.html`。独立运行目录 `.local-product-acceptance/run-8f9140bb-ecd1-40ce-b981-33871d317bfa`；3餐、7份待领取、领取账户未使用。运行需保持，停止后按 README 重新 seed；不要回收这个供用户验收的进程。早期49664/51117/55219测试环境已按各自PID正常关闭。
+- 最新本地回归：合约71/71；后台183通过、3个显式依赖用例默认跳过；前端151通过、1个真实provider用例默认跳过。已另外执行真实PG+Anvil+HTTP 5/5、真实nonce作废9/9，索引攻击回归和四组浏览器验收通过；跳过项不冒充通过。
+- Git分支 `codex/mealforward-product-mvp-20261031`；[独立草稿PR48](https://github.com/3956ray/MealForward/pull/48)。旧PR47/服务分支未更新。最终代码提交 `c69a20162d54a600fe13f2e5bb13898ebbc9334e` 的 [CI 41098323191](https://github.com/3956ray/MealForward/actions/runs/41098323191) 已全部 success（candidate + legacy-auth）；包含真实链适配器、nonce作废和真实钱包provider测试。前两次CI暴露的offline编译及测试资产未构建问题已修复并重跑，不能将失败记录删成首次即通过。普通Git传输网络超时后使用GitHub API上传，逐提交核对tree/SHA相同；无force覆盖旧分支。
+- 实施/验收/局限：[2026-10-31 MVP 验收文档](docs/superpowers/2026-10-31-mvp-acceptance.md)。本机启动：[acceptance.README.md](t1-intents/product-v2/acceptance.README.md)。`seed` 可准备一家厨房、三餐、7份已资助餐食。
+- 本轮没有云写入、真实测试网合约部署、旧记录迁移或用户钱包操作。开始时只读确认旧 Render live 为 `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa`，PR47 draft/open；原两笔记录仍 SETTLED，rev10/9，fingerprint `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`。
+- 2026-11-01 用户选择使用已有账户，并按所问三个角色顺序提供地址：部署 `0xC4F8a468f10d5f98DCfF3282516125E97F26433b`；平台 Claim `0x41DCBFED391b79FAC7B2951dD136c6B7e1384259`；验券签名 `0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3`。此角色映射依据回复顺序，已向用户说明，不沿用旧 Issuer 的业务角色。
+- 公开 RPC 只读核验：10143 finalized 块 `75993081`，hash `0x6337a8d8bd4e45f9d732992f96f1bcccac3dc911d2f090b746362412729fdc2a`，三地址校验和有效且无链上代码；当时 MON 余额依次 `12.48128412649` / `4.75645287341` / `4.88475715247`。未估算部署总费用，不据此保证预算充足；未签名或广播。
+- 此时后台签名配置位置尚未提供；该阻碍已由上方2026-11-02配置组确认记录更新。没有读取或索取私钥，尚未执行公网部署。
+- 公网实链验收仍需：固定候选提交/CI，新合约与专用平台账户/Gas、专用数据库角色及新服务配置，然后人工测试钱包验收。不能用本机测试替代这项。
+- 所有 `.local-product-acceptance/`、测试账户密钥、签名、会话和连接串均不得加入 Git 或交接。运行私钥仅在隔离进程内；重启用新目录，不恢复旧测试身份。
+
+---
+
+# 2026-10-30 完整 MVP 集成开发进行中（当前入口）
+
+用户要求继续开发可打开并完整验收的新版本；以下工作仍进行中，不能据此称已上线或已完成人工钱包验收。
+
+- 只读复核：GitHub PR47 仍 draft/open，远端 head `3d1486a73935c819ee5ff5ce0e95f2bf63f5f7c1`；旧 Render 服务 `srv-dbdgstivcj2c73fnqcc0` 最近 live 仍为 `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa`，原网址不变。
+- Supabase `ketfrukrcuosrqynnsay` 原业务 1/2 仍 SETTLED，revision 10/9，fingerprint `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`；本阶段未进行云写入。
+- 新增独立公网启动入口 `t1-intents/product-v2/server-entry.mjs`，强制专用数据库角色、TLS、独立平台签名配置和 10143/既有 USDC/2小时测试政策；导入不启动服务，不迁移旧库。
+- 新增显式 `local-acceptance` profile：只允许本机 127.0.0.1，31337 本地链；生产默认仍 `monad-testnet`。独立产品 SIWE 验证器绑定 origin 与 chainId，旧 SIWE 模块不放宽。runtime/启动配置目前 10 项测试通过，完整联合验证仍进行中。
+- 正在实现：可复用链适配器、真实 PostgreSQL + Anvil + HTTP 持续运行启动器、完整前端本地验收及公网部署准备。`.local-product-acceptance/` 已排除 Git，不能提交该目录或任何密钥/签名/会话/连接串。
+- 待用户规则：永久停业时有效未交餐券的处理已提出选择；长期未使用退款期限仍未确定，不能自行设定。新合约尚未部署。
+
+---
+
 # MealForward（留膳）— Agent 一读即接手 · HANDOFF
 
 > **本文件是当前项目唯一的高优先级跨 Agent 接手入口。** 从仓库根目录打开 `HANDOFF.md`，先核对实时 GitHub / Render / Supabase，再继续任何开发。此文件随每次开发、迁移、部署和用户验收更新。历史 `docs/agent-handoff-2026-10-16/` 与原 CP30 合同不得当作 2026-10-23 的实时云状态。
 >
-> **更新日期：2026-10-29（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
+> **更新日期：2026-10-30（UTC+8）**。状态在新提交和链上交易后可能变化；引用的是当时已实际查到的资源，不能把未来状态当真。
 >
-> **当前状态：Three Stores 已发布钱包选择弹窗、扩展去重、分步登录提示与被动会话恢复；本轮待最小真人登录补测。用户已完成第二张券全流程；两笔 SETTLED，第二笔7测试USDC付款已核验，本阶段最小MVP验收通过。第一笔 SETTLED 和原记录保留，既有 USDC/合约不变。** 以下最新记录优先于历史阶段。
+> **当前状态：新产品核心链路已开发为独立本地候选，完成商家登记/发布/补量、精确授权与多份资助、平台付Gas自助领取、原钱包餐券、先锁后交餐、180秒结算及今日休息。尚未上线；生产链适配、联合全栈验收、退款及原Site其余页面仍待完成。已部署的钱包测试版及两笔SETTLED保持原状。**
+
+> 测试入口补充（2026-10-30）：用户询问可测试网址。现有已知公网入口仍为下文旧钱包版 `/mvp/product.html`，新产品尚无已部署测试网址。本轮HTTP探测15秒超时、网页读取工具亦未成功，不能确认当前可达性，也不能据此判断服务已宕机。未部署或启动新服务，未进行钱包操作。
+
+## 2026-10-30 新产品核心链路已开发（当前接手入口）
+
+本节覆盖下方文档阶段“尚未实施”“待确定Claim Gas/链接授权”等进度；历史证据保留。用户已授权开始应用开发，并确认 **平台承担领取手续费、保存链接必须原领取钱包登录**。无需再问这两项。
+
+- 实施与复现：[实际实现、接口、测试及待办](docs/superpowers/2026-10-30-product-foundation-implementation.md)。原设计依据：[原Site流程与三版本对照](docs/superpowers/2026-10-30-product-flow-and-integration.md)。新代码不能替代原Site历史证据，也不能宣称当前公网已具备新流程。
+- 当前仓库 `/Users/mili/Documents/Developer/mealforward-phase6-release`；GitHub `3956ray/MealForward`；分支 `codex/mealforward-t1f-phase6-release-review-20261026`；HEAD仍 `1cddea335ea0de2b425af3d4af9e3721ff2604ba`。本批为未提交工作区修改，未推送。保留既有HANDOFF和流程文档改动。PR47本轮起始只读查询仍open/draft，远端head `3d1486a73935c819ee5ff5ce0e95f2bf63f5f7c1`。
+- 新合约源 `mvp-contracts/contracts/Product{Catalog,Funding,Escrow}.sol`，旧合约不变。多店铺/餐品版本、多份并行资助、无10份生命周期上限、7200/259200秒政策、平台领取权限、原时段、代次和180秒单次结算已有本地实现。退款未实现，候选合约未部署，不应据此接收真实资金。
+- 新后台 `t1-intents/product-v2/`；`runtime.mjs`组合独立SIWE、权限及业务，`host.mjs`提供独立服务工厂，默认关闭且不会自行启动。`/v1/product`使用独立cookie/CSRF/schema；只在旧 `auth/core.mjs`增加完整新命名空间白名单。新host未接到现有线上entrypoint。
+- 新前端 `t1-intents/mvp-client/catalog-entry.jsx`及catalog/kitchen/voucher/merchant组件，独立构建 `/product-v2/index.html`。明确审核→仅本次额度授权→确认资助→钱包付款；Claim不要求领取人付Gas或发交易。编辑/审核/进度继续用弹窗，原请求可恢复。商家和领取角色按同一钱包分别使用，不靠固定演示身份。
+- 商家流程必须 **检查→取得唯一处理权→实际交餐确认→钱包处理**。AWAITING_HANDOVER是持久业务锁；原session才取得处理句柄，跨设备须原商家钱包明确确认上一设备停止后接管同一操作。锁不自动返池，UNKNOWN不重发/不解锁；最终链EXPIRED证明允许原owner显式取消未发送责任。该链下锁不能阻止公开链expire。结算列表带链时间，179秒拒绝、180秒开放审核。
+- 营业设置保存北京时间每日时段及公告；“今日休息”次日自然恢复，不阻断资助或领取。券仍按领取时版本/用餐时段使用。公开目录使用最新版本，并保留旧版本已资助餐的领取可见性；过期未用券回原池，不新增资助。
+- 新数据库结构 `schema.sql`仅在一次性本地PG应用。模板角色 `mf_product_v2_runtime`无LOGIN/管理员/DELETE/TRUNCATE/DDL及旧库权限；启动检查实际RLS、表/列授权和成员关系。生产schema/登录/迁移尚未配置。当前单行JSON锁用于正确性验证，未完成生产容量、实体索引及备份恢复验收。
+- 平台worker：只处理用户确认的QUEUED请求；签名包和hash先持久化，再一次广播；UNKNOWN只查询。签名包不出API/日志，费用和总预算明确受限。`tickClaims`须由独立明确配置的worker调用。生产链adapter和签名服务尚未实现；测试脚本不是生产服务。
+
+### 本轮验证（本地，非线上钱包验收）
+
+- 合约 **47/47**（39新+8旧，256轮fuzz）。后台/API及旧runtime回归 **101/101**（84新+17旧）。前端 **102/102**。独立构建通过。
+- 新建随机loopback PostgreSQL：真实受限角色、权限漂移拒绝（含列授权/RLS/TRUNCATE）、SIWE会话一次性消费、跨连接库存/Claim竞争、回滚、原记录重连及平台outbox通过；链证据为合成。
+- 新建随机loopback Anvil 31337：真实领域层登记、发布、补量、精确额度授权、18份资助、平台付Gas领取、原钱包查券、先锁/跨session恢复、交餐/180秒结算、下架后领取、公开expire后显式清责任及同unit下一代领取、金额守恒通过；持久层为内存，不是PG。
+- 390px/1440px隔离浏览器通过，零page error；合成API覆盖12份审核、40份草稿、今日休息不阻断领取、领取未知恢复、原钱包链接、短码和退出。最近证据目录 `/var/folders/9y/_gzp7rc975z1g51l_2mszz0m0000gn/T/mealforward-product-browser-s1j7tC`，可由脚本重建。
+- 独立审查修复了同钱包nonce竞争、落后库存快照重复分配、policy不匹配、只认角色名称、未验证hash难以纠正、晚回复恢复旧身份、先交餐后锁、跨session死锁及结算DTO缺链时间等问题。最终只读审查未报告剩余明确接线阻断；不是生产合约审计或上线批准。
+- 详细命令见实施文档第6节。临时PG/Anvil/浏览器均已关闭；没有触碰旧本地服务。**尚未做HTTP＋真实PG＋链的联合隔离验收、线上新版本验收或新真人钱包签名。**
+
+### 云端实际边界和下一步
+
+本轮起始只读核对：Render service `srv-dbdgstivcj2c73fnqcc0` / workspace `tea-db7q3ou7bikc73bp2bt0`，仍live `a7f4c84dfa02aacd458dcd19cca0abddb8671aaa` / deploy `dep-dbhlh4mc6qcc73fo4nog`。原入口 https://mealforward-t1e-claim-laodao.onrender.com/mvp/product.html 。Monad Testnet 10143及既有测试USDC `0x534b2f3a21130d7a60830c2df862319e593943a3`不变；新escrow部署地址尚未产生。
+
+Supabase `ketfrukrcuosrqynnsay`，原 `mf_mvp_usdc.state` 两笔仍SETTLED，revision10/9，fingerprint `408e76f0c970880598786deeb7bfb39c` / `517254d2bdad4ef3dffc14ab23806c39`。本轮无云写入、正式迁移、发布、第三笔业务或真实钱包操作。已有两笔真人闭环无需重做；旧CP30 PREPARED、环境、数据和原部署合约继续冻结。
+
+下一阶段先完成生产链投影/回执适配、平台签名worker和最少权限正式迁移规格，再做联合隔离验收；补齐图片/入驻审核/公共账/履约汇总和原Site其余页面。长期退款期限、永久停业有效券/锁定券/在途责任仍待定，不能猜为半年或一年。发布前要完成新合约及恢复审查，真实钱包签名仍由用户本人明确点击。
+
+回退：本轮没有改线上环境，不需要线上回滚。新入口独立，停用新host/构建不会影响旧MVP；不得删除旧数据、重放UNKNOWN或整体覆盖已有HANDOFF。后续接手先重新只读核对GitHub/Render/Supabase再推进。
+
+## 2026-10-30 流程与接入评估已落盘（上一阶段历史记录）
+
+- 文档入口：[原 Site 全链路理解与接入方案](docs/superpowers/2026-10-30-product-flow-and-integration.md)。记录三版本边界、页面/弹窗、商家/Donor/领取人完整流程、份额及券状态、已有接口映射、真实接入差距、高星项目复用、验收清单和未决政策。此节覆盖下方旧接手记录中“尚未完成全链路核对”“待判断是否需要新合约”等进度，不删除历史。
+- 来源：测试助手与本对话已核对 Sites 保存版本 v8，源码 `e412ae14d6b92453634a0036f9aac986dcc821ac`，本地只读参考 `/tmp/mealforward-three-stores-reference`；后续完整模式 `sites-frontend/dist/app.js`、`live-api.mjs` 及旧后台适配；当前 `t1-intents/mvp*` 与 `mvp-contracts`。本地仓库基线 `1cddea335ea0de2b425af3d4af9e3721ff2604ba`。旧附件主要对应后续完整模式，不应混入当前单份版；公共账在该后续源码已有接口，时间控件仍有版本差异。
+- 核心结论：复用原产品交互、后续前端接口经验和当前 Wagmi/Viem 钱包恢复能力；不能将旧 `/v1/*` 直接转发至 `/v1/mvp/*`。现有固定72小时、生命周期10份及小范围位掩码、Issuer权限、下架阻断发券等与新规则不兼容，需要新合约版本和后台规格。不得自动部署新合约、迁移原记录或重用旧nonce。
+- 最新规则：内测领取间隔/券有效期均2小时、正式均72小时，按钱包全平台计算；下架仅停止新资助；非营业时间及今日休息仍允许领取，取餐限原券用餐时段；休息过期仍返池；商品改价改内容保留原订单/券承诺。今日休息不能复用旧安全暂停。永久停业需退款，但长期未使用期限、停业时有效券及在途履约责任、发券授权/Gas和长期私密链接授权仍待定，未写成已确认政策。
+- 测试证据：原 Site 模型37/37通过、隔离浏览器功能检查23/23组通过（未跑完整视觉矩阵）；后续前端整套首次152通过、1个浏览器测试因预览未启动失败，启动隔离预览后390px/1440px补跑通过。全部是相应源码的本地验证，不是当前线上真实钱包验收。原站匿名访问有ChatGPT登录门槛，未冒充线上全链路实测；详情与复现边界见文档第7节。
+- 高星复用：已核实 Wagmi、OpenZeppelin、Playwright、TanStack Query、XState、Superpowers 的官方仓库、约数Stars（均>500）和许可证，逐项记录已用/候选/仅借鉴及引入边界；本轮不安装技能或新增依赖。
+- 交付范围：只新增上述文档并更新本HANDOFF，保留已有未提交修改及历史。应用、合约、数据库、运行配置均未改动；无钱包动作、发布、迁移或第三笔业务。本轮未重新核验 Render/Supabase/链上，以下已部署build及两笔SETTLED仍是此前证据。正式开发前先只读核对云端，完成合约/API具体规格，再逐条实施。
+- 后续顺序：规格 → 商家上架与资助 → 自助Claim与历史 → 验券结算 → 休息/退款；每步保留原请求/原交易恢复。不要求重复已通过两笔真人闭环。
+- 本轮文档检查通过：本地引用路径、核心规则/证据完整性、交接入口及差异格式；应用未变，不为文档重复运行资金或浏览器全套测试。新增文档和HANDOFF保留在工作区，尚未提交或推送。
 
 
 
 
 
+
+
+
+## 2026-10-30 完整接手与最新业务需求（覆盖旧单份串行目标）
+
+接手核对：本地 HEAD 1cddea3，工作树干净；远端同名分支只读查询为 3d1486a，本地领先一个交接文档提交。已读取本节和父目录、仓库规则；本次尚未重新核验 Render 与 Supabase，以下云端状态仍为此前记录。下一步先只读核验云端，再对照 Sites v8 与现有合约、后台和前端制定差距及实施方案。未操作业务数据或钱包。
+
+接手对话：codex://threads/01a18a34-084d-7d62-a7d4-7320101f0114 ，标题「接手工作」。用户明确批准此对话接手。真实仓库在 `/Users/mili/Documents/Developer/mealforward-phase6-release`，不是当前聊天默认 `/Users/mili/Documents/Monad`。读父目录及仓库 AGENTS；本地交接前HEAD3d1486a73935c819ee5ff5ce0e95f2bf63f5f7c1，工作区干净。以下是需求确认，不是已上线功能。
+
+### 已确认最终流程
+
+1. 复用用户指定 Three Stores 视觉：商家有店铺及商品，批量上架例如10份，可补充到20份；设置可资助有效时间。上架完成必要授权后，Donor每次购买/支持不再需要商家逐笔签报价。不要把代币approve与商家商品授权混为一谈。
+2. Donor浏览店铺与商品，自选剩余范围内份数，查看总金额，授权并明确支付。已获资助餐食进入可领取池，多个支持者可参与，不能继续固定每笔1份/上一笔结算才下一笔。Donor有自己的支持历史（时间、商家、商品、数量、金额、付款状态/交易以及适当汇总履约进度），不暴露领取秘密或个人隐私。
+3. 任何人可用钱包登录并自助 Claim a Meal，不需要固定Issuer钱包逐笔人工发券。钱包账户不是自然人，用户接受暂按钱包限制。邮箱登录留待以后。不要擅自新增机构审核或实名门槛。
+4. 每个钱包全平台领取间隔：内测2小时、正式/YBH72小时；餐券有效期分别同为2小时/72小时，均从领取成功计算，不叠加每日一次。提前核销不能提前恢复领取资格；失败不占资格，重复/并发Claim不能多领。
+5. Claim成功直接获得餐券及私密领取链接，保存后到店使用。超时未使用则旧券失效，份数归还原资助池，可被重新领取；旧码不得复活，也不能算新捐赠。资助10份仅领取6份时剩余4份继续存在。
+6. 商家扫码/数字码验证，明确交餐，沿用180秒等待后明确结算。扫码有效不等于交餐。商品、交餐与结算历史保留。
+7. 修改价格或实质商品内容采用新商品/版本，新捐赠用新条件；不覆盖已支付/已领取承诺。补充数量允许。
+8. 下架只停止新捐赠；已资助但未领取的份数仍可Claim（用户已明确确认）；已领券在有效期内继续使用；已交餐仍可结算。
+
+### 尚未定案 / 不可自行假称确认
+
+- 2026-10-30 后续用户明确：商家永久停业，未履约的剩余资助款应退款；长期未使用的资助款也拟在一定期限后退回，但半年或一年尚未确定。退款触发方式、有效券及待结算款的处理仍需设计，不得宣称自动退款已实现或期限已定。
+- 商家入驻审核方式、商品上架时间默认值等未细化，先对照原设计找已有规则，不要凭旧CP文档猜测。
+- Turnstile、限流等仅建议，未部署。钱包多账号无法保证一人一份；不要宣称已解决真人去重。
+- 新业务是否需要新合约必须源码审查后判断；现有MVP合约生命周期10份，不能假定适合长期批量业务，更不能自动迁移已结算记录或重用旧nonce。
+
+### 下一步和证据
+
+2026-10-30 用户补充旧交互讨论，已全文阅读：`/Users/mili/.codex/attachments/d3dabd86-5ef5-450a-bb71-aeb268d37a42/已粘贴的文本.txt`。这是商家与捐赠者的详细页面/弹窗/钱包/恢复流程参考：登录按厨房管理权限分流，注册可恢复原登记；餐品新增编辑与发布审核在弹窗完成；验券检查、锁券、交餐、结算分离；捐赠数量/审核/授权/付款/结果在原弹窗推进，关闭不删除原请求，历史恢复原交易，UNKNOWN不能重新支付；捐赠成功不自动领券。参考声明的“当前代码”尚未与本仓库核验，不得视为当前部署事实。其真实模式路由 `#contributions`、`#mine`、注册/部署流程可能属于不同版本，需溯源；取餐时间“整点/半点”与已读Sites v8全分钟选择有差异；自动放款仅改进方向，本会话已确认仍为180秒后商家明确结算。以演示设计梳理完整交互，最新用户确认覆盖旧规则，当前仓库与部署证据判定实际实现，不让用户重复说明已有设计。此轮仅阅读附件并更新交接，未操作应用、云端、数据库或钱包。
+
+2026-10-30 本对话补充确认：
+- 营业/用餐时段原设计已有，不再作为未知需求反复询问。商家设置正常时间，工作台增加“今日休息”小按钮，供临时休息时切换并在店铺展示“休息中”；具体恢复机制尚未细化。食材不足等线下情况由商家自行公告，本轮不新增库存预测或保障流程。
+- 打烊或不在用餐时段仍允许领取，页面显示时间供领取人自行决定；餐券只在商家支持的用餐时段使用。休息期间过期仍按原规则失效并返还份数，不延长有效期或补偿。
+- 已实际读取原 Sites 本地参考 HEAD e412ae14d6b92453634a0036f9aac986dcc821ac 的 README、dist/model.mjs 及相关测试。原型每个餐品支持一至两段 Service Time（Asia/Shanghai），券保存原版本时段，生成/核验码受该时段限制；Claim 本身不检查用餐时段。原型的 safety pause 会阻止领取，不能直接等同本次“今日休息”；旧原型下架阻止 Claim 的行为也必须被最新确认“已资助仍可领”覆盖。这里只完成了相关逻辑核对，尚未完成全部页面交互审查，未声称线上已实现。
+
+先回查原Sites设计与现有源码，整理差距、需要改动的合约/后台/前端边界及实施计划。原设计网站 https://mealforward-three-stores.ochre-jelly-7528.chatgpt.site/ ，Sites project appgprj_6aca52912fa0819182f9619176eac3e5 v8，源码e412ae14d6b92453634a0036f9aac986dcc821ac；此前下载参考 `/tmp/mealforward-three-stores-reference`，存在与否需核对。旧prototype业务逻辑不等于资金安全实现。
+
+用户授权持续使用Superpowers及agent协作；偏好复用500Stars以上成熟项目、尽量减少真人测试，只补测受影响环节。不要继续宣称原始完整MVP已完成，也不要要求重测已通过两张券。真实钱包签名/交易始终由用户本人操作。
+
+已部署/CI/数据库为下方最新发布记录所述，交接时未重新查询云端，接手者应先只读核验。线上build b749401674bede156e3d，部署a7f4c84dfa02aacd458dcd19cca0abddb8671aaa；两个已结算记录必须保留。此次仅更新交接，不改应用或云端数据。接手者先确认正确目录、最新规则及新需求未实现，再输出差距与实施顺序。
 
 
 ## 2026-10-29 22:31 钱包弹窗优化已上线，等待最小补测

@@ -1,0 +1,85 @@
+import {createSiweMessage} from 'viem/siwe';
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {JSDOM} from 'jsdom';
+const dir=await mkdtemp(tmpdir()+'/mf-entry-'),base=new URL('../',import.meta.url);
+await build({entryPoints:[new URL('catalog-entry.jsx',base).pathname],outfile:dir+'/entry.mjs',bundle:true,format:'esm',platform:'node',jsx:'transform',tsconfigRaw:{compilerOptions:{jsx:'react'}},plugins:[{name:'external-runtime',setup(b){b.onResolve({filter:/^recharts$/},()=>({path:new URL("../node_modules/recharts/lib/index.js",import.meta.url).pathname,external:true}));b.onResolve({filter:/^\.\/thirdweb-login\.jsx$/},()=>({path:new URL("../thirdweb-login.jsx",import.meta.url).pathname,external:true}));b.onResolve({filter:/^@radix-ui\/react-dialog$/},()=>({path:new URL("../node_modules/@radix-ui/react-dialog/dist/index.mjs",import.meta.url).pathname,external:true}));b.onResolve({filter:/^(react|react-dom\/client|\.\/wallet.mjs|\.\/guards.mjs)$/},({path})=>({path:new URL(path.startsWith('./')?path:'node_modules/'+path+(path==='react'?'/index.js':'.js'),base).pathname,external:true}));}}]});
+const dom=new JSDOM('<div id="test"></div>',{url:'https://mealforward-test.onrender.com'});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,location:dom.window.location,HTMLElement:dom.window.HTMLElement,NodeFilter:dom.window.NodeFilter,Node:dom.window.Node,CustomEvent:dom.window.CustomEvent,MutationObserver:dom.window.MutationObserver,getComputedStyle:dom.window.getComputedStyle,HTMLInputElement:dom.window.HTMLInputElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+const React=await import('react'),{act}=React,{createRoot}=await import('react-dom/client'),{CatalogEntry}=await import(dir+'/entry.mjs');
+let root;const tick=()=>new Promise(r=>setTimeout(r,0));
+const response=(value,status=200)=>({ok:status===200,status,json:async()=>value});
+const catalog={stores:[],meals:[],asset:{symbol:'USDC',decimals:6},fundingEnabled:false};
+function loginChallenge(account){const issuedAt=new Date(Math.floor(Date.now()/1000)*1000),challengeId='11111111-2222-3333-4444-555555555555';return {challengeId,message:createSiweMessage({address:account,domain:location.host,uri:location.origin,chainId:10143,version:'1',nonce:'ab'.repeat(32),statement:'Sign in to MealForward with your test wallet.',requestId:challengeId,issuedAt,expirationTime:new Date(issuedAt.getTime()+180000)})};}
+function fixture({capability=true,configuration={verified:true,profile:'monad-testnet',chainId:10143,asset:'0x534b2f3a21130d7a60830c2df862319e593943a3',escrow:'0x'+'aa'.repeat(20)},orders=()=>response({items:[]}),extra=()=>undefined}={}) {
+ let account='0x1111111111111111111111111111111111111111',onChange,connections=0,signatures=0,sends=0,configurations=0;
+ const walletFactory=options=>{onChange=options.onChange;return {providers:()=>[{id:'test',name:'测试钱包'}],configure(){configurations++;},inspect:async()=>({account,chainId:10143}),select(){onChange();},connect:async()=>{connections++;return {account,chainId:10143};},signMessage:async()=>{signatures++;return 'synthetic-signature';},sendTransaction:async()=>{sends++;throw Error('unexpected wallet send');},dispose(){}};};
+ const fetchImpl=async(path,options)=>{const custom=extra(path.slice('/v1/product'.length),options);if(custom!==undefined)return custom;switch(path.slice('/v1/product'.length)){
+ case '/catalog':return response(catalog);
+ case '/configuration':return response(configuration);
+ case '/identity/setup':return response({walletLoginEnabled:capability,walletLoginChainId:10143,walletLoginOrigin:location.origin});
+ case '/auth/pre-session':return response({csrf:'synthetic-csrf'});
+ case '/identity/wallet/challenge':return response(loginChallenge(account));
+ case '/identity/wallet/login':return response({csrf:'new-synthetic-csrf'});
+ case '/me':return response({wallet:account,stores:[]});
+ case '/orders':return orders();
+ case '/approvals':return response({items:[]});
+ case '/auth/logout':return response({});
+ default:throw Error(path);
+ }};
+ return {walletFactory,fetchImpl,get connections(){return connections;},get configurations(){return configurations;},get signatures(){return signatures;},get sends(){return sends;},change(){account='0x2222222222222222222222222222222222222222';onChange();}};
+}
+async function mount(f){localStorage.clear();document.body.innerHTML='<div id="test"></div>';root=createRoot(document.getElementById('test'));await act(async()=>{root.render(React.createElement(CatalogEntry,f));await tick();});}
+async function click(text){await act(async()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent===text);assert.ok(b,text);b.click();await tick();await tick();});}
+async function login(){await click('钱包登录');await click('测试钱包');}
+async function clean(){await act(async()=>root.unmount());}
+test('non-true capability prevents wallet connection and signature',async()=>{
+ for(const capability of [false,'false',1,null]){const f=fixture({capability});await mount(f);try{await login();assert.equal(f.connections,0);assert.equal(f.signatures,0);assert.ok(document.body.textContent.includes('新产品登录尚未接通'));}finally{await clean();}}
+});
+test('current 401 removes authenticated UI',async()=>{
+ const f=fixture({orders:()=>response({error:'UNAUTHENTICATED'},401)});await mount(f);try{await login();assert.ok(document.body.textContent.includes('退出登录'));await click('我的支持');assert.ok(!document.body.textContent.includes('退出登录'));assert.ok(document.body.textContent.includes('钱包登录'));}finally{await clean();}
+});
+test('late 401 from old wallet cannot revoke a newer login',async()=>{
+ let finish,reads=0;const f=fixture({orders:()=>++reads===1?new Promise(r=>finish=r):response({items:[]})});await mount(f);
+ try{await login();await click('我的支持');await act(async()=>{f.change();await tick();});await login();assert.ok(document.body.textContent.includes('退出登录'));await act(async()=>{finish(response({error:'UNAUTHENTICATED'},401));await tick();});assert.ok(document.body.textContent.includes('退出登录'));assert.equal(f.signatures,2);}finally{await clean();}
+});
+after(async()=>{dom.window.close();await rm(dir,{recursive:true,force:true});});
+
+test('GET recovery records only the original journal hash and reconciles without resending',async()=>{
+ const wallet='0x1111111111111111111111111111111111111111',hash='0x'+'ab'.repeat(32),op={id:'original',kind:'support',wallet,name:'原订单',quantity:'1',amount:'7000000',version:1,state:'SEND_UNKNOWN'},calls=[];
+ const f=fixture({orders:()=>response({items:[op]}),extra:(p,o)=>{if(p.startsWith('/intents/')){calls.push([p,o]);if(p==='/intents/original')return response(op);if(p.endsWith('/hash')){assert.deepEqual(JSON.parse(o.body),{txHash:hash});return response({...op,candidateHash:hash});}if(p.endsWith('/reconcile'))return response({...op,state:'CONFIRMED',txHash:hash});}return undefined;}});
+ await mount(f);try{await login();localStorage.setItem('mf-product-wallet-v1:'+wallet+':/intents/original',JSON.stringify({wallet,id:op.id,kind:op.kind,attempted:true,txHash:hash}));await click('我的支持');await click('查看原请求');assert.deepEqual(calls.map(([p,o])=>[p,o.method]),[['/intents/original','GET'],['/intents/original/hash','POST'],['/intents/original/reconcile','POST']]);assert.equal(f.sends,0);assert.ok(document.querySelector('[role=dialog]').textContent.includes('资助已确认'));}finally{await clean();}
+});
+test('GET is the authoritative reconciliation for already recorded candidate or bound hashes',async()=>{
+ for(const state of ['SEND_UNKNOWN','HASH_BOUND']){const wallet='0x1111111111111111111111111111111111111111',hash='0x'+'cd'.repeat(32),op={id:'original',kind:'support',wallet,name:'原订单',quantity:'1',amount:'7000000',version:1,state},calls=[];const f=fixture({orders:()=>response({items:[op]}),extra:(p,o)=>{if(p.startsWith('/intents/')){calls.push([p,o.method]);assert.equal(p,'/intents/original');return response({...op,state:'CONFIRMED',candidateHash:hash,txHash:hash});}return undefined;}});await mount(f);try{await login();localStorage.setItem('mf-product-wallet-v1:'+wallet+':/intents/original',JSON.stringify({wallet,id:op.id,kind:op.kind,attempted:true,txHash:hash}));await click('我的支持');await click('查看原请求');assert.deepEqual(calls,[['/intents/original','GET']]);assert.equal(f.sends,0);assert.ok(document.querySelector('[role=dialog]').textContent.includes('资助已确认'));}finally{await clean();}}
+});
+
+test('public origin cannot configure local acceptance or a changed production token before wallet action',async()=>{
+ for(const configuration of [{verified:true,profile:'local-acceptance',chainId:31337,asset:'0x'+'bb'.repeat(20),escrow:'0x'+'aa'.repeat(20)},{verified:true,chainId:10143,asset:'0x'+'bb'.repeat(20),escrow:'0x'+'aa'.repeat(20)},{verified:true,chainId:31337,asset:'0x534b2f3a21130d7a60830c2df862319e593943a3',escrow:'0x'+'aa'.repeat(20)}]){const f=fixture({configuration});await mount(f);try{await login();assert.equal(f.configurations,0);assert.equal(f.connections,0);assert.equal(f.signatures,0);assert.equal(f.sends,0);assert.ok(document.body.textContent.includes('PRODUCT_CONFIGURATION_UNVERIFIED'));}finally{await clean();}}
+});
+test('discovery renders no wallet action; invalid SIWE is rejected before signature',async()=>{
+ const f=fixture({extra:p=>p==='/identity/wallet/challenge'?response({...loginChallenge('0x1111111111111111111111111111111111111111'),message:loginChallenge('0x1111111111111111111111111111111111111111').message.replace('Chain ID: 10143','Chain ID: 31337')}):undefined});await mount(f);try{assert.equal(f.connections,0);assert.equal(f.signatures,0);assert.equal(f.configurations,0);await login();assert.equal(f.configurations,1);assert.equal(f.connections,1);assert.equal(f.signatures,0);assert.equal(f.sends,0);assert.ok(document.body.textContent.includes('INVALID_LOGIN_CHALLENGE'));}finally{await clean();}
+});
+
+const businessTargets=[{id:'legacy',label:'历史业务',automaticSettlement:false,acceptingFunding:false},{id:'v3',label:'自动结算新版',automaticSettlement:true,acceptingFunding:true}];
+const targetConfiguration={verified:true,profile:'monad-testnet',chainId:10143,asset:'0x534b2f3a21130d7a60830c2df862319e593943a3',escrow:'0x'+'aa'.repeat(20),targetId:'v3',targets:businessTargets};
+async function changeTarget(id){await act(async()=>{const select=document.querySelector('select[aria-label="业务版本"]');assert.ok(select);select.value=id;select.dispatchEvent(new window.Event('change',{bubbles:true}));await tick();await tick();});}
+test('business switch keeps same-wallet authentication, discards old pending UI, and performs no signing or payment',async()=>{
+ window.history.replaceState(null,'','/product-v2/index.html?target=legacy');
+ const requests=[],op={id:'pending',kind:'support',wallet:'0x1111111111111111111111111111111111111111',state:'SEND_UNKNOWN',name:'历史未决资助',quantity:'1',amount:'7000000',version:1};
+ const f=fixture({configuration:targetConfiguration,extra:(p,o)=>{const target=o.headers['x-mf-product-target'];requests.push({p,target,method:o.method});if(p==='/me')return response({wallet:op.wallet,stores:[],targetId:target,legacyTarget:target==='legacy'});if(p==='/orders')return response({items:target==='legacy'?[op]:[]});if(p==='/intents/pending')return response(op);}});
+ await mount(f);try{await login();await click('我的支持');await click('查看原请求');assert.ok(document.body.textContent.includes('历史未决资助'));assert.ok(document.querySelector('[role=dialog]').textContent.includes('结果未确认')); const signatures=f.signatures,connections=f.connections;await changeTarget('v3');assert.equal(new URL(location.href).searchParams.get('target'),'v3');assert.equal(location.hash,'');assert.ok(document.body.textContent.includes('退出登录'));assert.ok(!document.body.textContent.includes('历史未决资助'));assert.equal(document.querySelector('[role=dialog]'),null);assert.equal(f.signatures,signatures);assert.equal(f.connections,connections);assert.equal(f.sends,0);assert.ok(requests.some(r=>r.p==='/me'&&r.target==='v3'));await click('我的支持');assert.ok(!document.body.textContent.includes('历史未决资助'));assert.equal(requests.filter(r=>r.method==='POST'&&!r.p.startsWith('/identity/')&&r.p!=='/auth/pre-session').length,0);}finally{await clean();window.history.replaceState(null,'','/');}
+});
+test('unqualified old voucher links select legacy while explicitly targeted links keep their version',async()=>{
+ for(const [query,expected] of [['','legacy'],['?target=v3','v3']]){window.history.replaceState(null,'','/product-v2/index.html'+query+'#voucher=saved');const reads=[];const f=fixture({configuration:targetConfiguration,extra:(p,o)=>{if(p==='/me')return response({wallet:'0x1111111111111111111111111111111111111111',stores:[],targetId:o.headers['x-mf-product-target']});if(p==='/vouchers')return response({items:[]});if(p==='/vouchers/saved'){reads.push(o.headers['x-mf-product-target']);return response({error:'VOUCHER_NOT_FOUND'},404);}}});await mount(f);try{assert.equal(document.querySelector('select[aria-label="业务版本"]').value,expected);await click('登录查看餐券');await click('测试钱包');assert.deepEqual(reads,[expected]);assert.equal(f.signatures,1);assert.equal(f.sends,0);assert.ok(!document.querySelector('[aria-label="原餐券"]'));}finally{await clean();window.history.replaceState(null,'','/');}}
+});
+test('switching business ignores a late old-target private voucher response',async()=>{
+ window.history.replaceState(null,'','/product-v2/index.html?target=legacy#voucher=saved');let finish;const f=fixture({configuration:targetConfiguration,extra:(p,o)=>{const target=o.headers['x-mf-product-target'];if(p==='/me')return response({wallet:'0x1111111111111111111111111111111111111111',stores:[],targetId:target});if(p==='/vouchers')return response({items:[]});if(p==='/vouchers/saved')return new Promise(r=>finish=r);}});await mount(f);try{await click('登录查看餐券');await click('测试钱包');assert.equal(typeof finish,'function');await changeTarget('v3');await act(async()=>{finish(response({id:'saved',name:'旧业务私密餐券',version:1,state:'ISSUED',expiresAt:Date.now()/1000+7200,windows:[[0,1440]]}));await tick();});assert.equal(location.hash,'');assert.ok(!document.body.textContent.includes('旧业务私密餐券'));assert.equal(document.querySelector('[aria-label="原餐券"]'),null);assert.equal(f.signatures,1);assert.equal(f.sends,0);}finally{await clean();window.history.replaceState(null,'','/');}
+});
+
+test('business switch immediately clears an existing private voucher and short display code',async()=>{
+ window.history.replaceState(null,'','/product-v2/index.html?target=legacy#voucher=saved');const f=fixture({configuration:targetConfiguration,extra:(p,o)=>{if(p==='/me')return response({wallet:'0x1111111111111111111111111111111111111111',stores:[],targetId:o.headers['x-mf-product-target']});if(p==='/vouchers')return response({items:[]});if(p==='/vouchers/saved')return response({id:'saved',name:'旧业务私密餐券',version:1,state:'ISSUED',expiresAt:Date.now()/1000+7200,windows:[[0,1440]]});if(p==='/vouchers/saved/display')return response({code:'654321',expiresAt:Date.now()/1000+120});}});await mount(f);try{await click('登录查看餐券');await click('测试钱包');await click('生成短时取餐码');assert.ok(document.querySelector('[aria-label="短时取餐码"]').textContent.includes('654321'));await changeTarget('v3');assert.equal(document.querySelector('[aria-label="短时取餐码"]'),null);assert.equal(document.querySelector('[aria-label="原餐券"]'),null);assert.ok(!document.body.textContent.includes('654321'));assert.ok(document.body.textContent.includes('退出登录'));assert.equal(f.signatures,1);assert.equal(f.sends,0);}finally{await clean();window.history.replaceState(null,'','/');}
+});

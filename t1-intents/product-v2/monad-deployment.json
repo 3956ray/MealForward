@@ -1,0 +1,20 @@
+{
+  "chainId": 10143,
+  "deployer": "0xC4F8a468f10d5f98DCfF3282516125E97F26433b",
+  "asset": "0x534b2f3a21130d7a60830c2df862319e593943a3",
+  "assetCodeHash": "0x96215e6049ed615cdc22fea7701e85458a8e51a2df3e7d45e8f9fa1d521b5a78",
+  "claimAuthority": "0x41DCBFED391b79FAC7B2951dD136c6B7e1384259",
+  "redemptionAuthority": "0x9747D93d9F8C2e1202b4d922a4916fcF634aA2B3",
+  "policySeconds": 7200,
+  "sourceCommit": "c69a20162d54a600fe13f2e5bb13898ebbc9334e",
+  "escrow": "0x999Edd25dBB7716D63a5360350dbD892b82312bD",
+  "escrowCodeHash": "0x01e6c1d78fa77c28ba77df0ceb07ca8aa560e14831b533153503f7e5ea95a8ff",
+  "assetDecimals": 6,
+  "deploymentBlock": 76236334,
+  "transactionHash": "0xa2a6f0ae0aa3d1e7fde5f17af4c819d2c8fb371abf2395e0db25a6be17bccf6f",
+  "finalizedBlock": 76238696,
+  "finalizedHash": "0x1ce1986cc3e417a97ab2951b24e66ced9802b7f58379b1c7fcffd2f46aa8ccb2",
+  "maxFeePerGas": "300000000000",
+  "maxTransactionFee": "300000000000000000",
+  "claimGasLimit": "1000000"
+}

@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {request} from 'node:http';import {access} from 'node:fs/promises';import {execFileSync} from 'node:child_process';import {makeProductHost} from './host.mjs';
+test('target-qualified entry and voucher reload work through the real host, with exact static query allowlist',async t=>{
+ try{await access(new URL('../public/product-v2/index.html',import.meta.url));}catch{execFileSync('npm',['run','build:catalog'],{cwd:new URL('../mvp-client/',import.meta.url),stdio:'pipe'});}
+ const old='10143:0x'+'aa'.repeat(20),next='10143:0x'+'bb'.repeat(20),runtime={targetIds:[old,next],handler:async()=>false};const host=await makeProductHost({origin:'http://127.0.0.1:19999',runtime});await new Promise(r=>host.server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>host.server.close(r)));
+ const get=(path,method='GET')=>new Promise((resolve,reject)=>{const req=request({host:'127.0.0.1',port:host.server.address().port,path,method,headers:{Host:'127.0.0.1:19999'}},res=>{let body='';res.on('data',c=>body+=c);res.on('end',()=>resolve({status:res.statusCode,body}));});req.on('error',reject);req.end();});
+ for(const id of [old,next]){const result=await get('/product-v2/index.html?target='+encodeURIComponent(id));assert.equal(result.status,200);assert.match(result.body,/<script/);assert.equal((await get('/product-v2/index.html?target='+encodeURIComponent(id),'HEAD')).status,200);}
+ for(const path of ['/product-v2/index.html?target=unknown','/product-v2/index.html?target='+old+'&target='+next,'/product-v2/index.html?target='+old+'&extra=1','/product-v2/catalog.mjs?target='+old,'/product-v2/index.html?target=','/product-v2/?target='+old])assert.equal((await get(path)).status,404,path);
+});
