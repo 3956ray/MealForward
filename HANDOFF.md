@@ -1,3 +1,13 @@
+# 2026-11-06 · 导航重设计已上线
+
+- 应用提交 `e5aa6e0ec538890fb77197b5e3080e706121d17f`，repo3956ray/MealForward，分支codex/mealforward-product-mvp-20261031，PR48；CI SUCCESS：https://github.com/3956ray/MealForward/actions/runs/42145208661 。
+- 原Render Free服务 `srv-dbjv7lnf3r2c73d7ri50`，部署 `dep-dbmj0kmk1f9s73b5g3qg` 于北京时间2026-11-06 09:43:18 LIVE。原URL https://mealforward-product-v2-laodao.onrender.com/product-v2/index.html 。自动部署关闭、环境/套餐/权限未改。
+- 导航改品牌/主页面/个人工具三分区；「我的」收纳支持、餐券及商家工作台；语言入口保留用户图标，去边框白底。页面选中浅绿、钱包入口圆角实色。手机保留公共页面和底部快捷入口。Escape回焦、点击外部/焦点移出/账户或页面变化收起菜单。
+- 前端原181项通过/1跳过，新增菜单导航验证通过（合计182通过/1跳过）；完整CI与构建通过。CUA本地390英文、768/1440中文布局无横向溢出，切换及菜单检查通过。截图 /Users/mili/.codex/visualizations/2026/11/05/01a1ab55-8a04-7773-933d-89b5294e0712/navigation-preview.png 是本地预览；公网浏览器读取超时，未冒充线上视觉截图。未执行真实钱包操作。
+- 公网文件摘要一致：catalog.mjs `518e6e4684ec7e554f8bae64e42cd242ef2f365e21fdfcd8f370ae1e82067d62`；catalog.css `0eba48b530dc65c782961e005b6deba39778b09eb455c9b232b901274708f382`。真实impact complete/stale=false，资助5/交餐1/受助钱包1/厨房2。
+- 发布后只读实库revision17444，pending/delayed/unresolved=0、lowBalance/backlogAlert=false。原V2/V3、180秒、钱包、数据和业务参数不变。产品演进HTML/Markdown已更新；后续仅交接文档提交。
+- 下一步用户刷新原网址查看；回退可使用cfb54e4，保持V3后台与原数据/任务，不回滚资金。
+
 # 2026-11-06 · 导航栏重设计候选
 
 - 品牌/主导航/个人操作三分区；支持和餐券收进「我的」原生details，商家可进入工作台。语言图标去边框白底，仍用用户提供PNG；页面选中态浅绿，钱包入口圆角实色。
